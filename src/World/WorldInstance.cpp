@@ -9,7 +9,8 @@ namespace CGEngine {
     Screen* screen = new Screen({ 1200,1000 }, "CGEngine App");
     InputMap* input = new InputMap(world->getWindow());
     World* world = new World({ 1200,1000 },"");
-    function<void()> drawWorld = []() { world->update(); };
+    function<void()> updateWorld = []() { world->runWorld(); };
+    function<void()> beginWorld = []() { world->startWorld(); };
     Logging logging;
 
     const char* keys[] = {

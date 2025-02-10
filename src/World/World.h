@@ -21,7 +21,8 @@ namespace CGEngine {
         //World Window
         Screen* createScreen(Vector2u windowSize, string appTitle);
         RenderWindow* getWindow() const;
-        void update();
+        void runWorld();
+        void startWorld();
         void renderWorld();
         //World Destruction
         void end();
