@@ -308,6 +308,13 @@ namespace CGEngine {
         }
     }
 
+    void World::startWorld() {
+        window = new RenderWindow(VideoMode(screen->getSize()), appTitle);
+        screen->window = window;
+        input->setWindow(window);
+        window->setView(*currentView);
+    }
+
     void World::renderWorld() {
         window->clear();
         render();
@@ -330,7 +337,7 @@ namespace CGEngine {
         }
     }
 
-    void World::update() {
+    void World::runWorld() {
         while (window->isOpen()) {
             deleted.clear();
             updateTime();

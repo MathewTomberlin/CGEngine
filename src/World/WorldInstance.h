@@ -12,11 +12,11 @@ namespace CGEngine {
 	extern GlobalTime time;
 	extern InputMap* input;
 	extern Screen* screen;
-	extern RenderWindow frame;
 	extern TextureCache* textures;
 	extern FontCache* fonts;
 	extern Font* defaultFont;
-	extern function<void()> drawWorld;
+	extern function<void()> updateWorld;
+	extern function<void()> beginWorld;
 	extern Logging logging;
 
 	extern const char* keys[];
