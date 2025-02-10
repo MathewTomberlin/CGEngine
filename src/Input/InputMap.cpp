@@ -2,9 +2,7 @@
 #include "../World/WorldInstance.h"
 
 namespace CGEngine {
-    InputMap::InputMap(RenderWindow* inputWindow) {
-        window = inputWindow;
-    }
+    InputMap::InputMap() { }
 
     void InputMap::clear() {
         domains.clear();

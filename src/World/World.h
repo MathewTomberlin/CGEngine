@@ -63,9 +63,9 @@ namespace CGEngine {
 
         Body* create(Transformable* entity = nullptr, Transformation transform = Transformation(), Body* parent = nullptr);
         void addWorldScript(string domain, Script* script);
-        RenderWindow* window;
+        RenderWindow* window = nullptr;
+        UniqueDomain<id_t, Body*> bodies = UniqueDomain<id_t, Body*>(1000);
     private:
-        UniqueIntegerStack<id_t> ids = UniqueIntegerStack<id_t>(1000);
         Body* root = nullptr;
         void updateTime();
         void render();

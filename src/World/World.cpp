@@ -294,7 +294,7 @@ namespace CGEngine {
     }
 
     RenderWindow* World::getWindow() const {
-        return screen->getWindow();
+        return window;
     }
 
     void World::addScene(string sceneName, Scene scene) {
@@ -372,7 +372,7 @@ namespace CGEngine {
 
     Body* World::create(Transformable* entity, Transformation transform, Body* parent) {
         Body* newBody = (entity==nullptr) ? new Body("Root") : new Body(entity, transform, parent);
-        ids.receive(&newBody->bodyId);
+        receiveBodyId(newBody);
         return newBody;
     }
 
@@ -395,11 +395,21 @@ namespace CGEngine {
     }
 
     id_t World::receiveBodyId(Body* body) {
-        return ids.receive(&body->bodyId);
+        //return ids.receive(&body->bodyId);
+
+        id_t id = bodies.add(body);
+        body->bodyId = id;
+        return id;
     }
 
     void World::refundBodyId(Body* body) {
-        ids.refund(&body->bodyId);
+        //ids.refund(&body->bodyId);
+
+        optional<id_t> bodyId = body->getId();
+        if (bodyId.has_value()) {
+            bodies.remove(bodyId.value());
+            body->bodyId = nullopt;
+        }
     }
 
     void World::setBoundsRenderingEnabled(bool enabled) {
