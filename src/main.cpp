@@ -19,7 +19,7 @@ int main() {
     ScriptEvent saveEvt = [](ScArgs args) { args.caller->get<Tilemap*>()->saveMapData(); };
     
     //Create the Body and setup its properties, including alignment and transform
-    worldGrid = new Body(new Tilemap("tilemap.png", { 32,32 }, { 10,10 }, vector<int>(), tilemapDataPath));
+    worldGrid = world->create(new Tilemap("tilemap.png", { 32,32 }, { 10,10 }, vector<int>(), tilemapDataPath));
     worldGrid->setName("map");
     worldGrid->move({ 400,400 });
     worldGrid->moveToAlignment({ 0.5, 0.5 });
@@ -64,7 +64,7 @@ int main() {
     //This script is meant to be called from the
     worldGrid->addScript("SaveMapData", new Script(saveEvt));
     
-    Body* tileTypeToolbox = new Body(new Tilemap("tilemap.png", { 32,32 }, { 8,7 }, tileTypes));
+    Body* tileTypeToolbox = world->create(new Tilemap("tilemap.png", { 32,32 }, { 8,7 }, tileTypes));
     tileTypeToolbox->setName("toolbox");
     tileTypeToolbox->setOrigin({ 0,0.5 });
     tileTypeToolbox->setScale({ 1.25f,1.25f });
@@ -159,7 +159,7 @@ int main() {
         ((SpriteAnimBody*)args.caller)->end();
     }, Keyboard::Scan::D);
     
-    Body* rectObj = new Body(new RectangleShape({ 32,32 }), Transformation(), worldGrid);
+    Body* rectObj = world->create(new RectangleShape({ 32,32 }), Transformation(), worldGrid);
     rectObj->setName("Rectangle");
     rectObj->zOrder = 1;
     rectObj->setIntersectEnabled(true);

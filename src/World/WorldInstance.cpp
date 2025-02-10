@@ -6,8 +6,8 @@ namespace CGEngine {
     TextureCache* textures = new TextureCache();
     FontCache* fonts = new FontCache();
     Font* defaultFont = fonts->getDefaultFont();
+    InputMap* input = new InputMap();
     Screen* screen = new Screen({ 1200,1000 }, "CGEngine App");
-    InputMap* input = new InputMap(world->getWindow());
     World* world = new World({ 1200,1000 },"");
     function<void()> updateWorld = []() { world->runWorld(); };
     function<void()> beginWorld = []() { world->startWorld(); };

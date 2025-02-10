@@ -24,7 +24,7 @@ namespace CGEngine {
 
     class InputMap {
     public:
-        InputMap(RenderWindow* inputWindow);
+        InputMap();
         void setWindow(RenderWindow* w);
         optional<Vector2i> getCursorPosition();
 

@@ -3,9 +3,13 @@
 #include "UniqueIntegerStack.h"
 
 namespace CGEngine {
-	template <typename DomainKey, typename DomainValue, int MaxSize>
+	template <typename DomainKey, typename DomainValue>
 	class UniqueDomain {
 	public:
+		UniqueDomain(size_t maxSize = 0) {
+			ids = UniqueIntegerStack<DomainKey>(maxSize);
+		}
+
 		DomainKey add(DomainValue value) {
 			DomainKey key = ids.take();
 			domain[key] = value;
@@ -26,6 +30,6 @@ namespace CGEngine {
 		}
 	private:
 		map<DomainKey, DomainValue> domain;
-		UniqueIntegerStack<DomainKey> ids = UniqueIntegerStack<DomainKey>(MaxSize);
+		UniqueIntegerStack<DomainKey> ids = UniqueIntegerStack<DomainKey>(0U);
 	};
 }
