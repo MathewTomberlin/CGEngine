@@ -16,4 +16,20 @@ namespace CGEngine {
 	void Scene::load(Body* sceneRoot) {
 		loadEvent->call(sceneRoot);
 	}
+
+	DataStack Scene::getInput() {
+		return loadEvent->getInput();
+	}
+
+	DataStack Scene::getOutput() {
+		return loadEvent->getOutput();
+	}
+
+	void Scene::setInput(DataStack in) {
+		loadEvent->setInput(in);
+	}
+
+	void Scene::setOutput(DataStack out) {
+		loadEvent->setOutput(out);
+	}
 }

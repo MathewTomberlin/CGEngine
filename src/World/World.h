@@ -59,13 +59,19 @@ namespace CGEngine {
         void setBoundsColor(Color color, Body* body);
         void setBoundsThickness(float thickness);
         void setBoundsThickness(float thickness, Body* body);
-        void addScene(string sceneName, Scene scene);
+        void addScene(string sceneName, Scene* scene);
         void loadScene(string sceneName, Body* sceneRoot = nullptr);
+        void loadSceneWithData(string sceneName, DataStack input, Body* sceneRoot = nullptr);
+        optional<DataStack> getSceneData(string sceneName);
 
-        Body* create(Transformable* entity = nullptr, Transformation transform = Transformation(), Body* parent = nullptr);
+        id_t create(Transformable* entity = nullptr);
+        id_t create(Transformable* entity, Transformation, Body* parent = nullptr, Script* startScript = nullptr);
+        id_t create(Transformable* entity, Body* parent, Script* startScript = nullptr, Transformation transform = Transformation());
+        id_t create(Transformable* entity, Script* startScript, Transformation transform = Transformation(), Body* parent = nullptr);
         void addWorldScript(string domain, Script* script);
         RenderWindow* window = nullptr;
         UniqueDomain<id_t, Body*> bodies = UniqueDomain<id_t, Body*>(1000);
+        map<string, Scene*> scenes;
     private:
         Body* root = nullptr;
         void updateTime();
@@ -84,7 +90,5 @@ namespace CGEngine {
         bool boundsRendering = false;
         Color boundsColor = Color::White;
         float boundsThickness = 3.f;
-
-        map<string, Scene> scenes;
     };
 }

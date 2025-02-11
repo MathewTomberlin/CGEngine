@@ -14,9 +14,15 @@ namespace CGEngine {
 		string getDisplayName();
 		void setDisplayName(string name);
 		void load(Body* sceneRoot = nullptr);
+		void setInput(DataStack in);
+		void setOutput(DataStack out);
+		DataStack getInput();
+		DataStack getOutput();
 	private:
 		friend class World;
 		string displayName = "";
 		Script* loadEvent;
+		DataStack input;
+		DataStack output;
 	};
 }

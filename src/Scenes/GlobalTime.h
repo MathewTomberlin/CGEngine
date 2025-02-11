@@ -21,6 +21,6 @@ namespace CGEngine {
 	private:
 		Clock runningClock;
 		Clock frameClock;
-		sec_t deltaSec;
+		sec_t deltaSec = 0.f;
 	};
 }
