@@ -4,32 +4,16 @@
 #include <queue>
 
 namespace CGEngine {
-    World::World() : root(create()) {
-        Vector2u size = VideoMode::getDesktopMode().size;
-        window = getWindow();
-        currentView = new View((Vector2f)size/2.f,(Vector2f)size);
-        //window->setView(*currentView);
-    }
+    World::World() : root(bodies.get(create())) { }
 
-    World::World(Vector2u windowSize) : root(create()) {
-        window = getWindow();
-        currentView = new View((Vector2f)windowSize / 2.f, (Vector2f)windowSize);
-        //window->setView(*currentView);
-    }
+    World::World(Vector2u windowSize) : root(bodies.get(create())) { }
 
-    World::World(string title) : root(create()) {
+    World::World(string title) : root(bodies.get(create())) {
         appTitle = title;
-        Vector2u size = VideoMode::getDesktopMode().size;
-        window = getWindow();
-        currentView = new View((Vector2f)size / 2.f, (Vector2f)size);
-        //window->setView(*currentView);
     }
 
-    World::World(Vector2u windowSize, string title) : root(create()) {
+    World::World(Vector2u windowSize, string title) : root(bodies.get(create())) {
         appTitle = title;
-        window = getWindow();
-        currentView = new View((Vector2f)windowSize / 2.f, (Vector2f)windowSize);
-        //window->setView(*currentView);
     }
 
     void World::initializeConsole() {
@@ -297,21 +281,39 @@ namespace CGEngine {
         return window;
     }
 
-    void World::addScene(string sceneName, Scene scene) {
+    void World::addScene(string sceneName, Scene* scene) {
         scenes[sceneName] = scene;
     }
 
     void World::loadScene(string sceneName, Body* sceneRoot) {
         if (scenes.find(sceneName) != scenes.end()) {
-            Scene scene = scenes[sceneName];
-            scene.load(sceneRoot);
+            Scene* scene = scenes[sceneName];
+            scene->load(sceneRoot);
+        }
+    }
+
+    void World::loadSceneWithData(string sceneName, DataStack input, Body* sceneRoot) {
+        if (scenes.find(sceneName) != scenes.end()) {
+            Scene* scene = scenes[sceneName];
+            scene->setInput(input);
+            scene->load(sceneRoot);
+        }
+    }
+
+    optional<DataStack> World::getSceneData(string sceneName) {
+        if (scenes.find(sceneName) != scenes.end()) {
+            Scene* scene = scenes[sceneName];
+            DataStack output = scene->getOutput();
+            return output;
         }
     }
 
     void World::startWorld() {
-        window = new RenderWindow(VideoMode(screen->getSize()), appTitle);
+        V2f screenSize = screen->getSize();
+        window = new RenderWindow(VideoMode(screenSize), appTitle);
         screen->window = window;
         input->setWindow(window);
+        currentView = new View(screenSize / 2.f, screenSize);
         window->setView(*currentView);
     }
 
@@ -377,10 +379,25 @@ namespace CGEngine {
         root->addKeyReleaseScript([](ScArgs args) { world->end(); }, Keyboard::Scan::Escape);
     }
 
-    Body* World::create(Transformable* entity, Transformation transform, Body* parent) {
+    id_t World::create(Transformable* entity, Transformation transform, Body* parent, Script* startScript) {
         Body* newBody = (entity==nullptr) ? new Body("Root") : new Body(entity, transform, parent);
-        receiveBodyId(newBody);
-        return newBody;
+        id_t bodyId = receiveBodyId(newBody);
+        if (startScript != nullptr) {
+            newBody->addStartScript(startScript);
+        }
+        return bodyId;
+    }
+
+    id_t World::create(Transformable* entity) {
+        return create(entity, Transformation());
+    }
+
+    id_t World::create(Transformable* entity, Body* parent, Script* startScript, Transformation transform) {
+        return create(entity, transform, parent, startScript);
+    }
+    
+    id_t World::create(Transformable* entity, Script* startScript, Transformation transform, Body* parent) {
+        return create(entity, transform, parent, startScript);
     }
 
     void World::addDeletedBody(Body* body) {
