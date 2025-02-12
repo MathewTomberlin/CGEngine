@@ -17,6 +17,7 @@ namespace CGEngine {
 	extern Font* defaultFont;
 	extern function<void()> updateWorld;
 	extern function<void()> beginWorld;
+	extern vector<Scene*> sceneList;
 	extern Logging logging;
 
 	extern const char* keys[];
