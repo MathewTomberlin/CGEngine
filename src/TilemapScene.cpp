@@ -100,7 +100,7 @@ namespace CGEngine {
                     Body* worldGrid = world->bodies.get(gridId);
                     if (worldGrid->contains(mouseGlobalPos)) {
                         SpriteAnimBody* body = new SpriteAnimBody("animation.png", AnimationParameters({ 32,32 }, 30.f), Transformation(), worldGrid);
-                        body->setTimer(0.5, new Script([](ScArgs args) { delete args.caller; }));
+                        body->setTimer(0.5, new Script([](ScArgs args) { world->deleteBody(args.caller); }));
                         Vector2f pos = (Vector2f)clickedTilemapPos.value();
                         int d = (int)(pos.x) % 32;
                         pos.x = pos.x - d;

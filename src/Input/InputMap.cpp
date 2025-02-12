@@ -133,7 +133,7 @@ namespace CGEngine {
         //Poll window events
         while (const optional event = window->pollEvent()) {
             if (event->is<Event::Closed>()) {
-                world->end();
+                world->endWorld();
             } else if (const auto* keyReleased = event->getIf<Event::KeyReleased>()) {
                 callDomain(InputCondition((int)keyReleased->scancode, InputType::Key, InputState::Released), stack<any>({ keyReleased }));
             }
