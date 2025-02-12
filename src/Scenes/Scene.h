@@ -18,10 +18,10 @@ namespace CGEngine {
 		void setOutput(DataStack out);
 		DataStack getInput();
 		DataStack getOutput();
+		Script* loadEvent;
+		string displayName = "";
 	private:
 		friend class World;
-		string displayName = "";
-		Script* loadEvent;
 		DataStack input;
 		DataStack output;
 	};

@@ -315,6 +315,12 @@ namespace CGEngine {
         input->setWindow(window);
         currentView = new View(screenSize / 2.f, screenSize);
         window->setView(*currentView);
+        if(sceneList.size()>0){
+            for (auto iterator = sceneList.begin(); iterator != sceneList.end(); ++iterator) {
+                addScene((*iterator)->getDisplayName(), (*iterator));
+            }
+            loadScene(sceneList.at(0)->getDisplayName());
+        }
     }
 
     void World::renderWorld() {

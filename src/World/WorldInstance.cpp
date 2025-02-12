@@ -1,4 +1,5 @@
 #include "WorldInstance.h"
+#include "../TilemapScene.cpp"
 
 namespace CGEngine {
     GlobalTime time;
@@ -9,8 +10,8 @@ namespace CGEngine {
     InputMap* input = new InputMap();
     Screen* screen = new Screen({ 1200,1000 }, "CGEngine App");
     World* world = new World({ 1200,1000 },"");
-    function<void()> updateWorld = []() { world->runWorld(); };
-    function<void()> beginWorld = []() { world->startWorld(); };
+    vector<Scene*> sceneList = { new TilemapScene() };
+    function<void()> beginWorld = []() { world->startWorld(); world->runWorld(); };
     Logging logging;
 
     const char* keys[] = {
