@@ -1,9 +1,13 @@
 #include "Screen.h"
 
 namespace CGEngine {
-    Screen::Screen(V2f size, string title, bool fullscreen) {
-        //createWindow(size, title, fullscreen);
+    Screen::Screen(V2f size, string title, bool fullscreen) : windowTitle(title) {
         setSize(size);
+        windowTitle = title;
+    }
+
+    string Screen::getWindowTitle() {
+        return windowTitle;
     }
 
     void Screen::setSize(V2f s) {
@@ -63,8 +67,40 @@ namespace CGEngine {
         return window;
     }
 
-    void Screen::createWindow(V2f size, string title, bool fullscreen) {
-        window = new RenderWindow(sf::VideoMode({ 1920u, 1080u }), title);
-        setSize(size);
+    RenderWindow* Screen::createWindow() {
+        window = new RenderWindow(VideoMode(size), windowTitle);
+        initView();
+        return window;
+    }
+
+    void Screen::initView() {
+        currentView = new View(size / 2.f, size);
+        window->setView(*currentView);
+    }
+
+    View* Screen::getCurrentView() {
+        return currentView;
+    }
+
+    void Screen::moveView(Vector2f delta) {
+        currentView->move(delta);
+        window->setView(*currentView);
+    }
+
+    void Screen::rotateView(Angle delta) {
+        currentView->rotate(delta);
+        window->setView(*currentView);
+    }
+
+    void Screen::zoomView(float delta) {
+        currentView->zoom(delta);
+        window->setView(*currentView);
+    }
+
+    Vector2f Screen::viewToGlobal(Vector2i pixels) {
+        if (window != nullptr) {
+            return window->mapPixelToCoords(pixels);
+        }
+        return Vector2f();
     }
 }

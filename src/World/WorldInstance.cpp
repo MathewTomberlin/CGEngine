@@ -2,17 +2,21 @@
 #include "../TilemapScene.cpp"
 
 namespace CGEngine {
+    Logging logging;
     GlobalTime time;
     Renderer renderer;
     TextureCache* textures = new TextureCache();
     FontCache* fonts = new FontCache();
     Font* defaultFont = fonts->getDefaultFont();
     InputMap* input = new InputMap();
+    
+    //Window Size & Window Title
     Screen* screen = new Screen({ 1200,1000 }, "CGEngine App");
-    World* world = new World({ 1200,1000 },"");
+    //List of Scenes to create, add to World and load sceneList[0]
     vector<Scene*> sceneList = { new TilemapScene() };
+
+    World* world = new World();
     function<void()> beginWorld = []() { world->startWorld(); world->runWorld(); };
-    Logging logging;
 
     const char* keys[] = {
         "a",

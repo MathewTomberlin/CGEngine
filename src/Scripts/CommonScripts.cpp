@@ -26,7 +26,7 @@ namespace CGEngine {
             V2f delta = evtArgs.direction * evtArgs.speed * time.getDeltaSec();
             args.caller->translate(delta, true);
             if (evtArgs.viewBound) {
-                world->moveView(delta);
+                screen->moveView(delta);
             }
         }
         args.caller->callScriptsWithData("OnTranslate", stack<any>({ evtArgs.direction }));
@@ -41,7 +41,7 @@ namespace CGEngine {
             Angle delta = degrees(evtArgs.degreesPerSecond * time.getDeltaSec());
             args.caller->rotate(delta);
             if (evtArgs.viewBound) {
-                world->rotateView(delta);
+                screen->rotateView(delta);
             }
             args.caller->callScriptsWithData("OnRotate", stack<any>({ evtArgs.degreesPerSecond }));
     };

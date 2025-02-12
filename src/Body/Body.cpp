@@ -255,11 +255,11 @@ namespace CGEngine {
     }
 
     Vector2f Body::viewToGlobal(Vector2i input) const {
-        return world->getWindow()->mapPixelToCoords(input);
+        return screen->getWindow()->mapPixelToCoords(input);
     }
 
     Vector2f Body::viewToLocal(Vector2i input) const {
-        return globalToLocal(world->viewToGlobal(input));
+        return globalToLocal(screen->viewToGlobal(input));
     }
 
     bool Body::lineIntersects(Vector2f lineStart, Vector2f lineEnd) {

@@ -6,16 +6,6 @@
 namespace CGEngine {
     World::World() : root(bodies.get(create())) { }
 
-    World::World(Vector2u windowSize) : root(bodies.get(create())) { }
-
-    World::World(string title) : root(bodies.get(create())) {
-        appTitle = title;
-    }
-
-    World::World(Vector2u windowSize, string title) : root(bodies.get(create())) {
-        appTitle = title;
-    }
-
     void World::initializeConsole() {
         if (!consoleInitialized && consoleFeatureEnabled) {
             consoleTextBox = new Body(new Text(*defaultFont), Transformation());
@@ -97,9 +87,10 @@ namespace CGEngine {
             consoleTextBox->addKeyReleaseScript([](ScArgs args) {
                 world->consoleInputEnabled = !world->consoleInputEnabled;
                 if (world->consoleInputEnabled) {
-                    Vector2f viewSize = world->getCurrentView()->getSize();
-                    args.caller->setRotation(world->getCurrentView()->getRotation());
-                    args.caller->setPosition((world->getCurrentView()->getInverseTransform() * V2f({ -1,1 })));
+                    View* currentView = screen->getCurrentView();
+                    Vector2f viewSize = currentView->getSize();
+                    args.caller->setRotation(currentView->getRotation());
+                    args.caller->setPosition((currentView->getInverseTransform() * V2f({ -1,1 })));
                     args.caller->get<Text*>()->setString("_");
                 } else {
                     args.caller->get<Text*>()->setString("");
@@ -175,32 +166,6 @@ namespace CGEngine {
         return nullptr;
     }
 
-    View* World::getCurrentView() {
-        return currentView;
-    }
-
-    void World::moveView(Vector2f delta) {
-        currentView->move(delta);
-        window->setView(*currentView);
-    }
-
-    void World::rotateView(Angle delta) {
-        currentView->rotate(delta);
-        window->setView(*currentView);
-    }
-
-    void World::zoomView(float delta) {
-        currentView->zoom(delta);
-        window->setView(*currentView);
-    }
-
-    Vector2f World::viewToGlobal(Vector2i pixels) {
-        if (window != nullptr) {
-            return window->mapPixelToCoords(pixels);
-        }
-        return Vector2f();
-    }
-
     vector<Body*> World::zRayCast(Vector2f worldPos, optional<int> startZ, int distance, bool backward, bool linecast) {
         int zMax = renderer.zMax();
         int zMin = renderer.zMin();
@@ -273,14 +238,6 @@ namespace CGEngine {
         return hits;
     }
 
-    Screen* World::createScreen(Vector2u windowSize, string appTitle) {
-        return new Screen(windowSize, appTitle);
-    }
-
-    RenderWindow* World::getWindow() const {
-        return window;
-    }
-
     void World::addScene(string sceneName, Scene* scene) {
         scenes[sceneName] = scene;
     }
@@ -309,16 +266,19 @@ namespace CGEngine {
     }
 
     void World::startWorld() {
-        V2f screenSize = screen->getSize();
-        window = new RenderWindow(VideoMode(screenSize), appTitle);
-        screen->window = window;
+        //Create window (via Screen) and set InputMap's window
+        window = screen->createWindow();
         input->setWindow(window);
-        currentView = new View(screenSize / 2.f, screenSize);
-        window->setView(*currentView);
-        if(sceneList.size()>0){
+        //Add scenes from sceneList to world and load sceneList[0]
+        initSceneList();
+    }
+
+    void World::initSceneList() {
+        if (sceneList.size() > 0) {
             for (auto iterator = sceneList.begin(); iterator != sceneList.end(); ++iterator) {
                 addScene((*iterator)->getDisplayName(), (*iterator));
             }
+
             loadScene(sceneList.at(0)->getDisplayName());
         }
     }
