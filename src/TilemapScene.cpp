@@ -96,7 +96,7 @@ namespace CGEngine {
                     MouseReleaseInput* mouseEvt = args.script->pullOutInputPtr<MouseReleaseInput>();
                     if (mouseEvt == nullptr || clickedTilemapPos == nullopt) return;
 
-                    V2f mouseGlobalPos = world->viewToGlobal(mouseEvt->position);
+                    V2f mouseGlobalPos = screen->viewToGlobal(mouseEvt->position);
                     Body* worldGrid = world->bodies.get(gridId);
                     if (worldGrid->contains(mouseGlobalPos)) {
                         SpriteAnimBody* body = new SpriteAnimBody("animation.png", AnimationParameters({ 32,32 }, 30.f), Transformation(), worldGrid);

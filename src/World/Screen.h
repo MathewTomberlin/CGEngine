@@ -9,7 +9,10 @@ namespace CGEngine {
     class Screen {
     public:
         Screen(V2f size, string title, bool fullscreen = false);
-        void setSize(V2f s);
+        //Window
+        RenderWindow* getWindow() const;
+        string getWindowTitle();
+        //Size
         V2f getSize() const;
         V2f getCenter() const;
         V2f getTopLeft() const;
@@ -20,10 +23,20 @@ namespace CGEngine {
         V2f getBottomCenter() const;
         V2f getLeftCenter() const;
         V2f getRightCenter() const;
-        RenderWindow* getWindow() const;
-        RenderWindow* window;
+        //Current View
+        View* getCurrentView();
+        void moveView(Vector2f delta);
+        void rotateView(Angle delta);
+        void zoomView(float delta);
+        Vector2f viewToGlobal(Vector2i pixels);
     protected:
-        void createWindow(V2f size, string title, bool fullscreen);
+        friend class World;
+        //Window
+        RenderWindow* window;
+        RenderWindow* createWindow();
+        string windowTitle;
+        //Size
+        void setSize(V2f s);
         V2f size;
         V2f center;
         V2f topLeft;
@@ -34,5 +47,8 @@ namespace CGEngine {
         V2f bottomCenter;
         V2f rightCenter;
         V2f leftCenter;
+        //Current View
+        View* currentView = nullptr;
+        void initView();
     };
 }

@@ -12,15 +12,6 @@ namespace CGEngine {
     class World {
     public:
         World();
-        World(string title);
-        World(Vector2u windowSize);
-        World(Vector2u windowSize, string title);
-
-        string appTitle;
-
-        //World Window
-        Screen* createScreen(Vector2u windowSize, string appTitle);
-        RenderWindow* getWindow() const;
         
         //World state
         void runWorld();
@@ -30,13 +21,6 @@ namespace CGEngine {
         //Scripts
         void callScripts(string scriptDomain, Body* body = nullptr);
         void addDefaultExitActuator();
-
-        //Current View
-        View* getCurrentView();
-        void moveView(Vector2f delta);
-        void rotateView(Angle delta);
-        void zoomView(float delta);
-        Vector2f viewToGlobal(Vector2i pixels);
 
         //Utility
         vector<Body*> zRayCast(Vector2f worldPos, optional<int> startZ = nullopt, int distance = -1, bool backward = false, bool linecast = false);
@@ -78,20 +62,21 @@ namespace CGEngine {
         Body* getRoot();
         Body* findBodyByName(string name);
         void addWorldScript(string domain, Script* script);
-
-        RenderWindow* window = nullptr;
     private:
+        RenderWindow* window = nullptr;
+
         //World Root
         Body* root = nullptr;
-
-        //Current View
-        View* currentView = nullptr;
         
-        //Update/World State
+        //World State
+        //Start World
+        void initSceneList();
+        //Update World
         void updateTime();
         void startUninitializedBodies();
         void renderWorld();
         void render();
+        //End World
         void endWorld(Body* body);
 
         //Bodies
