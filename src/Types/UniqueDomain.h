@@ -28,6 +28,12 @@ namespace CGEngine {
 				return domain[key];
 			}
 		}
+
+		void forEach(function<void(DomainValue)> function) {
+			for (auto iterator = domain.begin(); iterator != domain.end(); ++iterator) {
+				function((*iterator).second);
+			}
+		}
 	private:
 		map<DomainKey, DomainValue> domain;
 		UniqueIntegerStack<DomainKey> ids = UniqueIntegerStack<DomainKey>(0U);

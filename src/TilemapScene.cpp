@@ -20,7 +20,7 @@ namespace CGEngine {
 
         ScriptEvent saveTilemapDataEvt = [](ScArgs args) { args.caller->get<Tilemap*>()->saveMapData(); };
         ScriptEvent tileClickEvt = [this](ScArgs args) {
-            MouseReleaseInput* mouseEvt = args.script->pullOutInputPtr<MouseReleaseInput>();
+            MouseReleaseInput* mouseEvt = args.script->getInput().getDataPtr<MouseReleaseInput>("evt");
             Tilemap* tilemap = args.caller->get<Tilemap*>();
             if (mouseEvt == nullptr || tilemap == nullptr) return;
 
@@ -36,7 +36,7 @@ namespace CGEngine {
             }
         };
         ScriptEvent loadTilemapDataEvt = [this](ScArgs args) {
-            vector<string> strings = args.script->pullOutInput<vector<string>>();
+            vector<string> strings = args.script->getInput().getData<vector<string>>("args");
             Tilemap* tilemap = args.caller->get<Tilemap*>();
             if (strings.size() < 1 && tilemap == nullptr) return;
 
@@ -45,7 +45,7 @@ namespace CGEngine {
         };
 
         ScriptEvent toolboxTileClickEvt = [this](ScArgs args) {
-            MouseReleaseInput* mouseEvt = args.script->pullOutInputPtr<MouseReleaseInput>();
+            MouseReleaseInput* mouseEvt = args.script->getInput().getDataPtr<MouseReleaseInput>("evt");
             Tilemap* tilemap = args.caller->get<Tilemap*>();
             if (mouseEvt == nullptr || tilemap == nullptr) return;
 
@@ -93,7 +93,7 @@ namespace CGEngine {
                     }));
 
                 ScriptEvent clickUpdateScript = [this](ScArgs args) {
-                    MouseReleaseInput* mouseEvt = args.script->pullOutInputPtr<MouseReleaseInput>();
+                    MouseReleaseInput* mouseEvt = args.script->getInput().getDataPtr<MouseReleaseInput>("evt");
                     if (mouseEvt == nullptr || clickedTilemapPos == nullopt) return;
 
                     V2f mouseGlobalPos = world->viewToGlobal(mouseEvt->position);
@@ -112,11 +112,11 @@ namespace CGEngine {
                 world->getRoot()->addMouseReleaseScript(clickUpdateScript, Mouse::Button::Left);
                 world->getRoot()->addMouseReleaseScript(clickUpdateScript, Mouse::Button::Right);
 
-                args.script->setOutput(stack<any>({ gridId }));
+                args.script->setOutput(map<string, any>({ {"gridId", gridId} }));
             };
 
             ScriptEvent playerConstruction = [this](ScArgs args) {
-                id_t gridId = args.script->pullOutInput<id_t>();
+                id_t gridId = args.script->getInput().getData<id_t>("gridId");
                 Body* gridBody = world->bodies.get(gridId);
 
                 float playerSpeed = 100.f;
@@ -125,9 +125,19 @@ namespace CGEngine {
                 Script* keyboardMoveController = new Script(keyboardMovementController);
                 Script* keyboardRotateController = new Script(keyboardRotationController);
                 //Setup its input datastack with the desired input parameters
-                keyboardMoveController->setInput(DataStack(stack<any>({ playerSpeed })));
-                keyboardRotateController->setInput(DataStack(stack<any>({ playerSpeed })));
+                keyboardMoveController->setInput(DataMap(map<string, any>({ {"speed",playerSpeed} })));
+                keyboardRotateController->setInput(DataMap(map<string, any>({ {"speed",playerSpeed} })));
 
+                //Texture* spriteTex = textures->get("triceratops.png");
+                //IntRect spriteRect = IntRect({ 0,0 }, { 32,32 });
+                //Body* player = new Body(new Sprite(*spriteTex, IntRect({ 0,0 }, { 1, 1 })), Transformation(), gridBody);
+                //Behavior* animationBehavior = new Behavior(player);
+                //animationBehavior->input = DataStack(stack<any>({ spriteRect }));
+                //animationBehavior->scripts.addScript(onStartEvent, new Script([&animationBehavior](ScArgs args) {
+                //    IntRect newRect = any_cast<IntRect>(animationBehavior->input.pullOut().value());
+                //    args.caller->get<Sprite*>()->setTextureRect(newRect);
+                //}));
+                //player->addBehavior(animationBehavior);
                 Body* player = new SpriteAnimBody("triceratops.png", AnimationParameters({ 32,32 }, 15.f, 1.0f, true, false, 7), Transformation(), gridBody);
                 player->setName("player");
                 player->zOrder = 10;
@@ -155,8 +165,8 @@ namespace CGEngine {
                     if (((SpriteAnimBody*)args.caller)->getState() != AnimationState::Running) {
                         ((SpriteAnimBody*)args.caller)->start();
                     }
-                    lastMove = args.script->pullOutInput<Vector2f>();
-                    }));
+                    lastMove = args.script->getInput().getData<Vector2f>("evt");
+                }));
 
                 player->addKeyReleaseScript([](ScArgs args) {
                     ((SpriteAnimBody*)args.caller)->end();

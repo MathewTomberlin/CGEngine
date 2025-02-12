@@ -1,4 +1,5 @@
 #include "CommonScripts.h"
+#include "../Types/DataMap.h"
 #include "../World/WorldInstance.h"
 
 namespace CGEngine {
@@ -18,8 +19,7 @@ namespace CGEngine {
     ScriptEvent translateEvent = [](ScArgs args) {
         if (world->consoleInputEnabled) return;
         //Re-readable input
-        args.script->setOutput(args.script->getInput());
-        TranslateArgs evtArgs = args.script->pullOutOutput<TranslateArgs>();
+        TranslateArgs evtArgs = args.script->getInput().getData<TranslateArgs>("args");
 
         vector<Body*> hits = world->raycast(args.caller->getGlobalPosition() + (args.caller->getGlobalBounds().size / 2.f), evtArgs.direction, 1, (args.caller->getGlobalBounds().size / 2.f).x + evtArgs.speed * time.getDeltaSec());
         if (hits.size() <= 0) {
@@ -29,54 +29,55 @@ namespace CGEngine {
                 world->moveView(delta);
             }
         }
-        args.caller->callScriptsWithData("OnTranslate", stack<any>({ evtArgs.direction }));
+        args.caller->callScriptsWithData("OnTranslate", map<string, any>({ {"evt",evtArgs.direction} }));
     };
 
     ScriptEvent rotateEvent = [](ScArgs args) {
         if (world->consoleInputEnabled) return;
         //Re-readable input
-        args.script->setOutput(args.script->getInput());
-        RotateArgs evtArgs = args.script->pullOutOutput<RotateArgs>();
+        RotateArgs evtArgs = args.script->getInput().getData<RotateArgs>("args");
 
             Angle delta = degrees(evtArgs.degreesPerSecond * time.getDeltaSec());
             args.caller->rotate(delta);
             if (evtArgs.viewBound) {
                 world->rotateView(delta);
             }
-            args.caller->callScriptsWithData("OnRotate", stack<any>({ evtArgs.degreesPerSecond }));
+            args.caller->callScriptsWithData("OnRotate", map<string, any>({ {"evt",evtArgs.degreesPerSecond} }));
     };
 
 	ScriptEvent keyboardMovementController = [](ScArgs args) {
-            float moveSpeed = args.script->pullOutInput<float>();
-            InputKeyMap horizonalKeyMap = args.script->pullOutOptionalInput<InputKeyMap>().value_or(InputKeyMap(Keyboard::Scan::D, Keyboard::Scan::A));
-            InputKeyMap verticalKeyMap = args.script->pullOutInput<InputKeyMap>();
+            //float moveSpeed = args.script->pullOutInput<float>();
+            float moveSpeed = args.script->getInput().getData<float>("speed");
+            InputKeyMap horizonalKeyMap = InputKeyMap(Keyboard::Scan::D, Keyboard::Scan::A);
+            InputKeyMap verticalKeyMap = InputKeyMap();
 
             Script* translateUpScript = new Script(translateEvent);
-            translateUpScript->setInput(stack<any>({ TranslateArgs(moveSpeed, {0,-1}, true) }));
+            translateUpScript->setInput(map<string,any>({ {"args",TranslateArgs(moveSpeed, {0,-1}, true)} }));
             args.caller->addKeyHoldScript(translateUpScript, verticalKeyMap.negative);
 
             Script* translateDownScript = new Script(translateEvent);
-            translateDownScript->setInput(stack<any>({ TranslateArgs(moveSpeed, {0,1}, true) }));
+            translateDownScript->setInput(map<string, any>({ {"args",TranslateArgs(moveSpeed, {0,1}, true)} }));
             args.caller->addKeyHoldScript(translateDownScript, verticalKeyMap.positive);
 
             Script* translateLeftScript = new Script(translateEvent);
-            translateLeftScript->setInput(stack<any>({ TranslateArgs(moveSpeed, {-1,0}, true) }));
+            translateLeftScript->setInput(map<string, any>({ {"args",TranslateArgs(moveSpeed, {-1,0}, true) } }));
             args.caller->addKeyHoldScript(translateLeftScript, horizonalKeyMap.negative);
 
             Script* translateRightScript = new Script(translateEvent);
-            translateRightScript->setInput(stack<any>({ TranslateArgs(moveSpeed, {1,0}, true) }));
+            translateRightScript->setInput(map<string, any>({ {"args",TranslateArgs(moveSpeed, {1,0}, true) } }));
             args.caller->addKeyHoldScript(translateRightScript, horizonalKeyMap.positive);
 	};
 
     ScriptEvent keyboardRotationController = [](ScArgs args) {
-        float rotateSpeed = args.script->pullOutInput<float>();
+        //float rotateSpeed = args.script->pullOutInput<float>();
+        float rotateSpeed = args.script->getInput().getData<float>("speed");
 
         Script* translateRightScript = new Script(rotateEvent);
-        translateRightScript->setInput(stack<any>({ RotateArgs(rotateSpeed, false) }));
+        translateRightScript->setInput(map<string, any>({ {"args", RotateArgs(rotateSpeed, false) } }));
         args.caller->addKeyHoldScript(translateRightScript, Keyboard::Scan::E);
 
         Script* translateLeftScript = new Script(rotateEvent);
-        translateLeftScript->setInput(stack<any>({ RotateArgs(-rotateSpeed, false) }));
+        translateLeftScript->setInput(map<string, any>({ {"args", RotateArgs(-rotateSpeed, false) } }));
         args.caller->addKeyHoldScript(translateLeftScript, Keyboard::Scan::Q);
     };
 }

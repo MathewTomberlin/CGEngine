@@ -681,10 +681,12 @@ namespace CGEngine {
                 return;
             }
         }
+
+        behaviors.forEach([&domain](Behavior* behavior) { behavior->scripts.callDomain(domain); });
         scripts.callDomain(domain);
     }
 
-    void Body::callScriptsWithData(string domain, DataStack data) {
+    void Body::callScriptsWithData(string domain, DataMap data) {
         scripts.callDomainWithData(domain, data);
     }
 
@@ -717,7 +719,7 @@ namespace CGEngine {
 
         //If there are any intersected bodies
         if (intersections.size() > 0) {
-            args.script->setOutput(DataStack(intersects));
+            args.script->setOutput(DataMap(map<string, any>({ {"intersects",intersects }})));
             //Call any intersect domain scripts on this body, passing intersections and the intersectScript's data stack
             args.caller->callScriptsWithData(onIntersectEvent, args.script->getOutput());
         }
@@ -776,5 +778,17 @@ namespace CGEngine {
 
         delete this;
         return nullptr;
+    }
+
+    id_t Body::addBehavior(Behavior* behavior) {
+        return behaviors.add(behavior);
+    }
+
+    void Body::removeBehavior(id_t behaviorId) {
+        behaviors.remove(behaviorId);
+    }
+
+    Behavior* Body::getBehavior(id_t behaviorId) {
+        return behaviors.get(behaviorId);
     }
 }

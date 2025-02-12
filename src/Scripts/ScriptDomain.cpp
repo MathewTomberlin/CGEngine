@@ -110,7 +110,7 @@ namespace CGEngine {
         }
     }
 
-    void ScriptDomain::callDomain(Body* caller, optional<DataStack> input) {
+    void ScriptDomain::callDomain(Body* caller, optional<DataMap> input) {
         vector<size_t> keys = getScriptIds();
 
         for (int i = 0; i < keys.size(); i++) {
@@ -126,7 +126,7 @@ namespace CGEngine {
         }
     }
 
-    void ScriptDomain::setDomainInput(DataStack data) {
+    void ScriptDomain::setDomainInput(DataMap data) {
         vector<size_t> keys = getScriptIds();
 
         for (int i = 0; i < keys.size(); i++) {
@@ -137,7 +137,7 @@ namespace CGEngine {
             }
         }
     }
-    void ScriptDomain::setScriptInput(size_t scriptId, DataStack data) {
+    void ScriptDomain::setScriptInput(size_t scriptId, DataMap data) {
         auto iterator = scripts.find(scriptId);
         if (iterator != scripts.end()) {
             Script* script = (*iterator).second;
@@ -151,7 +151,7 @@ namespace CGEngine {
         }
     }
 
-    void ScriptDomain::callScript(size_t scriptId, Body* caller, DataStack input) {
+    void ScriptDomain::callScript(size_t scriptId, Body* caller, DataMap input) {
         if (Script* script = getScript(scriptId)) {
             script->setInput(input);
             script->call(caller);

@@ -39,7 +39,7 @@ namespace CGEngine {
         /// <param name="caller">The Body calling the script</param>
         /// <param name="others">Any other Bodies passed as arguments</param>
         /// <param name="input">The DataStack to pass as input</param>
-        void callDomain(Body* caller, optional<DataStack> input);
+        void callDomain(Body* caller, optional<DataMap> input);
         /// <summary>
         /// Call the Script from the Domain, passing caller and others as arguments and passing the predecessor script's output DataStack as input
         /// </summary>
@@ -55,18 +55,18 @@ namespace CGEngine {
         /// <param name="caller">The Body calling the script</param>
         /// <param name="others">Any other Bodies passed as arguments</param>
         /// <param name="predecessor">The DataStack to pass as input</param>
-        void callScript(size_t scriptId, Body* caller, DataStack input);
+        void callScript(size_t scriptId, Body* caller, DataMap input);
         /// <summary>
         /// Set the input DataStack for each Domain Script to data
         /// </summary>
         /// <param name="data">The DataStack to pass as input</param>
-        void setDomainInput(DataStack data);
+        void setDomainInput(DataMap data);
         /// <summary>
         /// Set the input DataStack for the Script to data
         /// </summary>
         /// <param name="scriptId">The id of the Script to assign the data to</param>
         /// <param name="data">The DataStack to pass as input</param>
-        void setScriptInput(size_t scriptId, DataStack data);
+        void setScriptInput(size_t scriptId, DataMap data);
         
         LogLevel logLevel = LogLevel::LogInfo;
     private:

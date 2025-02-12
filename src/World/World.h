@@ -58,8 +58,8 @@ namespace CGEngine {
         //Scenes
         void addScene(string sceneName, Scene* scene);
         void loadScene(string sceneName, Body* sceneRoot = nullptr);
-        void loadSceneWithData(string sceneName, DataStack input, Body* sceneRoot = nullptr);
-        optional<DataStack> getSceneData(string sceneName);
+        void loadSceneWithData(string sceneName, DataMap input, Body* sceneRoot = nullptr);
+        optional<DataMap> getSceneData(string sceneName);
 
         //Bodies
         UniqueDomain<id_t, Body*> bodies = UniqueDomain<id_t, Body*>(1000);

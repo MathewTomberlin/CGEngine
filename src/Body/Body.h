@@ -8,6 +8,9 @@
 #include "../Input/InputMap.h"
 #include "../Timers/TimerMap.h"
 #include "../Drawables/Tilemap.h"
+#include "../Behavior/Behavior.h"
+#include "../Types/UniqueDomain.h"
+#include "../Types/DataMap.h"
 using namespace std;
 using namespace sf;
 
@@ -396,7 +399,7 @@ namespace CGEngine {
         /// <param name="domain">The domain of the scripts to call</param>
         /// <param name="bodies">Input Bodies</param>
         /// <param name="data">The DataStack to provide as input</param>
-        void callScriptsWithData(string domain, DataStack data = DataStack());
+        void callScriptsWithData(string domain, DataMap data = DataMap());
 
         optional<id_t> addOverlapMousePressScript(Script* script, Mouse::Button button = Mouse::Button::Left, bool alwaysAddListener = false);
         optional<id_t> addOverlapMouseReleaseScript(Script* script, Mouse::Button button = Mouse::Button::Left, bool alwaysAddListener = false);
@@ -454,6 +457,10 @@ namespace CGEngine {
         /// The amount of time between calling scripts in the "update" domain for this Body
         /// </summary>
         sec_t scriptUpdateInterval = -1;
+
+        id_t addBehavior(Behavior* behavior);
+        void removeBehavior(id_t behaviorId);
+        Behavior* getBehavior(id_t behaviorId);
     protected:
         /// <summary>
         /// Base Body initialization with a display name, taking a unique ID from world's body IDs stack, and assigning itself to the ScriptMap's owner pointer.
@@ -478,6 +485,8 @@ namespace CGEngine {
         /// The assigned Transformable entity
         /// </summary>
         Transformable* entity = nullptr;
+
+        UniqueDomain<id_t, Behavior*> behaviors = UniqueDomain<id_t, Behavior*>(1000);
         /// <summary>
         /// The Body whose transform is the parent of this Body's transform
         /// </summary>
@@ -545,29 +554,29 @@ namespace CGEngine {
 
         ScriptEvent MouseOverlapReleaseEvent = [](ScArgs args) {
             //Get the mouse release event from the script input data
-            MouseReleaseInput* evt = args.script->pullOutInputPtr<MouseReleaseInput>();
+            MouseReleaseInput* evt = args.script->getInput().getDataPtr<MouseReleaseInput>("evt");
             if (evt == nullptr) return;
 
             //If the caller's bounds contains the mouse position (converted from View Space)
             if (args.caller->contains(args.caller->viewToGlobal(evt->position))) {
                 //Call any mouseRelease+button domain scripts with the mouse release event as input
-                args.caller->scripts.callDomainWithData("mouseRelease_" + to_string((int)evt->button), DataStack(stack<any>({ evt })));
+                args.caller->scripts.callDomainWithData("mouseRelease_" + to_string((int)evt->button), DataMap(map<string, any>({ {"evt",evt} })));
             }
         };
         ScriptEvent MouseOverlapPressEvent = [](ScArgs args) {
             //Get the mouse press event from the script input data
-            MousePressInput* evt = args.script->pullOutInputPtr<MousePressInput>();
+            MousePressInput* evt = args.script->getInput().getDataPtr<MousePressInput>("evt");
             if (evt == nullptr) return;
 
             //If the caller's bounds contains the mouse position (converted from View Space)
             if (args.caller->contains(args.caller->viewToGlobal(evt->position))) {
                 //Call any mousePress+button domain scripts with the mouse press event as input
-                args.caller->scripts.callDomainWithData("mousePress_" + to_string((int)evt->button), DataStack(stack<any>({ evt })));
+                args.caller->scripts.callDomainWithData("mousePress_" + to_string((int)evt->button), DataMap(map<string, any>({ {"evt",evt} })));
             }
         };
         ScriptEvent MouseOverlapHoldReleasedEvent = [](ScArgs args) {
             //Get the mouse release event from the script input data
-            MouseReleaseInput* evt = args.script->pullOutInputPtr<MouseReleaseInput>();
+            MouseReleaseInput* evt = args.script->getInput().getDataPtr<MouseReleaseInput>("evt");
             if (evt == nullptr) return;
 
             //If the caller has a mouseOverlapHold update script id assigned
@@ -582,7 +591,7 @@ namespace CGEngine {
         };
         ScriptEvent MouseOverlapHoldPressEvent = [](ScArgs args) {
             //Get the mouse press event from the scipt input data
-            MousePressInput* evt = args.script->pullOutInputPtr<MousePressInput>();
+            MousePressInput* evt = args.script->getInput().getDataPtr<MousePressInput>("evt");
             if (evt == nullptr) return;
 
             //If the caller's bounds contains the mouse position (converted from View Space)
@@ -606,7 +615,7 @@ namespace CGEngine {
 
         ScriptEvent KeyHoldReleasedEvent = [](ScArgs args) {
             //Get the key released event from the script input data
-            KeyReleaseInput* evt = args.script->pullOutInputPtr<KeyReleaseInput>();
+            KeyReleaseInput* evt = args.script->getInput().getDataPtr<KeyReleaseInput>("evt");
             if(evt == nullptr) return;
             Keyboard::Scan key = evt->scancode;
 
@@ -627,7 +636,7 @@ namespace CGEngine {
 
         ScriptEvent KeyHoldPressedEvent = [this](ScArgs args) {
             //Get the key press event from the script input data
-            KeyPressInput* evt = args.script->pullOutInputPtr<KeyPressInput>();
+            KeyPressInput* evt = args.script->getInput().getDataPtr<KeyPressInput>("evt");
             if (evt == nullptr) return;
             Keyboard::Scan key = evt->scancode;
 
@@ -646,23 +655,23 @@ namespace CGEngine {
 
         ScriptEvent MouseOverlapEnterEvent = [](ScArgs args) {
             //Get the mouse position from the script input data
-            Vector2i pos = args.script->pullOutInput<Vector2i>();
+            Vector2i pos = args.script->getInput().getData<Vector2i>("evt");
 
             //If the mouse position (converted from View Space) is contained by the caller's bounds
             if (args.caller->contains(args.caller->viewToGlobal(pos))) {
                 //Call any mouseEnter domain scripts with the mouse position as input data
-                args.caller->scripts.callDomainWithData("mouseEnter", DataStack(stack<any>({ pos })));
+                args.caller->scripts.callDomainWithData("mouseEnter", DataMap(map<string, any>({ {"evt",pos} })));
             }
         };
 
         ScriptEvent MouseOverlapExitEvent = [](ScArgs args) {
             //Get the mouse position from the script input data
-            Vector2i pos = args.script->pullOutInput<Vector2i>();
+            Vector2i pos = args.script->getInput().getData<Vector2i>("evt");
             
             //If the mouse position (converted from View Space) is contained by the caller's bounds
             if (!args.caller->contains(args.caller->viewToGlobal(pos))) {
                 //Call any mouseExit domain scripts with the mouse position as input data
-                args.caller->scripts.callDomainWithData("mouseExit", DataStack(stack<any>({ pos })));
+                args.caller->scripts.callDomainWithData("mouseExit", DataMap(map<string, any>({ {"evt",pos} })));
             }
         };
         /// <summary>

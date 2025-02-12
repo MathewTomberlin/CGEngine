@@ -16,8 +16,8 @@ namespace CGEngine {
 		void clear();
 		void callDomain(string domainName,  bool logUpdate = false);
 		void callScript(string domainName, size_t scriptId);
-		void callDomainWithData(string domainName, DataStack input = DataStack(), bool logUpdate = false);
-		void callScriptWithData(string domainName, size_t scriptId, DataStack input = DataStack());
+		void callDomainWithData(string domainName, DataMap input = DataMap(), bool logUpdate = false);
+		void callScriptWithData(string domainName, size_t scriptId, DataMap input = DataMap());
 		void deleteDomain(string domainName);
 		LogLevel logLevel = LogLevel::LogInfo;
 	private:

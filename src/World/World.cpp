@@ -24,7 +24,7 @@ namespace CGEngine {
             consoleTextBox->zOrder = 100;
             consoleTextBox->addTextEnteredScript([](ScArgs args) {
                 if (world->consoleInputEnabled) {
-                    const Event::TextEntered* evt = args.script->pullOutInputPtr<const Event::TextEntered>();
+                    TextEnteredInput* evt = args.script->getInput().getDataPtr<TextEnteredInput>("evt");
                     if (evt == nullptr) return;
                     char32_t ch = evt->unicode;
                     if (ch < 128 && ch != 8 && ch != 13 && ch != 96) {
@@ -76,7 +76,7 @@ namespace CGEngine {
                             world->lastConsoleInput = inputString;
                             if (target != "") {
                                 Body* targetBody = world->findBodyByName(target);
-                                targetBody->callScriptsWithData(command, DataStack(stack<any>({ inputStrings })));
+                                targetBody->callScriptsWithData(command, DataMap(map<string, any>({ { "args",inputStrings} })));
                             }
                         }
                         txt->setString("_");
@@ -108,7 +108,7 @@ namespace CGEngine {
 
             addWorldScript("ToggleBounds", new Script([](ScArgs args) {
                 Body* foundBody = nullptr;
-                vector<string> inputStrings = args.script->pullOutInput<vector<string>>();
+                vector<string> inputStrings = args.script->getInput().getData<vector<string>>("args");
                 if (inputStrings.size() >= 1) {
                     string objName = inputStrings[0];
                     foundBody = world->findBodyByName(objName);
@@ -292,7 +292,7 @@ namespace CGEngine {
         }
     }
 
-    void World::loadSceneWithData(string sceneName, DataStack input, Body* sceneRoot) {
+    void World::loadSceneWithData(string sceneName, DataMap input, Body* sceneRoot) {
         if (scenes.find(sceneName) != scenes.end()) {
             Scene* scene = scenes[sceneName];
             scene->setInput(input);
@@ -300,10 +300,10 @@ namespace CGEngine {
         }
     }
 
-    optional<DataStack> World::getSceneData(string sceneName) {
+    optional<DataMap> World::getSceneData(string sceneName) {
         if (scenes.find(sceneName) != scenes.end()) {
             Scene* scene = scenes[sceneName];
-            DataStack output = scene->getOutput();
+            DataMap output = scene->getOutput();
             return output;
         }
     }
