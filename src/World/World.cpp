@@ -132,20 +132,20 @@ namespace CGEngine {
         }
     }
 
-    void World::end() {
+    void World::endWorld() {
         if (input != nullptr) {
             input->clear();
         }
-        end(root);
+        endWorld(root);
         window->close();
     }
 
-    void World::end(Body* body) {
+    void World::endWorld(Body* body) {
         if (auto bd = body) {
             bd->callScripts(onDeleteEvent);
             for (auto iterator = bd->children.begin(); iterator != bd->children.end(); iterator++) {
                 Body* b = *iterator;
-                end(b);
+                endWorld(b);
             }
         }
     }
@@ -382,7 +382,7 @@ namespace CGEngine {
     }
 
     void World::addDefaultExitActuator() {
-        root->addKeyReleaseScript([](ScArgs args) { world->end(); }, Keyboard::Scan::Escape);
+        root->addKeyReleaseScript([](ScArgs args) { world->endWorld(); }, Keyboard::Scan::Escape);
     }
 
     id_t World::create(Transformable* entity, Transformation transform, Body* parent, Script* startScript) {
@@ -421,7 +421,8 @@ namespace CGEngine {
     /// <param name="childTermination"></param>
     void World::deleteBody(Body* body, ChildrenTermination childTermination) {
         body->deleteBody(childTermination);
-        deleted.insert(body);
+        addDeletedBody(body);
+        refundBodyId(body);
     }
 
     id_t World::receiveBodyId(Body* body) {

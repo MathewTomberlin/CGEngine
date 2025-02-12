@@ -64,9 +64,6 @@ namespace CGEngine {
             delete boundsRect;
             boundsRect = nullptr;
         }
-        //Assign this body to the world's deleted bodies (so script loops & timer code ignore it)
-        world->addDeletedBody(this);
-        world->refundBodyId(this);
     }
 
     optional<size_t> Body::getId() {
