@@ -14,15 +14,15 @@ namespace CGEngine {
 		string getDisplayName();
 		void setDisplayName(string name);
 		void load(Body* sceneRoot = nullptr);
-		void setInput(DataStack in);
-		void setOutput(DataStack out);
-		DataStack getInput();
-		DataStack getOutput();
+		void setInput(DataMap in);
+		void setOutput(DataMap out);
+		DataMap getInput();
+		DataMap getOutput();
 		Script* loadEvent;
 		string displayName = "";
 	private:
 		friend class World;
-		DataStack input;
-		DataStack output;
+		DataMap input;
+		DataMap output;
 	};
 }

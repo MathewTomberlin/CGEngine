@@ -88,7 +88,7 @@ namespace CGEngine {
 		}
 	}
 
-	void ScriptMap::callDomainWithData(string domainName, DataStack input, bool logUpdate) {
+	void ScriptMap::callDomainWithData(string domainName, DataMap input, bool logUpdate) {
 		if (ScriptDomain* domain = getDomain(domainName)) {
 			if (domainName != onUpdateEvent || logUpdate) {
 				log("Calling Domain('" + domain->getName() + "')");
@@ -97,7 +97,7 @@ namespace CGEngine {
 		}
 	}
 
-	void ScriptMap::callScriptWithData(string domainName, size_t scriptId, DataStack input) {
+	void ScriptMap::callScriptWithData(string domainName, size_t scriptId, DataMap input) {
 		if (ScriptDomain* domain = getDomain(domainName)) {
 			log("Calling Script[" + to_string(scriptId) + "]('" + domain->getName() + "')");
 			domain->callScript(scriptId, owner,  input);

@@ -11,6 +11,7 @@ namespace CGEngine {
     typedef const Event::MouseButtonReleased MouseReleaseInput;
     typedef const Event::KeyReleased KeyReleaseInput;
     typedef const Event::KeyPressed KeyPressInput;
+    typedef const Event::TextEntered TextEnteredInput;
 
     enum ShapeType {
         Circle,

@@ -40,7 +40,7 @@ namespace CGEngine {
         ScriptDomain* getButtonDomain(int input, InputState state);
         ScriptDomain* getCharacterDomain();
         ScriptDomain* getCursorDomain();
-        void callDomain(InputCondition domainCondition, optional<stack<any>> input = nullopt);
+        void callDomain(InputCondition domainCondition, optional<map<string, any>> input = nullopt);
     protected:
         friend class World;
         RenderWindow* window;

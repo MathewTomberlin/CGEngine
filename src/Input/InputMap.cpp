@@ -108,7 +108,7 @@ namespace CGEngine {
         return nullptr;
     }
 
-    void InputMap::callDomain(InputCondition domainCondition, optional<stack<any>> input) {
+    void InputMap::callDomain(InputCondition domainCondition, optional<map<string,any>> input) {
         ScriptDomain* domain = nullptr;
         if (domainCondition.type == InputType::Key) {
             domain = getKeyDomain(domainCondition.input, domainCondition.state);
@@ -121,9 +121,9 @@ namespace CGEngine {
         }
 
         if (domain != nullptr) {
-            optional<DataStack> stack = nullopt;
+            optional<DataMap> stack = nullopt;
             if (input.has_value()) {
-                stack = DataStack(input.value());
+                stack = DataMap(input.value());
             }
             domain->callDomain(nullptr, stack);
         }
@@ -135,23 +135,23 @@ namespace CGEngine {
             if (event->is<Event::Closed>()) {
                 world->endWorld();
             } else if (const auto* keyReleased = event->getIf<Event::KeyReleased>()) {
-                callDomain(InputCondition((int)keyReleased->scancode, InputType::Key, InputState::Released), stack<any>({ keyReleased }));
+                callDomain(InputCondition((int)keyReleased->scancode, InputType::Key, InputState::Released), map<string, any>({ {"evt",keyReleased} }));
             }
             else if (const auto* keyPressed = event->getIf<Event::KeyPressed>()) {
-                callDomain(InputCondition((int)keyPressed->scancode, InputType::Key, InputState::Pressed), stack<any>({ keyPressed }));
+                callDomain(InputCondition((int)keyPressed->scancode, InputType::Key, InputState::Pressed), map<string, any>({ {"evt",keyPressed } }));
             }
             else if (const auto* mousePressed = event->getIf<Event::MouseButtonPressed>()) {
-                callDomain(InputCondition((int)mousePressed->button, InputType::Button, InputState::Pressed), stack<any>({ mousePressed }));
+                callDomain(InputCondition((int)mousePressed->button, InputType::Button, InputState::Pressed), map<string, any>({ {"evt",mousePressed } }));
             }
             else if (const auto* mouseReleased = event->getIf<Event::MouseButtonReleased>()) {
-                callDomain(InputCondition((int)mouseReleased->button, InputType::Button, InputState::Released), stack<any>({ mouseReleased }));
+                callDomain(InputCondition((int)mouseReleased->button, InputType::Button, InputState::Released), map<string, any>({ {"evt",mouseReleased } }));
             }
             else if (const auto* textEntered = event->getIf<Event::TextEntered>()) {
-                callDomain(InputCondition(0, InputType::Character, InputState::Atomic), stack<any>({ textEntered }));
+                callDomain(InputCondition(0, InputType::Character, InputState::Atomic), map<string, any>({ {"evt", textEntered } }));
             }
             else if (const auto* mouseMoved = event->getIf<Event::MouseMoved>()) {
                 cursorPosition = mouseMoved->position;
-                callDomain(InputCondition(0, InputType::Cursor, InputState::Atomic), stack<any>({ mouseMoved->position }));
+                callDomain(InputCondition(0, InputType::Cursor, InputState::Atomic), map<string, any>({ {"evt", mouseMoved->position } }));
             }
         }
     }
