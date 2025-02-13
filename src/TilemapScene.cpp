@@ -138,7 +138,9 @@ namespace CGEngine {
                 player->addStartScript(keyboardMoveController);
                 player->addStartScript(keyboardRotateController);
                 //Add an AnimationBehavior to the player and get the new Behavior's ID
-                id_t animBehaviorId = (new AnimationBehavior(player))->getId();
+                AnimationParameters playerAnimParams = AnimationParameters();
+                playerAnimParams.startRunning = false;
+                id_t animBehaviorId = (new AnimationBehavior(player, playerAnimParams))->getId();
 
                 //Add KeyRelease scripts that call the "endAnimation" domain on the animationBehavior via its id
                 player->addKeyReleaseScript([](ScArgs args) {

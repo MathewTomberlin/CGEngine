@@ -3,25 +3,10 @@
 #include "../World/WorldInstance.h"
 
 namespace CGEngine {
-    AnimationBehavior::AnimationBehavior(Body* owner) : Behavior(owner) {
-        Sprite* sprite = owner->get<Sprite*>();
-        Texture spriteTex = sprite->getTexture();
-        IntRect spriteRect = IntRect({ 0,0 }, sprite->getTextureRect().size);
-        setInput(map<string, any>({
-            {"maxFrameRate",15.0f},
-            {"speed",1.0f},
-            {"maxFrame",7},
-            {"looping",true},
-            {"startRunning",false},
-            {"sheetSize",{spriteTex.getSize()}}
-        }));
-        setProcess(map<string, any>({
-            {"rect",spriteRect},
-            {"frame",0},
-            {"state",AnimationState::Ready},
-            {"frameTime",0.f},
-            {"animationStartPos",Vector2i({0,0})}
-        }));
+    AnimationBehavior::AnimationBehavior(Body* owner, AnimationParameters params) : Behavior(owner) {
+        setParameters(params);
+        resetProcessData();
+
         addScriptEventsByDomain(map<string, ScriptEvent>({
             {onUpdateEvent, animBehaviorUpdateEvt},
             {"startAnimation", startAnimEvt},
@@ -31,6 +16,31 @@ namespace CGEngine {
             {"animate", animateEvt},
             {onUpdateEvent, animBehaviorStartEvt},
             {"OnTranslate", onTranslateEvt},
+        }));
+    }
+
+    void AnimationBehavior::setParameters(AnimationParameters params) {
+        Sprite* sprite = getOwner()->get<Sprite*>();
+        Texture spriteTex = sprite->getTexture();
+        setInput(map<string, any>({
+            {"maxFrameRate",params.frameRate},
+            {"speed",params.speed},
+            {"maxFrame",params.maxFrame},
+            {"looping",params.looping},
+            {"startRunning",params.startRunning},
+            {"sheetSize",spriteTex.getSize()}
+        }));
+    }
+
+    void AnimationBehavior::resetProcessData() {
+        Sprite* sprite = getOwner()->get<Sprite*>();
+        IntRect spriteRect = IntRect({ 0,0 }, sprite->getTextureRect().size);
+        setProcess(map<string, any>({
+            {"rect",spriteRect},
+            {"frame",0},
+            {"state",AnimationState::Ready},
+            {"frameTime",0.f},
+            {"animationStartPos",Vector2i({0,0})}
         }));
     }
 

@@ -45,10 +45,10 @@ namespace CGEngine {
 		void setOutputData(string key, any value);
 		void setProcessData(string key, any value);
 		id_t getId();
-
+		Body* getOwner();
 	private:
-		optional<id_t> behaviorId = nullopt;
 		Body* owner;
+		optional<id_t> behaviorId = nullopt;
 		ScriptMap scripts;
 
 		DataMap input;

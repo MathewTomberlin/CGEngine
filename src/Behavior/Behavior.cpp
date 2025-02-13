@@ -68,4 +68,8 @@ namespace CGEngine {
 	id_t Behavior::getId() {
 		return behaviorId.value_or(0U);
 	}
+
+	Body* Behavior::getOwner() {
+		return owner;
+	}
 }
