@@ -2,6 +2,7 @@
 
 #include "SFML/Graphics.hpp"
 #include <map>
+#include <fstream>
 using namespace sf;
 using namespace std;
 
