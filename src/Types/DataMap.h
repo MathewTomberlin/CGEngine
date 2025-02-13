@@ -10,7 +10,7 @@ namespace CGEngine {
 	public:
 		DataMap(map<string, any> d = {}) : data(d) {};
 
-		void addData(string key, any val) {
+		void setData(string key, any val) {
 			data[key] = val;
 		}
 

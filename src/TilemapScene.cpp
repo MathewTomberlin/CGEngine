@@ -144,16 +144,16 @@ namespace CGEngine {
 
                 //Add KeyRelease scripts that call the "endAnimation" domain on the animationBehavior via its id
                 player->addKeyReleaseScript([](ScArgs args) {
-                    args.behavior->scripts.callDomain("endAnimation", args.behavior);
+                    args.behavior->callDomain("endAnimation");
                 }, Keyboard::Scan::W, animBehaviorId);
                 player->addKeyReleaseScript([&animationBehavior](ScArgs args) {
-                    args.behavior->scripts.callDomain("endAnimation", args.behavior);
+                    args.behavior->callDomain("endAnimation");
                 }, Keyboard::Scan::S, animBehaviorId);
                 player->addKeyReleaseScript([&animationBehavior](ScArgs args) {
-                    args.behavior->scripts.callDomain("endAnimation", args.behavior);
+                    args.behavior->callDomain("endAnimation");
                 }, Keyboard::Scan::A, animBehaviorId);
                 player->addKeyReleaseScript([&animationBehavior](ScArgs args) {
-                    args.behavior->scripts.callDomain("endAnimation", args.behavior);
+                    args.behavior->callDomain("endAnimation");
                 }, Keyboard::Scan::D, animBehaviorId);
 
                 id_t rectId = world->create(new RectangleShape({ 32,32 }), Transformation(), gridBody, new Script([](ScArgs args) {

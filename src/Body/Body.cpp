@@ -715,12 +715,12 @@ namespace CGEngine {
             }
         }
 
-        behaviors.forEach([&domain](Behavior* behavior) { behavior->scripts.callDomain(domain, behavior); });
+        behaviors.forEach([&domain](Behavior* behavior) { behavior->callDomain(domain); });
         scripts.callDomain(domain);
     }
 
     void Body::callScriptsWithData(string domain, DataMap data) {
-        behaviors.forEach([&domain, &data](Behavior* behavior) { behavior->scripts.callDomainWithData(domain, behavior, data); });
+        behaviors.forEach([&domain, &data](Behavior* behavior) { behavior->callDomainWithData(domain, data); });
         scripts.callDomainWithData(domain, nullptr, data);
     }
 
