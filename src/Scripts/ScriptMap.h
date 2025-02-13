@@ -14,10 +14,10 @@ namespace CGEngine {
 		void eraseScript(string domainName, Script* script, bool shouldDelete = false);
 		void clearDomain(string domainName);
 		void clear();
-		void callDomain(string domainName,  bool logUpdate = false);
-		void callScript(string domainName, size_t scriptId);
-		void callDomainWithData(string domainName, DataMap input = DataMap(), bool logUpdate = false);
-		void callScriptWithData(string domainName, size_t scriptId, DataMap input = DataMap());
+		void callDomain(string domainName, Behavior* behavior = nullptr, bool logUpdate = false);
+		void callScript(string domainName, size_t scriptId, Behavior* behavior = nullptr);
+		void callDomainWithData(string domainName, Behavior* behavior = nullptr, DataMap input = DataMap(), bool logUpdate = false);
+		void callScriptWithData(string domainName, size_t scriptId, Behavior* behavior = nullptr, DataMap input = DataMap());
 		void deleteDomain(string domainName);
 		LogLevel logLevel = LogLevel::LogInfo;
 	private:

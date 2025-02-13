@@ -15,8 +15,6 @@ namespace CGEngine {
         int assignedType = 0;
         optional<Vector2f> clickedTilemapPos = nullopt;
         string tilemapDataPath = "mapData_.txt";
-        Vector2f facing = { 0,1 };
-        Vector2f lastMove = { 0,0 };
 
         ScriptEvent saveTilemapDataEvt = [](ScArgs args) { args.caller->get<Tilemap*>()->saveMapData(); };
         ScriptEvent tileClickEvt = [this](ScArgs args) {
@@ -116,11 +114,13 @@ namespace CGEngine {
             };
 
             ScriptEvent playerConstruction = [this](ScArgs args) {
+                //Get the id of the grid body output by tilemapConstruction
                 id_t gridId = args.script->getInput().getData<id_t>("gridId");
                 Body* gridBody = world->bodies.get(gridId);
 
                 float playerSpeed = 100.f;
-                float updateInterval = -1.f;
+                //float updateInterval = -1.f; -- UNUSED
+                
                 //Create a new instance of the player input layout
                 Script* keyboardMoveController = new Script(keyboardMovementController);
                 Script* keyboardRotateController = new Script(keyboardRotationController);
@@ -128,58 +128,191 @@ namespace CGEngine {
                 keyboardMoveController->setInput(DataMap(map<string, any>({ {"speed",playerSpeed} })));
                 keyboardRotateController->setInput(DataMap(map<string, any>({ {"speed",playerSpeed} })));
 
-                //Texture* spriteTex = textures->get("triceratops.png");
-                //IntRect spriteRect = IntRect({ 0,0 }, { 32,32 });
-                //Body* player = new Body(new Sprite(*spriteTex, IntRect({ 0,0 }, { 1, 1 })), Transformation(), gridBody);
-                //Behavior* animationBehavior = new Behavior(player);
-                //animationBehavior->input = DataStack(stack<any>({ spriteRect }));
-                //animationBehavior->scripts.addScript(onStartEvent, new Script([&animationBehavior](ScArgs args) {
-                //    IntRect newRect = any_cast<IntRect>(animationBehavior->input.pullOut().value());
-                //    args.caller->get<Sprite*>()->setTextureRect(newRect);
-                //}));
-                //player->addBehavior(animationBehavior);
-                Body* player = new SpriteAnimBody("triceratops.png", AnimationParameters({ 32,32 }, 15.f, 1.0f, true, false, 7), Transformation(), gridBody);
+                //Create a body with a Sprite
+                Texture* spriteTex = textures->get("triceratops.png");
+                IntRect spriteRect = IntRect({ 0,0 }, { 32,32 });
+                Body* player = new Body(new Sprite(*spriteTex, spriteRect), gridBody);
                 player->setName("player");
                 player->zOrder = 10;
+                //Add the instances of the Move and Rotate Controllers
                 player->addStartScript(keyboardMoveController);
                 player->addStartScript(keyboardRotateController);
-                player->addUpdateScript(new Script([this, &playerSpeed](ScArgs args) {
-                    if (facing != lastMove && lastMove != V2f({ 0,0 })) {
-                        if (lastMove == Vector2f({ 0, 1 })) {
-                            ((SpriteAnimBody*)args.caller)->setAnimationStartPos({ 0,0 });
-                        }
-                        else if (lastMove == Vector2f({ 0, -1 })) {
-                            ((SpriteAnimBody*)args.caller)->setAnimationStartPos({ 0,96 });
-                        }
-                        else if (lastMove == Vector2f({ 1, 0 })) {
-                            ((SpriteAnimBody*)args.caller)->setAnimationStartPos({ 0,32 });
-                        }
-                        else {
-                            ((SpriteAnimBody*)args.caller)->setAnimationStartPos({ 0,64 });
-                        }
-                        facing = lastMove;
-                    }
-                    lastMove = { 0,0 };
-                    }));
-                player->addScript("OnTranslate", new Script([this](ScArgs args) {
-                    if (((SpriteAnimBody*)args.caller)->getState() != AnimationState::Running) {
-                        ((SpriteAnimBody*)args.caller)->start();
-                    }
-                    lastMove = args.script->getInput().getData<Vector2f>("evt");
+
+                //Declare the input (unmodified) and data (modified) parameters of the animation behavior
+                Behavior* animationBehavior = new Behavior(player);
+                animationBehavior->input = DataMap(map<string, any>({
+                    {"maxFrameRate",15.0f},
+                    {"speed",1.0f},
+                    {"maxFrame",7},
+                    {"looping",true},
+                    {"startRunning",false},
+                    {"sheetSize",{spriteTex->getSize()}}
+                }));
+                animationBehavior->data = DataMap(map<string, any>({
+                    {"rect",spriteRect},
+                    {"frame",0},
+                    {"state",AnimationState::Ready},
+                    {"frameTime",0.f},
+                    {"animationStartPos",Vector2i({0,0})}
                 }));
 
+                //When the Behavior is started (when the Body is started)
+                animationBehavior->scripts.addScript(onStartEvent, new Script([](ScArgs args) {
+                    IntRect spriteRect = args.behavior->data.getData<IntRect>("rect");
+                    bool startRunning = args.behavior->input.getData<bool>("startRunning");
+
+                    args.caller->get<Sprite*>()->setTextureRect(spriteRect);
+                    if (startRunning) {
+                        args.behavior->scripts.callDomain("startAnimation",args.behavior);
+                    }
+                }));
+
+                //Animation scripts
+                animationBehavior->scripts.addScript("calculateAnimLength", new Script([](ScArgs args) {
+                    float maxFrameRate = args.behavior->input.getData<float>("maxFrameRate");
+                    float speed = args.behavior->input.getData<float>("speed");
+                    float frameRate = maxFrameRate * abs(speed);
+                    float frameLength = 1.f / frameRate;
+                    args.behavior->data.addData("frameLength", frameLength);
+                }));
+
+                animationBehavior->scripts.addScript("pauseAnimation", new Script([](ScArgs args) {
+                    id_t animationUpdateScriptId = args.behavior->data.getData<id_t>("animUpdateId");
+                    args.behavior->data.addData("state", AnimationState::Paused);
+                    args.behavior->scripts.removeScript(onUpdateEvent, animationUpdateScriptId,true);
+                }));
+
+                animationBehavior->scripts.addScript("endAnimation", new Script([](ScArgs args) {
+                    args.behavior->data.addData("frameTime", 0.f);
+
+                    Vector2i startingPos = args.behavior->data.getData<Vector2i>("animationStartPos");
+                    IntRect spriteRect = args.behavior->data.getData<IntRect>("rect");
+                    spriteRect.position = startingPos;
+                    args.behavior->data.addData("rect", spriteRect);
+                    args.caller->get<Sprite*>()->setTextureRect(spriteRect);
+
+                    args.behavior->scripts.callDomain("pauseAnimation", args.behavior);
+                    args.behavior->data.addData("state", AnimationState::Ready);
+
+                    args.behavior->data.addData("frame", 0);
+                }));
+
+                animationBehavior->scripts.addScript("startAnimation", new Script([](ScArgs args) {
+                    args.behavior->scripts.callDomain("calculateAnimLength", args.behavior);
+                    args.behavior->data.addData("state", AnimationState::Running);
+                    
+                    id_t animationUpdateScriptId = args.behavior->scripts.addScript(onUpdateEvent, new Script([](ScArgs args) {
+                        args.behavior->scripts.callDomain("animate", args.behavior);
+                    }));
+                    args.behavior->data.addData("animUpdateId", animationUpdateScriptId);
+                }));
+
+                animationBehavior->scripts.addScript("animate", new Script([](ScArgs args) {
+                    int frame = args.behavior->data.getData<int>("frame");
+                    IntRect spriteRect = args.behavior->data.getData<IntRect>("rect");
+                    float frameLength = args.behavior->data.getData<float>("frameLength");
+                    float state = args.behavior->data.getData<AnimationState>("state");
+
+                    bool looping = args.behavior->input.getData<bool>("looping");
+                    bool startRunning = args.behavior->input.getData<bool>("startRunning");
+                    Vector2u spriteSheetSize = args.behavior->input.getData<Vector2u>("sheetSize");
+                    Vector2i animationStartPos = args.behavior->data.getData<Vector2i>("animationStartPos");
+                    int maxFrame = args.behavior->input.getData<int>("maxFrame");
+
+                    if (frameLength <= 0) return;
+                    float frameTime = args.behavior->data.getData<float>("frameTime") + time.getDeltaSec();
+                    if (frameTime > frameLength) {
+                        while ((frameTime -= frameLength) >= 0.f) {
+                            if (maxFrame > 0 && frame >= maxFrame) {
+                                if (looping) {
+                                    frame = 0;
+                                    spriteRect.position = animationStartPos;
+                                } else {
+                                    args.behavior->scripts.callDomain("pauseAnimation", args.behavior);
+                                    break;
+                                }
+                            }
+
+                            //Advance frame rect
+                            if (maxFrame < 0 || frame <= (unsigned)maxFrame) {
+                                if ((unsigned)(spriteRect.position.x + spriteRect.size.x) < spriteSheetSize.x) {
+                                    spriteRect.position.x += spriteRect.size.x;
+                                    frame++;
+                                }
+                                else {
+                                    if ((unsigned)(spriteRect.position.y + spriteRect.size.y) < spriteSheetSize.y) {
+                                        spriteRect.position.y += spriteRect.size.y;
+                                        spriteRect.position.x = 0;
+                                        frame++;
+                                    }
+                                    else {
+                                        if (looping) {
+                                            spriteRect.position = animationStartPos;
+                                            frame++;
+                                        }
+                                        else {
+                                            args.behavior->scripts.callDomain("pauseAnimation", args.behavior);
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        args.caller->get<Sprite*>()->setTextureRect(spriteRect);
+                        args.behavior->data.addData("frame", frame);
+                        args.behavior->data.addData("rect", spriteRect);
+                    }
+                    args.behavior->data.addData("frameTime", frameTime);
+                }));
+
+                animationBehavior->scripts.addScript(onUpdateEvent, new Script([&playerSpeed](ScArgs args) {
+                    Vector2f facing = args.behavior->data.getData<Vector2f>("facing");
+                    Vector2f lastMove = args.behavior->data.getData<Vector2f>("lastMove");
+
+                    if (facing != lastMove && lastMove != V2f({ 0,0 })) {
+                        if (lastMove == Vector2f({ 0, 1 })) {
+                            args.behavior->data.addData("animationStartPos", Vector2i({ 0,0 }));
+                        } else if (lastMove == Vector2f({ 0, -1 })) {
+                            args.behavior->data.addData("animationStartPos", Vector2i({ 0,96 }));
+                        } else if (lastMove == Vector2f({ 1, 0 })) {
+                            args.behavior->data.addData("animationStartPos", Vector2i({ 0,32 }));
+                        } else {
+                            args.behavior->data.addData("animationStartPos", Vector2i({ 0,64 }));
+                        }
+
+                        facing = lastMove;
+                        args.behavior->data.addData("facing", facing);
+                        args.behavior->scripts.callDomain("endAnimation", args.behavior);
+                    }
+                    lastMove = { 0,0 };
+                    args.behavior->data.addData("lastMove", lastMove);
+                }));
+
+                animationBehavior->scripts.addScript("OnTranslate", new Script([this](ScArgs args) {
+                    AnimationState animState = args.behavior->data.getData<AnimationState>("state");
+                    if (animState != AnimationState::Running) {
+                        args.behavior->scripts.callDomain("startAnimation", args.behavior);
+                    }
+                    Vector2f lastMove = args.script->getInput().getData<Vector2f>("evt");
+                    args.behavior->data.addData("lastMove", lastMove);
+                }));
+
+                //Finally, add the animationBehavior to the Body and get the id
+                id_t animBehaviorId = player->addBehavior(animationBehavior);
+
+                //Add KeyRelease scripts that call the "endAnimation" domain on the animationBehavior via its id
                 player->addKeyReleaseScript([](ScArgs args) {
-                    ((SpriteAnimBody*)args.caller)->end();
-                    }, Keyboard::Scan::W);
-                player->addKeyReleaseScript([](ScArgs args) {
-                    ((SpriteAnimBody*)args.caller)->end();
-                    }, Keyboard::Scan::S);
-                player->addKeyReleaseScript([](ScArgs args) {
-                    ((SpriteAnimBody*)args.caller)->end();
-                    }, Keyboard::Scan::A);
-                player->addKeyReleaseScript([](ScArgs args) {
-                    ((SpriteAnimBody*)args.caller)->end();
-                    }, Keyboard::Scan::D);
+                    args.behavior->scripts.callDomain("endAnimation", args.behavior);
+                }, Keyboard::Scan::W, animBehaviorId);
+                player->addKeyReleaseScript([&animationBehavior](ScArgs args) {
+                    args.behavior->scripts.callDomain("endAnimation", args.behavior);
+                }, Keyboard::Scan::S, animBehaviorId);
+                player->addKeyReleaseScript([&animationBehavior](ScArgs args) {
+                    args.behavior->scripts.callDomain("endAnimation", args.behavior);
+                }, Keyboard::Scan::A, animBehaviorId);
+                player->addKeyReleaseScript([&animationBehavior](ScArgs args) {
+                    args.behavior->scripts.callDomain("endAnimation", args.behavior);
+                }, Keyboard::Scan::D, animBehaviorId);
 
                 id_t rectId = world->create(new RectangleShape({ 32,32 }), Transformation(), gridBody, new Script([](ScArgs args) {
                     args.caller->setName("Rectangle");
@@ -187,7 +320,7 @@ namespace CGEngine {
                     args.caller->setIntersectEnabled(true);
                     args.caller->get()->setFillColor(Color(80, 80, 80, 0));
                     args.caller->translate({ 48,48 });
-                    }));
+                }));
             };
 
             Scene* tilemapScene = new Scene(tilemapConstruction);

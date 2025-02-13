@@ -477,11 +477,15 @@ namespace CGEngine {
         parent->exchangeBody(this, target);
     }
 
-    optional<id_t> Body::addOverlapMousePressScript(Script* script, Mouse::Button button, bool alwaysAddListener) {
+    optional<id_t> Body::addOverlapMousePressScript(Script* script, Mouse::Button button, optional<id_t> behaviorId, bool alwaysAddListener) {
         //The input condition called by the InputMap
         InputCondition inputCondition = InputCondition((int)button, InputType::Button, InputState::Pressed);
         if (alwaysAddListener || listenerIds.find(inputCondition) == listenerIds.end()) {
-            input->addActuator(inputCondition, new Actuator(MouseOverlapPressEvent, this));
+            Behavior* behavior = nullptr;
+            if (behaviorId.has_value()) {
+                behavior = behaviors.get(behaviorId.value());
+            }
+            input->addActuator(inputCondition, new Actuator(MouseOverlapPressEvent, this, behavior));
         }
         //Add the script to the input condition for clicking
         if (script != nullptr) {
@@ -490,11 +494,15 @@ namespace CGEngine {
         return nullopt;
     }
 
-    optional<id_t> Body::addOverlapMouseReleaseScript(Script* script, Mouse::Button button, bool alwaysAddListener) {
+    optional<id_t> Body::addOverlapMouseReleaseScript(Script* script, Mouse::Button button, optional<id_t> behaviorId, bool alwaysAddListener) {
         //The input condition called by the InputMap
         InputCondition inputCondition = InputCondition((int)button, InputType::Button, InputState::Released);
         if (alwaysAddListener || listenerIds.find(inputCondition) == listenerIds.end()) {
-            input->addActuator(inputCondition, new Actuator(MouseOverlapReleaseEvent, this));
+            Behavior* behavior = nullptr;
+            if (behaviorId.has_value()) {
+                behavior = behaviors.get(behaviorId.value());
+            }
+            input->addActuator(inputCondition, new Actuator(MouseOverlapReleaseEvent, this, behavior));
         }
         if (script != nullptr) {
             return scripts.addScript("mouseRelease_" + to_string((int)button), script);
@@ -502,64 +510,89 @@ namespace CGEngine {
         return nullopt;
     }
 
-    optional<id_t> Body::addOverlapMouseHoldScript(Script* script, Mouse::Button button) {
-        addMousePressScript(MouseOverlapHoldPressEvent, button);
+    optional<id_t> Body::addOverlapMouseHoldScript(Script* script, Mouse::Button button, optional<id_t> behaviorId) {
+        addMousePressScript(MouseOverlapHoldPressEvent, button, behaviorId);
         if (script != nullptr) {
             return scripts.addScript("mouseHold_" + to_string((int)button), script);
         }
         return nullopt;
     }
 
-    optional<id_t> Body::addOverlapEnterMouseScript(Script* script) {
-        addMouseMovedScript(MouseOverlapEnterEvent);
+    optional<id_t> Body::addOverlapEnterMouseScript(Script* script, optional<id_t> behaviorId) {
+        addMouseMovedScript(MouseOverlapEnterEvent, behaviorId);
         if (script != nullptr) {
             return scripts.addScript("mouseEnter", script);
         }
         return nullopt;
     }
 
-    optional<id_t> Body::addOverlapExitMouseScript(Script* script) {
-        addMouseMovedScript(MouseOverlapExitEvent);
+    optional<id_t> Body::addOverlapExitMouseScript(Script* script, optional<id_t> behaviorId) {
+        addMouseMovedScript(MouseOverlapExitEvent, behaviorId);
         if (script != nullptr) {
             return scripts.addScript("mouseExit", script);
         }
         return nullopt;
     }
 
-    optional<id_t> Body::addMouseMovedScript(ScriptEvent scriptEvt) {
+    optional<id_t> Body::addMouseMovedScript(ScriptEvent scriptEvt, optional<id_t> behaviorId) {
         InputCondition inputCondition = InputCondition(0, InputType::Cursor, InputState::Atomic);
-        return input->addActuator(inputCondition, new Actuator(scriptEvt, this));
+        Behavior* behavior = nullptr;
+        if (behaviorId.has_value()) {
+            behavior = behaviors.get(behaviorId.value());
+        }
+        return input->addActuator(inputCondition, new Actuator(scriptEvt, this, behavior));
     }
 
-    optional<id_t> Body::addMousePressScript(ScriptEvent scriptEvt, Mouse::Button button) {
+    optional<id_t> Body::addMousePressScript(ScriptEvent scriptEvt, Mouse::Button button, optional<id_t> behaviorId) {
         //The input condition called by the InputMap
         InputCondition inputConditionGlobal = InputCondition((int)button, InputType::Button, InputState::Pressed);
-        return input->addActuator(inputConditionGlobal, new Actuator(scriptEvt, this));
+        Behavior* behavior = nullptr;
+        if (behaviorId.has_value()) {
+            behavior = behaviors.get(behaviorId.value());
+        }
+        return input->addActuator(inputConditionGlobal, new Actuator(scriptEvt, this, behavior));
     }
 
-    optional<id_t> Body::addMouseReleaseScript(ScriptEvent scriptEvt, Mouse::Button button) {
+    optional<id_t> Body::addMouseReleaseScript(ScriptEvent scriptEvt, Mouse::Button button, optional<id_t> behaviorId) {
         //The input condition called by the InputMap
         InputCondition inputConditionGlobal = InputCondition((int)button, InputType::Button, InputState::Released);
-        return input->addActuator(inputConditionGlobal, new Actuator(scriptEvt, this));
+        Behavior* behavior = nullptr;
+        if (behaviorId.has_value()) {
+            behavior = behaviors.get(behaviorId.value());
+        }
+        return input->addActuator(inputConditionGlobal, new Actuator(scriptEvt, this, behavior));
     }
 
-    optional<id_t> Body::addKeyPressScript(ScriptEvent scriptEvt, Keyboard::Scan key) {
+    optional<id_t> Body::addKeyPressScript(ScriptEvent scriptEvt, Keyboard::Scan key, optional<id_t> behaviorId) {
         InputCondition inputConditionGlobal = InputCondition((int)key, InputType::Key, InputState::Pressed);
-        return input->addActuator(inputConditionGlobal, new Actuator(scriptEvt, this));
+        Behavior* behavior = nullptr;
+        if (behaviorId.has_value()) {
+            behavior = behaviors.get(behaviorId.value());
+        }
+        return input->addActuator(inputConditionGlobal, new Actuator(scriptEvt, this, behavior));
     }
 
-    optional<id_t> Body::addKeyReleaseScript(ScriptEvent scriptEvt, Keyboard::Scan key) {
+    optional<id_t> Body::addKeyReleaseScript(ScriptEvent scriptEvt, Keyboard::Scan key, optional<id_t> behaviorId) {
         InputCondition inputConditionGlobal = InputCondition((int)key, InputType::Key, InputState::Released);
-        return input->addActuator(inputConditionGlobal, new Actuator(scriptEvt, this));
+        Behavior* behavior = nullptr;
+        if (behaviorId.has_value()) {
+            behavior = behaviors.get(behaviorId.value());
+        }
+        return input->addActuator(inputConditionGlobal, new Actuator(scriptEvt, this, behavior));
     }
 
-    optional<id_t> Body::addTextEnteredScript(ScriptEvent scriptEvt) {
+    optional<id_t> Body::addTextEnteredScript(ScriptEvent scriptEvt, optional<id_t> behaviorId) {
         InputCondition inputConditionGlobal = InputCondition(0, InputType::Character, InputState::Atomic);
-        return input->addActuator(inputConditionGlobal, new Actuator(scriptEvt, this));
+        Behavior* behavior = nullptr;
+        if (behaviorId.has_value()) {
+            behavior = behaviors.get(behaviorId.value());
+        }
+        return input->addActuator(inputConditionGlobal, new Actuator(scriptEvt, this, behavior));
     }
 
-    optional<id_t> Body::addKeyHoldScript(Script* script, Keyboard::Scan key) {
-        addKeyPressScript(KeyHoldPressedEvent, key);
+    optional<id_t> Body::addKeyHoldScript(Script* script, Keyboard::Scan key, optional<id_t> behaviorId) {
+        Behavior* behavior = nullptr;
+        addKeyPressScript(KeyHoldPressedEvent, key, behaviorId);
         if (script != nullptr) {
             return scripts.addScript("keyHold_" + to_string((int)key), script);
         }
@@ -672,7 +705,7 @@ namespace CGEngine {
         scripts.clearDomain(domain);
     }
 
-    void Body::callScripts(string domain, vector<Body*> bodies) {
+    void Body::callScripts(string domain) {
         if (domain == onUpdateEvent) {
             sec_t elapsed = time.getElapsedSec();
             if (elapsed - lastUpdateTime > scriptUpdateInterval) {
@@ -682,12 +715,13 @@ namespace CGEngine {
             }
         }
 
-        behaviors.forEach([&domain](Behavior* behavior) { behavior->scripts.callDomain(domain); });
+        behaviors.forEach([&domain](Behavior* behavior) { behavior->scripts.callDomain(domain, behavior); });
         scripts.callDomain(domain);
     }
 
     void Body::callScriptsWithData(string domain, DataMap data) {
-        scripts.callDomainWithData(domain, data);
+        behaviors.forEach([&domain, &data](Behavior* behavior) { behavior->scripts.callDomainWithData(domain, behavior, data); });
+        scripts.callDomainWithData(domain, nullptr, data);
     }
 
     ScriptEvent Body::onIntersectScript = [](ScArgs args) {
