@@ -3,16 +3,17 @@
 #include "../World/WorldInstance.h"
 
 namespace CGEngine {
-    AnimationBehavior::AnimationBehavior(Body* owner, string textureName, Vector2i spriteSize) : Behavior(owner) {
-        Texture* spriteTex = textures->get(textureName);
-        IntRect spriteRect = IntRect({ 0,0 }, spriteSize);
+    AnimationBehavior::AnimationBehavior(Body* owner) : Behavior(owner) {
+        Sprite* sprite = owner->get<Sprite*>();
+        Texture spriteTex = sprite->getTexture();
+        IntRect spriteRect = IntRect({ 0,0 }, sprite->getTextureRect().size);
         setInput(map<string, any>({
             {"maxFrameRate",15.0f},
             {"speed",1.0f},
             {"maxFrame",7},
             {"looping",true},
             {"startRunning",false},
-            {"sheetSize",{spriteTex->getSize()}}
+            {"sheetSize",{spriteTex.getSize()}}
         }));
         setProcess(map<string, any>({
             {"rect",spriteRect},

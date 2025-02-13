@@ -116,12 +116,12 @@ namespace CGEngine {
             ScriptEvent playerConstruction = [this](ScArgs args) {
                 //Get the id of the grid body output by tilemapConstruction
                 id_t gridId = args.script->getInput().getData<id_t>("gridId");
+                //Get a reference to the grid Body so we can parent the player to it
                 Body* gridBody = world->bodies.get(gridId);
-
+                //Player movement properties
                 float playerSpeed = 100.f;
                 //float updateInterval = -1.f; -- UNUSED
-                
-                //Create a new instance of the player input layout
+                //Create a new instance of the player input layout and set their Input DataMaps with the playerSpeed
                 Script* keyboardMoveController = new Script(keyboardMovementController);
                 Script* keyboardRotateController = new Script(keyboardRotationController);
                 //Setup its input datastack with the desired input parameters
@@ -137,22 +137,20 @@ namespace CGEngine {
                 //Add the instances of the Move and Rotate Controllers
                 player->addStartScript(keyboardMoveController);
                 player->addStartScript(keyboardRotateController);
-
-                Behavior* animationBehavior = new AnimationBehavior(player, "triceratops.png", { 32,32 });
-                //Add the animationBehavior to the Body and get the id
-                id_t animBehaviorId = player->addBehavior(animationBehavior);
+                //Add an AnimationBehavior to the player and get the new Behavior's ID
+                id_t animBehaviorId = (new AnimationBehavior(player))->getId();
 
                 //Add KeyRelease scripts that call the "endAnimation" domain on the animationBehavior via its id
                 player->addKeyReleaseScript([](ScArgs args) {
                     args.behavior->callDomain("endAnimation");
                 }, Keyboard::Scan::W, animBehaviorId);
-                player->addKeyReleaseScript([&animationBehavior](ScArgs args) {
+                player->addKeyReleaseScript([](ScArgs args) {
                     args.behavior->callDomain("endAnimation");
                 }, Keyboard::Scan::S, animBehaviorId);
-                player->addKeyReleaseScript([&animationBehavior](ScArgs args) {
+                player->addKeyReleaseScript([](ScArgs args) {
                     args.behavior->callDomain("endAnimation");
                 }, Keyboard::Scan::A, animBehaviorId);
-                player->addKeyReleaseScript([&animationBehavior](ScArgs args) {
+                player->addKeyReleaseScript([](ScArgs args) {
                     args.behavior->callDomain("endAnimation");
                 }, Keyboard::Scan::D, animBehaviorId);
 
