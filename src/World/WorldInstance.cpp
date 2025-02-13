@@ -1,5 +1,4 @@
 #include "WorldInstance.h"
-#include "../TilemapScene.cpp"
 
 namespace CGEngine {
     //Size and name to give created window
