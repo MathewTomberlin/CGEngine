@@ -266,7 +266,8 @@ namespace CGEngine {
     }
 
     void World::startWorld() {
-        //Create window (via Screen) and set InputMap's window
+        //Create window (via Screen and using the static WindowParameters) and set InputMap's window
+        screen->setWindowParameters(windowParameters);
         window = screen->createWindow();
         input->setWindow(window);
         //Add scenes from sceneList to world and load sceneList[0]

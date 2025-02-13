@@ -2,13 +2,16 @@
 
 #include "SFML/Graphics.hpp"
 #include "../Types/V2.h"
+#include "../Types/Types.h"
 using namespace std;
 using namespace sf;
 
 namespace CGEngine {
     class Screen {
     public:
-        Screen(V2f size, string title, bool fullscreen = false);
+        Screen(Vector2i size, string title, bool fullscreen = false);
+        void setWindowParameters(Vector2i size, optional<string> title = "");
+        void setWindowParameters(WindowParameters windowParams);
         //Window
         RenderWindow* getWindow() const;
         string getWindowTitle();

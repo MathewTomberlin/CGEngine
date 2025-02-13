@@ -7,6 +7,7 @@
 #include "../ResourceCaches/TextureCache.h"
 
 namespace CGEngine {
+	extern WindowParameters windowParameters;
 	extern Renderer renderer;
 	extern World* world;
 	extern GlobalTime time;
@@ -20,7 +21,6 @@ namespace CGEngine {
 	extern vector<Scene*> sceneList;
 	extern Logging logging;
 
-	extern const char* keys[];
 	extern const string onUpdateEvent;
 	extern const string onStartEvent;
 	extern const string onDeleteEvent;

@@ -1,6 +1,7 @@
 #pragma once
 #include "SFML/Graphics.hpp"
 using namespace sf;
+using namespace std;
 
 namespace CGEngine {
     class Body;
@@ -87,5 +88,13 @@ namespace CGEngine {
         Color fillColor = Color(80, 80, 80);
         Color outlineColor = Color();
         float outlineWidth = 0;
+    };
+
+    struct WindowParameters {
+        WindowParameters(Vector2i windowSize, string windowTitle) :windowTitle(windowTitle), windowSize(windowSize) {
+
+        };
+        string windowTitle;
+        Vector2i windowSize;
     };
 }
