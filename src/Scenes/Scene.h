@@ -17,6 +17,19 @@ namespace CGEngine {
 		void setOutput(DataMap out);
 		DataMap getInput();
 		DataMap getOutput();
+
+		template<typename T>
+		T getInputData(string key) {
+			return input.getData<T>(key);
+		}
+
+		template<typename T>
+		T getOutputData(string key) {
+			return output.getData<T>(key);
+		}
+
+		void setInputData(string key, any value);
+		void setOutputData(string key, any value);
 		Script* loadEvent;
 		string displayName = "";
 	private:

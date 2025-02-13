@@ -2,7 +2,7 @@
 
 #include "SFML/Graphics.hpp"
 #include "World.h"
-#include "../Scenes/GlobalTime.h"
+#include "GlobalTime.h"
 #include "../ResourceCaches/FontCache.h"
 #include "../ResourceCaches/TextureCache.h"
 
