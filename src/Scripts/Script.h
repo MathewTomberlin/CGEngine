@@ -9,15 +9,18 @@ using namespace std;
 namespace CGEngine {
 	class Body;
 	class Script;
+	class Behavior;
 
 	struct ScArgs {
 	public:
-		ScArgs(Script* s, Body* b) {
+		ScArgs(Script* s, Body* b = nullptr, Behavior* beh = nullptr) {
 			script = s;
 			caller = b;
+			behavior = beh;
 		}
 		Script* script;
-		Body* caller;
+		Body* caller = nullptr;
+		Behavior* behavior = nullptr;
 	};
 
 	typedef function<void(ScArgs)> ScriptEvent;
@@ -29,8 +32,8 @@ namespace CGEngine {
 		ScriptEvent scriptEvent;
 		optional<size_t> id;
 
-		virtual void call(Body* caller = nullptr) {
-			scriptEvent(ScArgs(this, caller));
+		virtual void call(Body* caller = nullptr, Behavior* behavior = nullptr) {
+			scriptEvent(ScArgs(this, caller, behavior));
 		}
 
 		//template <typename T>

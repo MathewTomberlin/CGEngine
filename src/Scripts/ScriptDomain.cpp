@@ -97,20 +97,20 @@ namespace CGEngine {
         return keys;
     }
 
-    void ScriptDomain::callDomain(Body* caller) {
+    void ScriptDomain::callDomain(Body* caller, Behavior* behavior) {
         vector<size_t> keys = getScriptIds();
 
         for (int i = 0; i < keys.size(); i++) {
             auto iterator = scripts.find(keys[i]);
             if (iterator != scripts.end()) {
                 Script* script = (*iterator).second;
-                script->call(caller);
+                script->call(caller, behavior);
                 if (world->isDeleted(caller)) return;
             }
         }
     }
 
-    void ScriptDomain::callDomain(Body* caller, optional<DataMap> input) {
+    void ScriptDomain::callDomain(Body* caller, Behavior* behavior, optional<DataMap> input) {
         vector<size_t> keys = getScriptIds();
 
         for (int i = 0; i < keys.size(); i++) {
@@ -120,7 +120,7 @@ namespace CGEngine {
                 if (input != nullopt) {
                     script->setInput(input.value());
                 }
-                script->call(caller);
+                script->call(caller, behavior);
                 if (world->isDeleted(caller)) return;
             }
         }
@@ -145,16 +145,16 @@ namespace CGEngine {
         }
     }
 
-    void ScriptDomain::callScript(size_t scriptId, Body* caller) {
+    void ScriptDomain::callScript(size_t scriptId, Body* caller, Behavior* behavior) {
         if (Script* script = getScript(scriptId)) {
-            script->call(caller);
+            script->call(caller, behavior);
         }
     }
 
-    void ScriptDomain::callScript(size_t scriptId, Body* caller, DataMap input) {
+    void ScriptDomain::callScript(size_t scriptId, Body* caller, DataMap input, Behavior* behavior) {
         if (Script* script = getScript(scriptId)) {
             script->setInput(input);
-            script->call(caller);
+            script->call(caller, behavior);
         }
     }
 

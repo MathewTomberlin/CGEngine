@@ -32,14 +32,14 @@ namespace CGEngine {
         /// <param name="caller">The Body calling the script</param>
         /// <param name="others">Any other Bodies passed as arguments</param>
         /// <param name="predecessor">The script to pass output data from as input</param>
-        void callDomain(Body* caller);
+        void callDomain(Body* caller, Behavior* behavior);
         /// <summary>
         /// Call each Script in the Domain, passing caller and others as arguments and passing the DataStack as input
         /// </summary>
         /// <param name="caller">The Body calling the script</param>
         /// <param name="others">Any other Bodies passed as arguments</param>
         /// <param name="input">The DataStack to pass as input</param>
-        void callDomain(Body* caller, optional<DataMap> input);
+        void callDomain(Body* caller, Behavior* behavior, optional<DataMap> input);
         /// <summary>
         /// Call the Script from the Domain, passing caller and others as arguments and passing the predecessor script's output DataStack as input
         /// </summary>
@@ -47,7 +47,7 @@ namespace CGEngine {
         /// <param name="caller">The Body calling the script</param>
         /// <param name="others">Any other Bodies passed as arguments</param>
         /// <param name="predecessor">The script to pass output data from as input</param>
-        void callScript(size_t scriptId, Body* caller);
+        void callScript(size_t scriptId, Body* caller, Behavior* behavior = nullptr);
         /// <summary>
         /// Call the Script from the Domain, passing caller and others as arguments and passing the DataStack as input
         /// </summary>
@@ -55,7 +55,7 @@ namespace CGEngine {
         /// <param name="caller">The Body calling the script</param>
         /// <param name="others">Any other Bodies passed as arguments</param>
         /// <param name="predecessor">The DataStack to pass as input</param>
-        void callScript(size_t scriptId, Body* caller, DataMap input);
+        void callScript(size_t scriptId, Body* caller, DataMap input, Behavior* behavior = nullptr);
         /// <summary>
         /// Set the input DataStack for each Domain Script to data
         /// </summary>

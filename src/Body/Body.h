@@ -392,7 +392,7 @@ namespace CGEngine {
         /// <param name="domain">The domain of the scripts to call</param>
         /// <param name="bodies">Input Bodies</param>
         /// <param name="predecessor">The parent script to inherit return data from</param>
-        void callScripts(string domain, vector<Body*> bodies = {});
+        void callScripts(string domain);
         /// <summary>
         /// Call each script within the domain, providing the indicated bodies and data.
         /// </summary>
@@ -401,18 +401,18 @@ namespace CGEngine {
         /// <param name="data">The DataStack to provide as input</param>
         void callScriptsWithData(string domain, DataMap data = DataMap());
 
-        optional<id_t> addOverlapMousePressScript(Script* script, Mouse::Button button = Mouse::Button::Left, bool alwaysAddListener = false);
-        optional<id_t> addOverlapMouseReleaseScript(Script* script, Mouse::Button button = Mouse::Button::Left, bool alwaysAddListener = false);
-        optional<id_t> addOverlapMouseHoldScript(Script* script, Mouse::Button button = Mouse::Button::Left);
-        optional<id_t> addOverlapEnterMouseScript(Script* script);
-        optional<id_t> addOverlapExitMouseScript(Script* script);
-        optional<id_t> addMousePressScript(ScriptEvent scriptEvt, Mouse::Button button = Mouse::Button::Left);
-        optional<id_t> addMouseReleaseScript(ScriptEvent scriptEvt, Mouse::Button button = Mouse::Button::Left);
-        optional<id_t> addKeyPressScript(ScriptEvent scriptEvt, Keyboard::Scan key = Keyboard::Scan::Space);
-        optional<id_t> addKeyHoldScript(Script* script, Keyboard::Scan key = Keyboard::Scan::Space);
-        optional<id_t> addKeyReleaseScript(ScriptEvent scriptEvt, Keyboard::Scan key = Keyboard::Scan::Space);
-        optional<id_t> addTextEnteredScript(ScriptEvent scriptEvt);
-        optional<id_t> addMouseMovedScript(ScriptEvent scriptEvt);
+        optional<id_t> addOverlapMousePressScript(Script* script, Mouse::Button button = Mouse::Button::Left, optional<id_t> behaviorId = nullopt, bool alwaysAddListener = false);
+        optional<id_t> addOverlapMouseReleaseScript(Script* script, Mouse::Button button = Mouse::Button::Left, optional<id_t> behaviorId = nullopt, bool alwaysAddListener = false);
+        optional<id_t> addOverlapMouseHoldScript(Script* script, Mouse::Button button = Mouse::Button::Left, optional<id_t> behaviorId = nullopt);
+        optional<id_t> addOverlapEnterMouseScript(Script* script, optional<id_t> behaviorId = nullopt);
+        optional<id_t> addOverlapExitMouseScript(Script* script, optional<id_t> behaviorId = nullopt);
+        optional<id_t> addMousePressScript(ScriptEvent scriptEvt, Mouse::Button button = Mouse::Button::Left, optional<id_t> behaviorId = nullopt);
+        optional<id_t> addMouseReleaseScript(ScriptEvent scriptEvt, Mouse::Button button = Mouse::Button::Left, optional<id_t> behaviorId = nullopt);
+        optional<id_t> addKeyPressScript(ScriptEvent scriptEvt, Keyboard::Scan key = Keyboard::Scan::Space, optional<id_t> behaviorId = nullopt);
+        optional<id_t> addKeyHoldScript(Script* script, Keyboard::Scan key = Keyboard::Scan::Space, optional<id_t> behaviorId = nullopt);
+        optional<id_t> addKeyReleaseScript(ScriptEvent scriptEvt, Keyboard::Scan key = Keyboard::Scan::Space, optional<id_t> behaviorId = nullopt);
+        optional<id_t> addTextEnteredScript(ScriptEvent scriptEvt, optional<id_t> behaviorId = nullopt);
+        optional<id_t> addMouseMovedScript(ScriptEvent scriptEvt, optional<id_t> behaviorId = nullopt);
 
         void removeOverlapMousePressScript(Script* script, Mouse::Button button, bool shouldDelete = false);
         void removeOverlapMouseReleaseScript(Script* script, Mouse::Button button, bool shouldDelete = false);
@@ -560,7 +560,7 @@ namespace CGEngine {
             //If the caller's bounds contains the mouse position (converted from View Space)
             if (args.caller->contains(args.caller->viewToGlobal(evt->position))) {
                 //Call any mouseRelease+button domain scripts with the mouse release event as input
-                args.caller->scripts.callDomainWithData("mouseRelease_" + to_string((int)evt->button), DataMap(map<string, any>({ {"evt",evt} })));
+                args.caller->scripts.callDomainWithData("mouseRelease_" + to_string((int)evt->button), nullptr, DataMap(map<string, any>({ {"evt",evt} })));
             }
         };
         ScriptEvent MouseOverlapPressEvent = [](ScArgs args) {
@@ -571,7 +571,7 @@ namespace CGEngine {
             //If the caller's bounds contains the mouse position (converted from View Space)
             if (args.caller->contains(args.caller->viewToGlobal(evt->position))) {
                 //Call any mousePress+button domain scripts with the mouse press event as input
-                args.caller->scripts.callDomainWithData("mousePress_" + to_string((int)evt->button), DataMap(map<string, any>({ {"evt",evt} })));
+                args.caller->scripts.callDomainWithData("mousePress_" + to_string((int)evt->button), nullptr, DataMap(map<string, any>({ {"evt",evt} })));
             }
         };
         ScriptEvent MouseOverlapHoldReleasedEvent = [](ScArgs args) {
@@ -660,7 +660,7 @@ namespace CGEngine {
             //If the mouse position (converted from View Space) is contained by the caller's bounds
             if (args.caller->contains(args.caller->viewToGlobal(pos))) {
                 //Call any mouseEnter domain scripts with the mouse position as input data
-                args.caller->scripts.callDomainWithData("mouseEnter", DataMap(map<string, any>({ {"evt",pos} })));
+                args.caller->scripts.callDomainWithData("mouseEnter", nullptr, DataMap(map<string, any>({ {"evt",pos} })));
             }
         };
 
@@ -671,7 +671,7 @@ namespace CGEngine {
             //If the mouse position (converted from View Space) is contained by the caller's bounds
             if (!args.caller->contains(args.caller->viewToGlobal(pos))) {
                 //Call any mouseExit domain scripts with the mouse position as input data
-                args.caller->scripts.callDomainWithData("mouseExit", DataMap(map<string, any>({ {"evt",pos} })));
+                args.caller->scripts.callDomainWithData("mouseExit", nullptr, DataMap(map<string, any>({ {"evt",pos} })));
             }
         };
         /// <summary>

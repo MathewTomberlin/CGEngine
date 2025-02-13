@@ -125,7 +125,7 @@ namespace CGEngine {
             if (input.has_value()) {
                 stack = DataMap(input.value());
             }
-            domain->callDomain(nullptr, stack);
+            domain->callDomain(nullptr, nullptr, stack);
         }
     }
 
