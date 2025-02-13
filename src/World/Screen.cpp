@@ -1,9 +1,19 @@
 #include "Screen.h"
 
 namespace CGEngine {
-    Screen::Screen(V2f size, string title, bool fullscreen) : windowTitle(title) {
+    Screen::Screen(Vector2i size, string title, bool fullscreen) : windowTitle(title) {
+        setWindowParameters(size, title);
+    }
+
+    void Screen::setWindowParameters(Vector2i size, optional<string> title) {
         setSize(size);
-        windowTitle = title;
+        if (title.has_value()) {
+            windowTitle = title.value();
+        }
+    }
+
+    void Screen::setWindowParameters(WindowParameters windowParams) {
+        setWindowParameters(windowParams.windowSize, windowParams.windowTitle);
     }
 
     string Screen::getWindowTitle() {

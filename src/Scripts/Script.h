@@ -36,73 +36,33 @@ namespace CGEngine {
 			scriptEvent(ScArgs(this, caller, behavior));
 		}
 
-		//template <typename T>
-		//T pullOutInput() {
-		//	static T test;
-		//	return input.pullOut<T>().value_or(test);
-		//}
-		//
-		//template <typename T>
-		//optional<T> pullOutOptionalInput() {
-		//	static T test;
-		//	return input.pullOut<T>();
-		//}
-		//
-		//template <typename T>
-		//T peekInput() {
-		//	static T test;
-		//	return input.peek<T>().value_or(test);
-		//}
-		//
-		//template <typename T>
-		//optional<T> peekOptionalInput() {
-		//	static T test;
-		//	return input.peek<T>();
-		//}
-		//
-		//template <typename T>
-		//T pullOutOutput() {
-		//	static T test;
-		//	return output.pullOut<T>().value_or(test);
-		//}
-		//
-		//template <typename T>
-		//optional<T> pullOutOptionalOutput() {
-		//	static T test;
-		//	return output.pullOut<T>();
-		//}
-		//
-		//template <typename T>
-		//T peekOutput() {
-		//	static T test;
-		//	return output.peek<T>().value_or(test);
-		//}
-		//
-		//template <typename T>
-		//optional<T> peekOptionalOutput() {
-		//	static T test;
-		//	return output.peek<T>();
-		//}
-		//
-		//template <typename T>
-		//T* pullOutInputPtr() {
-		//	return input.pullOut<T*>().value_or(nullptr);
-		//}
-		//
-		//template <typename T>
-		//T* peekInputPtr() {
-		//	return input.peek<T*>().value_or(nullptr);
-		//}
-		//
-		//template <typename T>
-		//T* pullOutOutputPtr() {
-		//	return output.pullOut<T*>().value_or(nullptr);
-		//}
-		//
-		//template <typename T>
-		//T* peekOutputPtr() {
-		//	return output.peek<T*>().value_or(nullptr);
-		//}
+		template<typename T>
+		T getInputData(string key) {
+			return input.getData<T>(key);
+		}
+
+		template<typename T>
+		T getOutputData(string key) {
+			return output.getData<T>(key);
+		}
+
+		template<typename T>
+		T* getInputDataPtr(string key) {
+			return input.getDataPtr<T>(key);
+		}
+
+		template<typename T>
+		T* getOutputDataPtr(string key) {
+			return output.getDataPtr<T>(key);
+		}
+
+		void setInputData(string key, any value) {
+			input.setData(key, value);
+		}
+
+		void setOutputData(string key, any value) {
+			output.setData(key, value);
+		}
 
 		void setInput(DataMap stack) { input = stack; }
 		void setOutput(DataMap stack) { output = stack; }

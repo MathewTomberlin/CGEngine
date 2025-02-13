@@ -87,7 +87,6 @@ namespace CGEngine {
 			process.setData(key, value);
 		}
 
-
 	private:
 		Body* owner;
 		ScriptMap scripts;

@@ -7,18 +7,19 @@
 namespace CGEngine {
 	class TilemapScene : public Scene {
     public:
-        TilemapScene() { loadEvent = new Script(mainEvt); displayName = "TilemapScene"; }
+        TilemapScene() { 
+            loadEvent = new Script(mainEvt); 
+            displayName = "TilemapScene"; 
+        }
 
-        id_t gridId = 0U;
         vector<int> tileTypes = { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54 };
         int assignedType = 0;
         optional<Vector2f> clickedTilemapPos = nullopt;
         string tilemapDataPath = "mapData_.txt";
-        Behavior* beh = new AnimationBehavior(nullptr, "ts", { 32,32 });
 
         ScriptEvent saveTilemapDataEvt = [](ScArgs args) { args.caller->get<Tilemap*>()->saveMapData(); };
         ScriptEvent tileClickEvt = [this](ScArgs args) {
-            MouseReleaseInput* mouseEvt = args.script->getInput().getDataPtr<MouseReleaseInput>("evt");
+            MouseReleaseInput* mouseEvt = args.script->getInputDataPtr<MouseReleaseInput>("evt");
             Tilemap* tilemap = args.caller->get<Tilemap*>();
             if (mouseEvt == nullptr || tilemap == nullptr) return;
 
@@ -28,13 +29,12 @@ namespace CGEngine {
             //Set assignedType on RMB or assign the tile type on LMB
             if (mouseEvt->button == Mouse::Button::Right) {
                 assignedType = tilemap->query(tileId);
-            }
-            else {
+            } else {
                 tilemap->assign(tileId, assignedType);
             }
         };
         ScriptEvent loadTilemapDataEvt = [this](ScArgs args) {
-            vector<string> strings = args.script->getInput().getData<vector<string>>("args");
+            vector<string> strings = args.script->getInputData<vector<string>>("args");
             Tilemap* tilemap = args.caller->get<Tilemap*>();
             if (strings.size() < 1 && tilemap == nullptr) return;
 
@@ -43,7 +43,7 @@ namespace CGEngine {
         };
 
         ScriptEvent toolboxTileClickEvt = [this](ScArgs args) {
-            MouseReleaseInput* mouseEvt = args.script->getInput().getDataPtr<MouseReleaseInput>("evt");
+            MouseReleaseInput* mouseEvt = args.script->getInputDataPtr<MouseReleaseInput>("evt");
             Tilemap* tilemap = args.caller->get<Tilemap*>();
             if (mouseEvt == nullptr || tilemap == nullptr) return;
 
@@ -57,10 +57,10 @@ namespace CGEngine {
         ScriptEvent mainEvt = [this](ScArgs args) {
             ScriptEvent tilemapConstruction = [this](ScArgs args) {
                 //Create the Body and setup its properties, including alignment and transform
-                gridId = world->create(new Tilemap("tilemap.png", { 32,32 }, { 10,10 }, vector<int>(), tilemapDataPath), new Script([&](ScArgs args) {
+                id_t gridId = world->create(new Tilemap("tilemap.png", { 32,32 }, { 10,10 }, vector<int>(), tilemapDataPath), new Script([&](ScArgs args) {
                     //Basic body properties
                     args.caller->setName("map");
-                    args.caller->moveToAlignment({ 0.5, 0.5 });
+                    args.caller->moveToAlignment({ 0.5, 0 });
                     args.caller->setScale({ 1.5f,1.5f });
 
                     //Add OnDelete script to save map data on game end or tilemap deleted
@@ -76,7 +76,7 @@ namespace CGEngine {
                     args.caller->addScript("LoadMapData", new Script(loadTilemapDataEvt));
                     //Add "SaveMapData" that expects no input strings
                     args.caller->addScript("SaveMapData", new Script(saveTilemapDataEvt));
-                    }));
+                }));
 
                 id_t toolboxId = world->create(new Tilemap("tilemap.png", { 32,32 }, { 8,7 }, tileTypes), new Script([&](ScArgs args) {
                     //Basic body properties
@@ -88,7 +88,7 @@ namespace CGEngine {
 
                     //Add a left click listener and the toolboxTileClickScript script
                     args.caller->addOverlapMouseReleaseScript(new Script(toolboxTileClickEvt), Mouse::Button::Left);
-                    }));
+                }));
 
                 //ScriptEvent clickUpdateScript = [this](ScArgs args) {
                 //    MouseReleaseInput* mouseEvt = args.script->getInput().getDataPtr<MouseReleaseInput>("evt");
