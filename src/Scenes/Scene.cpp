@@ -32,4 +32,12 @@ namespace CGEngine {
 	void Scene::setOutput(DataMap out) {
 		loadEvent->setOutput(out);
 	}
+
+	void Scene::setInputData(string key, any value) {
+		input.setData(key, value);
+	}
+
+	void Scene::setOutputData(string key, any value) {
+		output.setData(key, value);
+	}
 }
