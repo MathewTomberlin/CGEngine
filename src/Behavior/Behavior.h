@@ -1,64 +1,30 @@
 #pragma once
 
 #include <stack>
+#include <optional>
+#include <any>
 #include "../Scripts/ScriptMap.h"
+#include "../Body/Body.h"
 
 using namespace std;
-class Body;
 
 namespace CGEngine {
 	class Behavior {
 	public:
-		Behavior(Body* owning) : scripts(owning) {
-			owner = owning; 
-		};
+		Behavior(Body* owning);;
 
-		id_t addScript(string domain, Script* script) {
-			return scripts.addScript(domain, script);
-		}
+		id_t addScript(string domain, Script* script);
+		void removeScript(string domain, id_t scriptId, bool shouldDelete = false);
+		void addScriptEventsByDomain(map<string, ScriptEvent> sc);
+		void callDomain(string domain);
+		void callDomainWithData(string domain, DataMap data);
 
-		void removeScript(string domain, id_t scriptId, bool shouldDelete = false) {
-			scripts.removeScript(domain, scriptId, shouldDelete);
-		}
-
-		void addScriptEventsByDomain(map<string, ScriptEvent> sc) {
-			for (auto iterator = sc.begin(); iterator != sc.end(); ++iterator) {
-				string domain = (*iterator).first;
-				addScript((*iterator).first, new Script((*iterator).second));
-			}
-		}
-
-		void callDomain(string domain) {
-			scripts.callDomain(domain, this);
-		}
-
-		void callDomainWithData(string domain, DataMap data) {
-			scripts.callDomainWithData(domain, this, data);
-		}
-
-		void setInput(DataMap in) {
-			input = in;
-		}
-
-		void setOutput(DataMap out) {
-			output = out;
-		}
-
-		void setProcess(DataMap d) {
-			process = d;
-		}
-
-		DataMap getInput() {
-			return input;
-		}
-
-		DataMap getOutput() {
-			return output;
-		}
-
-		DataMap getProcess() {
-			return process;
-		}
+		void setInput(DataMap in);
+		void setOutput(DataMap out);
+		void setProcess(DataMap d);
+		DataMap getInput();
+		DataMap getOutput();
+		DataMap getProcess();
 
 		template<typename T>
 		T getInputData(string key) {
@@ -75,19 +41,13 @@ namespace CGEngine {
 			return process.getData<T>(key);
 		}
 
-		void setInputData(string key, any value) {
-			input.setData(key, value);
-		}
-
-		void setOutputData(string key, any value) {
-			output.setData(key, value);
-		}
-
-		void setProcessData(string key, any value) {
-			process.setData(key, value);
-		}
+		void setInputData(string key, any value);
+		void setOutputData(string key, any value);
+		void setProcessData(string key, any value);
+		id_t getId();
 
 	private:
+		optional<id_t> behaviorId = nullopt;
 		Body* owner;
 		ScriptMap scripts;
 

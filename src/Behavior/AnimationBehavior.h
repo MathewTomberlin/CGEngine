@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Behavior.h"
 #include "../World/World.h"
 #include "../Scripts/Script.h"
 using namespace std;
@@ -9,7 +10,7 @@ namespace CGEngine {
 
 	class AnimationBehavior : public Behavior {
 	public:
-		AnimationBehavior(Body* owner, string textureName, Vector2i spriteSize);
+		AnimationBehavior(Body* owner);
 	private:
 		static ScriptEvent animBehaviorStartEvt;
 		static ScriptEvent calculateFrameLengthEvt;

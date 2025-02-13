@@ -4,7 +4,6 @@
 #include "../Body/Body.h"
 #include "../World/Renderer.h"
 #include <algorithm>
-#include "SceneLayout.h"
 using namespace std;
 
 namespace CGEngine {
