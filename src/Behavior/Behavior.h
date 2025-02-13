@@ -2,7 +2,6 @@
 
 #include <stack>
 #include "../Scripts/ScriptMap.h"
-#include "../Types/DataStack.h"
 
 using namespace std;
 class Body;
