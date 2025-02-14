@@ -1,3 +1,11 @@
+#CGEngine v0.1
+
+THIS SOFTWARE IS IN ALPHA DEVELOPMENT AND IS RELEASED AS-IS. FEATURES ARE LIKELY TO CHANGE WITHOUT NOTICE.
+
+This C++ interaction library allows you to create real-time, scriptable visual interfaces and games using composable Bodies, Behaviors, Scripts, and Timers.
+
+This project template is built on the SFML CMake GitHub template. Instructions for using that template are below and many should be the same for this project template, but they have not been reviewed or confirmed.
+
 # CMake SFML Project Template
 
 This repository template should allow for a fast and hassle-free kick start of your next SFML project using CMake.
@@ -6,7 +14,7 @@ Thanks to [GitHub's nature of templates](https://docs.github.com/en/repositories
 The template starts out very basic, but might receive additional features over time:
 
 - Basic CMake script to build your project and link SFML on any operating system
-- Basic [GitHub Actions](https://github.com/features/actions) script for all major platforms
+
 
 ## How to Use
 
