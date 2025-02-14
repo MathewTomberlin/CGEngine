@@ -238,31 +238,50 @@ namespace CGEngine {
         return hits;
     }
 
-    void World::addScene(string sceneName, Scene* scene) {
+    void World::addScene(string sceneName, Behavior* scene) {
         scenes[sceneName] = scene;
     }
 
-    void World::loadScene(string sceneName, Body* sceneRoot) {
+    void World::loadScene(string sceneName) {
         if (scenes.find(sceneName) != scenes.end()) {
-            Scene* scene = scenes[sceneName];
-            scene->load(sceneRoot);
+            Behavior* scene = scenes[sceneName];
+            scene->callDomain(onLoadEvent);
         }
     }
 
-    void World::loadSceneWithData(string sceneName, DataMap input, Body* sceneRoot) {
+    void World::loadSceneWithInput(string sceneName, DataMap input) {
         if (scenes.find(sceneName) != scenes.end()) {
-            Scene* scene = scenes[sceneName];
+            Behavior* scene = scenes[sceneName];
             scene->setInput(input);
-            scene->load(sceneRoot);
+            scene->callDomain(onLoadEvent);
         }
     }
 
-    optional<DataMap> World::getSceneData(string sceneName) {
+    optional<DataMap> World::getSceneOutput(string sceneName) {
         if (scenes.find(sceneName) != scenes.end()) {
-            Scene* scene = scenes[sceneName];
+            Behavior* scene = scenes[sceneName];
             DataMap output = scene->getOutput();
             return output;
         }
+        return nullopt;
+    }
+
+    optional<DataMap> World::getSceneInput(string sceneName) {
+        if (scenes.find(sceneName) != scenes.end()) {
+            Behavior* scene = scenes[sceneName];
+            DataMap input = scene->getInput();
+            return input;
+        }
+        return nullopt;
+    }
+
+    optional<DataMap> World::getSceneProcess(string sceneName) {
+        if (scenes.find(sceneName) != scenes.end()) {
+            Behavior* scene = scenes[sceneName];
+            DataMap process = scene->getProcess();
+            return process;
+        }
+        return nullopt;
     }
 
     void World::startWorld() {
@@ -277,10 +296,11 @@ namespace CGEngine {
     void World::initSceneList() {
         if (sceneList.size() > 0) {
             for (auto iterator = sceneList.begin(); iterator != sceneList.end(); ++iterator) {
-                addScene((*iterator)->getDisplayName(), (*iterator));
+                Behavior* scene = (*iterator);
+                addScene(scene->getName(), scene);
             }
 
-            loadScene(sceneList.at(0)->getDisplayName());
+            loadScene(sceneList.at(0)->getName());
         }
     }
 

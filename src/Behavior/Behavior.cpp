@@ -1,9 +1,12 @@
 #include "Behavior.h"
 
 namespace CGEngine {
-	Behavior::Behavior(Body* owning) : scripts(owning) {
+	Behavior::Behavior(Body* owning, string name) : scripts(owning) {
+		displayName = name;
 		owner = owning;
-		behaviorId = owner->addBehavior(this);
+		if (owner != nullptr) {
+			behaviorId = owner->addBehavior(this);
+		}
 	};
 
 	id_t Behavior::addScript(string domain, Script* script) {
@@ -71,5 +74,9 @@ namespace CGEngine {
 
 	Body* Behavior::getOwner() {
 		return owner;
+	}
+
+	string Behavior::getName() {
+		return displayName;
 	}
 }
