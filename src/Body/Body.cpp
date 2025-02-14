@@ -78,13 +78,6 @@ namespace CGEngine {
         bodyParams.name = name;
     }
 
-    void Body::set(Transformable* ent) {
-        if (entity != nullptr) {
-            delete entity;
-        }
-        entity = ent;
-    }
-
     void Body::update(function<void(Shape*)> script, bool updateChildren) {
         update<Shape*>(script, updateChildren);
     }
@@ -423,10 +416,6 @@ namespace CGEngine {
         }
     }
 
-    /// <summary>
-    /// Body is removed from children and its parent is set to null
-    /// </summary>
-    /// <param name="child"></param>
     void Body::dropBody(Body* child) {
         //Do nothing on null input
         if (child != nullptr) {
