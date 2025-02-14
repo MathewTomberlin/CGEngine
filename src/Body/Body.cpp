@@ -143,7 +143,7 @@ namespace CGEngine {
                 return FloatRect({ 0,0 }, screen->getSize());
             }
         }
-        return getBodyGlobalBounds();
+        return getBodyGlobalBounds(this);
     }
 
     FloatRect Body::getLocalBounds() const {
@@ -165,15 +165,7 @@ namespace CGEngine {
                 return FloatRect({ 0,0 }, screen->getSize());
             }
         }
-        return getBodyLocalBounds();
-    }
-
-    FloatRect Body::getBodyLocalBounds() const {
-        return FloatRect({ 0,0 }, { 1, 1 });
-    }
-    
-    FloatRect Body::getBodyGlobalBounds() const {
-        return getGlobalTransform().transformRect(FloatRect({ 0,0 }, { 1,1 }));
+        return getBodyLocalBounds(this);
     }
 
     V2f Body::getLocalCenter()  const {
