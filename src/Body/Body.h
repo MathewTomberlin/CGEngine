@@ -5,7 +5,7 @@
 #include <memory>
 #include "../Types/V2.h"
 #include "../Scripts/ScriptMap.h"
-#include "../Input/InputMap.h"
+#include "../World/InputMap.h"
 #include "../Timers/TimerMap.h"
 #include "../Drawables/Tilemap.h"
 #include "../Behavior/Behavior.h"
@@ -136,12 +136,12 @@ namespace CGEngine {
         /// Overrideable method to get the entity local bounds when the entity is not a built-in type
         /// </summary>
         /// <returns>The FloatRect local bounds of the entity</returns>
-        virtual FloatRect getBodyLocalBounds() const;
+        function<FloatRect(const Body*)> getBodyLocalBounds = [](const Body* body) { return FloatRect({ 0,0 }, { 1,1 }); };
         /// <summary>
         /// Overrideable method to get the entity global bounds when the entity is not a built-in type
         /// </summary>
         /// <returns>The FloatRect global bounds of the entity</returns>
-        virtual FloatRect getBodyGlobalBounds() const;
+        function<FloatRect(const Body*)> getBodyGlobalBounds = [](const Body* body) { return FloatRect({ 0,0 }, { 1,1 }); };;
         /// <summary>
         /// Returns the position of the Body in world space
         /// </summary>

@@ -3,6 +3,7 @@
 #include "SFML/Graphics.hpp"
 #include "World.h"
 #include "Renderer.h"
+#include "InputMap.h"
 #include "GlobalTime.h"
 #include "../ResourceCaches/FontCache.h"
 #include "../ResourceCaches/TextureCache.h"
