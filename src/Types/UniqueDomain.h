@@ -1,5 +1,6 @@
 #pragma once
 #include "Types.h"
+#include <functional>
 #include "UniqueIntegerStack.h"
 
 namespace CGEngine {
@@ -33,6 +34,10 @@ namespace CGEngine {
 			for (auto iterator = domain.begin(); iterator != domain.end(); ++iterator) {
 				function((*iterator).second);
 			}
+		}
+
+		void clear() {
+			domain.clear();
 		}
 	private:
 		map<DomainKey, DomainValue> domain;

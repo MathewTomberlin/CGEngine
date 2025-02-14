@@ -4,6 +4,7 @@
 #include <set>
 #include <optional>
 #include <iostream>
+#include "../Types/Types.h"
 using namespace std;
 
 namespace CGEngine {

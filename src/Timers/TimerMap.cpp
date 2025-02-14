@@ -17,9 +17,9 @@ namespace CGEngine {
         sec_t expiration = time.getElapsedSec() + duration;
         //Create new timer
         Timer* timer = new Timer(timerDisplayName);
-        //Take a unique id for the timer
-        timerIds.receive(&timer->id);
-        id_t id = timer->id.value();
+        //Take a unique id for the timer and assign it to the timer
+        id_t id = timers.add(timer);
+        timer->id = id;
         log(timer->name, id, "SET(" + to_string(duration) + " sec)");
         //Get the timer domain name by its timer id
         string timerDomain = "timer" + to_string(id);
@@ -32,10 +32,10 @@ namespace CGEngine {
             //OnUpdate: Check if the world time >= expiration time
             if (time.getElapsedSec() >= expiration) {
                 //LOGGING
-                log(timers[id]->name, id, "DONE");
+                log(timers.get(id)->name, id, "DONE");
                 //Get the timer domain name by its timer id
                 string timerDomainById = "timer" + to_string(id);
-                string timerName = timers[id]->name;
+                string timerName = timers.get(id)->name;
                 //Call all the scripts with this timer's domain by its id
                 args.caller->callScripts(timerDomainById);
                 //Check if the caller was deleted by the timer domain scripts
@@ -51,7 +51,7 @@ namespace CGEngine {
                         args.caller->clearDomain(timerDomainById);
                     }
                     //Delete the timer
-                    size_t updateEventId = timers[id]->eventId;
+                    size_t updateEventId = timers.get(id)->eventId;
                     deleteTimer(id);
                     //Start the next loop, if looping
                     if ((loopCount < 0 || loopCount > 1) && loopDuration > 0) {
@@ -62,68 +62,56 @@ namespace CGEngine {
                 }
             }
         }));
-        //Add the timer to the timers map
-        timers[id] = timer;
         //LOGGING
         log(timer->name, id, "START(" + to_string(duration) + " sec)");
         return id;
     }
 
     void TimerMap::cancelTimer(Body* body, size_t timerId) {
-        if (timers.find(timerId) != timers.end()) {
-            Timer* timer = timers[timerId];
-            //LOGGING
-            log(timer->name, timerId, "STOP");
-            //Delete the domain for the timer id
-            body->deleteDomain("timer" + to_string(timerId));
-            //Remove this timer's update script
-            body->eraseUpdateScript(timer->eventId);
-            //Refund the timer id, delete the timer and erase it from the timer map
-            timerIds.refund(&timers[timerId]->id);
-            delete timers[timerId];
-            timers.erase(timerId);
-        }
+        Timer* timer = timers.get(timerId);
+        //LOGGING
+        log(timer->name, timerId, "STOP");
+        //Delete the domain for the timer id
+        body->deleteDomain("timer" + to_string(timerId));
+        //Remove this timer's update script
+        body->eraseUpdateScript(timer->eventId);
+        //Refund the timer id, delete the timer and erase it from the timer map
+        timers.remove(timerId);
+        delete timer;
     }
 
     void TimerMap::cancelTimer(Body* body, timerId_t* timerId) {
         if (timerId->has_value()) {
-            size_t id = timerId->value();
-            auto iterator = timers.find(id);
-            if (iterator != timers.end()) {
-                Timer* timer = timers[id];
-                //LOGGING
-                log(timer->name, id, "STOP");
-                //Delete the domain for the timer id
-                body->deleteDomain("timer" + to_string(id));
-                //Remove this timer's update script
-                body->eraseUpdateScript(timer->eventId);
-                //Refund the timer id, delete the timer and erase it from the timer map and set the timerId optional to nullopt
-                timerIds.refund(&timers[id]->id);
-                delete timers[id];
-                timers.erase(id);
-                *timerId = nullopt;
-            }
+            id_t id = timerId->value();
+            Timer* timer = timers.get(id);
+            //LOGGING
+            log(timer->name, id, "STOP");
+            //Delete the domain for the timer id
+            body->deleteDomain("timer" + to_string(id));
+            //Remove this timer's update script
+            body->eraseUpdateScript(timer->eventId);
+            //Refund the timer id, delete the timer and erase it from the timer map and set the timerId optional to nullopt
+            timers.remove(id);
+            delete timer;
+            *timerId = nullopt;
         }
     }
 
     void TimerMap::deleteTimers(Body* body) {
-        for (auto iterator = timers.begin(); iterator != timers.end(); iterator++) {
-            if ((*iterator).second != nullptr) {
-                if (logging.willLog(logLevel)) {
-                    string namePrompt = (body->getName() != "") ? "(" + body->getName() + ")" : "";
-                    string idPrompt = body->getId().has_value() ? "[" + to_string(body->getId().value()) + "]" : "";
-                    logging(logLevel, "Body" + idPrompt + namePrompt, "Deleting Timer(" + (*iterator).second->name + ")");
-                }
-                delete (*iterator).second;
+        timers.forEach([this, &body](Timer* timer) {
+            if (logging.willLog(logLevel)) {
+                string namePrompt = (body->getName() != "") ? "(" + body->getName() + ")" : "";
+                string idPrompt = body->getId().has_value() ? "[" + to_string(body->getId().value()) + "]" : "";
+                logging(logLevel, "Body" + idPrompt + namePrompt, "Deleting Timer(" + timer->name + ")");
             }
-        }
+            delete timer;
+        });
     }
 
     void TimerMap::deleteTimer(size_t timerId) {
-        Timer* timer = timers[timerId];
-        timerIds.refund(&timer->id);
+        Timer* timer = timers.get(timerId);
+        timers.remove(timerId);
         delete timer;
-        timers.erase(timerId);
     }
 
     void TimerMap::log(string timerName, size_t timerId, string msg) {
