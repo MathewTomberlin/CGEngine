@@ -29,6 +29,25 @@ namespace CGEngine {
         bool boundsRendering = false;
     };
 
+    /// <summary>
+    /// A Body is a base class of CGEngine which contains a Drawable and Transformable entity (such as SFML's Shapes, Text, and Sprites) and which is, 
+    /// itself, Transformable and Drawable
+    /// 
+    /// A Body may have a parent and/or children with which its Transform is combined, allowing for hierarchical transformations. When not attached to
+    /// another Body, a Body is attached to the World Root Body.
+    /// 
+    /// A Body has a ScriptMap which is a map of domain names to lists of scripts by unique id. Some domain names are automatically called
+    /// at certain times during World Execution, such as "start" (or onStartEvent), "update" (or onUpdateEvent), and "delete" (or onDeleteEvent)
+    /// scripts, which are called when a Body is created, each frame, or when it is deleted, respectively. Alternatively, a domain name can be called
+    /// manually, by its name. Each Script is aware of itself, the Body that called it, and, if applicable, the Behavior that called it. A Script may 
+    /// be assigned input/output data via its DataMaps that may be used during its execution, if necessary.
+    /// 
+    /// A Body has a list of Behaviors by id. A Behavior has input, process, and output DataMaps that it may use to handle data. Additionally, a Behavior
+    /// has a ScriptMap, just like a Body. A Behavior's ScriptMap behaves in the same way as a Body and its "start", "update", and "delete" domains are
+    /// called whenever the Body's are called during World Execution.
+    /// 
+    /// A Body creates a bounds RectangleShape and updates it with its entity. The bounds may be drawn by setting the correct setting in the World.
+    /// </summary>
     class Body : public Transformable, public Drawable {
     public:
         Body(Transformable* d, Transformation handle = Transformation(), Body* p = nullptr, Vector2f align = {0,0});
@@ -41,7 +60,7 @@ namespace CGEngine {
         /// <returns>The Body's unique id or nullopt</returns>
         optional<size_t> getId();
         /// <summary>
-        /// The Body's user assigned name (or 'Root' for the world root body)
+        /// The Body's name
         /// </summary>
         /// <returns>The user assigned Body name</returns>
         string getName();
@@ -55,18 +74,16 @@ namespace CGEngine {
         /// </summary>
         /// <typeparam name="T">The type of object to return the drawn Shape as</typeparam>
         /// <returns>The drawn Shape as the indicated type</returns>
-
         template <typename T = Shape*>
         T get() {
             return dynamic_cast<T>(entity);
         }
 
-        void set(Transformable* ent);
         /// <summary>
-        /// Call the script on the drawn object, cast to the supplied type, and on each child recursively (if updateChildren is true)
+        /// Call the script on the entity, cast to the supplied type, and on each child recursively (if updateChildren is true)
         /// </summary>
-        /// <typeparam name="T">The type to cast the drawn object to</typeparam>
-        /// <param name="script">The script to call for the drawn object</param>
+        /// <typeparam name="T">The type to cast the entity to</typeparam>
+        /// <param name="script">The script to call for the entity</param>
         /// <param name="updateChildren">Whether to recursively call the script on children</param>
         template <typename T = Shape*>
         void update(function<void(T)> script, bool updateChildren = false) {
@@ -81,8 +98,23 @@ namespace CGEngine {
                 }
             }
         }
+        /// <summary>
+        /// Call the script on the entity, assuming it is a Shape, and on each child recursively (if updateChildren is true)
+        /// </summary>
+        /// <param name="script">The script to call for the Shape</param>
+        /// <param name="updateChildren">Whether to recursively call the script on children</param>
         void update(function<void(Shape*)> script, bool updateChildren = false);
+        /// <summary>
+        /// Call the script on the entity, assuming it is a Text, and on each child recursively (if updateChildren is true)
+        /// </summary>
+        /// <param name="script">The script to call for the Text</param>
+        /// <param name="updateChildren">Whether to recursively call the script on children</param>
         void update(function<void(Text*)> script, bool updateChildren = false);
+        /// <summary>
+        /// Call the script on the entity, assuming it is a Sprite, and on each child recursively (if updateChildren is true)
+        /// </summary>
+        /// <param name="script">The script to call for the Sprite</param>
+        /// <param name="updateChildren">Whether to recursively call the script on children</param>
         void update(function<void(Sprite*)> script, bool updateChildren = false);
 
         /// <summary>
@@ -91,14 +123,14 @@ namespace CGEngine {
         /// <returns>The Body's Transform in world space</returns>
         Transform getGlobalTransform() const;
         /// <summary>
-        /// Returns the rectangle surrounding the drawn Shape with all translate, rotate, and scale transformations applied
+        /// Returns the rectangle surrounding the entity with all translate, rotate, and scale transformations applied
         /// </summary>
-        /// <returns>Rect  without any translate, rotate, or scale transformations applied</returns>
+        /// <returns>Rect without any translate, rotate, or scale transformations applied</returns>
         FloatRect getGlobalBounds() const;
         /// <summary>
-        /// Returns the rectangle surrounding the drawn Shape without any translate, rotate, or scale transformations applied
+        /// Returns the rectangle surrounding the entity without any translate, rotate, or scale transformations applied
         /// </summary>
-        /// <returns>Rect  without any translate, rotate, or scale transformations applied</returns>
+        /// <returns>Rect without any translate, rotate, or scale transformations applied</returns>
         FloatRect getLocalBounds() const;
         /// <summary>
         /// Overrideable method to get the entity local bounds when the entity is not a built-in type
@@ -191,9 +223,15 @@ namespace CGEngine {
         /// <returns>The vector in local space</returns>
         Vector2f viewToLocal(Vector2i input) const;
 
+        /// <summary>
+        /// Determine if a line from lineStart to lineEnd intersects this Body's bounds rect
+        /// </summary>
+        /// <param name="lineStart">The start of the line</param>
+        /// <param name="lineEnd">The end of the line</param>
+        /// <returns>True if the line intersected the Body's bounds rect</returns>
         bool lineIntersects(Vector2f lineStart, Vector2f lineEnd);
         /// <summary>
-        /// Checks if the assigned point is within the drawn Shape's global bounds
+        /// Checks if the assigned point is within the entity's bounds rect
         /// </summary>
         /// <param name="point">The point to check</param>
         /// <returns>True if the point is within the shape's global bounds</returns>
@@ -268,7 +306,7 @@ namespace CGEngine {
         /// <param name="body">The Body to attach to this Body</param>
         void attachBody(Body* body);
         /// <summary>
-        /// Detach from a parent, if this Body has one, then attack to the target Body
+        /// Detach from a parent, if this Body has one, then attach to the target Body
         /// </summary>
         /// <param name="target">The Body to attach this Body to</param>
         void attach(Body* target);
@@ -384,39 +422,170 @@ namespace CGEngine {
         /// <param name="scriptId">The unique id of the script to delete with in the domain</param>
         /// <param name="shouldDelete">Whether the domain should be deleted if empty after the erase</param>
         void eraseDeleteScript(id_t scriptId, bool shouldDelete = false);
+        /// <summary>
+        /// Erase a Domain from the ScriptMap and then delete the Domain
+        /// </summary>
+        /// <param name="domain">The name of the domain to delete</param>
         void deleteDomain(string domain);
+        /// <summary>
+        /// Erase and refund ids for all scripts in the domain, but don't delete the domain or the Scripts
+        /// </summary>
+        /// <param name="domain">The name of the domain to delete</param>
         void clearDomain(string domain);
         /// <summary>
-        /// Call each script within the domain, providing the indicated bodies and inheriting return data from predecessors.
+        /// Call each script within the domain
         /// </summary>
         /// <param name="domain">The domain of the scripts to call</param>
-        /// <param name="bodies">Input Bodies</param>
-        /// <param name="predecessor">The parent script to inherit return data from</param>
         void callScripts(string domain);
         /// <summary>
-        /// Call each script within the domain, providing the indicated bodies and data.
+        /// Call each script within the domain, providing the indicated input data
         /// </summary>
         /// <param name="domain">The domain of the scripts to call</param>
-        /// <param name="bodies">Input Bodies</param>
-        /// <param name="data">The DataStack to provide as input</param>
+        /// <param name="data">The DataMap to provide as input</param>
         void callScriptsWithData(string domain, DataMap data = DataMap());
-
+        /// <summary>
+        /// Add the script to the "mousePress_"+buttonId ScriptMap domain. Also, if not added (or if 
+        /// alwaysAddListener is true), add an Actuator for the indicated Mouse Button that calls the 
+        /// "mousePress_"+buttonId ScriptMap domain when the Mouse Button is pressed when the cursor
+        /// is within this Body bounds rect.
+        /// </summary>
+        /// <param name="script">The Script to add to the "mousePress_"+buttonId domain</param>
+        /// <param name="button">The Mouse Button to respond to</param>
+        /// <param name="behaviorId">The Behavior to pass to the domain when called</param>
+        /// <param name="alwaysAddListener">If true, an Actuator will be added even if one already exists</param>
+        /// <returns>The id of the Script that was added to the "mousePress_"+buttonId domain</returns>
         optional<id_t> addOverlapMousePressScript(Script* script, Mouse::Button button = Mouse::Button::Left, optional<id_t> behaviorId = nullopt, bool alwaysAddListener = false);
+        /// <summary>
+        /// Add the script to the "mouseRelease_"+buttonId ScriptMap domain. Also, if not added (or if 
+        /// alwaysAddListener is true), add an Actuator for the indicated Mouse Button that calls the 
+        /// "mouseRelease_"+buttonId ScriptMap domain when the Mouse Button is released when the cursor
+        /// is within this Body bounds rect.
+        /// </summary>
+        /// <param name="script">The Script to add to the "mouseRelease_"+buttonId domain</param>
+        /// <param name="button">The Mouse Button to respond to</param>
+        /// <param name="behaviorId">The Behavior to pass to the domain when called</param>
+        /// <param name="alwaysAddListener">If true, an Actuator will be added even if one already exists</param>
+        /// <returns>The id of the Script that was added to the "mouseRelease_"+buttonId domain</returns>
         optional<id_t> addOverlapMouseReleaseScript(Script* script, Mouse::Button button = Mouse::Button::Left, optional<id_t> behaviorId = nullopt, bool alwaysAddListener = false);
+        /// <summary>
+        /// Add the script to the "mouseHold_"+buttonId ScriptMap domain. Also, add an Actuator for the 
+        /// indicated Mouse Button that calls the "mouseHold_"+buttonId ScriptMap domain when the Mouse 
+        /// Button is pressed and held within the bounds rect of this Body, removes itself (the Actuator),
+        /// and adds an Actuator for when the button is released.
+        /// </summary>
+        /// <param name="script">The Script to add to the "mouseHold_"+buttonId domain</param>
+        /// <param name="button">The Mouse Button to respond to</param>
+        /// <param name="behaviorId">The Behavior to pass to the domain when called</param>
+        /// <returns>The id of the Script that was added to the "mouseHold_"+buttonId domain</returns>
         optional<id_t> addOverlapMouseHoldScript(Script* script, Mouse::Button button = Mouse::Button::Left, optional<id_t> behaviorId = nullopt);
+        /// <summary>
+        /// Add the script to the "mouseEnter" ScriptMap domain. Add an update script that checks if the cursor
+        /// overlaps this Body and, if so, calls the "mouseEnter"ScriptMap domain.
+        /// </summary>
+        /// <param name="script">The Script to add to the "mouseEnter"domain</param>
+        /// <param name="behaviorId">The Behavior to pass to the domain when called</param>
+        /// <returns>The id of the Script that was added to the "mouseEnter" domain</returns>
         optional<id_t> addOverlapEnterMouseScript(Script* script, optional<id_t> behaviorId = nullopt);
+        /// <summary>
+        /// Add the script to the "mouseExit" ScriptMap domain. Add an update script that checks if the cursor
+        /// stops overlapping this Body and, if so, calls the "mouseExit"ScriptMap domain.
+        /// </summary>
+        /// <param name="script">The Script to add to the "mouseExit"domain</param>
+        /// <param name="behaviorId">The Behavior to pass to the domain when called</param>
+        /// <returns>The id of the Script that was added to the "mouseExit" domain</returns>
         optional<id_t> addOverlapExitMouseScript(Script* script, optional<id_t> behaviorId = nullopt);
+        /// <summary>
+        /// Add the script to the "mousePress_"+buttonId ScriptMap domain. Also, if not added (or if 
+        /// alwaysAddListener is true), add an Actuator for the indicated Mouse Button that calls the 
+        /// "mousePress_"+buttonId ScriptMap domain when the Mouse Button is pressed.
+        /// </summary>
+        /// <param name="script">The Script to add to the "mousePress_"+buttonId domain</param>
+        /// <param name="button">The Mouse Button to respond to</param>
+        /// <param name="behaviorId">The Behavior to pass to the domain when called</param>
+        /// <param name="alwaysAddListener">If true, an Actuator will be added even if one already exists</param>
+        /// <returns>The id of the Script that was added to the "mousePress_"+buttonId domain</returns>
         optional<id_t> addMousePressScript(ScriptEvent scriptEvt, Mouse::Button button = Mouse::Button::Left, optional<id_t> behaviorId = nullopt);
+        /// <summary>
+        /// Add the script to the "mouseRelease_"+buttonId ScriptMap domain. Also, if not added (or if 
+        /// alwaysAddListener is true), add an Actuator for the indicated Mouse Button that calls the 
+        /// "mouseRelease_"+buttonId ScriptMap domain when the Mouse Button is released.
+        /// </summary>
+        /// <param name="script">The Script to add to the "mouseRelease_"+buttonId domain</param>
+        /// <param name="button">The Mouse Button to respond to</param>
+        /// <param name="behaviorId">The Behavior to pass to the domain when called</param>
+        /// <param name="alwaysAddListener">If true, an Actuator will be added even if one already exists</param>
+        /// <returns>The id of the Script that was added to the "mouseRelease_"+buttonId domain</returns>
         optional<id_t> addMouseReleaseScript(ScriptEvent scriptEvt, Mouse::Button button = Mouse::Button::Left, optional<id_t> behaviorId = nullopt);
+        /// <summary>
+        /// Add the script to the "keyPress_"+keyId ScriptMap domain. Add an Actuator for the indicated 
+        /// Key that calls the  "keyPress_"+keyId ScriptMap domain when the Key is pressed.
+        /// </summary>
+        /// <param name="script">The Script to add to the "keyPress_"+buttonId domain</param>
+        /// <param name="key">The Key to respond to</param>
+        /// <param name="behaviorId">The Behavior to pass to the domain when called</param>
+        /// <returns>The id of the Script that was added to the "keyPress_"+keyId domain</returns>
         optional<id_t> addKeyPressScript(ScriptEvent scriptEvt, Keyboard::Scan key = Keyboard::Scan::Space, optional<id_t> behaviorId = nullopt);
+        /// <summary>
+        /// Add the script to the "keyHold_"+keyId ScriptMap domain. Add an Actuator for the indicated 
+        /// Key that calls the "keyHold_"+keyId ScriptMap domain when the Key is pressed and held.
+        /// </summary>
+        /// <param name="script">The Script to add to the "keyHold_"+buttonId domain</param>
+        /// <param name="key">The Key to respond to</param>
+        /// <param name="behaviorId">The Behavior to pass to the domain when called</param>
+        /// <returns>The id of the Script that was added to the "keyHold_"+keyId domain</returns>
         optional<id_t> addKeyHoldScript(Script* script, Keyboard::Scan key = Keyboard::Scan::Space, optional<id_t> behaviorId = nullopt);
+        /// <summary>
+        /// Add the script to the "keyRelease_"+keyId ScriptMap domain. Also, if not added (or if 
+        /// alwaysAddListener is true), add an Actuator for the indicated Key that calls the 
+        /// "keyRelease_"+keyId ScriptMap domain when the Key is released.
+        /// </summary>
+        /// <param name="script">The Script to add to the "keyRelease_"+buttonId domain</param>
+        /// <param name="key">The Key to respond to</param>
+        /// <param name="behaviorId">The Behavior to pass to the domain when called</param>
+        /// <returns>The id of the Script that was added to the "keyRelease_"+keyId domain</returns>
         optional<id_t> addKeyReleaseScript(ScriptEvent scriptEvt, Keyboard::Scan key = Keyboard::Scan::Space, optional<id_t> behaviorId = nullopt);
+        /// <summary>
+        /// Adds an Actuator that calls the indicated ScriptEvent when text is entered
+        /// </summary>
+        /// <param name="scriptEvt">The ScriptEvent to call when text is entered</param>
+        /// <param name="behaviorId">The Behavior to apply to the Actuator</param>
+        /// <returns>The id of the Actuator that was added with the ScriptEvent</returns>
         optional<id_t> addTextEnteredScript(ScriptEvent scriptEvt, optional<id_t> behaviorId = nullopt);
+        /// <summary>
+        /// Adds an Actuator that calls the indicated ScriptEvent when cursor is entered
+        /// </summary>
+        /// <param name="scriptEvt">The ScriptEvent to call when the cursor is moved</param>
+        /// <param name="behaviorId">The Behavior to apply to the Actuator</param>
+        /// <returns>The id of the Actuator that was added with the ScriptEvent</returns>
         optional<id_t> addMouseMovedScript(ScriptEvent scriptEvt, optional<id_t> behaviorId = nullopt);
 
+        /// <summary>
+        /// Remove a Script from the "mousePress_"+buttonId ScriptMap domain
+        /// </summary>
+        /// <param name="script">The Script to remove</param>
+        /// <param name="button">The button to remove the Script for</param>
+        /// <param name="shouldDelete">Whether the ScriptMap domain should be deleted if empty</param>
         void removeOverlapMousePressScript(Script* script, Mouse::Button button, bool shouldDelete = false);
+        /// <summary>
+        /// Remove a Script from the "mouseRelease_"+buttonId ScriptMap domain
+        /// </summary>
+        /// <param name="script">The Script to remove</param>
+        /// <param name="button">The button to remove the Script for</param>
+        /// <param name="shouldDelete">Whether the ScriptMap domain should be deleted if empty</param>
         void removeOverlapMouseReleaseScript(Script* script, Mouse::Button button, bool shouldDelete = false);
+        /// <summary>
+        /// Remove a Script from the "mousePress_"+buttonId ScriptMap domain
+        /// </summary>
+        /// <param name="scriptId">The id of the Script to remove</param>
+        /// <param name="button">The button to remove the Script for</param>
+        /// <param name="shouldDelete">Whether the ScriptMap domain should be deleted if empty</param>
         void removeOverlapMousePressScript(id_t scriptId, Mouse::Button button, bool shouldDelete = false);
+        /// <summary>
+        /// Remove a Script from the "mouseRelease_"+buttonId ScriptMap domain
+        /// </summary>
+        /// <param name="script">The id of the Script to remove</param>
+        /// <param name="button">The button to remove the Script for</param>
+        /// <param name="shouldDelete">Whether the ScriptMap domain should be deleted if empty</param>
         void removeOverlapMouseReleaseScript(id_t scriptId, Mouse::Button button, bool shouldDelete = false);
         /// <summary>
         /// Remove the InputActionEvent for the domain and delete it
@@ -447,6 +616,10 @@ namespace CGEngine {
         /// </summary>
         /// <param name="timerId">The id of the timer to cancel</param>
         void cancelTimer(size_t timerId);
+        /// <summary>
+        /// Cancel the timer with this id
+        /// </summary>
+        /// <param name="timerId">The id of the timer to cancel</param>
         void cancelTimer(timerId_t* timerId);
         /// <summary>
         /// Bodies with greater Z-Order are drawn in front of objects with lower Z-Order. Without modifying Z-Order, children are drawn
@@ -457,9 +630,22 @@ namespace CGEngine {
         /// The amount of time between calling scripts in the "update" domain for this Body
         /// </summary>
         sec_t scriptUpdateInterval = -1;
-
+        /// <summary>
+        /// Add the Behavior to this Body and return its id
+        /// </summary>
+        /// <param name="behavior">The Behavior to add for this Body</param>
+        /// <returns>The new id of the added Behavior</returns>
         id_t addBehavior(Behavior* behavior);
+        /// <summary>
+        /// Remove the Behavior from this Body
+        /// </summary>
+        /// <param name="behaviorId">The id of the Behavior to remove from this body</param>
         void removeBehavior(id_t behaviorId);
+        /// <summary>
+        /// Get the Behavior with the indicated id from this Body
+        /// </summary>
+        /// <param name="behaviorId">The id of the Behavior</param>
+        /// <returns>The Behavior, if it was found</returns>
         Behavior* getBehavior(id_t behaviorId);
     protected:
         /// <summary>
@@ -485,7 +671,9 @@ namespace CGEngine {
         /// The assigned Transformable entity
         /// </summary>
         Transformable* entity = nullptr;
-
+        /// <summary>
+        /// The Behaviors assigned to this Body
+        /// </summary>
         UniqueDomain<id_t, Behavior*> behaviors = UniqueDomain<id_t, Behavior*>(1000);
         /// <summary>
         /// The Body whose transform is the parent of this Body's transform
@@ -512,7 +700,13 @@ namespace CGEngine {
         /// Create and initialize the bounds RectangleShape
         /// </summary>
         void createBoundsRect();
+        /// <summary>
+        /// Update the bounds rect
+        /// </summary>
         void updateBoundsRect();
+        /// <summary>
+        /// Used for Bodies with update intervals
+        /// </summary>
         sec_t lastUpdateTime = 0;
         /// <summary>
         /// The TimerMap for a Body holds references to each of its Timers by id
@@ -522,6 +716,9 @@ namespace CGEngine {
         /// The ScriptMap for a Body holds references to each of its ScriptDomains and their assigned Scripts by id
         /// </summary>
         ScriptMap scripts;
+        /// <summary>
+        /// The id of an intersect script
+        /// </summary>
         optional<id_t> intersectScriptId;
         /// <summary>
         /// The map of listener ids by domain for the Body so they may be erased when the Body is deleted
