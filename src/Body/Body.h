@@ -656,7 +656,6 @@ namespace CGEngine {
         Body(string displayName = "");
     private:
         friend class World;
-        friend class Scene;
         friend class Renderer;
         friend class InputMap;
         /// <summary>

@@ -7,6 +7,7 @@ namespace CGEngine {
 	}
 
 	void ScriptMap::initialize() {
+		if (owner == nullptr) ownerName = "Behavior";
 		string namePrompt = (owner->getName() != "") ? "(" + owner->getName() + ")" : "";
 		string idPrompt = owner->getId().has_value() ? "[" + to_string(owner->getId().value()) + "]" : "";
 		ownerName = "Body" + idPrompt + namePrompt;

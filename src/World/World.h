@@ -2,7 +2,6 @@
 
 #include "../Body/Body.h"
 #include "../World/Screen.h"
-#include "../Scenes/Scene.h"
 #include "../Types/UniqueDomain.h"
 #include <sstream>
 using namespace sf;
@@ -40,10 +39,12 @@ namespace CGEngine {
         void setBoundsThickness(float thickness, Body* body);
 
         //Scenes
-        void addScene(string sceneName, Scene* scene);
-        void loadScene(string sceneName, Body* sceneRoot = nullptr);
-        void loadSceneWithData(string sceneName, DataMap input, Body* sceneRoot = nullptr);
-        optional<DataMap> getSceneData(string sceneName);
+        void addScene(string sceneName, Behavior* scene);
+        void loadScene(string sceneName);
+        void loadSceneWithInput(string sceneName, DataMap input);
+        optional<DataMap> getSceneInput(string sceneName);
+        optional<DataMap> getSceneOutput(string sceneName);
+        optional<DataMap> getSceneProcess(string sceneName);
 
         //Bodies
         UniqueDomain<id_t, Body*> bodies = UniqueDomain<id_t, Body*>(1000);
@@ -84,7 +85,7 @@ namespace CGEngine {
         void addDeletedBody(Body* bodyId);
 
         //Scenes
-        map<string, Scene*> scenes;
+        map<string, Behavior*> scenes;
         
         //Console
         bool consoleFeatureEnabled = true;

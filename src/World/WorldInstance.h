@@ -2,6 +2,7 @@
 
 #include "SFML/Graphics.hpp"
 #include "World.h"
+#include "Renderer.h"
 #include "GlobalTime.h"
 #include "../ResourceCaches/FontCache.h"
 #include "../ResourceCaches/TextureCache.h"
@@ -18,7 +19,7 @@ namespace CGEngine {
 	extern Font* defaultFont;
 	extern function<void()> updateWorld;
 	extern function<void()> beginWorld;
-	extern vector<Scene*> sceneList;
+	extern vector<Behavior*> sceneList;
 	extern Logging logging;
 
 	extern const string onUpdateEvent;
@@ -29,4 +30,5 @@ namespace CGEngine {
 	extern const string onMouseReleaseEvent;
 	extern const string onKeyPressEvent;
 	extern const string onKeyReleaseEvent;
+	extern const string onLoadEvent;
 }

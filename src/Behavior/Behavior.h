@@ -11,7 +11,7 @@ using namespace std;
 namespace CGEngine {
 	class Behavior {
 	public:
-		Behavior(Body* owning);;
+		Behavior(Body* owning, string name = "");
 
 		id_t addScript(string domain, Script* script);
 		void removeScript(string domain, id_t scriptId, bool shouldDelete = false);
@@ -46,7 +46,9 @@ namespace CGEngine {
 		void setProcessData(string key, any value);
 		id_t getId();
 		Body* getOwner();
+		string getName();
 	private:
+		string displayName = "";
 		Body* owner;
 		optional<id_t> behaviorId = nullopt;
 		ScriptMap scripts;

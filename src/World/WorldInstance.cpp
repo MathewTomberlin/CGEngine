@@ -4,7 +4,7 @@ namespace CGEngine {
     //Size and name to give created window
     WindowParameters windowParameters = WindowParameters({ 1000,500 }, "CGEngine App");
     //List of Scenes to create, add to World and load sceneList[0]
-    vector<Scene*> sceneList = { };
+    vector<Behavior*> sceneList = { };
     Logging logging;
     GlobalTime time;
     Renderer renderer;
@@ -26,4 +26,5 @@ namespace CGEngine {
     const string onMouseReleaseEvent = "mouseRelease";
     const string onKeyPressEvent = "keyPress";
     const string onKeyReleaseEvent = "keyRelease";
+    const string onLoadEvent = "load";
 }
