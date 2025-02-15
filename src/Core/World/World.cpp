@@ -1,7 +1,5 @@
 #include "World.h"
-#include "WorldInstance.h"
-#include <memory>
-#include <queue>
+#include "../Engine/Engine.h"
 
 namespace CGEngine {
     World::World() : root(bodies.get(create())) { }

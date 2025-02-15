@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../World/World.h"
+#include "../../Core/World/World.h"
 
 namespace CGEngine {
 	extern ScriptEvent translateEvent;

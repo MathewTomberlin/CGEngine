@@ -1,6 +1,6 @@
 #include "AnimationBehavior.h"
-#include "../Types/DataMap.h"
-#include "../World/WorldInstance.h"
+#include "../../Core/Types/DataMap.h"
+#include "../../Core/Engine/Engine.h"
 
 namespace CGEngine {
     AnimationBehavior::AnimationBehavior(Body* owner, AnimationParameters params) : Behavior(owner) {
