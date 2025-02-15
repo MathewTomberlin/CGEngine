@@ -2,6 +2,8 @@
 #include "World/WorldInstance.h"
 #include "Scripts/CommonScripts.h"
 #include "Behavior/AnimationBehavior.h"
+#include "Behavior/BoundsBehavior.h"
+#include "Drawables/Tilemap.h"
 
 namespace CGEngine {
 	class TilemapScene : public Behavior {
@@ -56,6 +58,15 @@ namespace CGEngine {
             ScriptEvent tilemapConstruction = [this](ScArgs args) {
                 //Create the Body and setup its properties, including alignment and transform
                 id_t gridId = world->create(new Tilemap("tilemap.png", { 32,32 }, { 10,10 }, vector<int>(), tilemapDataPath), new Script([&](ScArgs args) {
+                    //Create the BoundsBehavior with custom getLocalBounds and getGlobalBounds to call the Tilemap bounds functions
+                    //NOTE: Do this before applying moveToAlignment to avoid out-of-order errors
+                    new BoundsBehavior(args.caller, 
+                    [](const Body* body) {
+                        return dynamic_cast<Tilemap*>(body->get())->getGlobalBounds();
+                    }, 
+                    [](const Body* body) {
+                        return dynamic_cast<Tilemap*>(body->get())->getLocalBounds();
+                    });
                     //Basic body properties
                     args.caller->setName("map");
                     args.caller->moveToAlignment({ 0.5, 0 });
@@ -77,6 +88,15 @@ namespace CGEngine {
                 }));
 
                 id_t toolboxId = world->create(new Tilemap("tilemap.png", { 32,32 }, { 8,7 }, tileTypes), new Script([&](ScArgs args) {
+                    //Create the BoundsBehavior with custom getLocalBounds and getGlobalBounds to call the Tilemap bounds functions
+                    //NOTE: Do this before applying moveToAlignment to avoid out-of-order errors
+                    new BoundsBehavior(args.caller,
+                    [](const Body* body) {
+                        return dynamic_cast<Tilemap*>(body->get())->getGlobalBounds();
+                    },
+                    [](const Body* body) {
+                        return dynamic_cast<Tilemap*>(body->get())->getLocalBounds();
+                    });
                     //Basic body properties
                     args.caller->setName("toolbox");
                     args.caller->setOrigin({ 0,0.5 });
