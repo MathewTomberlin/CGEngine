@@ -78,6 +78,10 @@ namespace CGEngine {
         bodyParams.name = name;
     }
 
+    Transformable* Body::get() const {
+        return entity;
+    }
+
     void Body::update(function<void(Shape*)> script, bool updateChildren) {
         update<Shape*>(script, updateChildren);
     }
@@ -135,9 +139,6 @@ namespace CGEngine {
             else if (Sprite* t = dynamic_cast<Sprite*>(entity)) {
                 return (getGlobalTransform()).transformRect(t->getLocalBounds());
             }
-            else if (Tilemap* t = dynamic_cast<Tilemap*>(entity)) {
-                return (getGlobalTransform()).transformRect(t->getLocalBounds());
-            }
         } else {
             if (this == world->getRoot()) {
                 return FloatRect({ 0,0 }, screen->getSize());
@@ -155,9 +156,6 @@ namespace CGEngine {
                 return t->getLocalBounds();
             }
             else if (Sprite* t = dynamic_cast<Sprite*>(entity)) {
-                return t->getLocalBounds();
-            }
-            else if (Tilemap* t = dynamic_cast<Tilemap*>(entity)) {
                 return t->getLocalBounds();
             }
         } else {
