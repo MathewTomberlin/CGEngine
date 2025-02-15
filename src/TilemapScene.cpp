@@ -1,9 +1,9 @@
-#include "Scripts/Script.h"
-#include "World/WorldInstance.h"
-#include "Scripts/CommonScripts.h"
-#include "Behavior/AnimationBehavior.h"
-#include "Behavior/BoundsBehavior.h"
-#include "Drawables/Tilemap.h"
+#include "Core/Scripts/Script.h"
+#include "Core/Engine/Engine.h"
+#include "Standard/Scripts/CommonScripts.h"
+#include "Standard/Behaviors/AnimationBehavior.h"
+#include "Standard/Behaviors/BoundsBehavior.h"
+#include "Standard/Drawables/Tilemap.h"
 
 namespace CGEngine {
 	class TilemapScene : public Behavior {
