@@ -1,5 +1,5 @@
 #include "TimerMap.h"
-#include "../World/WorldInstance.h"
+#include "../Engine/Engine.h"
 
 namespace CGEngine {
     timerId_t TimerMap::setTimer(Body* body, sec_t duration, Script* onCompleteEvent, int loopCount, string timerDisplayName) {

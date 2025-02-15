@@ -1,6 +1,6 @@
 #include "CommonScripts.h"
-#include "../Types/DataMap.h"
-#include "../World/WorldInstance.h"
+#include "../../Core/Types/DataMap.h"
+#include "../../Core/Engine/Engine.h"
 
 namespace CGEngine {
     struct TranslateArgs {

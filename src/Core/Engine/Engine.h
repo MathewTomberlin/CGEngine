@@ -1,10 +1,10 @@
 #pragma once
 
 #include "SFML/Graphics.hpp"
-#include "World.h"
-#include "Renderer.h"
-#include "InputMap.h"
-#include "GlobalTime.h"
+#include "../World/World.h"
+#include "../World/Renderer.h"
+#include "../Input/InputMap.h"
+#include "../Time/GlobalTime.h"
 #include "../ResourceCaches/FontCache.h"
 #include "../ResourceCaches/TextureCache.h"
 

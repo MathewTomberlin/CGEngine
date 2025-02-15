@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Behavior.h"
-#include "../World/World.h"
-#include "../Scripts/Script.h"
+#include "../../Core/Behavior/Behavior.h"
+#include "../../Core/World/World.h"
+#include "../../Core/Scripts/Script.h"
 using namespace std;
 
 namespace CGEngine {

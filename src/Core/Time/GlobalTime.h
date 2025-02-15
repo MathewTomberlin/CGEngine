@@ -7,17 +7,9 @@ using namespace sf;
 namespace CGEngine {
 	class GlobalTime {
 	public:
-		sec_t getElapsedSec() {
-			return runningClock.getElapsedTime().asSeconds();
-		}
-
-		sec_t getDeltaSec() const {
-			return deltaSec;
-		}
-
-		void updateDeltaTime() {
-			deltaSec = frameClock.restart().asSeconds();
-		}
+		sec_t getElapsedSec();
+		sec_t getDeltaSec() const;
+		void updateDeltaTime();
 	private:
 		Clock runningClock;
 		Clock frameClock;

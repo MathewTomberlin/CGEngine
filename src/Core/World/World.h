@@ -4,6 +4,8 @@
 #include "../World/Screen.h"
 #include "../Types/UniqueDomain.h"
 #include <sstream>
+#include <memory>
+#include <queue>
 using namespace sf;
 using namespace std;
 

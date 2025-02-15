@@ -1,5 +1,5 @@
 #include "InputMap.h"
-#include "../World/WorldInstance.h"
+#include "../Engine/Engine.h"
 
 namespace CGEngine {
     InputMap::InputMap() { }

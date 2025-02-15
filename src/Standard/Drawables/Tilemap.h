@@ -2,7 +2,7 @@
 
 #include "SFML/Graphics.hpp"
 #include "SFML/System.hpp"
-#include "../Types/V2.h"
+#include "../../Core/Types/V2.h"
 #include <iostream>
 #include <fstream>
 using namespace sf;
