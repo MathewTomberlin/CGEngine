@@ -1,5 +1,5 @@
 #include "Renderer.h"
-#include "WorldInstance.h"
+#include "../Engine/Engine.h"
 
 namespace CGEngine {
 	void Renderer::add(Body* body, Transform transform) {

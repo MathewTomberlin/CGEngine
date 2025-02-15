@@ -1,5 +1,5 @@
 #include "Tilemap.h"
-#include "../World/WorldInstance.h"
+#include "../../Core/Engine/Engine.h"
 
 namespace CGEngine {
 	Tilemap::Tilemap(const filesystem::path& tilesetPath, Vector2u tileDimensions, Vector2u mapSizeByTiles, vector<int> data, string dataPath): tileSize(tileDimensions), dimensions(mapSizeByTiles), tileset(textures->get(tilesetPath)) {

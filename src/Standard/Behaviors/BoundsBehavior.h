@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Behavior.h"
-#include "../World/World.h"
+#include "../../Core/Behavior/Behavior.h"
+#include "../../Core/World/World.h"
 #include <functional>
 using namespace std;
 

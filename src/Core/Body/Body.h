@@ -5,7 +5,7 @@
 #include <memory>
 #include "../Types/V2.h"
 #include "../Scripts/ScriptMap.h"
-#include "../World/InputMap.h"
+#include "../Input/InputMap.h"
 #include "../Timers/TimerMap.h"
 #include "../Behavior/Behavior.h"
 #include "../Types/UniqueDomain.h"

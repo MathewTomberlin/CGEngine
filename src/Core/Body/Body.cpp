@@ -1,5 +1,5 @@
 #include "Body.h"
-#include "../World/WorldInstance.h"
+#include "../Engine/Engine.h"
 
 namespace CGEngine {
     Body::Body(string displayName) : scripts(this) {

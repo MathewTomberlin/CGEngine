@@ -1,5 +1,5 @@
 #include "ScriptMap.h"
-#include "../World/WorldInstance.h"
+#include "../Engine/Engine.h"
 
 namespace CGEngine {
 	ScriptMap::ScriptMap(Body* o) {

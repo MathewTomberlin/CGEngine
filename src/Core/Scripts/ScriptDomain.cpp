@@ -1,5 +1,5 @@
 #include "ScriptDomain.h"
-#include "../World/WorldInstance.h"
+#include "../Engine/Engine.h"
 
 namespace CGEngine {
     ScriptDomain::ScriptDomain(string name, string bodyName) {
