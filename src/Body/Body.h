@@ -7,7 +7,6 @@
 #include "../Scripts/ScriptMap.h"
 #include "../World/InputMap.h"
 #include "../Timers/TimerMap.h"
-#include "../Drawables/Tilemap.h"
 #include "../Behavior/Behavior.h"
 #include "../Types/UniqueDomain.h"
 #include "../Types/DataMap.h"
@@ -78,6 +77,8 @@ namespace CGEngine {
         T get() {
             return dynamic_cast<T>(entity);
         }
+
+        Transformable* get() const;
 
         /// <summary>
         /// Call the script on the entity, cast to the supplied type, and on each child recursively (if updateChildren is true)
