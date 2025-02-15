@@ -4,6 +4,8 @@
 #include <optional>
 #include "../Types/Types.h"
 #include "../Types/DataMap.h"
+#include "../Types/DataControllers/InputDataController.h"
+#include "../Types/DataControllers/OutputDataController.h"
 using namespace std;
 
 namespace CGEngine {
@@ -25,7 +27,7 @@ namespace CGEngine {
 
 	typedef function<void(ScArgs)> ScriptEvent;
 
-	class Script {
+	class Script : public InputDataController, public OutputDataController {
 	public:
 		Script(ScriptEvent evt);
 
@@ -35,41 +37,5 @@ namespace CGEngine {
 		virtual void call(Body* caller = nullptr, Behavior* behavior = nullptr) {
 			scriptEvent(ScArgs(this, caller, behavior));
 		}
-
-		template<typename T>
-		T getInputData(string key) {
-			return input.getData<T>(key);
-		}
-
-		template<typename T>
-		T getOutputData(string key) {
-			return output.getData<T>(key);
-		}
-
-		template<typename T>
-		T* getInputDataPtr(string key) {
-			return input.getDataPtr<T>(key);
-		}
-
-		template<typename T>
-		T* getOutputDataPtr(string key) {
-			return output.getDataPtr<T>(key);
-		}
-
-		void setInputData(string key, any value) {
-			input.setData(key, value);
-		}
-
-		void setOutputData(string key, any value) {
-			output.setData(key, value);
-		}
-
-		void setInput(DataMap stack) { input = stack; }
-		void setOutput(DataMap stack) { output = stack; }
-		DataMap getInput() { return input; }
-		DataMap getOutput() { return output;  }
-	private:
-		DataMap input;
-		DataMap output;
 	};
 }

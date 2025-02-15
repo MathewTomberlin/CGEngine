@@ -10,6 +10,7 @@
 #include "../Behavior/Behavior.h"
 #include "../Types/UniqueDomain.h"
 #include "../Types/DataMap.h"
+#include "../Types/ScriptController/ScriptController.h"
 using namespace std;
 using namespace sf;
 
@@ -47,7 +48,7 @@ namespace CGEngine {
     /// 
     /// A Body creates a bounds RectangleShape and updates it with its entity. The bounds may be drawn by setting the correct setting in the World.
     /// </summary>
-    class Body : public Transformable, public Drawable {
+    class Body : public Transformable, public Drawable, public ScriptController {
     public:
         Body(Transformable* d, Transformation handle = Transformation(), Body* p = nullptr, Vector2f align = {0,0});
         Body(Transformable* d, Body* p, Transformation handle = Transformation());
@@ -361,78 +362,11 @@ namespace CGEngine {
         /// <param name="parentTransform">This Body's parent transform</param>
         void render(RenderTarget& target, const Transform& parentTransform);
         /// <summary>
-        /// Add the script to the ScriptDomain, creating the domain if it doesn't already exist
-        /// </summary>
-        /// <param name="domain">The name of the domain to add the script to</param>
-        /// <param name="script">The script to add to the domain</param>
-        /// <returns>The unique id of the script within the domain</returns>
-        id_t addScript(string domain, Script* script);
-        /// <summary>
-        /// Add the script to the "start" ScriptDomain to be called when the Body is created or when the world starts
-        /// </summary>
-        /// <param name="script">The script to add</param>
-        /// <returns>The unique id of the script within the domain</returns>
-        id_t addStartScript(Script* script);
-        /// <summary>
-        /// Add the script to the "update" ScriptDomain to be called each update cycle
-        /// </summary>
-        /// <param name="script">The script to add</param>
-        /// <returns>The unique id of the script within the domain</returns>
-        id_t addUpdateScript(Script* script);
-        /// <summary>
-        /// Add the script to the "delete" ScriptDomain to be called when the Body is deleted
-        /// </summary>
-        /// <param name="script">The script to add</param>
-        /// <returns>The unique id of the script within the domain</returns>
-        id_t addDeleteScript(Script* script);
-        /// <summary>
         /// Add the script to the "intersect" ScriptDomain to be called when the Body's GlobalBounds intersects another Body's GlobalBounds (if that Body has intersecting enabled)
         /// </summary>
         /// <param name="script">The script to add</param>
         /// <returns>The unique id of the script within the domain</returns>
         id_t addIntersectScript(Script* script);
-        /// <summary>
-        /// Erase and delete the script with the id in the domain.
-        /// </summary>
-        /// <param name="domain">The domain to erase the script from</param>
-        /// <param name="scriptId">The unique id of the script to delete within the domain</param>
-        /// <param name="shouldDelete">Whether the domain should be deleted if empty after the erase</param>
-        void eraseScript(string domain, id_t scriptId, bool shouldDelete = false);
-        /// <summary>
-        /// Erase and delete the script with the id in the domain.
-        /// </summary>
-        /// <param name="domain">The domain to erase the script from</param>
-        /// <param name="script">The script to delete</param>
-        /// <param name="shouldDelete">Whether the domain should be deleted if empty after the erase</param>
-        void eraseScript(string domain, Script* script, bool shouldDelete = false);
-        /// <summary>
-        /// Erase and delete the script with the id in the "start" domain.
-        /// </summary>
-        /// <param name="scriptId">The unique id of the script to delete with in the domain</param>
-        /// <param name="shouldDelete">Whether the domain should be deleted if empty after the erase</param>
-        void eraseStartScript(id_t scriptId, bool shouldDelete = false);
-        /// <summary>
-        /// Erase and delete the script with the id in the "update" domain.
-        /// </summary>
-        /// <param name="scriptId">The unique id of the script to delete with in the domain</param>
-        /// <param name="shouldDelete">Whether the domain should be deleted if empty after the erase</param>
-        void eraseUpdateScript(id_t scriptId, bool shouldDelete = false);
-        /// <summary>
-        /// Erase and delete the script with the id in the "delete" domain.
-        /// </summary>
-        /// <param name="scriptId">The unique id of the script to delete with in the domain</param>
-        /// <param name="shouldDelete">Whether the domain should be deleted if empty after the erase</param>
-        void eraseDeleteScript(id_t scriptId, bool shouldDelete = false);
-        /// <summary>
-        /// Erase a Domain from the ScriptMap and then delete the Domain
-        /// </summary>
-        /// <param name="domain">The name of the domain to delete</param>
-        void deleteDomain(string domain);
-        /// <summary>
-        /// Erase and refund ids for all scripts in the domain, but don't delete the domain or the Scripts
-        /// </summary>
-        /// <param name="domain">The name of the domain to delete</param>
-        void clearDomain(string domain);
         /// <summary>
         /// Call each script within the domain
         /// </summary>
@@ -712,10 +646,6 @@ namespace CGEngine {
         /// The TimerMap for a Body holds references to each of its Timers by id
         /// </summary>
         TimerMap timers;
-        /// <summary>
-        /// The ScriptMap for a Body holds references to each of its ScriptDomains and their assigned Scripts by id
-        /// </summary>
-        ScriptMap scripts;
         /// <summary>
         /// The id of an intersect script
         /// </summary>
