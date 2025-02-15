@@ -2,13 +2,13 @@
 #include "../Engine/Engine.h"
 
 namespace CGEngine {
-    Body::Body(string displayName) : scripts(this) {
+    Body::Body(string displayName) : ScriptController(this) {
         bodyParams.name = displayName;
         world->receiveBodyId(this);
         scripts.initialize();
     }
 
-    Body::Body(bool isWorldRoot) : scripts(this) {
+    Body::Body(bool isWorldRoot) : ScriptController(this) {
         bodyParams.name = "Root";
         if (!isWorldRoot) {
             world->receiveBodyId(this);
@@ -628,22 +628,6 @@ namespace CGEngine {
         }
     }
 
-    id_t Body::addScript(string domain, Script* script) {
-        return scripts.addScript(domain, script);
-    }
-
-    id_t Body::addStartScript(Script* script) {
-        return scripts.addScript(onStartEvent, script);
-    }
-
-    id_t Body::addUpdateScript(Script* script) {
-        return scripts.addScript(onUpdateEvent, script);
-    }
-
-    id_t Body::addDeleteScript(Script* script) {
-        return scripts.addScript(onDeleteEvent, script);
-    }
-
     timerId_t Body::setTimer(sec_t duration, Script* onCompleteEvent, int loopCount, string timerDisplayName) {
         return timers.setTimer(this, duration, onCompleteEvent, loopCount, timerDisplayName);
     }
@@ -654,34 +638,6 @@ namespace CGEngine {
 
     void Body::cancelTimer(timerId_t* timerId) {
         timers.cancelTimer(this, timerId);
-    }
-
-    void Body::eraseScript(string domain, id_t scriptId, bool shouldDelete) {
-        scripts.eraseScript(domain, scriptId, shouldDelete);
-    }
-
-    void Body::eraseScript(string domain, Script* script, bool shouldDelete) {
-        scripts.eraseScript(domain, script, shouldDelete);
-    }
-
-    void Body::eraseStartScript(id_t scriptId, bool shouldDelete) {
-        eraseScript(onStartEvent, scriptId, shouldDelete);
-    }
-
-    void Body::eraseUpdateScript(id_t scriptId, bool shouldDelete) {
-        eraseScript(onUpdateEvent, scriptId, shouldDelete);
-    }
-
-    void Body::eraseDeleteScript(id_t scriptId, bool shouldDelete) {
-        eraseScript(onDeleteEvent, scriptId, shouldDelete);
-    }
-
-    void Body::deleteDomain(string domain) {
-        scripts.deleteDomain(domain);
-    }
-
-    void Body::clearDomain(string domain) {
-        scripts.clearDomain(domain);
     }
 
     void Body::callScripts(string domain) {
