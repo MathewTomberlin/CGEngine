@@ -1,8 +1,10 @@
 #pragma once
 
+#include "SFML/OpenGL.hpp"
 #include "../Body/Body.h"
 #include "../World/Screen.h"
 #include "../Types/UniqueDomain.h"
+#include "../Mesh/Mesh.h"
 #include <sstream>
 #include <memory>
 #include <queue>
@@ -70,6 +72,8 @@ namespace CGEngine {
 
         //World Root
         Body* root = nullptr;
+
+        bool running = false;
         
         //World State
         //Start World

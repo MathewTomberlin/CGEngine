@@ -1,5 +1,6 @@
 #pragma once
 
+#include "SFML/OpenGL.hpp"
 #include <vector>
 #include <map>
 #include "../Body/Body.h"
@@ -46,8 +47,18 @@ namespace CGEngine {
 		/// <param name="zIndex">The Z index to get Bodies above</param>
 		/// <returns>A vector of Body pointers above the indicated Z index</returns>
 		vector<Body*> getHigherZBodies(int zIndex);
+
+		void initializeOpenGL();
+		bool setGLWindowState(bool state);
+		bool clearGL(GLbitfield mask);
+		void commitGL();
+		void pullGL();
+
+		bool processRender();
+		void setWindow(RenderWindow* window);
 	private:
 		friend class World;
+		RenderWindow* window;
 		/// <summary>
 		/// Clear the renderOrder and bodyTransform map
 		/// </summary>

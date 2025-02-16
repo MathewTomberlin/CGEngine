@@ -722,7 +722,14 @@ namespace CGEngine {
             target.draw(*boundsRect, transform);
         }
         if (bodyParams.rendering && entity != nullptr) {
-            target.draw(*(Shape*)entity, transform);
+            if (Mesh* mesh = dynamic_cast<Mesh*>(entity)) {
+                // Pull OpenGL State
+                renderer.pullGL();
+                mesh->render(transform);
+                renderer.commitGL();
+            } else {
+                target.draw(*(Shape*)entity, transform);
+            }
         }
     }
 
