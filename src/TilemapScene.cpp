@@ -4,6 +4,7 @@
 #include "Standard/Behaviors/AnimationBehavior.h"
 #include "Standard/Behaviors/BoundsBehavior.h"
 #include "Standard/Drawables/Tilemap.h"
+#include "Standard/Meshes/CommonVArrays.h"
 
 namespace CGEngine {
 	class TilemapScene : public Behavior {
@@ -183,16 +184,39 @@ namespace CGEngine {
                 }));
             };
 
+            ScriptEvent meshConstruction = [](ScArgs args) {
+                //Get the id of the grid body output by tilemapConstruction
+                id_t gridId = args.behavior->getInput().getData<id_t>("gridId");
+                //Get a reference to the grid Body so we can parent the player to it
+                Body* gridBody = world->bodies.get(gridId);
+
+                id_t meshId1 = world->create(new Mesh(cubeVertices, textures->get("animation.png"), true, 15));
+                id_t meshId2 = world->create(new Mesh(cubeVertices, textures->get("image.png"), true, 15));
+                //TODO: Meshes begin at the Viewport center (where the OpenGL world is?) but should match the SFML origin
+                Body* body1 = world->bodies.get(meshId1);
+                body1->translate({ 1,-1 });
+                body1->addUpdateScript(new Script([](ScArgs args) { args.caller->rotate(degrees(0.01f)); }));
+
+                Body* body2 = world->bodies.get(meshId2);
+                body2->translate({ 1.5f,-1 });
+            };
+
             Behavior* tilemapScene = new Behavior(nullptr); 
             tilemapScene->addScript(onLoadEvent,new Script(tilemapConstruction));
+
             Behavior* playerScene = new Behavior(nullptr); 
             playerScene->addScript(onLoadEvent, new Script(playerConstruction));
 
+            Behavior* meshScene = new Behavior(nullptr);
+            meshScene->addScript(onLoadEvent, new Script(meshConstruction));
+
             world->addScene("tilemap", tilemapScene);
             world->addScene("player", playerScene);
+            world->addScene("meshes", meshScene);
 
             world->loadScene("tilemap");
             world->loadSceneWithInput("player", tilemapScene->getOutput());
+            world->loadSceneWithInput("meshes", tilemapScene->getOutput());
 		};
 	};
 }
