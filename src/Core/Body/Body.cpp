@@ -724,9 +724,7 @@ namespace CGEngine {
         if (bodyParams.rendering && entity != nullptr) {
             if (Mesh* mesh = dynamic_cast<Mesh*>(entity)) {
                 // Pull OpenGL State
-                renderer.pullGL();
                 mesh->render(transform);
-                renderer.commitGL();
             } else {
                 target.draw(*(Shape*)entity, transform);
             }

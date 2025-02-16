@@ -34,9 +34,8 @@ namespace CGEngine {
 			glEnableClientState(GL_COLOR_ARRAY);
 		}
 
-		bool lightingEnabled = false;
 		// Setup OPENGL lighting
-		if (lightingEnabled) {
+		if (openGLSettings.lightingEnabled) {
 			glEnable(GL_LIGHTING);
 		}
 		else {
@@ -44,7 +43,7 @@ namespace CGEngine {
 		}
 
 		bool Texture2DEnabled = true;
-		if (Texture2DEnabled) {
+		if (openGLSettings.texture2DEnabled) {
 			glEnable(GL_TEXTURE_2D);
 		}
 		else {
@@ -52,10 +51,11 @@ namespace CGEngine {
 		}
 
 		// Setup OPENGL viewport within window
-		GLsizei viewPositionX_px = 0;
-		GLsizei viewPositionY_px = 0;
-		GLsizei viewSizeX_px = static_cast<GLsizei>(window->getSize().x);
-		GLsizei viewSizeY_px = static_cast<GLsizei>(window->getSize().y);
+		FloatRect viewport = openGLSettings.viewport;
+		GLsizei viewPositionX_px = viewport.position.x;
+		GLsizei viewPositionY_px = viewport.position.y;
+		GLsizei viewSizeX_px = static_cast<GLsizei>(window->getSize().x * viewport.size.x);
+		GLsizei viewSizeY_px = static_cast<GLsizei>(window->getSize().y * viewport.size.y);
 		glViewport(viewPositionX_px, viewPositionY_px, viewSizeX_px, viewSizeY_px);
 
 		//Calculate the perspective ratio
@@ -63,7 +63,7 @@ namespace CGEngine {
 		// Setup OPENGL perspective projection from viewport size
 		glMatrixMode(GL_PROJECTION);                        //Switch from ModelView to ProjectionView matrix
 		glLoadIdentity();                                   //Clear the matrix
-		glFrustum(-ratio, ratio, -1.f, 1.f, 1.f, 500.f);    //L/R/T/B coordinates of perspective
+		glFrustum(-ratio, ratio, -1.f, 1.f, openGLSettings.nearClipPlane, openGLSettings.farClipPlane);    //L/R/T/B coordinates of perspective and near/far clip plane
 		if (!setGLWindowState(false)) return;
 	}
 

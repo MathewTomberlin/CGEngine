@@ -8,6 +8,7 @@ namespace CGEngine {
 
 	void Mesh::render(Transform transform) {
 		if (renderer.setGLWindowState(true)) {
+			renderer.pullGL();
 			(void)meshTexture->generateMipmap();
 			Texture::bind(&(*meshTexture));
 
@@ -49,6 +50,7 @@ namespace CGEngine {
 
 			// Draw the cube
 			glDrawArrays(GL_TRIANGLES, 0, 36);
+			renderer.commitGL();
 		}
 	}
 }
