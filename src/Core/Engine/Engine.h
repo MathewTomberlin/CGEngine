@@ -10,6 +10,7 @@
 
 namespace CGEngine {
 	extern WindowParameters windowParameters;
+	extern OpenGLSettings openGLSettings;
 	extern Renderer renderer;
 	extern World* world;
 	extern GlobalTime time;

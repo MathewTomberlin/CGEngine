@@ -1,6 +1,5 @@
 #pragma once
 
-#include "SFML/OpenGL.hpp"
 #include "../Body/Body.h"
 #include "../World/Screen.h"
 #include "../Types/UniqueDomain.h"
