@@ -1,5 +1,6 @@
 #include "World.h"
 #include "../Engine/Engine.h"
+#include "../../Standard/Meshes/CommonVArrays.h"
 
 namespace CGEngine {
     World::World() : root(bodies.get(create())) { }
@@ -126,6 +127,7 @@ namespace CGEngine {
             input->clear();
         }
         endWorld(root);
+        running = false;
         window->close();
     }
 
@@ -286,9 +288,15 @@ namespace CGEngine {
         //Create window (via Screen and using the static WindowParameters) and set InputMap's window
         screen->setWindowParameters(windowParameters);
         window = screen->createWindow();
+        if(!window->setActive(true)) {
+            logging(LogLevel::LogError, "World", "Failed to set window as active OpenGL context");
+        }
+        renderer.setWindow(window);
         input->setWindow(window);
         //Add scenes from sceneList to world and load sceneList[0]
         initSceneList();
+
+        running = true;
     }
 
     void World::initSceneList() {
@@ -325,13 +333,19 @@ namespace CGEngine {
     }
 
     void World::runWorld() {
-        while (window->isOpen()) {
-            deleted.clear();
-            updateTime();
-            startUninitializedBodies();
-            callScripts(onUpdateEvent);
-            input->gather();
-            renderWorld();
+        while (running) {
+            renderer.initializeOpenGL();
+
+            while (window->isOpen()) {
+                deleted.clear();
+                updateTime();
+                startUninitializedBodies();
+                callScripts(onUpdateEvent);
+                input->gather();
+                
+                if (!renderer.clearGL(GL_DEPTH_BUFFER_BIT)) continue;
+                if (!renderer.processRender()) return;
+            }
         }
     }
 
