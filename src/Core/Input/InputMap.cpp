@@ -1,3 +1,4 @@
+#include "SFML/OpenGL.hpp"
 #include "InputMap.h"
 #include "../Engine/Engine.h"
 
@@ -152,6 +153,9 @@ namespace CGEngine {
             else if (const auto* mouseMoved = event->getIf<Event::MouseMoved>()) {
                 cursorPosition = mouseMoved->position;
                 callDomain(InputCondition(0, InputType::Cursor, InputState::Atomic), map<string, any>({ {"evt", mouseMoved->position } }));
+            } else if (const auto* resized = event->getIf<sf::Event::Resized>()) {
+                // adjust the viewport when the window is resized
+                glViewport(0, 0, resized->size.x, resized->size.y);
             }
         }
     }
