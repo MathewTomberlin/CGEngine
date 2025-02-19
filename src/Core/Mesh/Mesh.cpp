@@ -1,7 +1,7 @@
 #include "Mesh.h"
 
 namespace CGEngine {
-	Mesh::Mesh(vector<GLfloat> vertices, V3f position, V3f rotation, V3f scale, Texture* texture, bool screenSpaceRendering, bool textureCoordinatesEnabled) : position(position), eulerRotation(rotation), scale(scale), vertices(vertices), meshTexture(texture), textureCoordinatesEnabled(textureCoordinatesEnabled), screenSpaceRendering(screenSpaceRendering) { };
+	Mesh::Mesh(vector<GLfloat> vertices, V3f position, V3f rotation, V3f scale, Texture* texture, bool screenSpaceRendering, bool textureCoordinatesEnabled, vector<GLfloat> vertexColor) : position(position), eulerRotation(rotation), scale(scale), vertices(vertices), meshTexture(texture), textureCoordinatesEnabled(textureCoordinatesEnabled), screenSpaceRendering(screenSpaceRendering), vertexColor(vertexColor) { };
 
 	void Mesh::render(Transform transform) {
 		if (renderer.setGLWindowState(true)) {
@@ -19,6 +19,12 @@ namespace CGEngine {
 			//Enable texture coordinate component if enabled
 			if (textureCoordinatesEnabled) {
 				glTexCoordPointer(2, GL_FLOAT, 5 * sizeof(GLfloat), vertices.data() + 3);
+			}
+
+			if (vertexColor.size()>0) {
+				glColor3fv(vertexColor.data());
+			} else {
+				glColor3fv(vector<float>({1,1,1}).data());
 			}
 
 			//Get world xy position, xy right, z rotation, and xy scale from Body transform
