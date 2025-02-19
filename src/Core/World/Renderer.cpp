@@ -37,16 +37,14 @@ namespace CGEngine {
 		// Setup OPENGL lighting
 		if (openGLSettings.lightingEnabled) {
 			glEnable(GL_LIGHTING);
-		}
-		else {
+		} else {
 			glDisable(GL_LIGHTING);
 		}
 
 		bool Texture2DEnabled = true;
 		if (openGLSettings.texture2DEnabled) {
 			glEnable(GL_TEXTURE_2D);
-		}
-		else {
+		} else {
 			glDisable(GL_TEXTURE_2D);
 		}
 
@@ -54,17 +52,17 @@ namespace CGEngine {
 		FloatRect viewport = openGLSettings.viewport;
 		GLsizei viewPositionX_px = viewport.position.x;
 		GLsizei viewPositionY_px = viewport.position.y;
+		float viewportSizeX = min(1.f, (float)window->getSize().y / window->getSize().x) * (float)window->getSize().x;
 		float viewportSizeY = min(1.f, (float)window->getSize().x / window->getSize().y)* (float)window->getSize().y;
-		float viewportSizeX = min(1.f, (float)window->getSize().y / window->getSize().x)* (float)window->getSize().x;
-		float minDim = min(window->getSize().x, window->getSize().y);
-		GLsizei viewSizeY_px = static_cast<GLsizei>(minDim * viewport.size.y);
-		int yOffset = ((int)window->getSize().y - viewportSizeY);
-		int xOffset = ((int)window->getSize().x - viewportSizeX);
+		int xOffset = ((int)window->getSize().x - viewportSizeX)/2;
+		int yOffset = ((int)window->getSize().y - viewportSizeY)/2;
 
 		glMatrixMode(GL_PROJECTION);
 		glLoadIdentity();
+		//This perspective is clipped by the near and far clip planes
 		glFrustum(-1,1,-1,1, openGLSettings.nearClipPlane, openGLSettings.farClipPlane);
-		glViewport(viewPositionX_px+(xOffset/2), viewPositionY_px+(yOffset/2), viewportSizeX, viewportSizeY);
+		//ViewPosition should allow the openGL viewport to be moved on the screen, x/yOffset centers the viewport, and viewportSizeXY squares it
+		glViewport(viewPositionX_px+xOffset, viewPositionY_px+yOffset, viewportSizeX, viewportSizeY);
 		if (!setGLWindowState(false)) return;
 	}
 
