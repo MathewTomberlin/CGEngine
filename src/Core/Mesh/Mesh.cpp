@@ -18,14 +18,10 @@ namespace CGEngine {
 			}
 
 			//Get world xy position, xy right, z rotation, and xy scale from Body transform
-			Vector2f worldPositionXY = transform.transformPoint({ 0,0 });
-			Vector2f worldRightXYDir = (transform.transformPoint({ 1,0 }) - worldPositionXY);
-			if (worldRightXYDir.lengthSquared() > 0.001f) worldRightXYDir = worldRightXYDir.normalized();
-			float worldAngleZ_Deg = atan2(worldRightXYDir.y, worldRightXYDir.x) * 180.0f / (float)M_PI;
-			if (worldAngleZ_Deg < 0) worldAngleZ_Deg += 360.0f;
-			Angle worldAngleZ = degrees(worldAngleZ_Deg);
-			Transform unrotatedTransform = transform.rotate(-worldAngleZ);
-			Vector2f worldScaleXY = (unrotatedTransform.transformPoint({ 1,1 }) - unrotatedTransform.transformPoint({ 0,0 }));
+			Vector2f worldPositionXY = world->getGlobalPosition(transform);
+			Vector2f worldRightXYDir = world->getRight(transform);
+			float worldAngleZ_Deg = world->getGlobalRotation(transform).asDegrees();
+			Vector2f worldScaleXY = world->getGlobalScale(transform);
 
 			//Get the position of the window View
 			Vector2f viewPosition = screen->getCurrentView()->getTransform().transformPoint({ 0,0 });

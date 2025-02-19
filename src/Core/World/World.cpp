@@ -482,4 +482,46 @@ namespace CGEngine {
             setBoundsThickness(thickness, body->children[i]);
         }
     }
+
+    V2f World::getGlobalPosition(Transform transform) const {
+        return transform.transformPoint({ 0,0 });
+    }
+
+    Angle World::getGlobalRotation(Transform transform) const {
+        V2f dir = getForward(transform);
+        float angle = atan2(dir.y, dir.x) * 180.0f / (float)M_PI;
+        if (angle < 0) angle += 360.0f;
+        return degrees(angle);
+    }
+
+    V2f World::getForward(Transform transform) const {
+        Vector2f wPos = transform.transformPoint({ 0,0 });
+        Vector2f rPos = transform.transformPoint({ 1,0 });
+        Vector2f dir = (rPos - wPos);
+        if (dir.lengthSquared() > 0.001f) dir = dir.normalized();
+        return dir;
+    }
+
+    V2f World::getRight(Transform transform) const {
+        Vector2f wPos = transform.transformPoint({ 0,0 });
+        Vector2f uPos = transform.transformPoint({ 0,1 });
+        Vector2f dir = (uPos - wPos);
+        if (dir.lengthSquared() > 0.001f) dir = dir.normalized();
+        return dir;
+    }
+
+    V2f World::getGlobalScale(Transform transform) const {
+        Vector2f wPos = transform.transformPoint({ 0,0 });
+        Vector2f rPos = transform.transformPoint({ 1,1 });
+        Vector2f dir = (rPos - wPos);
+        return dir;
+    }
+    V2f World::getInverseGlobalScale(Transform transform) const {
+        return Vector2f({ 1.f,1.f }).componentWiseDiv(getGlobalScale(transform));
+    }
+
+    Angle World::getInverseGlobalRotation(Transform transform) const {
+        return degrees(-getGlobalRotation(transform).asDegrees());
+    }
+
 }

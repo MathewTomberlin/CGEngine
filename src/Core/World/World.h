@@ -66,6 +66,42 @@ namespace CGEngine {
         Body* getRoot();
         Body* findBodyByName(string name);
         void addWorldScript(string domain, Script* script);
+
+        /// <summary>
+        /// Returns the position of the Body in world space
+        /// </summary>
+        /// <returns>The Body's position in world space</returns>
+        V2f getGlobalPosition(Transform transform) const;
+        /// <summary>
+        /// Returns the rotation (from 0 to 360 degrees) of the Body in world space
+        /// </summary>
+        /// <returns>The Body's rotation in world space</returns>
+        Angle getGlobalRotation(Transform transform) const;
+        /// <summary>
+        /// Returns the scale of the Body in world space
+        /// </summary>
+        /// <returns>The Body's scale in world space</returns>
+        V2f getGlobalScale(Transform transform) const;
+        /// <summary>
+        /// Return 1 / global scale (inverse global scale)
+        /// </summary>
+        /// <returns>The Body's scale in world space</returns>
+        V2f getInverseGlobalScale(Transform transform) const;
+        /// <summary>
+        /// Return the negative (inverse) global rotation
+        /// </summary>
+        /// <returns>The Body's inverse global rotation</returns>
+        Angle getInverseGlobalRotation(Transform transform) const;
+        /// <summary>
+        /// Returns the normalized world space direction of the Body's forward vector
+        /// </summary>
+        /// <returns>The Body's rotation in world space as a normalized direction vector</returns>
+        V2f getForward(Transform transform) const;
+        /// <summary>
+        /// Returns the normalized world space direction of the Body's right vector
+        /// </summary>
+        /// <returns>The Body's rotation in world space as a normalized direction vector</returns>
+        V2f getRight(Transform transform) const;
     private:
         RenderWindow* window = nullptr;
 
