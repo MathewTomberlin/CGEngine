@@ -89,9 +89,9 @@ namespace CGEngine {
         float minDim = min(size.x, size.y);
         float ratioX = (1-(minDim /window->getSize().x))/2.f;
         float ratioY = (1-(minDim / window->getSize().y)) / 2.f;
-        currentView = new View({0,0}, {minDim, minDim});
+        currentView = new View({minDim/2,minDim/2}, {minDim, minDim});
         //0-1,0-1
-        currentView->setViewport(FloatRect({ Vector2f({0,0}),{viewportSizeX,viewportSizeY} }));
+        currentView->setViewport(FloatRect({ Vector2f({ratioX,ratioY}),{viewportSizeX,viewportSizeY} }));
         window->setView(*currentView);
     }
 

@@ -59,11 +59,12 @@ namespace CGEngine {
 		float minDim = min(window->getSize().x, window->getSize().y);
 		GLsizei viewSizeY_px = static_cast<GLsizei>(minDim * viewport.size.y);
 		int yOffset = ((int)window->getSize().y - viewportSizeY);
+		int xOffset = ((int)window->getSize().x - viewportSizeX);
 
 		glMatrixMode(GL_PROJECTION);
 		glLoadIdentity();
 		glFrustum(-1,1,-1,1, openGLSettings.nearClipPlane, openGLSettings.farClipPlane);
-		glViewport(viewPositionX_px, viewPositionY_px+yOffset, viewportSizeX, viewportSizeY);
+		glViewport(viewPositionX_px+(xOffset/2), viewPositionY_px+(yOffset/2), viewportSizeX, viewportSizeY);
 		if (!setGLWindowState(false)) return;
 	}
 
