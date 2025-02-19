@@ -37,10 +37,10 @@ namespace CGEngine {
 			//Get the ratio of window size
 			float windowSizeRatio = screen->getSize().x / screen->getSize().y;
 			//Multiply world positon + view position by windowSizeRatio for x or 1/windowSizeRatio for y or use 1 for whichever is less than 1
-			//TODO: Test if windowSizeRatio should actually be OpenGL ViewportSizeRatio or window View ViewportSizeRatio or some combination of them
-			//		I suspect it's actually based on the OpenGL ViewportSizeRatio since it affects perspective
-			Vector2f viewOffsetWorldPosition = { (worldPosition.x + viewPosition.x) * max(windowSizeRatio,1.f) * depth,(worldPosition.y + viewPosition.y) * max((1/windowSizeRatio),1.f) * depth};
-
+			float xViewOffset = 2 / screen->getCurrentView()->getSize().x;
+			float yViewOffset = 2 / screen->getCurrentView()->getSize().y;
+			Vector2f worldPositionScaled = V2f{ worldPosition.x*xViewOffset,-worldPosition.y*yViewOffset};
+			Vector2f viewOffsetWorldPosition = (worldPositionScaled + viewPosition);
 			// Apply some transformations
 			glMatrixMode(GL_MODELVIEW);
 			glLoadIdentity();

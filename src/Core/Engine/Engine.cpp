@@ -4,12 +4,12 @@ namespace CGEngine {
     //Size and name to give created window
     WindowParameters windowParameters = WindowParameters({ 1000,500 }, "CGEngine App");
     
-    OpenGLSettings openGLSettings = OpenGLSettings(false, true, FloatRect({ 0,0 }, { 1,1 }),0.f,500.f);
+    OpenGLSettings openGLSettings = OpenGLSettings(false, true);
     //List of Scenes to create, add to World and load sceneList[0]
     vector<Behavior*> sceneList = { };
     Logging logging;
     GlobalTime time;
-    Renderer renderer = Renderer();
+    Renderer renderer;
     TextureCache* textures = new TextureCache();
     FontCache* fonts = new FontCache();
     Font* defaultFont = fonts->getDefaultFont();
@@ -29,4 +29,6 @@ namespace CGEngine {
     const string onKeyPressEvent = "keyPress";
     const string onKeyReleaseEvent = "keyRelease";
     const string onLoadEvent = "load";
+
+    const float minHolographicNearClip = 0.000000000001f;
 }
