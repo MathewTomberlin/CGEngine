@@ -33,4 +33,6 @@ namespace CGEngine {
 	extern const string onKeyPressEvent;
 	extern const string onKeyReleaseEvent;
 	extern const string onLoadEvent;
+
+	extern const float minHolographicNearClip;
 }

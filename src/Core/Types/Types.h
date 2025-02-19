@@ -99,13 +99,13 @@ namespace CGEngine {
     };
 
     struct OpenGLSettings {
-        OpenGLSettings(bool lightingEnabled = false, bool texture2DEnabled = true, FloatRect viewport = FloatRect({0,0},{1,1}), float nearClip = 1.f, float farClip = 500.f) 
-            : lightingEnabled(lightingEnabled), texture2DEnabled(texture2DEnabled), viewport(viewport), nearClipPlane(max(nearClip,1.f)), farClipPlane(farClip) { };
+        OpenGLSettings(bool lightingEnabled = false, bool texture2DEnabled = true, FloatRect viewport = FloatRect({0,0},{1,1}), float nearClip = 0.000000001f, float farClip = 1.f)
+            : lightingEnabled(lightingEnabled), texture2DEnabled(texture2DEnabled), viewport(viewport), nearClipPlane(max(nearClip, 0.0f)), farClipPlane(farClip) { };
 
         bool lightingEnabled = false;
         bool texture2DEnabled = true;
         FloatRect viewport = FloatRect({ 0,0 }, { 1,1 });
-        float nearClipPlane = 1.0f;
-        float farClipPlane = 500.f;
+        float nearClipPlane = 0.000000001f;
+        float farClipPlane = 1.f;
     };
 }
