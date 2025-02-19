@@ -189,7 +189,8 @@ namespace CGEngine {
                 id_t gridId = args.behavior->getInput().getData<id_t>("gridId");
                 //Get a reference to the grid Body so we can parent the player to it
                 Body* gridBody = world->bodies.get(gridId);
-
+                Vector2f viewSize = screen->getCurrentView()->getSize();
+                id_t screenSpaceMeshId = world->create(new Mesh(getCubeVertices(0.066f), { -viewSize.x/2 + 10,-viewSize.y/2 + 10,-0.000000001f}, {0,0,0}, {1,1,0.0000000004f}, textures->get("animation.png"), true));
                 id_t meshId2 = world->create(new Mesh(getCubeVertices(0.066f), { 72,72,-0.000000001f }, { 0,0,0 }, { 1,1,0.0000000004f },textures->get("animation.png")), gridBody);
                 id_t planeId = world->create(new Mesh(getCubeVertices(0.066f), { 72,16,-0.00000000104f }, { 0,0,0 }, { 1,1,0 }, textures->get("image.png")), gridBody);
                 id_t planeId2 = world->create(new Mesh(getCubeVertices(0.066f), { 72,118,-0.00000000104f }, { 0,0,0 }, { 1,1,0 }, textures->get("image.png")), gridBody);
