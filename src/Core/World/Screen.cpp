@@ -100,6 +100,14 @@ namespace CGEngine {
         return currentView;
     }
 
+    void Screen::setViewPosition(Vector2f pos) {
+        currentView->setCenter(pos);
+    }
+
+    void Screen::setViewEulerRotation(float rotation) {
+        currentView->setRotation(degrees(rotation));
+    }
+
     void Screen::moveView(Vector2f delta) {
         currentView->move(delta);
         window->setView(*currentView);
