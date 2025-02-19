@@ -190,30 +190,11 @@ namespace CGEngine {
                 //Get a reference to the grid Body so we can parent the player to it
                 Body* gridBody = world->bodies.get(gridId);
 
-                id_t meshId2 = world->create(new Mesh(getCubeVertices(0.066f), textures->get("animation.png"), 0.000000001f), gridBody);
-                Body* body2 = world->bodies.get(meshId2);
-                body2->translate({ 72,72});
-                body2->get<Mesh*>()->height = 0.000000001f;
-
-                id_t planeId = world->create(new Mesh(getCubeVertices(0.066f), textures->get("image.png"), 0.00000000102f), gridBody);
-                Body* planeBody = world->bodies.get(planeId);
-                planeBody->translate({ 72,16 });
-                planeBody->get<Mesh*>()->height = 0.0f;
-                
-                id_t planeId2 = world->create(new Mesh(getCubeVertices(0.066f), textures->get("image.png"), 0.00000000102f), gridBody);
-                Body* planeBody2 = world->bodies.get(planeId2);
-                planeBody2->translate({ 72,118 });
-                planeBody2->get<Mesh*>()->height = 0.0f;
-                
-                id_t planeId3 = world->create(new Mesh(getCubeVertices(0.066f), textures->get("image.png"), 0.00000000102f), gridBody);
-                Body* planeBody3 = world->bodies.get(planeId3);
-                planeBody3->translate({ 124,72 });
-                planeBody3->get<Mesh*>()->height = 0.0f;
-                
-                id_t planeId4 = world->create(new Mesh(getCubeVertices(0.066f), textures->get("image.png"), 0.00000000102f), gridBody);
-                Body* planeBody4 = world->bodies.get(planeId4);
-                planeBody4->translate({ 24,72 });
-                planeBody4->get<Mesh*>()->height = 0.0f;
+                id_t meshId2 = world->create(new Mesh(getCubeVertices(0.066f), { 72,72,-0.000000001f }, { 0,0,0 }, { 1,1,0.0000000004f },textures->get("animation.png")), gridBody);
+                id_t planeId = world->create(new Mesh(getCubeVertices(0.066f), { 72,16,-0.00000000104f }, { 0,0,0 }, { 1,1,0 }, textures->get("image.png")), gridBody);
+                id_t planeId2 = world->create(new Mesh(getCubeVertices(0.066f), { 72,118,-0.00000000104f }, { 0,0,0 }, { 1,1,0 }, textures->get("image.png")), gridBody);
+                id_t planeId3 = world->create(new Mesh(getCubeVertices(0.066f), { 124,72,-0.00000000104f }, { 0,0,0 }, { 1,1,0 }, textures->get("image.png")), gridBody);
+                id_t planeId4 = world->create(new Mesh(getCubeVertices(0.066f), { 24,72,-0.00000000104f }, { 0,0,0 }, { 1,1,0 }, textures->get("image.png")), gridBody);
             };
 
             Behavior* tilemapScene = new Behavior(nullptr); 
