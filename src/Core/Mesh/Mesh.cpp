@@ -1,7 +1,7 @@
 #include "Mesh.h"
 
 namespace CGEngine {
-	Mesh::Mesh(vector<GLfloat> vertices, Texture* texture, float depth, bool screenSpaceRendering, bool textureCoordinatesEnabled) : vertices(vertices), meshTexture(texture), textureCoordinatesEnabled(textureCoordinatesEnabled), depth(depth), screenSpaceRendering(screenSpaceRendering) { };
+	Mesh::Mesh(vector<GLfloat> vertices, V3f position, V3f rotation, V3f scale, Texture* texture, bool screenSpaceRendering, bool textureCoordinatesEnabled) : position(position), eulerRotation(rotation), scale(scale), vertices(vertices), meshTexture(texture), textureCoordinatesEnabled(textureCoordinatesEnabled), screenSpaceRendering(screenSpaceRendering) { };
 
 	void Mesh::render(Transform transform) {
 		if (renderer.setGLWindowState(true)) {
@@ -37,16 +37,20 @@ namespace CGEngine {
 			float viewScreenOffsetX = 2 / screen->getCurrentView()->getSize().x;
 			float viewScreenOffsetY = 2 / screen->getCurrentView()->getSize().y;
 			//Negate y position to match SFML y-axis orientation, add the view's position to convert from Screen Space, and offset by View size
-			Vector2f globalPositionXY = V2f({ worldPositionXY.x*viewScreenOffsetX,-worldPositionXY.y*viewScreenOffsetY}) + viewPosition;
-			//Apply the SFML XY transformations along with height and -depth
+			Vector2f globalPositionXY = V2f({ (worldPositionXY.x + position.x) *viewScreenOffsetX,(-worldPositionXY.y - position.y) *viewScreenOffsetY}) + viewPosition;
+			
 			glMatrixMode(GL_MODELVIEW);
 			glLoadIdentity();
-			//TODO: Replace depth Mesh Vector3 position (add position xy to globalPositonXY)
-			glTranslatef(globalPositionXY.x, globalPositionXY.y, -depth);
-			//TODO: Apply X and Y rotations
-			glRotatef(worldAngleZ_Deg, 0, 0, 1);
-			//TODO: Replace height Mesh Vector3 scale (multiply position xy to globalPositonXY)
-			glScalef(worldScaleXY.x, worldScaleXY.y, height);
+			//Apply SFML global XY position to this Mesh's V3 position
+			glTranslatef(globalPositionXY.x, globalPositionXY.y, position.z);
+			//Scale by SFML scale on XY multiplied by Mesh's V3 scale
+			glScalef(worldScaleXY.x * scale.x, worldScaleXY.y * scale.y, scale.z);
+			//Rotate by eulerRotation on x
+			glRotatef(eulerRotation.x, 1, 0, 0);
+			//Rotate by eulerRotation on y
+			glRotatef(eulerRotation.y, 0, 1, 0);
+			//Rotate by eulerRotation + SFML rotation on z
+			glRotatef(worldAngleZ_Deg + eulerRotation.z, 0, 0, 1);
 
 			// Draw the cube
 			glDrawArrays(GL_TRIANGLES, 0, 36);
