@@ -6,8 +6,12 @@ namespace CGEngine {
 	void Mesh::render(Transform transform) {
 		if (renderer.setGLWindowState(true)) {
 			renderer.pullGL();
-			(void)meshTexture->generateMipmap();
-			Texture::bind(&(*meshTexture));
+			if (meshTexture != nullptr) {
+				(void)meshTexture->generateMipmap();
+				Texture::bind(&(*meshTexture));
+			} else {
+				Texture::bind(nullptr);
+			}
 
 			// Enable vertex component
 			glVertexPointer(3, GL_FLOAT, 5 * sizeof(GLfloat), vertices.data());
