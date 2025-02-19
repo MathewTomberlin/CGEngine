@@ -178,7 +178,7 @@ namespace CGEngine {
         /// Returns the normalized world space direction of the Body's right vector
         /// </summary>
         /// <returns>The Body's rotation in world space as a normalized direction vector</returns>
-        V2f getUp() const;
+        V2f getRight() const;
         /// <summary>
         /// Gets the drawn Shape's local geometric center
         /// </summary>

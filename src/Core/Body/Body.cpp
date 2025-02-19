@@ -194,7 +194,7 @@ namespace CGEngine {
         return dir;
     }
 
-    V2f Body::getUp() const {
+    V2f Body::getRight() const {
         Transform wTr = getGlobalTransform();
         Vector2f wPos = wTr.transformPoint({ 0,0 });
         Vector2f uPos = wTr.transformPoint({ 0,1 });
