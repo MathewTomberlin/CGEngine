@@ -54,16 +54,17 @@ namespace CGEngine {
 		FloatRect viewport = openGLSettings.viewport;
 		GLsizei viewPositionX_px = viewport.position.x;
 		GLsizei viewPositionY_px = viewport.position.y;
-		GLsizei viewSizeX_px = static_cast<GLsizei>(window->getSize().x * viewport.size.x);
-		GLsizei viewSizeY_px = static_cast<GLsizei>(window->getSize().y * viewport.size.y);
-		glViewport(viewPositionX_px, viewPositionY_px, viewSizeX_px, viewSizeY_px);
+		float viewportSizeY = min(1.f, (float)window->getSize().x / window->getSize().y)* (float)window->getSize().y;
+		float viewportSizeX = min(1.f, (float)window->getSize().y / window->getSize().x)* (float)window->getSize().x;
+		float minDim = min(window->getSize().x, window->getSize().y);
+		GLsizei viewSizeY_px = static_cast<GLsizei>(minDim * viewport.size.y);
+		int yOffset = ((int)window->getSize().y - viewportSizeY);
+		int xOffset = ((int)window->getSize().x - viewportSizeX);
 
-		//Calculate the perspective ratio
-		const GLfloat ratio = viewSizeX_px / viewSizeY_px;
-		// Setup OPENGL perspective projection from viewport size
-		glMatrixMode(GL_PROJECTION);                        //Switch from ModelView to ProjectionView matrix
-		glLoadIdentity();                                   //Clear the matrix
-		glFrustum(-ratio, ratio, -1.f, 1.f, openGLSettings.nearClipPlane, openGLSettings.farClipPlane);    //L/R/T/B coordinates of perspective and near/far clip plane
+		glMatrixMode(GL_PROJECTION);
+		glLoadIdentity();
+		glFrustum(-1,1,-1,1, openGLSettings.nearClipPlane, openGLSettings.farClipPlane);
+		glViewport(viewPositionX_px+(xOffset/2), viewPositionY_px+(yOffset/2), viewportSizeX, viewportSizeY);
 		if (!setGLWindowState(false)) return;
 	}
 

@@ -84,7 +84,14 @@ namespace CGEngine {
     }
 
     void Screen::initView() {
-        currentView = new View(size / 2.f, size);
+        float viewportSizeY = min(1.f, size.x / size.y);
+        float viewportSizeX = min(1.f, size.y / size.x);
+        float minDim = min(size.x, size.y);
+        float ratioX = (1-(minDim /window->getSize().x))/2.f;
+        float ratioY = (1-(minDim / window->getSize().y)) / 2.f;
+        currentView = new View({minDim/2,minDim/2}, {minDim, minDim});
+        //0-1,0-1
+        currentView->setViewport(FloatRect({ Vector2f({ratioX,ratioY}),{viewportSizeX,viewportSizeY} }));
         window->setView(*currentView);
     }
 
