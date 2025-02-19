@@ -6,6 +6,10 @@ namespace CGEngine {
 		this->window = window;
 	}
 	void Renderer::initializeOpenGL() {
+		if (currentCamera == nullptr) {
+			currentCamera = new Camera({0,0,0},{0,0,0});
+		}
+
 		if (!setGLWindowState(true)) return;
 
 		// Enable Z-buffer read and write (Disabling results in out-of-order polygon draws)
@@ -91,6 +95,7 @@ namespace CGEngine {
 
 	bool Renderer::processRender() {
 		Body* root = world->getRoot();
+		renderCamera();
 		// Commit OpenGL State
 		commitGL();
 		// Clear the window
@@ -178,5 +183,25 @@ namespace CGEngine {
 			if (world->isDeleted(*iterator)) continue;
 			(*iterator)->onDraw(*window, (*iterator)->getGlobalTransform());
 		}
+	}
+
+	void Renderer::renderCamera() {
+		if (currentCamera != nullptr) {
+			glMatrixMode(GL_PROJECTION);
+			glLoadIdentity();
+			glFrustum(-1, 1, -1, 1, openGLSettings.nearClipPlane, openGLSettings.farClipPlane);
+			glTranslatef(currentCamera->position.x, currentCamera->position.y, currentCamera->position.z);
+			glRotatef(currentCamera->eulerRotation.x, 1, 0, 0);
+			glRotatef(currentCamera->eulerRotation.y, 0, 1, 0);
+			glRotatef(currentCamera->eulerRotation.z, 0, 0, 1);
+		}
+	}
+
+	Camera* Renderer::getCurrentCamera() {
+		return currentCamera;
+	}
+
+	void Renderer::setCurrentCamera(Camera* camera) {
+		currentCamera = camera;
 	}
 }

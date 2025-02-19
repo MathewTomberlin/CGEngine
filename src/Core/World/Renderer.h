@@ -4,6 +4,7 @@
 #include <vector>
 #include <map>
 #include "../Body/Body.h"
+#include "../Camera/Camera.h"
 using namespace std;
 
 namespace CGEngine {
@@ -56,9 +57,11 @@ namespace CGEngine {
 
 		bool processRender();
 		void setWindow(RenderWindow* window);
+		Camera* getCurrentCamera();
+		void setCurrentCamera(Camera* camera);
 	private:
 		friend class World;
-		RenderWindow* window;
+		RenderWindow* window = nullptr;
 		/// <summary>
 		/// Clear the renderOrder and bodyTransform map
 		/// </summary>
@@ -72,6 +75,9 @@ namespace CGEngine {
 		/// </summary>
 		/// <param name="window">The RenderTarget to draw the Body in</param>
 		void render(RenderTarget* window);
+
+		Camera* currentCamera = nullptr;
+		void renderCamera();
 		/// <summary>
 		/// The order in which to draw bodies, with Bodies further back in the vector drawn on top of other Bodies. This is cleared and re-calculated each frame
 		/// </summary>

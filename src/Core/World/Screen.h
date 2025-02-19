@@ -28,6 +28,8 @@ namespace CGEngine {
         V2f getRightCenter() const;
         //Current View
         View* getCurrentView();
+        void setViewPosition(Vector2f pos);
+        void setViewEulerRotation(float rotation);
         void moveView(Vector2f delta);
         void rotateView(Angle delta);
         void zoomView(float delta);

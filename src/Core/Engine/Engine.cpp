@@ -19,6 +19,7 @@ namespace CGEngine {
     Screen* screen = new Screen(windowParameters.windowSize, windowParameters.windowTitle);
     World* world = new World();
     function<void()> beginWorld = []() { world->startWorld(); world->runWorld(); };
+    function<Camera* ()> getCamera = []() { return renderer.getCurrentCamera(); };
 
     const string onUpdateEvent = "update";
     const string onStartEvent = "start";

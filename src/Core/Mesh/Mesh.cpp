@@ -27,6 +27,8 @@ namespace CGEngine {
 				glColor3fv(vector<float>({1,1,1}).data());
 			}
 
+			//TODO: SUPPORT NORMAL MAP
+
 			//Get world xy position, xy right, z rotation, and xy scale from Body transform
 			Vector2f worldPositionXY = world->getGlobalPosition(transform);
 			Vector2f worldRightXYDir = world->getRight(transform);

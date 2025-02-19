@@ -21,6 +21,7 @@ namespace CGEngine {
 	extern Font* defaultFont;
 	extern function<void()> updateWorld;
 	extern function<void()> beginWorld;
+	extern function<Camera*()> getCamera;
 	extern vector<Behavior*> sceneList;
 	extern Logging logging;
 
