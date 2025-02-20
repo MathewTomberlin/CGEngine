@@ -7,7 +7,7 @@
 namespace CGEngine {
 	class Mesh : public Transformable{
 	public:
-		Mesh(vector<GLfloat> vertices, vector<GLfloat> normals, V3f position = { 0,0,0 }, V3f rotation = { 0,0,0 }, V3f scale = { 0,0,0 }, Texture* texture = nullptr, bool screenSpaceRendering = false, bool textureCoordinatesEnabled = true, vector<GLfloat> vertexColor = {});
+		Mesh(vector<GLfloat> vertices, vector<GLfloat> normals, V3f position = { 0,0,0 }, V3f rotation = { 0,0,0 }, V3f scale = { 0,0,0 }, Texture* texture = nullptr, bool screenSpaceRendering = false, bool textureCoordinatesEnabled = true, vector<GLfloat> vertexColor = {}, bool lightingEnabled = true, bool texture2dEnabled = true, bool normalsEnabled = true);
 
 		void render(Transform parentTransform);
 		vector<GLfloat> vertices;
@@ -21,5 +21,8 @@ namespace CGEngine {
 	private:
 		bool textureCoordinatesEnabled = true;
 		bool screenSpaceRendering = false;
+		bool lightingEnabled = true;
+		bool texture2dEnabled = true;
+		bool normalsEnabled = true;
 	};
 }
