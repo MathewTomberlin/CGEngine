@@ -7,15 +7,17 @@
 namespace CGEngine {
 	class Mesh : public Transformable{
 	public:
-		Mesh(vector<GLfloat> vertices, V3f position = { 0,0,0 }, V3f rotation = { 0,0,0 }, V3f scale = { 0,0,0 }, Texture* texture = nullptr, bool screenSpaceRendering = false, bool textureCoordinatesEnabled = true, vector<GLfloat> vertexColor = {});
+		Mesh(vector<GLfloat> vertices, vector<GLfloat> normals, V3f position = { 0,0,0 }, V3f rotation = { 0,0,0 }, V3f scale = { 0,0,0 }, Texture* texture = nullptr, bool screenSpaceRendering = false, bool textureCoordinatesEnabled = true, vector<GLfloat> vertexColor = {});
 
 		void render(Transform parentTransform);
 		vector<GLfloat> vertices;
 		Texture* meshTexture;
+		Texture* meshNormalTexture;
 		V3f position = { 0,0,0 };
 		V3f eulerRotation = { 0,0,0 };
 		V3f scale = { 1,1,1 };
 		vector<GLfloat> vertexColor = { 1.f,1.f,1.f };
+		vector<GLfloat> normals;
 	private:
 		bool textureCoordinatesEnabled = true;
 		bool screenSpaceRendering = false;

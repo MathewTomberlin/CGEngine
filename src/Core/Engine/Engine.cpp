@@ -4,7 +4,7 @@ namespace CGEngine {
     //Size and name to give created window
     WindowParameters windowParameters = WindowParameters({ 1000,500 }, "CGEngine App");
     
-    OpenGLSettings openGLSettings = OpenGLSettings(false, true);
+    OpenGLSettings openGLSettings = OpenGLSettings(true, true);
     //List of Scenes to create, add to World and load sceneList[0]
     vector<Behavior*> sceneList = { };
     Logging logging;

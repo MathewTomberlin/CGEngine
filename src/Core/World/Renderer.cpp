@@ -20,7 +20,33 @@ namespace CGEngine {
 		// Enable Vertex and Texture Coordinate Arrays
 		glEnableClientState(GL_VERTEX_ARRAY);
 		glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+		glEnableClientState(GL_NORMAL_ARRAY);
 
+		//Enable color materials
+		glEnable(GL_COLOR_MATERIAL);
+
+		glEnable(GL_LIGHT0);
+		GLfloat brightness = 4.f;
+		GLfloat diffuseColor[4] = { 1 * brightness,1 * brightness,1 * brightness,1 * brightness };
+		GLfloat ambientColor[4] = { 0,0,0,1 };
+		GLfloat specularColor[4] = { 1 * brightness,1 * brightness,1 * brightness,1 * brightness };
+		GLfloat lightPosition[4] = { 0,0,5,1 };
+		GLfloat spotDirection[3] = { 0,0,-1 };
+		GLfloat spotCutoff = 10.f;
+		GLfloat spotExponent = 128.f;
+		GLfloat spotConstantAttenuation = 2.f;
+		GLfloat spotLinearAttenuation = 0.1f;
+		GLfloat spotQuadraticAttenuation = 0.1f;
+		glLightfv(GL_LIGHT0, GL_POSITION, lightPosition);
+		glLightfv(GL_LIGHT0, GL_DIFFUSE, diffuseColor);
+		glLightfv(GL_LIGHT0, GL_AMBIENT, ambientColor);
+		glLightfv(GL_LIGHT0, GL_SPECULAR, specularColor);
+		glLightfv(GL_LIGHT0, GL_SPOT_DIRECTION, spotDirection);
+		glLightf(GL_LIGHT0, GL_SPOT_CUTOFF, spotCutoff);
+		glLightf(GL_LIGHT0, GL_SPOT_EXPONENT, spotExponent);
+		glLightf(GL_LIGHT0, GL_CONSTANT_ATTENUATION, spotConstantAttenuation);
+		glLightf(GL_LIGHT0, GL_LINEAR_ATTENUATION, spotLinearAttenuation);
+		glLightf(GL_LIGHT0, GL_QUADRATIC_ATTENUATION, spotQuadraticAttenuation);
 		// Disable normal and color vertex components
 		bool normalsEnabled = false;
 		bool vertexColorsEnabled = false;

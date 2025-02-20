@@ -48,6 +48,28 @@ namespace CGEngine {
         };
     }
 
+    vector<GLfloat> getCubeNormals() {
+        return {
+            -1,0,0,
+            -1,0,0,
+
+            1,0,0,
+            1,0,0,
+
+            0,-1,0,
+            0,-1,0,
+
+            0,1,0,
+            0,1,0,
+
+            0,0,-1,
+            0,0,-1,
+
+            0,0,1,
+            0,0,1,
+        };
+    }
+
     vector<GLfloat> getPlaneVertices(float scale) {
         return {
              // positions    // texture coordinates
