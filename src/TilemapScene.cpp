@@ -5,6 +5,7 @@
 #include "Standard/Behaviors/BoundsBehavior.h"
 #include "Standard/Drawables/Tilemap.h"
 #include "Standard/Meshes/CommonVArrays.h"
+#include "Core/Light/Light.h"
 
 namespace CGEngine {
 	class TilemapScene : public Behavior {
@@ -186,6 +187,10 @@ namespace CGEngine {
             };
 
             ScriptEvent meshConstruction = [](ScArgs args) {
+                //Add an offset and rotated spotlight
+                Light* light1 = new Light(2,Color::White, Color::Black, Color::White, {0,-3,3}, {0,1,-1}, false, SpotlightParameters(20));
+                //Add a wider red light
+                Light* light2 = new Light(20, Color::Red, Color::Black, Color::White, {0,-3,3}, {0,1,-1}, false, SpotlightParameters(90));
                 //Get the id of the grid body output by tilemapConstruction
                 id_t gridId = args.behavior->getInput().getData<id_t>("gridId");
                 //Get a reference to the grid Body so we can parent the player to it
@@ -196,22 +201,22 @@ namespace CGEngine {
                 id_t meshId3 = world->create(new Mesh(getCubeVertices(0.066f), getCubeNormals(), { 24,0,-0.000000001f }, { 0,0,0 }, { 1,1,0.0000000008f }, textures->get("brick_tile.png"))/*, gridBody*/);
                 id_t meshId4 = world->create(new Mesh(getCubeVertices(0.066f), getCubeNormals(), { 172,272,-0.000000001f }, { 0,0,0 }, { 1,1,0.0000000008f }, textures->get("brick_tile.png"))/*, gridBody*/);
                 id_t meshId5 = world->create(new Mesh(getCubeVertices(0.066f), getCubeNormals(), { -30,272,-0.000000001f }, { 0,0,0 }, { 1,1,0.0000000008f }, textures->get("brick_tile.png"))/*, gridBody*/);
-                id_t groundPlane1 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 0,0,-0.00000000108f }, { 0,0,0 }, { 1,1,0 }, textures->get("grass_tile.png")));
-                id_t groundPlane2 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 125,0,-0.00000000108f }, { 0,0,0 }, { 1,1,0 }, textures->get("grass_tile.png")));
-                id_t groundPlane3 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 125,125,-0.00000000108f }, { 0,0,0 }, { 1,1,0 }, textures->get("grass_tile.png")));
-                id_t groundPlane4 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 0,125,-0.00000000108f }, { 0,0,0 }, { 1,1,0 }, textures->get("grass_tile.png")));
-                id_t groundPlane5 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 250,0,-0.00000000108f }, { 0,0,0 }, { 1,1,0 }, textures->get("grass_tile.png")));
-                id_t groundPlane6 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 250,125,-0.00000000108f }, { 0,0,0 }, { 1,1,0 }, textures->get("grass_tile.png")));
-                id_t groundPlane7 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 250,250,-0.00000000108f }, { 0,0,0 }, { 1,1,0 }, textures->get("grass_tile.png")));
-                id_t groundPlane8 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 125,250,-0.00000000108f }, { 0,0,0 }, { 1,1,0 }, textures->get("grass_tile.png")));
-                id_t groundPlane9 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 0,375,-0.00000000108f }, { 0,0,0 }, { 1,1,0 }, textures->get("grass_tile.png")));
-                id_t groundPlane10 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 375,250,-0.00000000108f }, { 0,0,0 }, { 1,1,0 }, textures->get("grass_tile.png")));
-                id_t groundPlane11 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 375,375,-0.00000000108f }, { 0,0,0 }, { 1,1,0 }, textures->get("grass_tile.png")));
-                id_t groundPlane12 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 250,375,-0.00000000108f }, { 0,0,0 }, { 1,1,0 }, textures->get("grass_tile.png")));
-                id_t groundPlane13 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 0,250,-0.00000000108f }, { 0,0,0 }, { 1,1,0 }, textures->get("grass_tile.png")));
-                id_t groundPlane14 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 375,0,-0.00000000108f }, { 0,0,0 }, { 1,1,0 }, textures->get("grass_tile.png")));
-                id_t groundPlane15 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 125,375,-0.00000000108f }, { 0,0,0 }, { 1,1,0 }, textures->get("grass_tile.png")));
-                id_t groundPlane16 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 375,125,-0.00000000108f }, { 0,0,0 }, { 1,1,0 }, textures->get("grass_tile.png")));
+                id_t groundPlane1 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 0,0,-0.00000000108f }, { 0,0,0 }, { 1,1,0.0000000000001f }, textures->get("grass_tile.png")));
+                id_t groundPlane2 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 125,0,-0.00000000108f }, { 0,0,0 }, { 1,1,0.0000000000001f }, textures->get("grass_tile.png")));
+                id_t groundPlane3 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 125,125,-0.00000000108f }, { 0,0,0 }, { 1,1,0.0000000000001f }, textures->get("grass_tile.png")));
+                id_t groundPlane4 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 0,125,-0.00000000108f }, { 0,0,0 }, { 1,1,0.0000000000001f }, textures->get("grass_tile.png")));
+                id_t groundPlane5 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 250,0,-0.00000000108f }, { 0,0,0 }, { 1,1,0.0000000000001f }, textures->get("grass_tile.png")));
+                id_t groundPlane6 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 250,125,-0.00000000108f }, { 0,0,0 }, { 1,1,0.0000000000001f }, textures->get("grass_tile.png")));
+                id_t groundPlane7 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 250,250,-0.00000000108f }, { 0,0,0 }, { 1,1,0.0000000000001f }, textures->get("grass_tile.png")));
+                id_t groundPlane8 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 125,250,-0.00000000108f }, { 0,0,0 }, { 1,1,0.0000000000001f }, textures->get("grass_tile.png")));
+                id_t groundPlane9 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 0,375,-0.00000000108f }, { 0,0,0 }, { 1,1,0.0000000000001f }, textures->get("grass_tile.png")));
+                id_t groundPlane10 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 375,250,-0.00000000108f }, { 0,0,0 }, { 1,1,0.0000000000001f }, textures->get("grass_tile.png")));
+                id_t groundPlane11 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 375,375,-0.00000000108f }, { 0,0,0 }, { 1,1,0.0000000000001f }, textures->get("grass_tile.png")));
+                id_t groundPlane12 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 250,375,-0.00000000108f }, { 0,0,0 }, { 1,1,0.0000000000001f }, textures->get("grass_tile.png")));
+                id_t groundPlane13 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 0,250,-0.00000000108f }, { 0,0,0 }, { 1,1,0.0000000000001f }, textures->get("grass_tile.png")));
+                id_t groundPlane14 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 375,0,-0.00000000108f }, { 0,0,0 }, { 1,1,0.0000000000001f }, textures->get("grass_tile.png")));
+                id_t groundPlane15 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 125,375,-0.00000000108f }, { 0,0,0 }, { 1,1,0.0000000000001f }, textures->get("grass_tile.png")));
+                id_t groundPlane16 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 375,125,-0.00000000108f }, { 0,0,0 }, { 1,1,0.0000000000001f }, textures->get("grass_tile.png")));
             };
 
             Behavior* tilemapScene = new Behavior(nullptr); 
