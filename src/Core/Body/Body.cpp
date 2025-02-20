@@ -306,6 +306,7 @@ namespace CGEngine {
         case Bottom_Center:
             return V2f(0.5f, 1);
         }
+        return V2f(0, 0);
     }
 
     void Body::setAlignment(Alignment targetAlignment) {
