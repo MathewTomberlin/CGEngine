@@ -1,7 +1,7 @@
 #include "Mesh.h"
 
 namespace CGEngine {
-	Mesh::Mesh(vector<GLfloat> vertices, V3f position, V3f rotation, V3f scale, Texture* texture, bool screenSpaceRendering, bool textureCoordinatesEnabled, vector<GLfloat> vertexColor) : position(position), eulerRotation(rotation), scale(scale), vertices(vertices), meshTexture(texture), textureCoordinatesEnabled(textureCoordinatesEnabled), screenSpaceRendering(screenSpaceRendering), vertexColor(vertexColor) { };
+	Mesh::Mesh(vector<GLfloat> vertices, vector<GLfloat> normals, V3f position, V3f rotation, V3f scale, Texture* texture, bool screenSpaceRendering, bool textureCoordinatesEnabled, vector<GLfloat> vertexColor) : position(position), eulerRotation(rotation), scale(scale), vertices(vertices), meshTexture(texture), textureCoordinatesEnabled(textureCoordinatesEnabled), screenSpaceRendering(screenSpaceRendering), vertexColor(vertexColor), normals(normals) { };
 
 	void Mesh::render(Transform transform) {
 		if (renderer.setGLWindowState(true)) {
@@ -23,7 +23,9 @@ namespace CGEngine {
 				glColor3fv(vector<float>({1,1,1}).data());
 			}
 
-			//TODO: SUPPORT NORMAL MAP
+			glColorMaterial(GL_FRONT, GL_DIFFUSE);
+
+			glNormalPointer(GL_FLOAT, 0, normals.data());
 
 			//Get world xy position, xy right, z rotation, and xy scale from Body transform
 			Vector2f worldPositionXY = world->getGlobalPosition(transform);
@@ -55,9 +57,9 @@ namespace CGEngine {
 			glRotatef(eulerRotation.y, 0, 1, 0);
 			//Rotate by eulerRotation + SFML rotation on z
 			glRotatef(worldAngleZ_Deg + eulerRotation.z, 0, 0, 1);
-
+			glEnable(GL_NORMALIZE);
 			// Draw the cube
-			glDrawArrays(GL_TRIANGLES, 0, 36);
+			glDrawArrays(GL_TRIANGLES, 0, (vertices.capacity() / 5));
 			renderer.commitGL();
 		}
 	}
