@@ -25,23 +25,6 @@ namespace CGEngine {
 		//Don't enable color array
 		//glEnableClientState(GL_COLOR_ARRAY);
 
-		//Enable color materials
-		glEnable(GL_COLOR_MATERIAL);
-
-		// Setup OPENGL lighting
-		if (openGLSettings.lightingEnabled) {
-			glEnable(GL_LIGHTING);
-		} else {
-			glDisable(GL_LIGHTING);
-		}
-
-		bool Texture2DEnabled = true;
-		if (openGLSettings.texture2DEnabled) {
-			glEnable(GL_TEXTURE_2D);
-		} else {
-			glDisable(GL_TEXTURE_2D);
-		}
-
 		// Setup OPENGL viewport within window
 		FloatRect viewport = openGLSettings.viewport;
 		GLsizei viewPositionX_px = viewport.position.x;

@@ -1,35 +1,43 @@
 #include "Mesh.h"
 
 namespace CGEngine {
-	Mesh::Mesh(vector<GLfloat> vertices, vector<GLfloat> normals, V3f position, V3f rotation, V3f scale, Texture* texture, bool screenSpaceRendering, bool textureCoordinatesEnabled, vector<GLfloat> vertexColor) : position(position), eulerRotation(rotation), scale(scale), vertices(vertices), meshTexture(texture), textureCoordinatesEnabled(textureCoordinatesEnabled), screenSpaceRendering(screenSpaceRendering), vertexColor(vertexColor), normals(normals) { };
+	Mesh::Mesh(vector<GLfloat> vertices, vector<GLfloat> normals, V3f position, V3f rotation, V3f scale, Texture* texture, bool screenSpaceRendering, bool textureCoordinatesEnabled, vector<GLfloat> vertexColor, bool lightingEnabled, bool texture2dEnabled, bool normalsEnabled) : position(position), eulerRotation(rotation), scale(scale), vertices(vertices), meshTexture(texture), textureCoordinatesEnabled(textureCoordinatesEnabled), screenSpaceRendering(screenSpaceRendering), vertexColor(vertexColor), normals(normals), lightingEnabled(lightingEnabled), texture2dEnabled(texture2dEnabled), normalsEnabled(normalsEnabled) { };
 
 	void Mesh::render(Transform transform) {
 		if (renderer.setGLWindowState(true)) {
 			renderer.pullGL();
+			
+			//Generate mesh texture mips and binds
 			if (meshTexture != nullptr) {
 				(void)meshTexture->generateMipmap();
 				Texture::bind(&(*meshTexture));
 			} else {
 				Texture::bind(nullptr);
 			}
+			
+			//Size of vertex buffer determined by presence of texture coordinates
+			size_t vBufferSize = 3 + (textureCoordinatesEnabled ? 2 : 0);
+			//Apply vertex buffer to vertex pointer
+			glVertexPointer(3, GL_FLOAT, vBufferSize * sizeof(GLfloat), vertices.data());
 
-			// Enable vertex component
-			glVertexPointer(3, GL_FLOAT, 5 * sizeof(GLfloat), vertices.data());
-
-			//Enable texture coordinate component if enabled
+			//Apply vertex buffer to texture coordinate pointer
 			if (textureCoordinatesEnabled) {
-				glTexCoordPointer(2, GL_FLOAT, 5 * sizeof(GLfloat), vertices.data() + 3);
+				glTexCoordPointer(2, GL_FLOAT, vBufferSize * sizeof(GLfloat), vertices.data() + 3);
 			}
 
+			//Apply normals
+			if (normalsEnabled) {
+				glNormalPointer(GL_FLOAT, 0, normals.data());
+			}
+
+			//Apply vertex colors
 			if (vertexColor.size()>0) {
 				glColor3fv(vertexColor.data());
 			} else {
-				glColor3fv(vector<float>({1,1,1}).data());
+				const GLfloat white[] = {1,1,1,1};
+				glColor3fv(white);
 			}
-
-			glColorMaterial(GL_FRONT, GL_DIFFUSE);
-
-			glNormalPointer(GL_FLOAT, 0, normals.data());
+			glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
 
 			//Get world xy position, xy right, z rotation, and xy scale from Body transform
 			Vector2f worldPositionXY = world->getGlobalPosition(transform);
@@ -62,6 +70,20 @@ namespace CGEngine {
 			//Rotate by eulerRotation + SFML rotation on z
 			glRotatef(worldAngleZ_Deg + eulerRotation.z, 0, 0, 1);
 			glEnable(GL_NORMALIZE);
+
+			if (lightingEnabled && openGLSettings.lightingEnabled) {
+				glEnable(GL_LIGHTING);
+			} else {
+				glDisable(GL_LIGHTING);
+			}
+
+			if (texture2dEnabled &&  openGLSettings.texture2DEnabled) {
+				glEnable(GL_TEXTURE_2D);
+			}
+			else {
+				glDisable(GL_TEXTURE_2D);
+			}
+
 			// Draw the cube
 			glDrawArrays(GL_TRIANGLES, 0, (vertices.capacity() / 5));
 			renderer.commitGL();
