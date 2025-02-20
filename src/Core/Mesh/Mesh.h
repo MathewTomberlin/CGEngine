@@ -12,7 +12,6 @@ namespace CGEngine {
 		void render(Transform parentTransform);
 		vector<GLfloat> vertices;
 		Texture* meshTexture;
-		Texture* meshNormalTexture;
 		V3f position = { 0,0,0 };
 		V3f eulerRotation = { 0,0,0 };
 		V3f scale = { 1,1,1 };

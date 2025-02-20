@@ -28,6 +28,8 @@ namespace CGEngine {
 			if (domain.find(key) != domain.end()) {
 				return domain[key];
 			}
+			static DomainValue def;
+			return def;
 		}
 
 		void forEach(function<void(DomainValue)> function) {

@@ -154,10 +154,11 @@ namespace CGEngine {
             Body* b = bodies.front();
             if (b != nullptr && b->getName() == name) {
                 return b;
-            }
-            //Otherwise add its children to the stack
-            for (Body* child : b->children) {
-                bodies.push(child);
+            } else if (b != nullptr) {
+                //Otherwise add its children to the stack
+                for (Body* child : b->children) {
+                    bodies.push(child);
+                }
             }
             //And pop it
             bodies.pop();
