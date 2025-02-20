@@ -335,6 +335,10 @@ namespace CGEngine {
     void World::runWorld() {
         while (running) {
             renderer.initializeOpenGL();
+            if (!lightsInit) {
+                lights.forEach([](Light* light) { light->init(); });
+                lightsInit = true;
+            }
 
             while (window->isOpen()) {
                 deleted.clear();
@@ -524,4 +528,11 @@ namespace CGEngine {
         return degrees(-getGlobalRotation(transform).asDegrees());
     }
 
+    id_t World::addLight(Light* light) {
+        return lights.add(light);
+    }
+
+    Light* World::getLight(id_t lightId) {
+        return lights.get(lightId);
+    }
 }

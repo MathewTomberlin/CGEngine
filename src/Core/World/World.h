@@ -4,6 +4,7 @@
 #include "../World/Screen.h"
 #include "../Types/UniqueDomain.h"
 #include "../Mesh/Mesh.h"
+#include "../Light/Light.h"
 #include <sstream>
 #include <memory>
 #include <queue>
@@ -102,6 +103,9 @@ namespace CGEngine {
         /// </summary>
         /// <returns>The Body's rotation in world space as a normalized direction vector</returns>
         V2f getRight(Transform transform) const;
+
+        id_t addLight(Light* light);
+        Light* getLight(id_t lightId);
     private:
         RenderWindow* window = nullptr;
 
@@ -127,7 +131,11 @@ namespace CGEngine {
 
         //Scenes
         map<string, Behavior*> scenes;
-        
+
+        //Lights
+        UniqueDomain<id_t, Light*> lights = UniqueDomain<id_t, Light*>(8);
+        bool lightsInit = false;
+
         //Console
         bool consoleFeatureEnabled = true;
         bool consoleInitialized = false;
