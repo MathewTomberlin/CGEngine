@@ -88,26 +88,26 @@ namespace CGEngine {
                     args.caller->addScript("SaveMapData", new Script(saveTilemapDataEvt));
                 }));
 
-                id_t toolboxId = world->create(new Tilemap("tilemap.png", { 32,32 }, { 8,7 }, tileTypes), new Script([&](ScArgs args) {
-                    //Create the BoundsBehavior with custom getLocalBounds and getGlobalBounds to call the Tilemap bounds functions
-                    //NOTE: Do this before applying moveToAlignment to avoid out-of-order errors
-                    new BoundsBehavior(args.caller,
-                    [](const Body* body) {
-                        return dynamic_cast<Tilemap*>(body->get())->getGlobalBounds();
-                    },
-                    [](const Body* body) {
-                        return dynamic_cast<Tilemap*>(body->get())->getLocalBounds();
-                    });
-                    //Basic body properties
-                    args.caller->setName("toolbox");
-                    args.caller->setOrigin({ 0,0.5 });
-                    args.caller->setScale({ 1.25f,1.25f });
-                    args.caller->setBoundsRenderingEnabled(true);
-                    args.caller->moveToAlignment({ 0,0.5 });
-
-                    //Add a left click listener and the toolboxTileClickScript script
-                    args.caller->addOverlapMouseReleaseScript(new Script(toolboxTileClickEvt), Mouse::Button::Left);
-                }));
+                //id_t toolboxId = world->create(new Tilemap("tilemap.png", { 32,32 }, { 8,7 }, tileTypes), new Script([&](ScArgs args) {
+                //    //Create the BoundsBehavior with custom getLocalBounds and getGlobalBounds to call the Tilemap bounds functions
+                //    //NOTE: Do this before applying moveToAlignment to avoid out-of-order errors
+                //    new BoundsBehavior(args.caller,
+                //    [](const Body* body) {
+                //        return dynamic_cast<Tilemap*>(body->get())->getGlobalBounds();
+                //    },
+                //    [](const Body* body) {
+                //        return dynamic_cast<Tilemap*>(body->get())->getLocalBounds();
+                //    });
+                //    //Basic body properties
+                //    args.caller->setName("toolbox");
+                //    args.caller->setOrigin({ 0,0.5 });
+                //    args.caller->setScale({ 1.25f,1.25f });
+                //    args.caller->setBoundsRenderingEnabled(true);
+                //    args.caller->moveToAlignment({ 0,0.5 });
+                //
+                //    //Add a left click listener and the toolboxTileClickScript script
+                //    args.caller->addOverlapMouseReleaseScript(new Script(toolboxTileClickEvt), Mouse::Button::Left);
+                //}));
 
                 //ScriptEvent clickUpdateScript = [this](ScArgs args) {
                 //    MouseReleaseInput* mouseEvt = args.script->getInput().getDataPtr<MouseReleaseInput>("evt");
@@ -150,9 +150,10 @@ namespace CGEngine {
                 //Create a body with a Sprite
                 Texture* spriteTex = textures->get("triceratops.png");
                 IntRect spriteRect = IntRect({ 0,0 }, { 32,32 });
-                Body* player = new Body(new Sprite(*spriteTex, spriteRect), gridBody);
+                Body* player = new Body(new Sprite(*spriteTex, spriteRect)/*, gridBody*/);
                 player->setName("player");
                 player->zOrder = 10;
+                player->setPosition({ screen->getCurrentView()->getSize().x / 2, screen->getCurrentView()->getSize().y / 2});
                 //Add the instances of the Move and Rotate Controllers
                 player->addStartScript(keyboardMoveController);
                 player->addStartScript(keyboardRotateController);
@@ -190,12 +191,27 @@ namespace CGEngine {
                 //Get a reference to the grid Body so we can parent the player to it
                 Body* gridBody = world->bodies.get(gridId);
                 Vector2f viewSize = screen->getCurrentView()->getSize();
-                id_t screenSpaceMeshId = world->create(new Mesh(getCubeVertices(0.066f), { -viewSize.x/2 + 10,-viewSize.y/2 + 10,-0.000000001f}, {0,0,0}, {1,1,0.0000000004f}, nullptr, true, true, {1.f,1.f,0.f}));
-                id_t meshId2 = world->create(new Mesh(getCubeVertices(0.066f), { 72,72,-0.000000001f }, { 0,0,0 }, { 1,1,0.0000000008f },textures->get("brick_tile.png")), gridBody);
-                id_t planeId = world->create(new Mesh(getCubeVertices(0.066f), { 72,16,-0.00000000108f }, { 0,0,0 }, { 1,1,0 }, textures->get("lava_tile.png")), gridBody);
-                id_t planeId2 = world->create(new Mesh(getCubeVertices(0.066f), { 72,118,-0.00000000108f }, { 0,0,0 }, { 1,1,0 }, textures->get("lava_tile.png")), gridBody);
-                id_t planeId3 = world->create(new Mesh(getCubeVertices(0.066f), { 124,72,-0.00000000108f }, { 0,0,0 }, { 1,1,0 }, textures->get("lava_tile.png")), gridBody);
-                id_t planeId4 = world->create(new Mesh(getCubeVertices(0.066f), { 24,72,-0.00000000108f }, { 0,0,0 }, { 1,1,0 }, textures->get("lava_tile.png")), gridBody);
+                id_t screenSpaceMeshId = world->create(new Mesh(getCubeVertices(0.066f), getCubeNormals(), { -viewSize.x/2 + 10,-viewSize.y/2 + 10,-0.000000001f}, {0,0,0}, {1,1,0.0000000004f}, nullptr, true, true, {1.f,1.f,0.f}));
+                id_t meshId2 = world->create(new Mesh(getCubeVertices(0.066f), getCubeNormals(), {72,72,-0.000000001f}, {0,0,0}, {1,1,0.0000000008f}, textures->get("brick_tile.png"))/*, gridBody*/);
+                id_t meshId3 = world->create(new Mesh(getCubeVertices(0.066f), getCubeNormals(), { 24,0,-0.000000001f }, { 0,0,0 }, { 1,1,0.0000000008f }, textures->get("brick_tile.png"))/*, gridBody*/);
+                id_t meshId4 = world->create(new Mesh(getCubeVertices(0.066f), getCubeNormals(), { 172,272,-0.000000001f }, { 0,0,0 }, { 1,1,0.0000000008f }, textures->get("brick_tile.png"))/*, gridBody*/);
+                id_t meshId5 = world->create(new Mesh(getCubeVertices(0.066f), getCubeNormals(), { -30,272,-0.000000001f }, { 0,0,0 }, { 1,1,0.0000000008f }, textures->get("brick_tile.png"))/*, gridBody*/);
+                id_t groundPlane1 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 0,0,-0.00000000108f }, { 0,0,0 }, { 1,1,0 }, textures->get("grass_tile.png")));
+                id_t groundPlane2 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 125,0,-0.00000000108f }, { 0,0,0 }, { 1,1,0 }, textures->get("grass_tile.png")));
+                id_t groundPlane3 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 125,125,-0.00000000108f }, { 0,0,0 }, { 1,1,0 }, textures->get("grass_tile.png")));
+                id_t groundPlane4 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 0,125,-0.00000000108f }, { 0,0,0 }, { 1,1,0 }, textures->get("grass_tile.png")));
+                id_t groundPlane5 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 250,0,-0.00000000108f }, { 0,0,0 }, { 1,1,0 }, textures->get("grass_tile.png")));
+                id_t groundPlane6 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 250,125,-0.00000000108f }, { 0,0,0 }, { 1,1,0 }, textures->get("grass_tile.png")));
+                id_t groundPlane7 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 250,250,-0.00000000108f }, { 0,0,0 }, { 1,1,0 }, textures->get("grass_tile.png")));
+                id_t groundPlane8 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 125,250,-0.00000000108f }, { 0,0,0 }, { 1,1,0 }, textures->get("grass_tile.png")));
+                id_t groundPlane9 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 0,375,-0.00000000108f }, { 0,0,0 }, { 1,1,0 }, textures->get("grass_tile.png")));
+                id_t groundPlane10 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 375,250,-0.00000000108f }, { 0,0,0 }, { 1,1,0 }, textures->get("grass_tile.png")));
+                id_t groundPlane11 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 375,375,-0.00000000108f }, { 0,0,0 }, { 1,1,0 }, textures->get("grass_tile.png")));
+                id_t groundPlane12 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 250,375,-0.00000000108f }, { 0,0,0 }, { 1,1,0 }, textures->get("grass_tile.png")));
+                id_t groundPlane13 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 0,250,-0.00000000108f }, { 0,0,0 }, { 1,1,0 }, textures->get("grass_tile.png")));
+                id_t groundPlane14 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 375,0,-0.00000000108f }, { 0,0,0 }, { 1,1,0 }, textures->get("grass_tile.png")));
+                id_t groundPlane15 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 125,375,-0.00000000108f }, { 0,0,0 }, { 1,1,0 }, textures->get("grass_tile.png")));
+                id_t groundPlane16 = world->create(new Mesh(getCubeVertices(0.25f), getCubeNormals(), { 375,125,-0.00000000108f }, { 0,0,0 }, { 1,1,0 }, textures->get("grass_tile.png")));
             };
 
             Behavior* tilemapScene = new Behavior(nullptr); 
@@ -211,9 +227,9 @@ namespace CGEngine {
             world->addScene("player", playerScene);
             world->addScene("meshes", meshScene);
 
-            world->loadScene("tilemap");
-            world->loadSceneWithInput("player", tilemapScene->getOutput());
             world->loadSceneWithInput("meshes", tilemapScene->getOutput());
+            //world->loadScene("tilemap");
+            world->loadScene/*WithInput*/("player"/*, tilemapScene->getOutput()*/);
 		};
 	};
 }
