@@ -5,23 +5,43 @@
 #include "../Engine/Engine.h"
 
 namespace CGEngine {
-	class Mesh : public Transformable{
-	public:
-		Mesh(vector<GLfloat> vertices, vector<GLfloat> normals, V3f position = { 0,0,0 }, V3f rotation = { 0,0,0 }, V3f scale = { 0,0,0 }, Texture* texture = nullptr, bool screenSpaceRendering = false, bool textureCoordinatesEnabled = true, vector<GLfloat> vertexColor = {}, bool lightingEnabled = true, bool texture2dEnabled = true, bool normalsEnabled = true);
+	struct RenderParameters {
+		RenderParameters(bool lighting = true, bool textures = true, bool screenSpace = false, bool normals = true, bool textureCoords = true) :lightingEnabled(lighting),texture2dEnabled(textures),screenSpaceRendering(screenSpace),normalsEnabled(normals), textureCoordinatesEnabled(textureCoords){};
 
-		void render(Transform parentTransform);
-		vector<GLfloat> vertices;
-		Texture* meshTexture;
-		V3f position = { 0,0,0 };
-		V3f eulerRotation = { 0,0,0 };
-		V3f scale = { 1,1,1 };
-		vector<GLfloat> vertexColor = { 1.f,1.f,1.f };
-		vector<GLfloat> normals;
-	private:
-		bool textureCoordinatesEnabled = true;
-		bool screenSpaceRendering = false;
 		bool lightingEnabled = true;
 		bool texture2dEnabled = true;
+		bool screenSpaceRendering = false;
 		bool normalsEnabled = true;
+		bool textureCoordinatesEnabled = true;
+	};
+
+	struct VertexModel {
+		VertexModel(vector<GLfloat> vertices, vector<GLfloat> normals = {}) :vertices(vertices), normals(normals) {};
+
+		vector<GLfloat> vertices;
+		vector<GLfloat> normals;
+	};
+
+	struct Transformation3D {
+		Transformation3D(Vector3f position = Vector3f()) :position(position), rotation(Vector3f()), scale(Vector3f()) { };
+		Transformation3D(Vector3f position, Vector3f rotation, Vector3f scale) :position(position), rotation(rotation), scale(scale) { };
+		Transformation3D(Vector3f position, Vector3f scale) :position(position), rotation(Vector3f()), scale(scale) { };
+
+		Vector3f position;
+		Vector3f rotation;
+		Vector3f scale;
+	};
+
+	class Mesh : public Transformable{
+	public:
+		Mesh(VertexModel model, Transformation3D transformation = Transformation3D(), Texture* texture = nullptr, Color vertexColor = {}, RenderParameters renderParams = RenderParameters());
+
+		void render(Transform parentTransform);
+		VertexModel model;
+		Texture* meshTexture;
+		Transformation3D transformation;
+		Color vertexColor = Color::White;
+	private:
+		RenderParameters renderParameters;
 	};
 }

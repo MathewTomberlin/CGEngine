@@ -2,10 +2,13 @@
 
 #include "SFML/OpenGL.hpp"
 #include <vector>
+#include "../../Core/Mesh/Mesh.h"
 using namespace std;
 
 namespace CGEngine {
-	extern vector<GLfloat> getCubeVertices(float scale);
-	extern vector<GLfloat> getCubeNormals();
-	extern vector<GLfloat> getPlaneVertices(float scale);
+	extern VertexModel getCubeModel(float scale);
+	vector<GLfloat> getCubeVertices(float scale);
+	vector<GLfloat> getCubeNormals();
+	extern VertexModel getPlaneModel(float scale);
+	vector<GLfloat> getPlaneVertices(float scale);
 }
