@@ -1,6 +1,14 @@
 #include "CommonVArrays.h"
 
 namespace CGEngine {
+    VertexModel getCubeModel(float scale) {
+        return VertexModel(getCubeVertices(scale), getCubeNormals());
+    }
+
+    VertexModel getPlaneModel(float scale) {
+        return VertexModel(getPlaneVertices(scale));
+    }
+
     vector<GLfloat> getCubeVertices(float scale) {
         return {
             // positions    // texture coordinates
