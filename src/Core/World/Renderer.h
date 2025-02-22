@@ -136,8 +136,5 @@ namespace CGEngine {
 		GLuint vao = 0;
 		GLuint vertexVBO = 0;
 		GLuint indexVBO = 0;
-		
-		//View projection from screen
-		glm::mat4 projection;
 	};
 }

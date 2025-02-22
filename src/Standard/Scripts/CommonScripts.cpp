@@ -26,7 +26,7 @@ namespace CGEngine {
             V2f delta = evtArgs.direction * evtArgs.speed * time.getDeltaSec();
             args.caller->translate(delta, true);
             if (evtArgs.viewBound) {
-                screen->moveView(delta);
+                renderer.getCurrentCamera()->move(Vector3f({ delta.x,delta.y,0 }));
             }
         }
         args.caller->callScriptsWithData("OnTranslate", map<string, any>({ {"evt",evtArgs.direction} }));
