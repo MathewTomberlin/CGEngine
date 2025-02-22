@@ -293,9 +293,8 @@ namespace CGEngine {
             logging(LogLevel::LogError, "World", "Failed to set window as active OpenGL context");
         }
         renderer.setWindow(window);
+        renderer.initGlew();
         input->setWindow(window);
-        //Add scenes from sceneList to world and load sceneList[0]
-        initSceneList();
 
         running = true;
     }
@@ -336,10 +335,12 @@ namespace CGEngine {
     void World::runWorld() {
         while (running) {
             renderer.initializeOpenGL();
-            if (!lightsInit) {
-                lights.forEach([](Light* light) { light->init(); });
-                lightsInit = true;
-            }
+            //if (!lightsInit) {
+            //    lights.forEach([](Light* light) { light->init(); });
+            //    lightsInit = true;
+            //}
+            //Add scenes from sceneList to world and load sceneList[0]
+            initSceneList();
 
             while (window->isOpen()) {
                 deleted.clear();
@@ -348,7 +349,7 @@ namespace CGEngine {
                 callScripts(onUpdateEvent);
                 input->gather();
                 
-                if (!renderer.clearGL(GL_DEPTH_BUFFER_BIT)) continue;
+                renderer.clearGL(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
                 if (!renderer.processRender()) return;
             }
         }
