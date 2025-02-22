@@ -1,4 +1,3 @@
-#include "SFML/OpenGL.hpp"
 #include "InputMap.h"
 #include "../Engine/Engine.h"
 

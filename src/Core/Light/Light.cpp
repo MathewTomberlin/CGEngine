@@ -1,6 +1,6 @@
-#include "SFML/OpenGL.hpp"
 #include "Light.h"
 #include "../Engine/Engine.h"
+#include "SFML/OpenGL.hpp"
 
 namespace CGEngine {
 	Light::Light(float brightness, Color diffuse, Color ambient, Color specular, Vector3f pos, Vector3f rotation, bool directional, SpotlightParameters spotlight) : brightness(brightness), directional(directional), spotlightParameters(spotlight) {
