@@ -6,10 +6,6 @@ namespace CGEngine {
 		this->window = window;
 	}
 	void Renderer::initializeOpenGL() {
-		if (currentCamera == nullptr) {
-			currentCamera = new Camera({0,0,0},{0,0,0});
-		}
-
 		if (!setGLWindowState(true)) return;
 		// Load the default shaders
 		if (program == 0) {
@@ -24,8 +20,8 @@ namespace CGEngine {
 
 		// Setup a perspective projection
 		GLfloat ratio = static_cast<float>(window->getSize().x) / window->getSize().y;
-		projection = glm::frustum(-ratio, ratio, -1.f, 1.f, 1.f, 500.0f);
-		
+		currentCamera = new Camera(ratio);
+
 		auto stride = sizeof(GLfloat) * 5;
 		auto textureCoordOffset = sizeof(GLfloat) * 3;
 		//Generate and bind vertex array and vertex buffer
@@ -114,7 +110,7 @@ namespace CGEngine {
 		glm::mat4 matrix_rotZ = glm::rotate(transform.rotation.z, glm::vec3(0.f, 0.f, 1.f));
 		glm::mat4 matrix_rotation = matrix_rotZ * matrix_rotY * matrix_rotX;
 		glm::mat4 meshTransform = matrix_pos * matrix_rotation;
-		glm::mat4 viewProj = projection * meshTransform;
+		glm::mat4 viewProj = currentCamera->getProjection() * meshTransform;
 
 		if (renderer.setGLWindowState(true)) {
 			//Bind the shaders.
