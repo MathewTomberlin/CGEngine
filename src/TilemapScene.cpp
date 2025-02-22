@@ -196,7 +196,7 @@ namespace CGEngine {
                 //Get a reference to the grid Body so we can parent the player to it
                 Body* gridBody = world->bodies.get(gridId);
 
-                VertexModel cubeModel = getCubeModel(0.066f);
+                VertexModel cubeModel = getCubeModel(1.f);
                 VertexModel bigCubeModel = getCubeModel(0.25f);
                 Vector3f cubeScale = { 1,1,0.0000000008f };
                 Vector3f planeScale = { 1,1,0.0000000000001f };
@@ -208,31 +208,33 @@ namespace CGEngine {
                 //Untextured screen space object
                 Vector2f viewSize = screen->getCurrentView()->getSize();
                 Vector2f screenSpaceOffset = { -viewSize.x / 2 + 10,-viewSize.y / 2 + 10 };
-                id_t screenSpaceMeshId = world->create(new Mesh(cubeModel, Transformation3D({screenSpaceOffset.x,screenSpaceOffset.y,cubeZheight}, cubeScale), nullptr, Color::Yellow, RenderParameters(true, true, true)));
+                //id_t screenSpaceMeshId = world->create(new Mesh(cubeModel, Transformation3D({screenSpaceOffset.x,screenSpaceOffset.y,cubeZheight}, cubeScale), nullptr, Color::Yellow, RenderParameters(true, true, true)));
 
                 //Textured cubes
-                id_t meshId2 = world->create(new Mesh(cubeModel, Transformation3D({72,72,cubeZheight}, cubeScale), brickTex)/*, gridBody*/);
-                id_t meshId3 = world->create(new Mesh(cubeModel, Transformation3D({ 24,0,cubeZheight }, cubeScale), brickTex)/*, gridBody*/);
-                id_t meshId4 = world->create(new Mesh(cubeModel, Transformation3D({ 172,272,cubeZheight }, cubeScale), brickTex)/*, gridBody*/);
-                id_t meshId5 = world->create(new Mesh(cubeModel, Transformation3D({ -30,272,cubeZheight }, cubeScale), brickTex)/*, gridBody*/);
+                id_t meshId1 = world->create(new Mesh(cubeModel, Transformation3D({0,5,-10}, cubeScale), brickTex)/*, gridBody*/);
+                id_t meshId2 = world->create(new Mesh(cubeModel, Transformation3D({ 0,-5,-10 }, cubeScale), grassTex)/*, gridBody*/);
+                //id_t meshId2 = world->create(new Mesh(cubeModel, Transformation3D({72,72,cubeZheight}, cubeScale), brickTex)/*, gridBody*/);
+                //id_t meshId3 = world->create(new Mesh(cubeModel, Transformation3D({ 24,0,cubeZheight }, cubeScale), brickTex)/*, gridBody*/);
+                //id_t meshId4 = world->create(new Mesh(cubeModel, Transformation3D({ 172,272,cubeZheight }, cubeScale), brickTex)/*, gridBody*/);
+                //id_t meshId5 = world->create(new Mesh(cubeModel, Transformation3D({ -30,272,cubeZheight }, cubeScale), brickTex)/*, gridBody*/);
 
                 //Textured planes
-                id_t groundPlane1 = world->create(new Mesh(bigCubeModel, Transformation3D({ 0,0,grnd }, planeScale), grassTex));
-                id_t groundPlane2 = world->create(new Mesh(bigCubeModel, Transformation3D({ 125,0,grnd }, planeScale), grassTex));
-                id_t groundPlane3 = world->create(new Mesh(bigCubeModel, Transformation3D({ 125,125,grnd }, planeScale), grassTex));
-                id_t groundPlane4 = world->create(new Mesh(bigCubeModel, Transformation3D({ 0,125,grnd }, planeScale), grassTex));
-                id_t groundPlane5 = world->create(new Mesh(bigCubeModel, Transformation3D({ 250,0,grnd }, planeScale), grassTex));
-                id_t groundPlane6 = world->create(new Mesh(bigCubeModel, Transformation3D({ 250,125,grnd }, planeScale), grassTex));
-                id_t groundPlane7 = world->create(new Mesh(bigCubeModel, Transformation3D({ 250,250,grnd }, planeScale), grassTex));
-                id_t groundPlane8 = world->create(new Mesh(bigCubeModel, Transformation3D({ 125,250,grnd }, planeScale), grassTex));
-                id_t groundPlane9 = world->create(new Mesh(bigCubeModel, Transformation3D({ 0,375,grnd }, planeScale), grassTex));
-                id_t groundPlane10 = world->create(new Mesh(bigCubeModel, Transformation3D({ 375,250,grnd }, planeScale), grassTex));
-                id_t groundPlane11 = world->create(new Mesh(bigCubeModel, Transformation3D({ 375,375,grnd }, planeScale), grassTex));
-                id_t groundPlane12 = world->create(new Mesh(bigCubeModel, Transformation3D({ 250,375,grnd }, planeScale), grassTex));
-                id_t groundPlane13 = world->create(new Mesh(bigCubeModel, Transformation3D({ 0,250,grnd }, planeScale), grassTex));
-                id_t groundPlane14 = world->create(new Mesh(bigCubeModel, Transformation3D({ 375,0,grnd }, planeScale), grassTex));
-                id_t groundPlane15 = world->create(new Mesh(bigCubeModel, Transformation3D({ 125,375,grnd }, planeScale), grassTex));
-                id_t groundPlane16 = world->create(new Mesh(bigCubeModel, Transformation3D({ 375,125,grnd }, planeScale), grassTex));
+                //id_t groundPlane1 = world->create(new Mesh(bigCubeModel, Transformation3D({ 0,0,grnd }, planeScale), grassTex));
+                //id_t groundPlane2 = world->create(new Mesh(bigCubeModel, Transformation3D({ 125,0,grnd }, planeScale), grassTex));
+                //id_t groundPlane3 = world->create(new Mesh(bigCubeModel, Transformation3D({ 125,125,grnd }, planeScale), grassTex));
+                //id_t groundPlane4 = world->create(new Mesh(bigCubeModel, Transformation3D({ 0,125,grnd }, planeScale), grassTex));
+                //id_t groundPlane5 = world->create(new Mesh(bigCubeModel, Transformation3D({ 250,0,grnd }, planeScale), grassTex));
+                //id_t groundPlane6 = world->create(new Mesh(bigCubeModel, Transformation3D({ 250,125,grnd }, planeScale), grassTex));
+                //id_t groundPlane7 = world->create(new Mesh(bigCubeModel, Transformation3D({ 250,250,grnd }, planeScale), grassTex));
+                //id_t groundPlane8 = world->create(new Mesh(bigCubeModel, Transformation3D({ 125,250,grnd }, planeScale), grassTex));
+                //id_t groundPlane9 = world->create(new Mesh(bigCubeModel, Transformation3D({ 0,375,grnd }, planeScale), grassTex));
+                //id_t groundPlane10 = world->create(new Mesh(bigCubeModel, Transformation3D({ 375,250,grnd }, planeScale), grassTex));
+                //id_t groundPlane11 = world->create(new Mesh(bigCubeModel, Transformation3D({ 375,375,grnd }, planeScale), grassTex));
+                //id_t groundPlane12 = world->create(new Mesh(bigCubeModel, Transformation3D({ 250,375,grnd }, planeScale), grassTex));
+                //id_t groundPlane13 = world->create(new Mesh(bigCubeModel, Transformation3D({ 0,250,grnd }, planeScale), grassTex));
+                //id_t groundPlane14 = world->create(new Mesh(bigCubeModel, Transformation3D({ 375,0,grnd }, planeScale), grassTex));
+                //id_t groundPlane15 = world->create(new Mesh(bigCubeModel, Transformation3D({ 125,375,grnd }, planeScale), grassTex));
+                //id_t groundPlane16 = world->create(new Mesh(bigCubeModel, Transformation3D({ 375,125,grnd }, planeScale), grassTex));
             };
 
             Behavior* tilemapScene = new Behavior(nullptr); 
@@ -249,7 +251,7 @@ namespace CGEngine {
             world->addScene("meshes", meshScene);
 
             world->loadSceneWithInput("meshes", tilemapScene->getOutput());
-            //world->loadScene("tilemap");
+            world->loadScene("tilemap");
             world->loadScene/*WithInput*/("player"/*, tilemapScene->getOutput()*/);
 		};
 	};
