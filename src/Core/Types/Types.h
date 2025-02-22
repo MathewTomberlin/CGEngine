@@ -108,4 +108,25 @@ namespace CGEngine {
         float nearClipPlane = 0.000000001f;
         float farClipPlane = 100.f;
     };
+
+    struct VertexModel {
+        VertexModel(vector<float> vertices, vector<unsigned> indices, vector<float> normals = {}) :vertices(vertices), normals(normals), indices(indices), vertexCount(indices.size()), vertexSpan(indices.size() * sizeof(float)), vertexComponentSpan(vertexSpan * 5) {};
+
+        vector<float> vertices;
+        vector<float> normals;
+        vector<unsigned> indices;
+        size_t vertexCount = 0U;
+        size_t vertexSpan = 0U;
+        size_t vertexComponentSpan = 0U;
+    };
+
+    struct Transformation3D {
+        Transformation3D(Vector3f position = Vector3f()) :position(position), rotation(Vector3f()), scale(Vector3f()) { };
+        Transformation3D(Vector3f position, Vector3f rotation, Vector3f scale) :position(position), rotation(rotation), scale(scale) { };
+        Transformation3D(Vector3f position, Vector3f scale) :position(position), rotation(Vector3f()), scale(scale) { };
+
+        Vector3f position;
+        Vector3f rotation;
+        Vector3f scale;
+    };
 }

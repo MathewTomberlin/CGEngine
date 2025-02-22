@@ -22,11 +22,11 @@ namespace CGEngine {
 		void init();
 
 		float brightness = 5.f;
-		vector<GLfloat> diffuseColor = {1,1,1,1};
-		vector<GLfloat>  ambientColor = { 0,0,0,1 };
-		vector<GLfloat>  specularColor = { 1,1,1,1 };
-		vector<GLfloat>  position = { 0,0,5 };
-		vector<GLfloat>  eulerRotation = { 0,0,-1 };
+		vector<float> diffuseColor = {1,1,1,1};
+		vector<float>  ambientColor = { 0,0,0,1 };
+		vector<float>  specularColor = { 1,1,1,1 };
+		vector<float>  position = { 0,0,5 };
+		vector<float>  eulerRotation = { 0,0,-1 };
 		bool directional = false;
 		SpotlightParameters spotlightParameters;
 		id_t lightId;
