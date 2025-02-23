@@ -213,6 +213,9 @@ namespace CGEngine {
                 //Textured cubes
                 id_t meshId1 = world->create(new Mesh(cubeModel, Transformation3D({0,5,-10}, cubeScale), brickTex)/*, gridBody*/);
                 id_t meshId2 = world->create(new Mesh(cubeModel, Transformation3D({ 0,-5,-10 }, cubeScale), grassTex)/*, gridBody*/);
+                id_t meshId3 = world->create(new Mesh(cubeModel, Transformation3D({ 0,0,-20 }, cubeScale), grassTex)/*, gridBody*/);
+                Body* b = world->bodies.get(meshId3);
+                b->get<Mesh*>()->scale({ 100.f,100.f,0.0001f });
                 //id_t meshId2 = world->create(new Mesh(cubeModel, Transformation3D({72,72,cubeZheight}, cubeScale), brickTex)/*, gridBody*/);
                 //id_t meshId3 = world->create(new Mesh(cubeModel, Transformation3D({ 24,0,cubeZheight }, cubeScale), brickTex)/*, gridBody*/);
                 //id_t meshId4 = world->create(new Mesh(cubeModel, Transformation3D({ 172,272,cubeZheight }, cubeScale), brickTex)/*, gridBody*/);
