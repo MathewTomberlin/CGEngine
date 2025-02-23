@@ -1,0 +1,18 @@
+#version 330
+
+attribute vec3 position;
+attribute vec2 texCoord;
+attribute vec3 vertNormal;
+uniform mat4 camera;
+uniform mat4 model;
+varying vec2 uv;
+varying vec3 normal;
+varying vec3 vert;
+
+void main() {
+	uv = texCoord;
+	normal = vertNormal;
+	vert = position;
+
+	gl_Position = camera * model * vec4(position, 1.0);
+}

@@ -1,0 +1,37 @@
+#version 330
+
+uniform struct Light {
+   vec3 position;
+   vec3 intensities; //a.k.a the color of the light
+} lights[10];
+uniform mat4 model;
+uniform sampler2D tex;
+
+uniform int lightCount;
+
+varying vec2 uv;
+varying vec3 normal;
+varying vec3 vert;
+
+vec3 applyLight(Light light, vec3 surfaceColor, vec3 normal, vec3 surfacePos){
+    // Calculated by light
+    vec3 surfaceToLight = normalize(light.position - surfacePos);
+    float diffuseCoefficient = max(0.0, dot(normal, surfaceToLight));
+    return diffuseCoefficient * light.intensities * surfaceColor.rgb;
+}
+
+void main() {
+    // Calculated from material and model
+    mat3 normalMatrix = transpose(inverse(mat3(model)));
+    vec3 norm = normalize(normalMatrix * normal);
+    vec3 surfacePos = vec3(model * vec4(vert, 1));
+    vec4 surfaceColor = texture(tex, uv);
+
+    //combine color from all the lights
+    vec3 linearColor = vec3(0,0,0);
+    for(int i = 0; i < lightCount; ++i){
+        linearColor += applyLight(lights[i], surfaceColor.rgb, norm, surfacePos);
+    }
+
+	gl_FragColor = vec4(linearColor.rgb, surfaceColor.a);
+}

@@ -1,12 +1,12 @@
 #pragma once
 
-#include "SFML/Graphics.hpp"
-#include "../World/World.h"
 #include "../World/Renderer.h"
+#include "../World/World.h"
 #include "../Input/InputMap.h"
 #include "../Time/GlobalTime.h"
 #include "../ResourceCaches/FontCache.h"
 #include "../ResourceCaches/TextureCache.h"
+#include "SFML/Graphics.hpp"
 
 namespace CGEngine {
 	extern WindowParameters windowParameters;

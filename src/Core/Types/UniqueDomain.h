@@ -41,6 +41,10 @@ namespace CGEngine {
 		void clear() {
 			domain.clear();
 		}
+
+		size_t size() {
+			return domain.size();
+		}
 	private:
 		map<DomainKey, DomainValue> domain;
 		UniqueIntegerStack<DomainKey> ids = UniqueIntegerStack<DomainKey>(0U);
