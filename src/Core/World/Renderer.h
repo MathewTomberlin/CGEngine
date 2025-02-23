@@ -87,6 +87,9 @@ namespace CGEngine {
 
 		void renderMesh(VertexModel model, Transformation3D transform, ModelData data);
 		void getModelData(Mesh* mesh);
+		id_t addLight(LightData* light);
+		void removeLight(id_t lightId);
+		LightData* getLight(id_t lightId);
 	private:
 		friend class World;
 		RenderWindow* window = nullptr;
@@ -118,7 +121,6 @@ namespace CGEngine {
 		//GLuint indexVBO = 0;
 		Program* program;
 
-		LightData light;
-
+		UniqueDomain<id_t, LightData*> lights = UniqueDomain<id_t, LightData*>(10);
 	};
 }
