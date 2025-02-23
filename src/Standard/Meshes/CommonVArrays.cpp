@@ -2,64 +2,64 @@
 
 namespace CGEngine {
     VertexModel getCubeModel(float scale) {
-        return VertexModel(getCubeVertices(scale), getCubeIndices(), getCubeNormals());
+        return VertexModel(getCubeVertices(scale));
     }
 
     VertexModel getPlaneModel(float scale) {
         //TODO: Fix plane indices
-        return VertexModel(getPlaneVertices(scale), {});
+        return VertexModel(getPlaneVertices(scale));
     }
 
     vector<float> getCubeVertices(float scale) {
         return {
-            // positions   // texture coordinates
+            // positions            // texture coordinates  // normals
             //bottom
-            -scale,-scale,-scale,   0.0f, 0.0f,
-             scale,-scale,-scale,   1.0f, 0.0f,
-            -scale,-scale, scale,   0.0f, 1.0f,
-             scale,-scale,-scale,   1.0f, 0.0f,
-             scale,-scale, scale,   1.0f, 1.0f,
-            -scale,-scale, scale,   0.0f, 1.0f,
+            -scale,-scale,-scale,   0.0f, 0.0f,             0.0f,-1.0f,0.0f,
+             scale,-scale,-scale,   1.0f, 0.0f,             0.0f,-1.0f,0.0f,
+            -scale,-scale, scale,   0.0f, 1.0f,             0.0f,-1.0f,0.0f,
+             scale,-scale,-scale,   1.0f, 0.0f,             0.0f,-1.0f,0.0f,
+             scale,-scale, scale,   1.0f, 1.0f,             0.0f,-1.0f,0.0f,
+            -scale,-scale, scale,   0.0f, 1.0f,             0.0f,-1.0f,0.0f,
 
             // top
-            -scale, scale,-scale,   0.0f, 0.0f,
-            -scale, scale, scale,   0.0f, 1.0f,
-             scale, scale,-scale,   1.0f, 0.0f,
-             scale, scale,-scale,   1.0f, 0.0f,
-            -scale, scale, scale,   0.0f, 1.0f,
-             scale, scale, scale,   1.0f, 1.0f,
+            -scale, scale,-scale,   0.0f, 0.0f,             0.0f,1.0f,0.0f,
+            -scale, scale, scale,   0.0f, 1.0f,             0.0f,1.0f,0.0f,
+             scale, scale,-scale,   1.0f, 0.0f,             0.0f,1.0f,0.0f,
+             scale, scale,-scale,   1.0f, 0.0f,             0.0f,1.0f,0.0f,
+            -scale, scale, scale,   0.0f, 1.0f,             0.0f,1.0f,0.0f,
+             scale, scale, scale,   1.0f, 1.0f,             0.0f,1.0f,0.0f,
 
              // front
-             -scale,-scale, scale,   1.0f, 0.0f,
-              scale,-scale, scale,   0.0f, 0.0f,
-             -scale, scale, scale,   1.0f, 1.0f,
-              scale,-scale, scale,   0.0f, 0.0f,
-              scale, scale, scale,   0.0f, 1.0f,
-             -scale, scale, scale,   1.0f, 1.0f,
+             -scale,-scale, scale,   1.0f, 0.0f,            0.0f,0.0f,1.0f,
+              scale,-scale, scale,   0.0f, 0.0f,            0.0f,0.0f,1.0f,
+             -scale, scale, scale,   1.0f, 1.0f,            0.0f,0.0f,1.0f,
+              scale,-scale, scale,   0.0f, 0.0f,            0.0f,0.0f,1.0f,
+              scale, scale, scale,   0.0f, 1.0f,            0.0f,0.0f,1.0f,
+             -scale, scale, scale,   1.0f, 1.0f,            0.0f,0.0f,1.0f,
 
              // back
-             -scale,-scale,-scale,   0.0f, 0.0f,
-             -scale, scale,-scale,   0.0f, 1.0f,
-              scale,-scale,-scale,   1.0f, 0.0f,
-              scale,-scale,-scale,   1.0f, 0.0f,
-             -scale, scale,-scale,   0.0f, 1.0f,
-              scale, scale,-scale,   1.0f, 1.0f,
+             -scale,-scale,-scale,   0.0f, 0.0f,            0.0f,0.0f,-1.0f,
+             -scale, scale,-scale,   0.0f, 1.0f,            0.0f,0.0f,-1.0f,
+              scale,-scale,-scale,   1.0f, 0.0f,            0.0f,0.0f,-1.0f,
+              scale,-scale,-scale,   1.0f, 0.0f,            0.0f,0.0f,-1.0f,
+             -scale, scale,-scale,   0.0f, 1.0f,            0.0f,0.0f,-1.0f,
+              scale, scale,-scale,   1.0f, 1.0f,            0.0f,0.0f,-1.0f,
 
               // left
-              -scale,-scale, scale,   0.0f, 1.0f,
-              -scale, scale,-scale,   1.0f, 0.0f,
-              -scale,-scale,-scale,   0.0f, 0.0f,
-              -scale,-scale, scale,   0.0f, 1.0f,
-              -scale, scale, scale,   1.0f, 1.0f,
-              -scale, scale,-scale,   1.0f, 0.0f,
+              -scale,-scale, scale,   0.0f, 1.0f,           -1.0f,0.0f,0.0f,
+              -scale, scale,-scale,   1.0f, 0.0f,           -1.0f,0.0f,0.0f,
+              -scale,-scale,-scale,   0.0f, 0.0f,           -1.0f,0.0f,0.0f,
+              -scale,-scale, scale,   0.0f, 1.0f,           -1.0f,0.0f,0.0f,
+              -scale, scale, scale,   1.0f, 1.0f,           -1.0f,0.0f,0.0f,
+              -scale, scale,-scale,   1.0f, 0.0f,           -1.0f,0.0f,0.0f,
 
               // right
-               scale,-scale, scale,   1.0f, 1.0f,
-               scale,-scale,-scale,   1.0f, 0.0f,
-               scale, scale,-scale,   0.0f, 0.0f,
-               scale,-scale, scale,   1.0f, 1.0f,
-               scale, scale,-scale,   0.0f, 0.0f,
-               scale, scale, scale,   0.0f, 1.0f
+               scale,-scale, scale,   1.0f, 1.0f,           1.0f,0.0f,0.0f,
+               scale,-scale,-scale,   1.0f, 0.0f,           1.0f,0.0f,0.0f,
+               scale, scale,-scale,   0.0f, 0.0f,           1.0f,0.0f,0.0f,
+               scale,-scale, scale,   1.0f, 1.0f,           1.0f,0.0f,0.0f,
+               scale, scale,-scale,   0.0f, 0.0f,           1.0f,0.0f,0.0f,
+               scale, scale, scale,   0.0f, 1.0f,           1.0f,0.0f,0.0f
         };
     }
 
