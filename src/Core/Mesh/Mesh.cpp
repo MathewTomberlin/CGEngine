@@ -1,12 +1,21 @@
 #include "Mesh.h"
 
 namespace CGEngine {
-	Mesh::Mesh(VertexModel model, Transformation3D transformation, Texture* texture, Color vertexColor, RenderParameters renderParams) : model(model), transformation(transformation), meshTexture(texture), vertexColor(vertexColor), renderParameters(renderParams) { };
+	Mesh::Mesh(VertexModel model, Transformation3D transformation, Texture* texture, Color vertexColor, RenderParameters renderParams, ShaderProgramPath shaderPath) : model(model), transformation(transformation), meshTexture(texture), vertexColor(vertexColor), renderParameters(renderParams), shaderPath(shaderPath) {
+		renderer.getModelData(this);
+	};
+
+	void Mesh::setModelData(ModelData data) {
+		modelData = data;
+	}
+
+	VertexModel Mesh::getModel() {
+		return model;
+	}
 
 	void Mesh::render(Transform transform) {
 		renderer.pullGL();
 		bindTexture();
-		renderer.bufferMeshData(model);
 
 		//Combine SFML entity transform components with 3D transformation components
 		Vector2f position2d = world->getGlobalPosition(transform);
@@ -19,7 +28,7 @@ namespace CGEngine {
 		Vector3f scale = { scale2d.x * transformation.scale.x,scale2d.y * transformation.scale.y, transformation.scale.z };
 		Transformation3D combinedTransformation = Transformation3D(position, rotation, scale);
 
-		renderer.renderMesh(model, combinedTransformation);
+		renderer.renderMesh(model, combinedTransformation, modelData);
 		renderer.commitGL();
 	}
 
@@ -58,5 +67,9 @@ namespace CGEngine {
 
 	void Mesh::scale(Vector3f delta) {
 		transformation.scale += delta;
+	}
+
+	ShaderProgramPath Mesh::getShaderProgramPaths() {
+		return shaderPath;
 	}
 }

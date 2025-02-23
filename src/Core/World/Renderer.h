@@ -16,6 +16,23 @@
 using namespace std;
 
 namespace CGEngine {
+	class Mesh;
+
+	struct LightData {
+		glm::vec3 position;
+		glm::vec3 intensities; //a.k.a. the color of the light
+	};
+
+	struct ModelData {
+		ModelData() :vbo(0), vao(0), drawType(GL_TRIANGLES), drawStart(0), drawCount(0), shaders(NULL) {};
+		ModelData(GLint drawCount, Program* shaders, GLint drawStart = 0, GLenum type = GL_TRIANGLES) :vbo(0), vao(0), drawType(type), drawStart(drawStart), drawCount(drawCount), shaders(shaders) {};
+		GLuint vbo;
+		GLuint vao;
+		GLenum drawType;
+		GLint drawStart;
+		GLint drawCount;
+		Program* shaders;
+	};
 	/// <summary>
 	/// Responsible for ordering Bodies for rendering. Allows for default ordering (children render on top of parents)
 	/// modified with per-object Z-Order
@@ -68,8 +85,8 @@ namespace CGEngine {
 		Camera* getCurrentCamera();
 		void setCurrentCamera(Camera* camera);
 
-		void renderMesh(VertexModel model, Transformation3D transform);
-		void bufferMeshData(VertexModel model);
+		void renderMesh(VertexModel model, Transformation3D transform, ModelData data);
+		void getModelData(Mesh* mesh);
 	private:
 		friend class World;
 		RenderWindow* window = nullptr;
@@ -96,9 +113,12 @@ namespace CGEngine {
 		GLenum initGlew();
 
 		//Vertex Array and Buffer and Index Buffer
-		GLuint vao = 0;
-		GLuint vertexVBO = 0;
-		GLuint indexVBO = 0;
+		//GLuint vao = 0;
+		//GLuint vertexVBO = 0;
+		//GLuint indexVBO = 0;
 		Program* program;
+
+		LightData light;
+
 	};
 }

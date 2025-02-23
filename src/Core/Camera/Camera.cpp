@@ -7,6 +7,10 @@ namespace CGEngine {
 	Camera::Camera(float fov, float aspect, float nearPlane, float farPlane) : Camera({ 0,0,1 }, 0.0f, 0.0f, 0.0f, fov, aspect, nearPlane, farPlane) { }
 	Camera::Camera(float aspect) : Camera({0,0,1}, 0.0f, 0.0f, 0.0f, 93.f, aspect, 0.01f, 100.f) { }
 
+	Vector3f Camera::getPosition() {
+		return Vector3f({ position.x,position.y,position.z });
+	}
+
 	void Camera::setPosition(Vector3f pos, bool affect2DView) {
 		this->position = { pos.x,pos.y,pos.z };
 

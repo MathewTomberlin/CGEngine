@@ -13,6 +13,7 @@ namespace CGEngine {
 		Camera(Vector3f position, float angleX = 0.0f, float angleY = 0.0f, float angleZ = 0.0f, float fov = 93.f, float aspect = 1.f, float near = 1.f, float far = 500.f);
 		Camera(float fov, float aspect, float near = 0.01f, float far = 100.f);
 		Camera(float aspect = 1.f);
+		Vector3f getPosition();
 		void setPosition(Vector3f pos, bool affect2DView = true);
 		void move(Vector3f delta, bool affect2DView = true);
 		glm::mat4 getOrientation() const;

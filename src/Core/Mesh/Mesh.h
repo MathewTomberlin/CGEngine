@@ -15,7 +15,7 @@ namespace CGEngine {
 
 	class Mesh : public Transformable{
 	public:
-		Mesh(VertexModel model, Transformation3D transformation = Transformation3D(), Texture* texture = nullptr, Color vertexColor = {}, RenderParameters renderParams = RenderParameters());
+		Mesh(VertexModel model, Transformation3D transformation = Transformation3D(), Texture* texture = nullptr, Color vertexColor = {}, RenderParameters renderParams = RenderParameters(), ShaderProgramPath shaderPath = ShaderProgramPath());
 
 		void render(Transform parentTransform);
 		void bindTexture();
@@ -25,11 +25,16 @@ namespace CGEngine {
 		void rotate(Vector3f delta);
 		void setScale(Vector3f scale);
 		void scale(Vector3f delta);
+		void setModelData(ModelData data);
+		VertexModel getModel();
+		ShaderProgramPath getShaderProgramPaths();
 	private:
 		VertexModel model;
+		ModelData modelData;
 		Texture* meshTexture;
 		Transformation3D transformation;
 		Color vertexColor = Color::White;
 		RenderParameters renderParameters;
+		ShaderProgramPath shaderPath;
 	};
 }

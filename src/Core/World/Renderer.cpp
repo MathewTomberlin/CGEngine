@@ -8,32 +8,50 @@ namespace CGEngine {
 	void Renderer::initializeOpenGL() {
 		if (!setGLWindowState(true)) return;
 
-		program = new Program("shaders/StdVertexShader.txt", "shaders/StdFragShader.txt");
 		// Setup a camera with perspective projection
 		GLfloat aspectRatio = static_cast<float>(window->getSize().x) / window->getSize().y;
 		currentCamera = new Camera(aspectRatio);
-
+		light = LightData();
+		light.position = { 25,5,5 };
+		light.intensities = { 1,1,1 };
 		// Enable Z-buffer read and write
 		glEnable(GL_DEPTH_TEST);
 		glDepthFunc(GL_LESS);
 		glEnable(GL_BLEND);
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-		auto stride = sizeof(GLfloat) * 5;
-		auto textureCoordOffset = sizeof(GLfloat) * 3;
-		//Generate and bind vertex array and vertex buffer
-		glGenVertexArrays(1, &vao);
-		glBindVertexArray(vao);
-		glGenBuffers(1, &vertexVBO);
-		glBindBuffer(GL_ARRAY_BUFFER, vertexVBO);
-		//Enable and prepare vertex and texture coordinate attribute arrays
-		glEnableVertexAttribArray(program->attrib("position"));
-		glVertexAttribPointer(program->attrib("position"), 3, GL_FLOAT, GL_FALSE, stride, 0);
-		glEnableVertexAttribArray(program->attrib("texCoord"));
-		glVertexAttribPointer(program->attrib("texCoord"), 2, GL_FLOAT, GL_FALSE, stride, (void*)textureCoordOffset);
-		glBindVertexArray(0);
 		commitGL();
 		if (!setGLWindowState(false)) return;
+	}
+
+	void Renderer::getModelData(Mesh* mesh) {
+		if (setGLWindowState(true)) {
+			VertexModel model = mesh->getModel();
+			ShaderProgramPath shaderPath = mesh->getShaderProgramPaths();
+			//Setup ModelData with drawCount, vertex buffer and array, and shader program
+			ModelData data = ModelData(model.vertexCount, new Program(shaderPath));
+			glGenBuffers(1, &data.vbo);
+			glGenVertexArrays(1, &data.vao);
+
+			glBindVertexArray(data.vao);
+			//Bind the vertex buffer and pass in the vertex data
+			glBindBuffer(GL_ARRAY_BUFFER, data.vbo);
+			glBufferData(GL_ARRAY_BUFFER, model.dataSpan, model.vertices.data(), GL_STATIC_DRAW);
+			auto stride = sizeof(GLfloat) * 8;
+			auto textureCoordOffset = sizeof(GLfloat) * 3;
+			auto normalOffset = sizeof(GLfloat) * 5;
+			//Enable and prepare vertex and texture coordinate attribute arrays
+			glEnableVertexAttribArray(data.shaders->attrib("position"));
+			glVertexAttribPointer(data.shaders->attrib("position"), 3, GL_FLOAT, GL_FALSE, stride, NULL);
+			glEnableVertexAttribArray(data.shaders->attrib("texCoord"));
+			glVertexAttribPointer(data.shaders->attrib("texCoord"), 2, GL_FLOAT, GL_FALSE, stride, (void*)textureCoordOffset);
+			glEnableVertexAttribArray(data.shaders->attrib("vertNormal"));
+			glVertexAttribPointer(data.shaders->attrib("vertNormal"), 3, GL_FLOAT, GL_FALSE, stride, (void*)normalOffset);
+			glBindVertexArray(0);
+
+			mesh->setModelData(data);
+			setGLWindowState(false);
+		}
 	}
 
 	bool Renderer::setGLWindowState(bool state) {
@@ -67,18 +85,11 @@ namespace CGEngine {
 		root->render(*window, root->getTransform());
 		//Sort and render Meshes and SFML entities
 		render(window);
-		//Reset OpenGL parameters
-		if (setGLWindowState(true)) {
-			glBindVertexArray(0);
-			program->stop();
-			glBindTexture(GL_TEXTURE_2D, 0);
-		}
-		if (!setGLWindowState(false));
 		window->display();
 		return true;
 	}
 
-	void Renderer::renderMesh(VertexModel model, Transformation3D transform) {
+	void Renderer::renderMesh(VertexModel model, Transformation3D transform, ModelData data) {
 		//TODO: Apply scale
 		glm::mat4 modelPos = glm::translate(glm::vec3(transform.position.x, transform.position.y, transform.position.z));
 		glm::mat4 modelRotX = glm::rotate(transform.rotation.x, glm::vec3(1.f, 0.f, 0.f));
@@ -89,32 +100,25 @@ namespace CGEngine {
 		glm::mat4 modelTransform = modelPos * modelRotation *modelScale;
 
 		if (renderer.setGLWindowState(true)) {
+			glBindVertexArray(data.vao);
 			//Bind the shaders.
-			program->use();
+			data.shaders->use();
 
 			//Set the uniforms for the shader to use
-			program->setUniform("camera", currentCamera->getMatrix());
-			program->setUniform("model", modelTransform);
-			program->setUniform("texture", 0);
+			data.shaders->setUniform("camera", currentCamera->getMatrix());
+			data.shaders->setUniform("model", modelTransform);
+			data.shaders->setUniform("tex", 0);
+			data.shaders->setUniform("light.position", light.position);
+			data.shaders->setUniform("light.intensities", light.intensities);
 
 			// Draw the cube
 			glDrawArrays(GL_TRIANGLES, 0, model.vertices.size()/5);
 
-			// Unbind varray, program, and texture
+			// Unbind varray, shaders, and texture
 			glBindVertexArray(0);
-			program->stop();
+			data.shaders->stop();
 		}
 		if (renderer.setGLWindowState(false));
-	}
-
-	void Renderer::bufferMeshData(VertexModel model) {
-		//Apply the incoming model data
-		if (renderer.setGLWindowState(true)) {
-			glBindVertexArray(renderer.vao);
-			//Apply model vertices and vertex texture coordinate data
-			glBufferData(GL_ARRAY_BUFFER, model.vertexComponentSpan, model.vertices.data(), GL_STATIC_DRAW);
-		}
-		renderer.setGLWindowState(false);
 	}
 
 	void Renderer::add(Body* body, Transform transform) {
