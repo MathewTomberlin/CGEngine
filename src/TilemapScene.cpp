@@ -187,10 +187,6 @@ namespace CGEngine {
             };
 
             ScriptEvent meshConstruction = [](ScArgs args) {
-                //Add an offset and rotated spotlight
-                Light* light1 = new Light(2,Color::White, Color::Black, Color::White, {0,-3,3}, {0,1,-1}, false, SpotlightParameters(20));
-                //Add a wider red light
-                Light* light2 = new Light(20, Color::Red, Color::Black, Color::White, {0,-3,3}, {0,1,-1}, false, SpotlightParameters(90));
                 //Get the id of the grid body output by tilemapConstruction
                 id_t gridId = args.behavior->getInput().getData<id_t>("gridId");
                 //Get a reference to the grid Body so we can parent the player to it
@@ -210,10 +206,10 @@ namespace CGEngine {
                 Vector2f screenSpaceOffset = { -viewSize.x / 2 + 10,-viewSize.y / 2 + 10 };
                 //id_t screenSpaceMeshId = world->create(new Mesh(cubeModel, Transformation3D({screenSpaceOffset.x,screenSpaceOffset.y,cubeZheight}, cubeScale), nullptr, Color::Yellow, RenderParameters(true, true, true)));
 
-                LightData* lightData1 = new LightData();
-                lightData1->position = { 25,5,5 };
-                lightData1->intensities = { 1,1,1 };
-                id_t lightId = renderer.addLight(lightData1);
+                Light* light1 = new Light();
+                light1->position = { 25,5,5 };
+                light1->intensities = { 1,1,1 };
+                id_t lightId = renderer.addLight(light1);
 
                 //Textured cubes
                 id_t meshId1 = world->create(new Mesh(cubeModel, Transformation3D({0,5,-10}, cubeScale), brickTex)/*, gridBody*/);
