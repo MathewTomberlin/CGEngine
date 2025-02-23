@@ -210,6 +210,11 @@ namespace CGEngine {
                 Vector2f screenSpaceOffset = { -viewSize.x / 2 + 10,-viewSize.y / 2 + 10 };
                 //id_t screenSpaceMeshId = world->create(new Mesh(cubeModel, Transformation3D({screenSpaceOffset.x,screenSpaceOffset.y,cubeZheight}, cubeScale), nullptr, Color::Yellow, RenderParameters(true, true, true)));
 
+                LightData* lightData1 = new LightData();
+                lightData1->position = { 25,5,5 };
+                lightData1->intensities = { 1,1,1 };
+                id_t lightId = renderer.addLight(lightData1);
+
                 //Textured cubes
                 id_t meshId1 = world->create(new Mesh(cubeModel, Transformation3D({0,5,-10}, cubeScale), brickTex)/*, gridBody*/);
                 id_t meshId2 = world->create(new Mesh(cubeModel, Transformation3D({ 0,-5,-10 }, cubeScale), grassTex)/*, gridBody*/);
