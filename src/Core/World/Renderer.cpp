@@ -9,15 +9,14 @@ namespace CGEngine {
 		if (!setGLWindowState(true)) return;
 
 		program = new Program("shaders/StdVertexShader.txt", "shaders/StdFragShader.txt");
+		// Setup a camera with perspective projection
+		GLfloat aspectRatio = static_cast<float>(window->getSize().x) / window->getSize().y;
+		currentCamera = new Camera(aspectRatio);
 
 		// Enable Z-buffer read and write
 		glEnable(GL_DEPTH_TEST);
 		glEnable(GL_CULL_FACE);
 		glCullFace(GL_BACK);
-
-		// Setup a perspective projection
-		GLfloat ratio = static_cast<float>(window->getSize().x) / window->getSize().y;
-		currentCamera = new Camera(ratio);
 
 		auto stride = sizeof(GLfloat) * 5;
 		auto textureCoordOffset = sizeof(GLfloat) * 3;
@@ -64,7 +63,6 @@ namespace CGEngine {
 	}
 
 	bool Renderer::processRender() {
-		glViewport(0, 0, window->getSize().x, window->getSize().y);
 		//Clear render order
 		clear();
 		//Collect Bodies to render
@@ -85,20 +83,22 @@ namespace CGEngine {
 
 	void Renderer::renderMesh(VertexModel model, Transformation3D transform) {
 		//TODO: Apply scale
-		glm::mat4 matrix_pos = glm::translate(glm::vec3(transform.position.x, transform.position.y, transform.position.z));
-		glm::mat4 matrix_rotX = glm::rotate(transform.rotation.x, glm::vec3(1.f, 0.f, 0.f));
-		glm::mat4 matrix_rotY = glm::rotate(transform.rotation.y, glm::vec3(0.f, 1.f, 0.f));
-		glm::mat4 matrix_rotZ = glm::rotate(transform.rotation.z, glm::vec3(0.f, 0.f, 1.f));
-		glm::mat4 matrix_rotation = matrix_rotZ * matrix_rotY * matrix_rotX;
-		glm::mat4 meshTransform = matrix_pos * matrix_rotation;
-		glm::mat4 viewProj = currentCamera->getProjection() * meshTransform;
+		glm::mat4 modelPos = glm::translate(glm::vec3(transform.position.x, transform.position.y, transform.position.z));
+		glm::mat4 modelRotX = glm::rotate(transform.rotation.x, glm::vec3(1.f, 0.f, 0.f));
+		glm::mat4 modelRotY = glm::rotate(transform.rotation.y, glm::vec3(0.f, 1.f, 0.f));
+		glm::mat4 modelRotZ = glm::rotate(transform.rotation.z, glm::vec3(0.f, 0.f, 1.f));
+		glm::mat4 modelRotation = modelRotZ * modelRotY * modelRotX;
+		glm::mat4 modelTransform = modelPos * modelRotation;
 
 		if (renderer.setGLWindowState(true)) {
 			//Bind the shaders.
 			glUseProgram(program->getObjectId());
 
-			//Set the uniforms for the shader to use.
-			program->setUniform("projection", viewProj);
+			//Set the uniforms for the shader to use
+			program->setUniform("camera", currentCamera->getTransform());
+			program->setUniform("model", modelTransform);
+			program->setUniform("projection", currentCamera->getProjection());
+			program->setUniform("texture", 0);
 
 			// Draw the cube
 			glDrawElements(GL_TRIANGLES, model.indices.size(), GL_UNSIGNED_INT, 0);

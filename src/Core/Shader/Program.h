@@ -60,6 +60,9 @@ namespace CGEngine {
 		void setUniform(const GLchar* name, glm::mat4& m, GLboolean transpose = GL_FALSE) {
 			glUniformMatrix4fv(uniform(name), 1, transpose, glm::value_ptr(m));
 		}
+		void use();
+		void stop();
+		GLint inUse();
 	private:
 		GLuint objectId;
 

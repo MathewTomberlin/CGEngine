@@ -78,4 +78,19 @@ namespace CGEngine {
 
 		return uniform;
 	}
+
+	void Program::use() {
+		glUseProgram(getObjectId());
+	}
+
+	void Program::stop() {
+		assert(inUse());
+		glUseProgram(0);
+	}
+
+	GLint Program::inUse() {
+		GLint currentProgram = 0;
+		glGetIntegerv(GL_CURRENT_PROGRAM, &currentProgram);
+		return currentProgram;
+	}
 }
