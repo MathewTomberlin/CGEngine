@@ -19,6 +19,12 @@ namespace CGEngine {
 
 		void render(Transform parentTransform);
 		void bindTexture();
+		void setPosition(Vector3f pos);
+		void move(Vector3f delta);
+		void setRotation(Vector3f rot);
+		void rotate(Vector3f delta);
+		void setScale(Vector3f scale);
+		void scale(Vector3f delta);
 	private:
 		VertexModel model;
 		Texture* meshTexture;

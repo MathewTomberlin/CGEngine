@@ -121,9 +121,9 @@ namespace CGEngine {
     };
 
     struct Transformation3D {
-        Transformation3D(Vector3f position = Vector3f()) :position(position), rotation(Vector3f()), scale(Vector3f()) { };
+        Transformation3D(Vector3f position = Vector3f()) :position(position), rotation(Vector3f()), scale({1,1,1}) { };
         Transformation3D(Vector3f position, Vector3f rotation, Vector3f scale) :position(position), rotation(rotation), scale(scale) { };
-        Transformation3D(Vector3f position, Vector3f scale) :position(position), rotation(Vector3f()), scale(scale) { };
+        Transformation3D(Vector3f position, Vector3f scale) :position(position), rotation(Vector3f()), scale({ 1,1,1 }) { };
 
         Vector3f position;
         Vector3f rotation;
