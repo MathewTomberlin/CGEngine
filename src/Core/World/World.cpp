@@ -517,6 +517,7 @@ namespace CGEngine {
     }
 
     V2f World::getGlobalScale(Transform transform) const {
+        Transform r_wT = transform.rotate(getInverseGlobalRotation(transform));
         Vector2f wPos = transform.transformPoint({ 0,0 });
         Vector2f rPos = transform.transformPoint({ 1,1 });
         Vector2f dir = (rPos - wPos);

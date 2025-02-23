@@ -13,69 +13,58 @@ namespace CGEngine {
     vector<float> getCubeVertices(float scale) {
         return {
             // positions   // texture coordinates
-           //front
-           -scale, -scale, -scale,  0, 0,
-            scale, -scale, -scale,  1, 0,
-            scale,  scale, -scale,  1, 1,
-           -scale,  scale, -scale,  0, 1,
-           //right
-            scale,  scale, -scale,  1, 1,
-            scale,  scale,  scale,  0, 1,
-            scale, -scale,  scale,  0, 0,
-            scale, -scale, -scale,  1, 0,
-            //back
-            -scale, -scale,  scale,  0, 0,
-             scale, -scale,  scale,  1, 0,
-             scale,  scale,  scale,  1, 1,
-            -scale,  scale,  scale,  0, 1,
-            //left
-            -scale, -scale,  scale,  0, 0,
-            -scale, -scale, -scale,  1, 0,
-            -scale,  scale, -scale,  1, 1,
-            -scale,  scale,  scale,  0, 1,
-            //upper
-             scale, -scale,  scale,  0, 1,
-            -scale, -scale,  scale,  1, 1,
-            -scale, -scale, -scale,  1, 0,
-             scale, -scale, -scale,  0, 0,
-             //bottom
-             -scale,  scale, -scale,  0, 1,
-              scale,  scale, -scale,  1, 1,
-              scale,  scale,  scale,  1, 0,
-             -scale,  scale,  scale,  0, 0,
+            //bottom
+            -scale,-scale,-scale,   0.0f, 0.0f,
+             scale,-scale,-scale,   1.0f, 0.0f,
+            -scale,-scale, scale,   0.0f, 1.0f,
+             scale,-scale,-scale,   1.0f, 0.0f,
+             scale,-scale, scale,   1.0f, 1.0f,
+            -scale,-scale, scale,   0.0f, 1.0f,
+
+            // top
+            -scale, scale,-scale,   0.0f, 0.0f,
+            -scale, scale, scale,   0.0f, 1.0f,
+             scale, scale,-scale,   1.0f, 0.0f,
+             scale, scale,-scale,   1.0f, 0.0f,
+            -scale, scale, scale,   0.0f, 1.0f,
+             scale, scale, scale,   1.0f, 1.0f,
+
+             // front
+             -scale,-scale, scale,   1.0f, 0.0f,
+              scale,-scale, scale,   0.0f, 0.0f,
+             -scale, scale, scale,   1.0f, 1.0f,
+              scale,-scale, scale,   0.0f, 0.0f,
+              scale, scale, scale,   0.0f, 1.0f,
+             -scale, scale, scale,   1.0f, 1.0f,
+
+             // back
+             -scale,-scale,-scale,   0.0f, 0.0f,
+             -scale, scale,-scale,   0.0f, 1.0f,
+              scale,-scale,-scale,   1.0f, 0.0f,
+              scale,-scale,-scale,   1.0f, 0.0f,
+             -scale, scale,-scale,   0.0f, 1.0f,
+              scale, scale,-scale,   1.0f, 1.0f,
+
+              // left
+              -scale,-scale, scale,   0.0f, 1.0f,
+              -scale, scale,-scale,   1.0f, 0.0f,
+              -scale,-scale,-scale,   0.0f, 0.0f,
+              -scale,-scale, scale,   0.0f, 1.0f,
+              -scale, scale, scale,   1.0f, 1.0f,
+              -scale, scale,-scale,   1.0f, 0.0f,
+
+              // right
+               scale,-scale, scale,   1.0f, 1.0f,
+               scale,-scale,-scale,   1.0f, 0.0f,
+               scale, scale,-scale,   0.0f, 0.0f,
+               scale,-scale, scale,   1.0f, 1.0f,
+               scale, scale,-scale,   0.0f, 0.0f,
+               scale, scale, scale,   0.0f, 1.0f
         };
     }
 
     vector<float> getCubeNormals() {
         return {
-            0,0,-1,
-            0,0,-1,
-            0,0,-1,
-            0,0,-1,
-            0,0,-1,
-            0,0,-1,
-
-            1,0,0,
-            1,0,0,
-            1,0,0,
-            1,0,0,
-            1,0,0,
-            1,0,0,
-
-            0,0,1,
-            0,0,1,
-            0,0,1,
-            0,0,1,
-            0,0,1,
-            0,0,1,
-
-            -1,0,0,
-            -1,0,0,
-            -1,0,0,
-            -1,0,0,
-            -1,0,0,
-            -1,0,0,
-
             0,-1,0,
             0,-1,0,
             0,-1,0,
@@ -88,7 +77,35 @@ namespace CGEngine {
             0,1,0,
             0,1,0,
             0,1,0,
-            0,1,0
+            0,1,0,
+
+            0,0,1,
+            0,0,1,
+            0,0,1,
+            0,0,1,
+            0,0,1,
+            0,0,1,
+
+            0,0,-1,
+            0,0,-1,
+            0,0,-1,
+            0,0,-1,
+            0,0,-1,
+            0,0,-1,
+
+            -1,0,0,
+            -1,0,0,
+            -1,0,0,
+            -1,0,0,
+            -1,0,0,
+            -1,0,0,
+
+            1,0,0,
+            1,0,0,
+            1,0,0,
+            1,0,0,
+            1,0,0,
+            1,0,0
         };
     }
 

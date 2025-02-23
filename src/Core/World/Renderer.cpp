@@ -7,20 +7,17 @@ namespace CGEngine {
 	}
 	void Renderer::initializeOpenGL() {
 		if (!setGLWindowState(true)) return;
-		// Load the default shaders
-		if (program == 0) {
-			loadFromMemory(defaultVertexShader, ShaderType::Vertex);
-			loadFromMemory(defaultFragShader, ShaderType::Fragment);
-		}
+
+		program = new Program("shaders/StdVertexShader.txt", "shaders/StdFragShader.txt");
+		// Setup a camera with perspective projection
+		GLfloat aspectRatio = static_cast<float>(window->getSize().x) / window->getSize().y;
+		currentCamera = new Camera(aspectRatio);
 
 		// Enable Z-buffer read and write
 		glEnable(GL_DEPTH_TEST);
-		glEnable(GL_CULL_FACE);
-		glCullFace(GL_BACK);
-
-		// Setup a perspective projection
-		GLfloat ratio = static_cast<float>(window->getSize().x) / window->getSize().y;
-		currentCamera = new Camera(ratio);
+		glDepthFunc(GL_LESS);
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 		auto stride = sizeof(GLfloat) * 5;
 		auto textureCoordOffset = sizeof(GLfloat) * 3;
@@ -30,33 +27,13 @@ namespace CGEngine {
 		glGenBuffers(1, &vertexVBO);
 		glBindBuffer(GL_ARRAY_BUFFER, vertexVBO);
 		//Enable and prepare vertex and texture coordinate attribute arrays
-		glEnableVertexAttribArray(static_cast<GLuint>(VertexAttribute::Position));
-		glVertexAttribPointer(static_cast<GLuint>(VertexAttribute::Position), 3, GL_FLOAT, GL_FALSE, stride, 0);
-		glEnableVertexAttribArray(static_cast<GLuint>(VertexAttribute::TexCoord));
-		glVertexAttribPointer(static_cast<GLuint>(VertexAttribute::TexCoord), 2, GL_FLOAT, GL_FALSE, stride, (void*)textureCoordOffset);
-		//Generate and bind the index buffer
-		glGenBuffers(1, &indexVBO);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexVBO);
-		//Make sure to bind the vertex array to null if you wish to define more objects.
+		glEnableVertexAttribArray(program->attrib("position"));
+		glVertexAttribPointer(program->attrib("position"), 3, GL_FLOAT, GL_FALSE, stride, 0);
+		glEnableVertexAttribArray(program->attrib("texCoord"));
+		glVertexAttribPointer(program->attrib("texCoord"), 2, GL_FLOAT, GL_FALSE, stride, (void*)textureCoordOffset);
 		glBindVertexArray(0);
 		commitGL();
 		if (!setGLWindowState(false)) return;
-
-		// Setup OPENGL viewport within window
-		//FloatRect viewport = openGLSettings.viewport;
-		//GLsizei viewPositionX_px = viewport.position.x;
-		//GLsizei viewPositionY_px = viewport.position.y;
-		//float viewportSizeX = min(1.f, (float)window->getSize().y / window->getSize().x) * (float)window->getSize().x;
-		//float viewportSizeY = min(1.f, (float)window->getSize().x / window->getSize().y)* (float)window->getSize().y;
-		//int xOffset = ((int)window->getSize().x - viewportSizeX)/2;
-		//int yOffset = ((int)window->getSize().y - viewportSizeY)/2;
-
-		//glMatrixMode(GL_PROJECTION);
-		//glLoadIdentity();
-		////This perspective is clipped by the near and far clip planes
-		//glFrustum(-1,1,-1,1, openGLSettings.nearClipPlane, openGLSettings.farClipPlane);
-		////ViewPosition should allow the openGL viewport to be moved on the screen, x/yOffset centers the viewport, and viewportSizeXY squares it
-		//glViewport(viewPositionX_px+xOffset, viewPositionY_px+yOffset, viewportSizeX, viewportSizeY);
 	}
 
 	bool Renderer::setGLWindowState(bool state) {
@@ -83,7 +60,6 @@ namespace CGEngine {
 	}
 
 	bool Renderer::processRender() {
-		glViewport(0, 0, window->getSize().x, window->getSize().y);
 		//Clear render order
 		clear();
 		//Collect Bodies to render
@@ -94,7 +70,7 @@ namespace CGEngine {
 		//Reset OpenGL parameters
 		if (setGLWindowState(true)) {
 			glBindVertexArray(0);
-			glUseProgram(0);
+			program->stop();
 			glBindTexture(GL_TEXTURE_2D, 0);
 		}
 		if (!setGLWindowState(false));
@@ -104,29 +80,29 @@ namespace CGEngine {
 
 	void Renderer::renderMesh(VertexModel model, Transformation3D transform) {
 		//TODO: Apply scale
-		glm::mat4 matrix_pos = glm::translate(glm::vec3(transform.position.x, transform.position.y, transform.position.z));
-		glm::mat4 matrix_rotX = glm::rotate(transform.rotation.x, glm::vec3(1.f, 0.f, 0.f));
-		glm::mat4 matrix_rotY = glm::rotate(transform.rotation.y, glm::vec3(0.f, 1.f, 0.f));
-		glm::mat4 matrix_rotZ = glm::rotate(transform.rotation.z, glm::vec3(0.f, 0.f, 1.f));
-		glm::mat4 matrix_rotation = matrix_rotZ * matrix_rotY * matrix_rotX;
-		glm::mat4 meshTransform = matrix_pos * matrix_rotation;
-		glm::mat4 viewProj = currentCamera->getProjection() * meshTransform;
+		glm::mat4 modelPos = glm::translate(glm::vec3(transform.position.x, transform.position.y, transform.position.z));
+		glm::mat4 modelRotX = glm::rotate(transform.rotation.x, glm::vec3(1.f, 0.f, 0.f));
+		glm::mat4 modelRotY = glm::rotate(transform.rotation.y, glm::vec3(0.f, 1.f, 0.f));
+		glm::mat4 modelRotZ = glm::rotate(transform.rotation.z, glm::vec3(0.f, 0.f, 1.f));
+		glm::mat4 modelScale = glm::scale(glm::vec3(transform.scale.x, transform.scale.y, transform.scale.z));
+		glm::mat4 modelRotation = modelRotZ * modelRotY * modelRotX;
+		glm::mat4 modelTransform = modelPos * modelRotation *modelScale;
 
 		if (renderer.setGLWindowState(true)) {
 			//Bind the shaders.
-			glUseProgram(renderer.program);
+			program->use();
 
-			//Set the uniforms for the shader to use.
-			if (renderer.uniform[(int)UniformType::TransformPVM] >= 0) {
-				glUniformMatrix4fv((unsigned int)renderer.uniform[(int)UniformType::TransformPVM], 1, GL_FALSE, &viewProj[0][0]);
-			}
+			//Set the uniforms for the shader to use
+			program->setUniform("camera", currentCamera->getMatrix());
+			program->setUniform("model", modelTransform);
+			program->setUniform("texture", 0);
 
 			// Draw the cube
-			glDrawElements(GL_TRIANGLES, model.indices.size(), GL_UNSIGNED_INT, 0);
+			glDrawArrays(GL_TRIANGLES, 0, model.vertices.size()/5);
 
 			// Unbind varray, program, and texture
 			glBindVertexArray(0);
-			glUseProgram(0);
+			program->stop();
 		}
 		if (renderer.setGLWindowState(false));
 	}
@@ -137,8 +113,6 @@ namespace CGEngine {
 			glBindVertexArray(renderer.vao);
 			//Apply model vertices and vertex texture coordinate data
 			glBufferData(GL_ARRAY_BUFFER, model.vertexComponentSpan, model.vertices.data(), GL_STATIC_DRAW);
-			//Apply model vertex face indices
-			glBufferData(GL_ELEMENT_ARRAY_BUFFER, model.vertexSpan, model.indices.data(), GL_STATIC_DRAW);
 		}
 		renderer.setGLWindowState(false);
 	}
@@ -222,85 +196,6 @@ namespace CGEngine {
 
 	void Renderer::setCurrentCamera(Camera* camera) {
 		currentCamera = camera;
-	}
-
-	
-	void Renderer::loadFromMemory(const std::string& shaderData, ShaderType type) {
-		if (shaderData.empty()) return;
-
-		//Detach and delete already attached shader
-		if (shader[static_cast<unsigned int>(type)]) {
-			glDetachShader(program, shader[static_cast<unsigned int>(type)]);
-			glDeleteShader(shader[static_cast<unsigned int>(type)]);
-		}
-
-		//Build the shader by its type
-		switch (type) {
-		case ShaderType::Vertex:
-			shader[static_cast<unsigned int>(type)] = buildShader(shaderData, GL_VERTEX_SHADER);
-			break;
-		case ShaderType::Geometry:
-			shader[static_cast<unsigned int>(type)] = buildShader(shaderData, GL_GEOMETRY_SHADER);
-			break;
-		case ShaderType::Fragment:
-			shader[static_cast<unsigned int>(type)] = buildShader(shaderData, GL_FRAGMENT_SHADER);
-			break;
-		default:
-			break;
-		}
-
-		//Ceate the program if it's null
-		if (program == 0) {
-			program = glCreateProgram();
-		}
-
-		//Attach the shader and assign Position and TexCoord VertexAttributes to position and texCoord
-		glAttachShader(program, shader[static_cast<unsigned int>(type)]);
-		glBindAttribLocation(program, static_cast<GLuint>(VertexAttribute::Position), "position");
-		glBindAttribLocation(program, static_cast<GLuint>(VertexAttribute::TexCoord), "texCoord");
-
-		//Link and validate the shaders
-		glLinkProgram(program);
-		checkError(program, GL_LINK_STATUS, true, "Shader link error:");
-		glValidateProgram(program);
-		checkError(program, GL_VALIDATE_STATUS, true, "Invalid shader:");
-
-		uniform[static_cast<unsigned int>(UniformType::TransformPVM)] = glGetUniformLocation(program, "pvm");
-	}
-
-	///Creates and compiles a shader.
-	GLuint Renderer::buildShader(const std::string& l_src, unsigned int l_type) {
-		GLuint shaderID = glCreateShader(l_type);
-		if (!shaderID) {
-			std::cout << "Bad shader type!";
-			return 0;
-		}
-		const GLchar* sources[1];
-		GLint lengths[1];
-		sources[0] = l_src.c_str();
-		lengths[0] = l_src.length();
-		glShaderSource(shaderID, 1, sources, lengths);
-		glCompileShader(shaderID);
-		checkError(shaderID, GL_COMPILE_STATUS, false, "Shader compile error: ");
-		return shaderID;
-	}
-
-	///Checks for any errors specific to the shaders. It will output any errors within the shader if it's not valid.
-	void Renderer::checkError(GLuint l_shader, GLuint l_flag, bool l_program, const string& l_errorMsg) {
-		GLint success = 0;
-		GLchar error[1024] = { 0 };
-		if (l_program) { glGetProgramiv(l_shader, l_flag, &success); }
-		else { glGetShaderiv(l_shader, l_flag, &success); }
-
-		if (success) { return; }
-		if (l_program) {
-			glGetProgramInfoLog(l_shader, sizeof(error), nullptr, error);
-		}
-		else {
-			glGetShaderInfoLog(l_shader, sizeof(error), nullptr, error);
-		}
-
-		std::cout << l_errorMsg << "\n";
 	}
 
 	GLenum Renderer::initGlew() {
