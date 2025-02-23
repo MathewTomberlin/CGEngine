@@ -52,19 +52,19 @@ namespace CGEngine {
 		}
 	}
 
-	id_t Renderer::addLight(LightData* light) {
+	id_t Renderer::addLight(Light* light) {
 		return lights.add(light);
 	}
 
 	void Renderer::removeLight(id_t lightId) {
-		LightData* light = lights.get(lightId);
+		Light* light = lights.get(lightId);
 		lights.remove(lightId);
 		if (light != nullptr) {
 			delete light;
 		}
 	}
 
-	LightData* Renderer::getLight(id_t lightId) {
+	Light* Renderer::getLight(id_t lightId) {
 		return lights.get(lightId);
 	}
 
