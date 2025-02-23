@@ -84,7 +84,6 @@ namespace CGEngine {
 	}
 
 	void Program::stop() {
-		assert(inUse());
 		glUseProgram(0);
 	}
 
