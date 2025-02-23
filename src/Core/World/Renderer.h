@@ -13,15 +13,11 @@
 #include "../Camera/Camera.h"
 #include "../Shader/Shader.h"
 #include "../Shader/Program.h"
+#include "../Light/Light.h"
 using namespace std;
 
 namespace CGEngine {
 	class Mesh;
-
-	struct LightData {
-		glm::vec3 position;
-		glm::vec3 intensities; //a.k.a. the color of the light
-	};
 
 	struct ModelData {
 		ModelData() :vbo(0), vao(0), drawType(GL_TRIANGLES), drawStart(0), drawCount(0), shaders(NULL) {};
@@ -87,9 +83,9 @@ namespace CGEngine {
 
 		void renderMesh(VertexModel model, Transformation3D transform, ModelData data);
 		void getModelData(Mesh* mesh);
-		id_t addLight(LightData* light);
+		id_t addLight(Light* light);
 		void removeLight(id_t lightId);
-		LightData* getLight(id_t lightId);
+		Light* getLight(id_t lightId);
 	private:
 		friend class World;
 		RenderWindow* window = nullptr;
@@ -121,6 +117,6 @@ namespace CGEngine {
 		//GLuint indexVBO = 0;
 		Program* program;
 
-		UniqueDomain<id_t, LightData*> lights = UniqueDomain<id_t, LightData*>(10);
+		UniqueDomain<id_t, Light*> lights = UniqueDomain<id_t, Light*>(10);
 	};
 }
