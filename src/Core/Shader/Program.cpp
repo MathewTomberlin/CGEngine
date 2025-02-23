@@ -43,6 +43,8 @@ namespace CGEngine {
 	Program::Program(string vertexShaderPath, string fragmentShaderPath) : 
 		Program({ Shader::readFile(vertexShaderPath, GL_VERTEX_SHADER),Shader::readFile(fragmentShaderPath, GL_FRAGMENT_SHADER) }) { }
 
+	Program::Program(ShaderProgramPath shaderPath) : Program(shaderPath.vertexShaderPath, shaderPath.fragmentShaderPath) {};
+
 	Program::~Program() {
 		if (objectId != 0) {
 			glDeleteProgram(objectId);

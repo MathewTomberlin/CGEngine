@@ -1,8 +1,36 @@
 #version 330
 
-uniform sampler2D texture;
+uniform mat4 model;
+uniform sampler2D tex;
+uniform struct Light {
+   vec3 position;
+   vec3 intensities; //a.k.a the color of the light
+} light;
+
 varying vec2 uv;
+varying vec3 normal;
+varying vec3 vert;
 
 void main() {
-	gl_FragColor = texture2D(texture, uv);
+    //calculate normal in world coordinates
+    mat3 normalMatrix = transpose(inverse(mat3(model)));
+    vec3 norm = normalize(normalMatrix * normal);
+    
+    //calculate the location of this fragment (pixel) in world coordinates
+    vec3 fragPosition = vec3(model * vec4(vert, 1));
+    
+    //calculate the vector from this pixels surface to the light source
+    vec3 surfaceToLight = light.position - fragPosition;
+
+    //calculate the cosine of the angle of incidence
+    float brightness = dot(norm, surfaceToLight) / (length(surfaceToLight) * length(norm));
+    brightness = pow(clamp(brightness, 0.5, 1),2.0);
+
+    //calculate final color of the pixel, based on:
+    // 1. The angle of incidence: brightness
+    // 2. The color/intensities of the light: light.intensities
+    // 3. The texture and texture coord: texture(tex, uv)
+    vec4 surfaceColor = texture(tex, uv);
+
+	gl_FragColor = vec4(brightness * light.intensities * surfaceColor.rgb, surfaceColor.a);
 }
