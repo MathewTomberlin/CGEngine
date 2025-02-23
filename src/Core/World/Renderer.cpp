@@ -11,9 +11,7 @@ namespace CGEngine {
 		// Setup a camera with perspective projection
 		GLfloat aspectRatio = static_cast<float>(window->getSize().x) / window->getSize().y;
 		currentCamera = new Camera(aspectRatio);
-		light = LightData();
-		light.position = { 25,5,5 };
-		light.intensities = { 1,1,1 };
+
 		// Enable Z-buffer read and write
 		glEnable(GL_DEPTH_TEST);
 		glDepthFunc(GL_LESS);
@@ -52,6 +50,22 @@ namespace CGEngine {
 			mesh->setModelData(data);
 			setGLWindowState(false);
 		}
+	}
+
+	id_t Renderer::addLight(LightData* light) {
+		return lights.add(light);
+	}
+
+	void Renderer::removeLight(id_t lightId) {
+		LightData* light = lights.get(lightId);
+		lights.remove(lightId);
+		if (light != nullptr) {
+			delete light;
+		}
+	}
+
+	LightData* Renderer::getLight(id_t lightId) {
+		return lights.get(lightId);
 	}
 
 	bool Renderer::setGLWindowState(bool state) {
@@ -108,8 +122,18 @@ namespace CGEngine {
 			data.shaders->setUniform("camera", currentCamera->getMatrix());
 			data.shaders->setUniform("model", modelTransform);
 			data.shaders->setUniform("tex", 0);
-			data.shaders->setUniform("light.position", light.position);
-			data.shaders->setUniform("light.intensities", light.intensities);
+			data.shaders->setUniform("lightCount", (int)lights.size());
+			for (size_t i = 0; i < lights.size(); ++i) {
+				std::ostringstream positionStream;
+				positionStream << "lights[" << i << "].position";
+				std::string positionUniform = positionStream.str();
+
+				std::ostringstream intensitiesStream;
+				intensitiesStream << "lights[" << i << "].intensities";
+				std::string intensitiesUniform = intensitiesStream.str();
+				data.shaders->setUniform(positionUniform.c_str(), lights.get(i)->position);
+				data.shaders->setUniform(intensitiesUniform.c_str(), lights.get(i)->intensities);
+			}
 
 			// Draw the cube
 			glDrawArrays(GL_TRIANGLES, 0, model.vertices.size()/5);
