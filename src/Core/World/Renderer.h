@@ -14,20 +14,22 @@
 #include "../Shader/Shader.h"
 #include "../Shader/Program.h"
 #include "../Light/Light.h"
+#include "../Material/Material.h"
 using namespace std;
 
 namespace CGEngine {
 	class Mesh;
 
 	struct ModelData {
-		ModelData() :vbo(0), vao(0), drawType(GL_TRIANGLES), drawStart(0), drawCount(0), shaders(NULL) {};
-		ModelData(GLint drawCount, Program* shaders, GLint drawStart = 0, GLenum type = GL_TRIANGLES) :vbo(0), vao(0), drawType(type), drawStart(drawStart), drawCount(drawCount), shaders(shaders) {};
+		ModelData() :vbo(0), vao(0), drawType(GL_TRIANGLES), drawStart(0), drawCount(0), shaders(NULL), material(nullptr) {};
+		ModelData(GLint drawCount, Program* shaders, Material* material = new Material(), GLint drawStart = 0, GLenum type = GL_TRIANGLES) :vbo(0), vao(0), drawType(type), drawStart(drawStart), drawCount(drawCount), shaders(shaders), material(material) {};
 		GLuint vbo;
 		GLuint vao;
 		GLenum drawType;
 		GLint drawStart;
 		GLint drawCount;
 		Program* shaders;
+		Material* material;
 	};
 	/// <summary>
 	/// Responsible for ordering Bodies for rendering. Allows for default ordering (children render on top of parents)
@@ -86,6 +88,7 @@ namespace CGEngine {
 		id_t addLight(Light* light);
 		void removeLight(id_t lightId);
 		Light* getLight(id_t lightId);
+		string getUniformArrayPropertyName(string arrayName, int index, string propertyName);
 	private:
 		friend class World;
 		RenderWindow* window = nullptr;

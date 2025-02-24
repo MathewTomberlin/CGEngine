@@ -335,11 +335,6 @@ namespace CGEngine {
     void World::runWorld() {
         while (running) {
             renderer.initializeOpenGL();
-            //if (!lightsInit) {
-            //    lights.forEach([](Light* light) { light->init(); });
-            //    lightsInit = true;
-            //}
-            //Add scenes from sceneList to world and load sceneList[0]
             initSceneList();
 
             while (window->isOpen()) {
@@ -531,11 +526,15 @@ namespace CGEngine {
         return degrees(-getGlobalRotation(transform).asDegrees());
     }
 
-    id_t World::addLight(Light* light) {
-        return lights.add(light);
+    id_t World::addMaterial(Material* material) {
+        return materials.add(material);
     }
 
-    Light* World::getLight(id_t lightId) {
-        return lights.get(lightId);
+    Material* World::getMaterial(id_t materialId) {
+        return materials.get(materialId);
+    }
+
+    id_t World::createMaterial(MaterialParameters params) {
+        return materials.add(new Material(params));
     }
 }

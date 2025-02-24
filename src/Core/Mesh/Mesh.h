@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../Engine/Engine.h"
+#include "../Material/Material.h"
 
 namespace CGEngine {
 	struct RenderParameters {
@@ -15,7 +16,7 @@ namespace CGEngine {
 
 	class Mesh : public Transformable{
 	public:
-		Mesh(VertexModel model, Transformation3D transformation = Transformation3D(), Texture* texture = nullptr, Color vertexColor = {}, RenderParameters renderParams = RenderParameters(), ShaderProgramPath shaderPath = ShaderProgramPath());
+		Mesh(VertexModel model, Transformation3D transformation = Transformation3D(), Material* material = new Material(), RenderParameters renderParams = RenderParameters(), ShaderProgramPath shaderPath = ShaderProgramPath());
 
 		void render(Transform parentTransform);
 		void bindTexture();
@@ -28,13 +29,14 @@ namespace CGEngine {
 		void setModelData(ModelData data);
 		VertexModel getModel();
 		ShaderProgramPath getShaderProgramPaths();
+		Material* getMaterial();
 	private:
 		VertexModel model;
 		ModelData modelData;
 		Texture* meshTexture;
 		Transformation3D transformation;
-		Color vertexColor = Color::White;
 		RenderParameters renderParameters;
 		ShaderProgramPath shaderPath;
+		Material* material;
 	};
 }
