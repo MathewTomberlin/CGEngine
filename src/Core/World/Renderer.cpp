@@ -26,8 +26,9 @@ namespace CGEngine {
 		if (setGLWindowState(true)) {
 			VertexModel model = mesh->getModel();
 			ShaderProgramPath shaderPath = mesh->getShaderProgramPaths();
+			Material* meshMaterial = mesh->getMaterial();
 			//Setup ModelData with drawCount, vertex buffer and array, and shader program
-			ModelData data = ModelData(model.vertexCount, new Program(shaderPath));
+			ModelData data = ModelData(model.vertexCount, new Program(shaderPath), meshMaterial);
 			glGenBuffers(1, &data.vbo);
 			glGenVertexArrays(1, &data.vao);
 
@@ -119,20 +120,31 @@ namespace CGEngine {
 			data.shaders->use();
 
 			//Set the uniforms for the shader to use
+			Vector3f camPos = currentCamera->getPosition();
+			glm::vec3 materialSpecularColor = { data.material->specularColor.r,data.material->specularColor.g,data.material->specularColor.b };
+			glm::vec3 materialSurfaceColor = { data.material->surfaceColor.r,data.material->surfaceColor.g,data.material->surfaceColor.b };
 			data.shaders->setUniform("camera", currentCamera->getMatrix());
 			data.shaders->setUniform("model", modelTransform);
-			data.shaders->setUniform("tex", 0);
+			data.shaders->setUniform("cameraPosition", { camPos.x,camPos.y,camPos.z });
+
+			data.shaders->setUniform("material.diffuseColor", materialSurfaceColor);
+			data.shaders->setUniform("material.diffuseTexture", 0);
+			data.shaders->setUniform("material.smoothnessFactor", data.material->shininess);
+			data.shaders->setUniform("material.specularColor", materialSpecularColor);
+			data.shaders->setUniform("material.opacity", data.material->opacity);
+			data.shaders->setUniform("material.gammaCorrected", data.material->gammaCorrected);
+
 			data.shaders->setUniform("lightCount", (int)lights.size());
 			for (size_t i = 0; i < lights.size(); ++i) {
-				std::ostringstream positionStream;
-				positionStream << "lights[" << i << "].position";
-				std::string positionUniform = positionStream.str();
-
-				std::ostringstream intensitiesStream;
-				intensitiesStream << "lights[" << i << "].intensities";
-				std::string intensitiesUniform = intensitiesStream.str();
-				data.shaders->setUniform(positionUniform.c_str(), lights.get(i)->position);
-				data.shaders->setUniform(intensitiesUniform.c_str(), lights.get(i)->intensities);
+				glm::vec3 colorIntensities = { lights.get(i)->parameters.colorIntensities.x,lights.get(i)->parameters.colorIntensities.y,lights.get(i)->parameters.colorIntensities.z };
+				glm::vec3 lightDirection = { lights.get(i)->parameters.lightDirection.x,lights.get(i)->parameters.lightDirection.y,lights.get(i)->parameters.lightDirection.z };
+				data.shaders->setUniform(getUniformArrayPropertyName("lights",i,"position").c_str(), lights.get(i)->position);
+				data.shaders->setUniform(getUniformArrayPropertyName("lights", i, "brightness").c_str(), lights.get(i)->parameters.brightness);
+				data.shaders->setUniform(getUniformArrayPropertyName("lights", i, "intensities").c_str(), colorIntensities);
+				data.shaders->setUniform(getUniformArrayPropertyName("lights", i, "attenuation").c_str(), lights.get(i)->parameters.attenuation);
+				data.shaders->setUniform(getUniformArrayPropertyName("lights", i, "ambiance").c_str(), lights.get(i)->parameters.ambiance);
+				data.shaders->setUniform(getUniformArrayPropertyName("lights", i, "coneAngle").c_str(), lights.get(i)->parameters.coneAngle);
+				data.shaders->setUniform(getUniformArrayPropertyName("lights", i, "lightDirection").c_str(), lightDirection);
 			}
 
 			// Draw the cube
@@ -143,6 +155,12 @@ namespace CGEngine {
 			data.shaders->stop();
 		}
 		if (renderer.setGLWindowState(false));
+	}
+
+	string Renderer::getUniformArrayPropertyName(string arrayName, int index, string propertyName) {
+		std::ostringstream ss;
+		ss << arrayName << "[" << index << "]." << propertyName;
+		return ss.str();
 	}
 
 	void Renderer::add(Body* body, Transform transform) {

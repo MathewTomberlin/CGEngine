@@ -7,20 +7,22 @@ using namespace sf;
 using namespace std;
 
 namespace CGEngine {
-	struct SpotlightParameters {
-		SpotlightParameters(float cutoff = 60.f, float exponent = 128.f, float constantAtten = 1.f, float linearAtten = 0.1f, float quadraticAtten = 0.1f) :spotCutoff(cutoff), spotExponent(exponent), spotConstantAttenuation(constantAtten), spotLinearAttenuation(linearAtten), spotQuadraticAttenuation(quadraticAtten) {};
-		float spotCutoff = 60.f;
-		float spotExponent = 128.f;
-		float spotConstantAttenuation = 1.f;
-		float spotLinearAttenuation = 0.1f;
-		float spotQuadraticAttenuation = 0.1f;
+	struct LightParameters {
+		LightParameters(float brightness = 5.0f, Vector3f colorIntensities = {1,1,1}, float attenuation = 0.005f, float ambiance = 0.001f, float coneAngle = 180.0f, Vector3f lightDirection = Vector3f(0, 0, -1)) : brightness(brightness), colorIntensities(colorIntensities), attenuation(attenuation), ambiance(ambiance), coneAngle(coneAngle), lightDirection(lightDirection) {};
+		float brightness;
+		Vector3f colorIntensities;
+		float attenuation;
+		float ambiance;
+		float coneAngle;
+		Vector3f lightDirection;
 	};
 
 	class Light {
 	public:
-		Light(Vector3f position = Vector3f(), Vector3f intensities = {1.0f,1.0f,1.0f});
+		Light(Vector3f position = Vector3f(), bool directional = false, LightParameters parameters = LightParameters()) ;
 
-		glm::vec3 position;
-		glm::vec3 intensities;
+		id_t lightId;
+		glm::vec4 position;
+		LightParameters parameters;
 	};
 }

@@ -104,8 +104,9 @@ namespace CGEngine {
         /// <returns>The Body's rotation in world space as a normalized direction vector</returns>
         V2f getRight(Transform transform) const;
 
-        id_t addLight(Light* light);
-        Light* getLight(id_t lightId);
+        id_t createMaterial(MaterialParameters params);
+        id_t addMaterial(Material* material);
+        Material* getMaterial(id_t materialId);
     private:
         RenderWindow* window = nullptr;
 
@@ -134,7 +135,9 @@ namespace CGEngine {
 
         //Lights
         UniqueDomain<id_t, Light*> lights = UniqueDomain<id_t, Light*>(8);
-        bool lightsInit = false;
+
+        //Materials
+        UniqueDomain<id_t, Material*> materials = UniqueDomain<id_t, Material*>(1000);
 
         //Console
         bool consoleFeatureEnabled = true;

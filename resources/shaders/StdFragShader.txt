@@ -1,37 +1,105 @@
 #version 330
 
-uniform struct Light {
-   vec3 position;
-   vec3 intensities; //a.k.a the color of the light
-} lights[10];
-uniform mat4 model;
-uniform sampler2D tex;
+//Input
+#define MAX_LIGHTS 10
 
+uniform mat4 model;
+uniform vec3 cameraPosition;
+
+uniform struct Light {
+   vec4 position;
+   float brightness;
+   vec3 intensities;
+   float attenuation;
+   float ambiance;
+   float coneAngle;
+   vec3 lightDirection;
+} lights[MAX_LIGHTS];
 uniform int lightCount;
+
+uniform struct Material {
+    vec3 diffuseColor;
+    sampler2D diffuseTexture;
+    vec3 specularColor;
+    float smoothnessFactor;
+    float opacity;
+    bool gammaCorrected;
+} material;
 
 varying vec2 uv;
 varying vec3 normal;
-varying vec3 vert;
+varying vec3 vertex;
 
-vec3 applyLight(Light light, vec3 surfaceColor, vec3 normal, vec3 surfacePos){
-    // Calculated by light
-    vec3 surfaceToLight = normalize(light.position - surfacePos);
-    float diffuseCoefficient = max(0.0, dot(normal, surfaceToLight));
-    return diffuseCoefficient * light.intensities * surfaceColor.rgb;
+vec3 applyLight(Light inputLight, vec3 surfaceColor, vec3 surfaceNormal, vec3 surfacePos, vec3 surfaceViewDir){
+    vec3 lightIntensities = normalize(inputLight.intensities);
+    vec3 surfaceLightDir;
+    float lightPercentage = 1.0;
+    if(inputLight.position.w == 0.0) {
+        //directional light
+        surfaceLightDir = normalize(-inputLight.lightDirection);
+    
+        lightPercentage = 1.0;
+    } else {
+        //point light
+        surfaceLightDir = inputLight.position.xyz - surfacePos;
+        float distanceToLight = length(surfaceLightDir);
+        surfaceLightDir = normalize(surfaceLightDir);
+
+        float attenuation = inputLight.attenuation * pow(distanceToLight, 2);
+        lightPercentage = 1.0 / (1.0 + attenuation);
+
+        //cone restrictions (affects attenuation)
+        float lightToSurfaceAngle = degrees(acos(dot(-surfaceLightDir, normalize(inputLight.lightDirection))));
+        if(inputLight.coneAngle <= 90.0 && lightToSurfaceAngle > inputLight.coneAngle){
+            lightPercentage = 0.0;
+        }
+    }
+
+    //ambient
+    vec3 ambient = inputLight.ambiance * surfaceColor.rgb * lightIntensities;
+
+    //diffuse
+    float diffusion = max(0.0, dot(surfaceNormal, surfaceLightDir));
+    vec3 diffuse = diffusion * surfaceColor.rgb * lightIntensities;
+    
+    //specular
+    float specularity = 0.0;
+    float specularPower = max(1.0,material.smoothnessFactor);
+    float specularOpacity = clamp(material.smoothnessFactor,0.0,1.0);
+    if(diffusion > 0.0){
+        vec3 reflectDir = reflect(-surfaceLightDir, surfaceNormal);
+        specularity = pow(max(0.0, dot(surfaceViewDir, reflectDir)), specularPower);
+    }
+    vec3 specular = specularity * specularOpacity * normalize(material.specularColor) * lightIntensities;
+
+    //linear color (color before gamma correction)
+    return max(inputLight.brightness,0.0) * (ambient + lightPercentage*(diffuse + specular));
 }
 
 void main() {
     // Calculated from material and model
-    mat3 normalMatrix = transpose(inverse(mat3(model)));
-    vec3 norm = normalize(normalMatrix * normal);
-    vec3 surfacePos = vec3(model * vec4(vert, 1));
-    vec4 surfaceColor = texture(tex, uv);
+    vec3 surfaceNormal = normalize(transpose(inverse(mat3(model))) * normal);
+    vec3 surfacePos = vec3(model * vec4(vertex, 1));
+    vec4 materialColor = vec4(normalize(material.diffuseColor),1);
+    vec4 surfaceColor = texture(material.diffuseTexture, uv) * materialColor;
+    vec3 surfaceViewDir = normalize(cameraPosition - surfacePos);
+    float opacity = clamp(material.opacity,0.0,1.0);
+    float surfaceOpacity = min(surfaceColor.a, opacity);
 
     //combine color from all the lights
-    vec3 linearColor = vec3(0,0,0);
+    vec3 linearColor = vec3(0);
     for(int i = 0; i < lightCount; ++i){
-        linearColor += applyLight(lights[i], surfaceColor.rgb, norm, surfacePos);
+        if(lights[i].brightness > 0){
+            linearColor += applyLight(lights[i], surfaceColor.rgb, surfaceNormal, surfacePos, surfaceViewDir);
+        }
     }
 
-	gl_FragColor = vec4(linearColor.rgb, surfaceColor.a);
+	//final color (after gamma correction)
+    vec3 finalColor = linearColor.rgb;
+    if(material.gammaCorrected){
+        vec3 gamma = vec3(1.0/2.2);
+        finalColor = pow(linearColor, gamma);
+    }
+    
+    gl_FragColor = vec4(finalColor, surfaceOpacity);
 }
