@@ -67,6 +67,9 @@ namespace CGEngine {
 		void setUniform(const GLchar* name, glm::mat4& m, GLboolean transpose = GL_FALSE) {
 			glUniformMatrix4fv(uniform(name), 1, transpose, glm::value_ptr(m));
 		}
+		void setUniform(const GLchar* uniformName, const glm::vec2& v) {
+			glUniform2fv(uniform(uniformName), 1, glm::value_ptr(v));
+		}
 		void setUniform(const GLchar* uniformName, const glm::vec3& v) {
 			glUniform3fv(uniform(uniformName), 1, glm::value_ptr(v));
 		}

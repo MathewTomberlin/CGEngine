@@ -1,7 +1,7 @@
 #include "Mesh.h"
 
 namespace CGEngine {
-	Mesh::Mesh(VertexModel model, Transformation3D transformation, Material* material, RenderParameters renderParams, ShaderProgramPath shaderPath) : model(model), transformation(transformation), meshTexture(material->texture), renderParameters(renderParams), shaderPath(shaderPath), material(material) {
+	Mesh::Mesh(VertexModel model, Transformation3D transformation, Material* material, RenderParameters renderParams, ShaderProgramPath shaderPath) : model(model), transformation(transformation), meshTexture(material->diffuseTexture), renderParameters(renderParams), shaderPath(shaderPath), material(material) {
 		renderer.getModelData(this);
 	};
 

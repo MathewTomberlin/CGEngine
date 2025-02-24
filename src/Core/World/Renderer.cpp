@@ -122,13 +122,15 @@ namespace CGEngine {
 			//Set the uniforms for the shader to use
 			Vector3f camPos = currentCamera->getPosition();
 			glm::vec3 materialSpecularColor = { data.material->specularColor.r,data.material->specularColor.g,data.material->specularColor.b };
-			glm::vec3 materialSurfaceColor = { data.material->surfaceColor.r,data.material->surfaceColor.g,data.material->surfaceColor.b };
+			glm::vec3 materialSurfaceColor = { data.material->diffuseColor.r,data.material->diffuseColor.g,data.material->diffuseColor.b };
+			glm::vec2 materialDiffuseScale = { data.material->diffuseTextureUVScale.x,data.material->diffuseTextureUVScale.y };
 			data.shaders->setUniform("camera", currentCamera->getMatrix());
 			data.shaders->setUniform("model", modelTransform);
 			data.shaders->setUniform("cameraPosition", { camPos.x,camPos.y,camPos.z });
 
 			data.shaders->setUniform("material.diffuseColor", materialSurfaceColor);
 			data.shaders->setUniform("material.diffuseTexture", 0);
+			data.shaders->setUniform("material.diffuseTextureUVScale", materialDiffuseScale);
 			data.shaders->setUniform("material.smoothnessFactor", data.material->shininess);
 			data.shaders->setUniform("material.specularColor", materialSpecularColor);
 			data.shaders->setUniform("material.opacity", data.material->opacity);
