@@ -139,7 +139,7 @@ namespace CGEngine {
                 //Get a reference to the grid Body so we can parent the player to it
                 Body* gridBody = world->bodies.get(gridId);
                 //Player movement properties
-                float playerSpeed = 100.f;
+                float playerSpeed = 5.f;
                 //float updateInterval = -1.f; -- UNUSED
                 //Create a new instance of the player input layout and set their Input DataMaps with the playerSpeed
                 Script* keyboardMoveController = new Script(keyboardMovementController);
@@ -193,52 +193,48 @@ namespace CGEngine {
                 Body* gridBody = world->bodies.get(gridId);
 
                 VertexModel cubeModel = getCubeModel(1.f);
-                VertexModel bigCubeModel = getCubeModel(0.25f);
                 Vector3f cubeScale = { 1,1,0.0000000008f };
-                Vector3f planeScale = { 1,1,0.0000000000001f };
-                float cubeZheight = -0.000000001f;
-                float grnd = -0.00000000108f;
-                Texture* brickTex = textures->get("brick_tile.png");
-                Texture* grassTex = textures->get("grass_tile.png");
+
+                //Spotlight
+                LightParameters lightParams = LightParameters();
+                lightParams.coneAngle = 60.f;
+                lightParams.lightDirection = { 0,1,-1 };
+                Light* light = new Light({ 0,-20,5 }, false, lightParams);
+
+                //Red Point Light
+                LightParameters lightParams2 = LightParameters();
+                lightParams2.attenuation = 0.005f;
+                lightParams2.colorIntensities = { 1,0.5f,0.5f };
+                Light* light2 = new Light({ 0,10,10 }, false, lightParams2);
                 
-                //Untextured screen space object
-                Vector2f viewSize = screen->getCurrentView()->getSize();
-                Vector2f screenSpaceOffset = { -viewSize.x / 2 + 10,-viewSize.y / 2 + 10 };
-                //id_t screenSpaceMeshId = world->create(new Mesh(cubeModel, Transformation3D({screenSpaceOffset.x,screenSpaceOffset.y,cubeZheight}, cubeScale), nullptr, Color::Yellow, RenderParameters(true, true, true)));
+                //Materials
+                id_t brickMaterialId = world->createMaterial(MaterialParameters("brick_tile.png"));
+                Material* brickMaterial = world->getMaterial(brickMaterialId);
+                id_t grassMaterialId = world->createMaterial(MaterialParameters("grass_tile.png"));
+                Material* grassMaterial = world->getMaterial(grassMaterialId);
+                grassMaterial->shininess = 0.0f;
+                grassMaterial->surfaceColor = Color::White;
 
-                Light* light1 = new Light();
-                light1->position = { 25,5,5 };
-                light1->intensities = { 1,1,1 };
-                id_t lightId = renderer.addLight(light1);
-
-                //Textured cubes
-                id_t meshId1 = world->create(new Mesh(cubeModel, Transformation3D({0,5,-10}, cubeScale), brickTex)/*, gridBody*/);
-                id_t meshId2 = world->create(new Mesh(cubeModel, Transformation3D({ 0,-5,-10 }, cubeScale), grassTex)/*, gridBody*/);
-                id_t meshId3 = world->create(new Mesh(cubeModel, Transformation3D({ 0,0,-20 }, cubeScale), grassTex)/*, gridBody*/);
-                Body* b = world->bodies.get(meshId3);
-                b->get<Mesh*>()->scale({ 100.f,100.f,0.0001f });
-                //id_t meshId2 = world->create(new Mesh(cubeModel, Transformation3D({72,72,cubeZheight}, cubeScale), brickTex)/*, gridBody*/);
-                //id_t meshId3 = world->create(new Mesh(cubeModel, Transformation3D({ 24,0,cubeZheight }, cubeScale), brickTex)/*, gridBody*/);
-                //id_t meshId4 = world->create(new Mesh(cubeModel, Transformation3D({ 172,272,cubeZheight }, cubeScale), brickTex)/*, gridBody*/);
-                //id_t meshId5 = world->create(new Mesh(cubeModel, Transformation3D({ -30,272,cubeZheight }, cubeScale), brickTex)/*, gridBody*/);
-
-                //Textured planes
-                //id_t groundPlane1 = world->create(new Mesh(bigCubeModel, Transformation3D({ 0,0,grnd }, planeScale), grassTex));
-                //id_t groundPlane2 = world->create(new Mesh(bigCubeModel, Transformation3D({ 125,0,grnd }, planeScale), grassTex));
-                //id_t groundPlane3 = world->create(new Mesh(bigCubeModel, Transformation3D({ 125,125,grnd }, planeScale), grassTex));
-                //id_t groundPlane4 = world->create(new Mesh(bigCubeModel, Transformation3D({ 0,125,grnd }, planeScale), grassTex));
-                //id_t groundPlane5 = world->create(new Mesh(bigCubeModel, Transformation3D({ 250,0,grnd }, planeScale), grassTex));
-                //id_t groundPlane6 = world->create(new Mesh(bigCubeModel, Transformation3D({ 250,125,grnd }, planeScale), grassTex));
-                //id_t groundPlane7 = world->create(new Mesh(bigCubeModel, Transformation3D({ 250,250,grnd }, planeScale), grassTex));
-                //id_t groundPlane8 = world->create(new Mesh(bigCubeModel, Transformation3D({ 125,250,grnd }, planeScale), grassTex));
-                //id_t groundPlane9 = world->create(new Mesh(bigCubeModel, Transformation3D({ 0,375,grnd }, planeScale), grassTex));
-                //id_t groundPlane10 = world->create(new Mesh(bigCubeModel, Transformation3D({ 375,250,grnd }, planeScale), grassTex));
-                //id_t groundPlane11 = world->create(new Mesh(bigCubeModel, Transformation3D({ 375,375,grnd }, planeScale), grassTex));
-                //id_t groundPlane12 = world->create(new Mesh(bigCubeModel, Transformation3D({ 250,375,grnd }, planeScale), grassTex));
-                //id_t groundPlane13 = world->create(new Mesh(bigCubeModel, Transformation3D({ 0,250,grnd }, planeScale), grassTex));
-                //id_t groundPlane14 = world->create(new Mesh(bigCubeModel, Transformation3D({ 375,0,grnd }, planeScale), grassTex));
-                //id_t groundPlane15 = world->create(new Mesh(bigCubeModel, Transformation3D({ 125,375,grnd }, planeScale), grassTex));
-                //id_t groundPlane16 = world->create(new Mesh(bigCubeModel, Transformation3D({ 375,125,grnd }, planeScale), grassTex));
+                //Bodies
+                id_t meshId1 = world->create(new Mesh(cubeModel, Transformation3D({0,5,-10}, cubeScale), brickMaterial));
+                id_t meshId2 = world->create(new Mesh(cubeModel, Transformation3D({ 0,-5,-10 }, cubeScale), brickMaterial));
+                id_t meshId4 = world->create(new Mesh(cubeModel, Transformation3D({ 5,0,-10 }, cubeScale), brickMaterial));
+                id_t meshId5 = world->create(new Mesh(cubeModel, Transformation3D({ -5,0,-10 }, cubeScale), brickMaterial));
+                id_t meshId6 = world->create(new Mesh(cubeModel, Transformation3D({ 10,-10,-10 }, cubeScale), brickMaterial));
+                id_t meshId7 = world->create(new Mesh(cubeModel, Transformation3D({ -10,-10,-10 }, cubeScale), brickMaterial));
+                id_t meshId8 = world->create(new Mesh(cubeModel, Transformation3D({ 10,10,-10 }, cubeScale), brickMaterial));
+                id_t meshId9 = world->create(new Mesh(cubeModel, Transformation3D({ -10,10,-10 }, cubeScale), brickMaterial));
+                id_t meshId3 = world->create(new Mesh(cubeModel, Transformation3D({ 0,0,-20 }, cubeScale), grassMaterial));
+                Body* planeBody = world->bodies.get(meshId3);
+                planeBody->get<Mesh*>()->scale({ 100.f,100.f,0.0001f });
+                world->getRoot()->setTimer(15.0f, new Script([&grassMaterialId](ScArgs args) {
+                    world->getRoot()->addUpdateScript(new Script([&grassMaterialId](ScArgs args) {
+                        Material* grassMat = world->getMaterial(2);
+                        if (grassMat != nullptr) {
+                            grassMat->surfaceColor = { (uint8_t)((sin(time.getElapsedSec()) * 127) + 127),255,(uint8_t)((cos(time.getElapsedSec()) * 127) + 127),0 };
+                        }
+                    }));
+                }));
             };
 
             Behavior* tilemapScene = new Behavior(nullptr); 
@@ -255,7 +251,7 @@ namespace CGEngine {
             world->addScene("meshes", meshScene);
 
             world->loadSceneWithInput("meshes", tilemapScene->getOutput());
-            world->loadScene("tilemap");
+            //world->loadScene("tilemap");
             world->loadScene/*WithInput*/("player"/*, tilemapScene->getOutput()*/);
 		};
 	};
