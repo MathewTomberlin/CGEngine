@@ -20,6 +20,7 @@ uniform int lightCount;
 uniform struct Material {
     vec3 diffuseColor;
     sampler2D diffuseTexture;
+    vec2 diffuseTextureUVScale;
     vec3 specularColor;
     float smoothnessFactor;
     float opacity;
@@ -81,10 +82,10 @@ void main() {
     vec3 surfaceNormal = normalize(transpose(inverse(mat3(model))) * normal);
     vec3 surfacePos = vec3(model * vec4(vertex, 1));
     vec4 materialColor = vec4(normalize(material.diffuseColor),1);
-    vec4 surfaceColor = texture(material.diffuseTexture, uv) * materialColor;
+    vec4 surfaceColor = texture(material.diffuseTexture, (uv * material.diffuseTextureUVScale)) * materialColor;
     vec3 surfaceViewDir = normalize(cameraPosition - surfacePos);
     float opacity = clamp(material.opacity,0.0,1.0);
-    float surfaceOpacity = min(surfaceColor.a, opacity);
+    float surfaceOpacity = min(surfaceColor.a , opacity);
 
     //combine color from all the lights
     vec3 linearColor = vec3(0);
