@@ -213,8 +213,10 @@ namespace CGEngine {
                 id_t grassMaterialId = world->createMaterial(MaterialParameters("grass_tile.png"));
                 Material* grassMaterial = world->getMaterial(grassMaterialId);
                 grassMaterial->shininess = 0.0f;
-                grassMaterial->surfaceColor = Color::White;
-
+                grassMaterial->diffuseColor = Color::White;
+                grassMaterial->diffuseTextureUVScale = { 10,10 };
+                grassMaterial->diffuseTexture->setRepeated(true);
+                grassMaterial->diffuseTexture->setSmooth(true);
                 //Bodies
                 id_t meshId1 = world->create(new Mesh(cubeModel, Transformation3D({0,5,-10}, cubeScale), brickMaterial));
                 id_t meshId2 = world->create(new Mesh(cubeModel, Transformation3D({ 0,-5,-10 }, cubeScale), brickMaterial));
@@ -227,11 +229,11 @@ namespace CGEngine {
                 id_t meshId3 = world->create(new Mesh(cubeModel, Transformation3D({ 0,0,-20 }, cubeScale), grassMaterial));
                 Body* planeBody = world->bodies.get(meshId3);
                 planeBody->get<Mesh*>()->scale({ 100.f,100.f,0.0001f });
-                world->getRoot()->setTimer(15.0f, new Script([&grassMaterialId](ScArgs args) {
-                    world->getRoot()->addUpdateScript(new Script([&grassMaterialId](ScArgs args) {
-                        Material* grassMat = world->getMaterial(2);
+                planeBody->setTimer(15.0f, new Script([](ScArgs args) {
+                    args.caller->addUpdateScript(new Script([](ScArgs args) {
+                        Material* grassMat = world->getMaterial(args.caller->get<Mesh*>()->getMaterial()->materialId);
                         if (grassMat != nullptr) {
-                            grassMat->surfaceColor = { (uint8_t)((sin(time.getElapsedSec()) * 127) + 127),255,(uint8_t)((cos(time.getElapsedSec()) * 127) + 127),0 };
+                            grassMat->diffuseColor = { (uint8_t)((sin(time.getElapsedSec()) * 127) + 127),255,(uint8_t)((cos(time.getElapsedSec()) * 127) + 127),0 };
                         }
                     }));
                 }));
