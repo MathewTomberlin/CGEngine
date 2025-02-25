@@ -208,15 +208,19 @@ namespace CGEngine {
                 Light* light2 = new Light({ 0,10,10 }, false, lightParams2);
                 
                 //Materials
-                id_t brickMaterialId = world->createMaterial(MaterialParameters("brick_tile.png"));
+                id_t brickMaterialId = world->createMaterial(SurfaceParameters("brick_tile.png"));
                 Material* brickMaterial = world->getMaterial(brickMaterialId);
-                id_t grassMaterialId = world->createMaterial(MaterialParameters("grass_tile.png"));
+                SurfaceParameters grassMaterialParams = SurfaceParameters("grass_tile.png");
+                grassMaterialParams.smoothnessFactor = 0.0f;
+                grassMaterialParams.diffuseColor = Color::White;
+                grassMaterialParams.diffuseTextureUVScale = { 10,10 };
+                id_t grassMaterialId = world->createMaterial(grassMaterialParams);
                 Material* grassMaterial = world->getMaterial(grassMaterialId);
-                grassMaterial->shininess = 0.0f;
-                grassMaterial->diffuseColor = Color::White;
-                grassMaterial->diffuseTextureUVScale = { 10,10 };
-                grassMaterial->diffuseTexture->setRepeated(true);
-                grassMaterial->diffuseTexture->setSmooth(true);
+                optional<Texture*> grassTexture = grassMaterial->getParameter<Texture*>("diffuseTexture");
+                if (grassTexture.has_value()) {
+                    grassTexture.value()->setRepeated(true);
+                    grassTexture.value()->setSmooth(true);
+                }
                 //Bodies
                 id_t meshId1 = world->create(new Mesh(cubeModel, Transformation3D({0,5,-10}, cubeScale), brickMaterial));
                 id_t meshId2 = world->create(new Mesh(cubeModel, Transformation3D({ 0,-5,-10 }, cubeScale), brickMaterial));
@@ -233,7 +237,7 @@ namespace CGEngine {
                     args.caller->addUpdateScript(new Script([](ScArgs args) {
                         Material* grassMat = world->getMaterial(args.caller->get<Mesh*>()->getMaterial()->materialId);
                         if (grassMat != nullptr) {
-                            grassMat->diffuseColor = { (uint8_t)((sin(time.getElapsedSec()) * 127) + 127),255,(uint8_t)((cos(time.getElapsedSec()) * 127) + 127),0 };
+                            grassMat->setParameter("diffuseColor",Color{(uint8_t)((sin(time.getElapsedSec()) * 127) + 127),255,(uint8_t)((cos(time.getElapsedSec()) * 127) + 127),0}, ParamType::RGBA);
                         }
                     }));
                 }));
