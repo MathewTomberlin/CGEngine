@@ -1,7 +1,11 @@
 #include "Mesh.h"
 
 namespace CGEngine {
-	Mesh::Mesh(VertexModel model, Transformation3D transformation, Material* material, RenderParameters renderParams, ShaderProgramPath shaderPath) : model(model), transformation(transformation), meshTexture(material->diffuseTexture), renderParameters(renderParams), shaderPath(shaderPath), material(material) {
+	Mesh::Mesh(VertexModel model, Transformation3D transformation, Material* material, RenderParameters renderParams) : model(model), transformation(transformation), renderParameters(renderParams), material(material) {
+		optional<Texture*> tex = material->getParameter<Texture*>("diffuseTexture");
+		if (tex.has_value()) {
+			meshTexture = tex.value();
+		}
 		renderer.getModelData(this);
 	};
 
@@ -67,10 +71,6 @@ namespace CGEngine {
 
 	void Mesh::scale(Vector3f delta) {
 		transformation.scale += delta;
-	}
-
-	ShaderProgramPath Mesh::getShaderProgramPaths() {
-		return shaderPath;
 	}
 
 	Material* Mesh::getMaterial() {

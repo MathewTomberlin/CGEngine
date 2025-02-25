@@ -534,7 +534,15 @@ namespace CGEngine {
         return materials.get(materialId);
     }
 
-    id_t World::createMaterial(MaterialParameters params) {
-        return materials.add(new Material(params));
+    id_t World::createMaterial(SurfaceParameters params, ShaderProgramPath shaderPath) {
+        return materials.add(new Material(params, shaderPath));
     }
+
+    id_t World::createMaterial(ShaderProgramPath shaderPath) {
+        return materials.add(new Material(shaderPath));
+    }
+    id_t World::createMaterial(map<string, ParamData> materialParams, ShaderProgramPath shaderPath) {
+        return materials.add(new Material(materialParams, shaderPath));
+    }
+
 }

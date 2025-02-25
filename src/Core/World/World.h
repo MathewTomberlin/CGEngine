@@ -104,7 +104,9 @@ namespace CGEngine {
         /// <returns>The Body's rotation in world space as a normalized direction vector</returns>
         V2f getRight(Transform transform) const;
 
-        id_t createMaterial(MaterialParameters params);
+        id_t createMaterial(ShaderProgramPath shaderPath = ShaderProgramPath());
+        id_t createMaterial(SurfaceParameters params, ShaderProgramPath shaderPath = ShaderProgramPath());
+        id_t createMaterial(map<string,ParamData> materialParams, ShaderProgramPath shaderPath = ShaderProgramPath());
         id_t addMaterial(Material* material);
         Material* getMaterial(id_t materialId);
     private:

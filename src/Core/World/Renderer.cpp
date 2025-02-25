@@ -25,10 +25,9 @@ namespace CGEngine {
 	void Renderer::getModelData(Mesh* mesh) {
 		if (setGLWindowState(true)) {
 			VertexModel model = mesh->getModel();
-			ShaderProgramPath shaderPath = mesh->getShaderProgramPaths();
 			Material* meshMaterial = mesh->getMaterial();
 			//Setup ModelData with drawCount, vertex buffer and array, and shader program
-			ModelData data = ModelData(model.vertexCount, new Program(shaderPath), meshMaterial);
+			ModelData data = ModelData(model.vertexCount, meshMaterial->getProgram(), meshMaterial);
 			glGenBuffers(1, &data.vbo);
 			glGenVertexArrays(1, &data.vao);
 
@@ -121,20 +120,60 @@ namespace CGEngine {
 
 			//Set the uniforms for the shader to use
 			Vector3f camPos = currentCamera->getPosition();
-			glm::vec3 materialSpecularColor = { data.material->specularColor.r,data.material->specularColor.g,data.material->specularColor.b };
-			glm::vec3 materialSurfaceColor = { data.material->diffuseColor.r,data.material->diffuseColor.g,data.material->diffuseColor.b };
-			glm::vec2 materialDiffuseScale = { data.material->diffuseTextureUVScale.x,data.material->diffuseTextureUVScale.y };
 			data.shaders->setUniform("camera", currentCamera->getMatrix());
 			data.shaders->setUniform("model", modelTransform);
 			data.shaders->setUniform("cameraPosition", { camPos.x,camPos.y,camPos.z });
 
-			data.shaders->setUniform("material.diffuseColor", materialSurfaceColor);
-			data.shaders->setUniform("material.diffuseTexture", 0);
-			data.shaders->setUniform("material.diffuseTextureUVScale", materialDiffuseScale);
-			data.shaders->setUniform("material.smoothnessFactor", data.material->shininess);
-			data.shaders->setUniform("material.specularColor", materialSpecularColor);
-			data.shaders->setUniform("material.opacity", data.material->opacity);
-			data.shaders->setUniform("material.gammaCorrected", data.material->gammaCorrected);
+			for (auto iterator = data.material->materialParameters.begin(); iterator != data.material->materialParameters.end(); ++iterator) {
+				string paramName = (*iterator).first;
+				optional<ParamData> paramData = data.material->getParameter(paramName);
+				bool boolData = false;
+				int intData = 0;
+				float floatData = 0.0f;
+				Vector2f v2Data = { 0,0 };
+				Vector3f v3Data = { 0,0,0 };
+				Color colorData = { 0,0,0,0 };
+				if (paramData.has_value()) {
+					any paramVal = paramData.value().data;
+					ParamType paramType = paramData.value().type;
+					switch (paramType) {
+					case ParamType::Bool:
+						boolData = any_cast<bool>(paramVal);
+						data.shaders->setUniform(getUniformObjectPropertyName("material", paramName).c_str(), boolData);
+						break;
+					case ParamType::Int:
+						intData = any_cast<int>(paramVal);
+						data.shaders->setUniform(getUniformObjectPropertyName("material", paramName).c_str(), intData);
+						break;
+					case ParamType::Float:
+						floatData = any_cast<float>(paramVal);
+						data.shaders->setUniform(getUniformObjectPropertyName("material", paramName).c_str(), floatData);
+						break;
+					case ParamType::V2:
+						v2Data = any_cast<Vector2f>(paramVal);
+						data.shaders->setUniform(getUniformObjectPropertyName("material", paramName).c_str(), toGlm(v2Data));
+						break;
+					case ParamType::V3:
+						v3Data = any_cast<Vector3f>(paramVal);
+						data.shaders->setUniform(getUniformObjectPropertyName("material", paramName).c_str(), toGlm(v3Data));
+						break;
+					case ParamType::RGBA:
+						colorData = any_cast<Color>(paramVal);
+						data.shaders->setUniform(getUniformObjectPropertyName("material", paramName).c_str(), toGlm(colorData));
+						break;
+					//case MaterialParameterType::String:
+					//	string stringData = any_cast<string>(paramData);
+					//	data.shaders->setUniform(getUniformObjectPropertyName("material", paramName).c_str(), stringData);
+					//	break;
+					//case MaterialParameterType::Texture2D:
+					//	Vector3f v3Data = any_cast<Vector3f>(paramData);
+					//	data.shaders->setUniform(getUniformObjectPropertyName("material", paramName).c_str(), toGlm(v3Data));
+					//	break;
+					default:
+						break;
+					}
+				}
+			}
 
 			data.shaders->setUniform("lightCount", (int)lights.size());
 			for (size_t i = 0; i < lights.size(); ++i) {
@@ -162,6 +201,12 @@ namespace CGEngine {
 	string Renderer::getUniformArrayPropertyName(string arrayName, int index, string propertyName) {
 		std::ostringstream ss;
 		ss << arrayName << "[" << index << "]." << propertyName;
+		return ss.str();
+	}
+
+	string Renderer::getUniformObjectPropertyName(string objectName, string propertyName) {
+		std::ostringstream ss;
+		ss << objectName << "." << propertyName;
 		return ss.str();
 	}
 
@@ -256,5 +301,15 @@ namespace CGEngine {
 			cout << "GLEW initialized" << "\n";
 		}
 		return state;
+	}
+
+	glm::vec2 Renderer::toGlm(Vector2f v) {
+		return glm::vec2(v.x, v.y);
+	}
+	glm::vec3 Renderer::toGlm(Vector3f v) {
+		return glm::vec3(v.x, v.y, v.z);
+	}
+	glm::vec3 Renderer::toGlm(Color c) {
+		return glm::vec3(c.r, c.g, c.b);
 	}
 }
