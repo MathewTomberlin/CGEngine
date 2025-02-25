@@ -22,14 +22,13 @@ namespace CGEngine {
 	class Mesh;
 
 	struct ModelData {
-		ModelData() :vbo(0), vao(0), drawType(GL_TRIANGLES), drawStart(0), drawCount(0), shaders(NULL), material(nullptr) {};
-		ModelData(GLint drawCount, Program* shaders, Material* material = new Material(), GLint drawStart = 0, GLenum type = GL_TRIANGLES) :vbo(0), vao(0), drawType(type), drawStart(drawStart), drawCount(drawCount), shaders(shaders), material(material) {};
+		ModelData() :vbo(0), vao(0), drawType(GL_TRIANGLES), drawStart(0), drawCount(0), material(nullptr) {};
+		ModelData(GLint drawCount, Material* material = new Material(), GLint drawStart = 0, GLenum type = GL_TRIANGLES) :vbo(0), vao(0), drawType(type), drawStart(drawStart), drawCount(drawCount), material(material) {};
 		GLuint vbo;
 		GLuint vao;
 		GLenum drawType;
 		GLint drawStart;
 		GLint drawCount;
-		Program* shaders;
 		Material* material;
 	};
 	/// <summary>
@@ -91,6 +90,8 @@ namespace CGEngine {
 		Light* getLight(id_t lightId);
 		string getUniformArrayPropertyName(string arrayName, int index, string propertyName);
 		string getUniformObjectPropertyName(string objectName, string propertyName);
+		void setMaterialUniforms(Material* material, Program* program);
+		void setLightUniforms(Light* light, size_t lightIndex, Program* program);
 		glm::vec2 toGlm(Vector2f v);
 		glm::vec3 toGlm(Vector3f v);
 		glm::vec3 toGlm(Color c);
