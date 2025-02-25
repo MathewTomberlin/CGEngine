@@ -1,5 +1,6 @@
 #pragma once
 #include "SFML/Graphics.hpp"
+#include <any>
 using namespace sf;
 using namespace std;
 
@@ -126,5 +127,13 @@ namespace CGEngine {
         Vector3f position;
         Vector3f rotation;
         Vector3f scale;
+    };
+
+    enum ParamType { NA, Bool, Int, Float, V2, V3, RGBA, String, Texture2D };
+
+    struct ParamData {
+        ParamData(any data = 0, ParamType type = ParamType::NA) : data(data), type(type) {};
+        any data;
+        ParamType type;
     };
 }
