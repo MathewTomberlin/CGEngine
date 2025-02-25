@@ -15,11 +15,22 @@ namespace CGEngine {
 		setParameter("diffuseTexturePath", params.diffuseTexturePath, ParamType::String);
 		setParameter("diffuseTextureUVScale", params.diffuseTextureUVScale, ParamType::V2);
 		setParameter("diffuseTexture", textures->load(params.diffuseTexturePath), ParamType::Texture2D);
-		setParameter("smoothnessFactor", params.smoothnessFactor, ParamType::Float);
-		setParameter("opacity", params.opacity, ParamType::Float);
-		setParameter("specularColor", params.specularColor, ParamType::RGBA);
 		setParameter("diffuseColor", params.diffuseColor, ParamType::RGBA);
-		setParameter("gammaCorrected", params.gammaCorrected, ParamType::Bool);
+		setParameter("specularTexturePath", params.specularTexturePath, ParamType::String);
+		setParameter("specularTextureUVScale", params.specularTextureUVScale, ParamType::V2);
+		setParameter("specularTexture", textures->load(params.specularTexturePath), ParamType::Texture2D);
+		setParameter("specularColor", params.specularColor, ParamType::RGBA);
+		setParameter("smoothnessFactor", params.smoothnessFactor, ParamType::Float);
+		setParameter("opacityTextureUVScale", params.opacityTextureUVScale, ParamType::V2);
+		setParameter("opacityTexture", textures->load(params.opacityTexturePath), ParamType::Texture2D);
+		setParameter("opacity", params.opacity, ParamType::Float);
+		setParameter("alphaCutoff", params.alphaCutoff, ParamType::Float);
+		setParameter("gamma", params.gamma, ParamType::Float);
+		setParameter("useGammaCorrection", params.useGammaCorrection, ParamType::Bool);
+		setParameter("useDiffuseTexture", params.useDiffuseTexture, ParamType::Bool);
+		setParameter("useSpecularTexture", params.useSpecularTexture, ParamType::Bool);
+		setParameter("useOpacityTexture", params.useOpacityTexture, ParamType::Bool);
+		setParameter("useLighting", params.useLighting, ParamType::Bool);
 	};
 
 	Material::Material(map<string, ParamData> materialParameters, ShaderProgramPath shaderPath) : Material(shaderPath) {

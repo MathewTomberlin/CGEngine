@@ -19,7 +19,7 @@ namespace CGEngine {
 		Mesh(VertexModel model, Transformation3D transformation = Transformation3D(), Material* material = new Material(), RenderParameters renderParams = RenderParameters());
 
 		void render(Transform parentTransform);
-		void bindTexture();
+		void bindTexture(Texture* texture);
 		void setPosition(Vector3f pos);
 		void move(Vector3f delta);
 		void setRotation(Vector3f rot);

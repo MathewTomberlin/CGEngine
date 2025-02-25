@@ -19,7 +19,6 @@ namespace CGEngine {
 
 	void Mesh::render(Transform transform) {
 		renderer.pullGL();
-		bindTexture();
 
 		//Combine SFML entity transform components with 3D transformation components
 		Vector2f position2d = world->getGlobalPosition(transform);
@@ -36,18 +35,18 @@ namespace CGEngine {
 		renderer.commitGL();
 	}
 
-	void Mesh::bindTexture() {
+	void Mesh::bindTexture(Texture* texture) {
 		if (renderer.setGLWindowState(true)) {
 			//Generate texture mipmaps and bind or clear
-			if (meshTexture != nullptr) {
-				(void)meshTexture->generateMipmap();
-				Texture::bind(&(*meshTexture));
+			if (texture != nullptr) {
+				(void)texture->generateMipmap();
+				Texture::bind(&(*texture));
 			}
 			else {
 				Texture::bind(nullptr);
 			}
+			renderer.setGLWindowState(false);
 		}
-		renderer.setGLWindowState(false);
 	}
 
 	void Mesh::setPosition(Vector3f pos) {

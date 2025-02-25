@@ -14,7 +14,6 @@ namespace CGEngine {
 
 		// Enable Z-buffer read and write
 		glEnable(GL_DEPTH_TEST);
-		glDepthFunc(GL_LESS);
 		glEnable(GL_BLEND);
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
@@ -132,7 +131,6 @@ namespace CGEngine {
 			for (size_t i = 0; i < lights.size(); ++i) {
 				setLightUniforms(lights.get(i), i, program);
 			}
-
 			// Draw the cube
 			glDrawArrays(GL_TRIANGLES, 0, model.vertices.size()/5);
 
@@ -153,6 +151,7 @@ namespace CGEngine {
 			Vector2f v2Data = { 0,0 };
 			Vector3f v3Data = { 0,0,0 };
 			Color colorData = { 0,0,0,0 };
+			Texture* textureData = nullptr;
 			if (paramData.has_value()) {
 				any paramVal = paramData.value().data;
 				ParamType paramType = paramData.value().type;
@@ -181,10 +180,17 @@ namespace CGEngine {
 					colorData = any_cast<Color>(paramVal);
 					program->setUniform(getUniformObjectPropertyName("material", paramName).c_str(), toGlm(colorData));
 					break;
-				//case MaterialParameterType::String:
-				//	break;
-				//case MaterialParameterType::Texture2D:
-				//	break;
+				case ParamType::Texture2D:
+					textureData = any_cast<Texture*>(paramVal);
+					if (textureData != nullptr) {
+						glActiveTexture(GL_TEXTURE0 + textureData->getNativeHandle());
+						glBindTexture(GL_TEXTURE_2D, textureData->getNativeHandle());
+						program->setUniform(getUniformObjectPropertyName("material", paramName).c_str(), (int)textureData->getNativeHandle());
+						glActiveTexture(GL_TEXTURE0);
+					}
+					break;
+				//case ParamType::String:
+					//	break;
 				default:
 					break;
 				}
