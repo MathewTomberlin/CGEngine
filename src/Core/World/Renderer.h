@@ -16,6 +16,7 @@
 #include "../Light/Light.h"
 #include "../Material/Material.h"
 using namespace std;
+using namespace sf;
 
 namespace CGEngine {
 	class Mesh;
@@ -89,6 +90,10 @@ namespace CGEngine {
 		void removeLight(id_t lightId);
 		Light* getLight(id_t lightId);
 		string getUniformArrayPropertyName(string arrayName, int index, string propertyName);
+		string getUniformObjectPropertyName(string objectName, string propertyName);
+		glm::vec2 toGlm(Vector2f v);
+		glm::vec3 toGlm(Vector3f v);
+		glm::vec3 toGlm(Color c);
 	private:
 		friend class World;
 		RenderWindow* window = nullptr;
