@@ -25,9 +25,10 @@ namespace CGEngine {
 	void Renderer::getModelData(Mesh* mesh) {
 		if (setGLWindowState(true)) {
 			VertexModel model = mesh->getModel();
-			Material* meshMaterial = mesh->getMaterial();
+			Material* material = mesh->getMaterial();
+			Program* program = material->getProgram();
 			//Setup ModelData with drawCount, vertex buffer and array, and shader program
-			ModelData data = ModelData(model.vertexCount, meshMaterial->getProgram(), meshMaterial);
+			ModelData data = ModelData(model.vertexCount, material);
 			glGenBuffers(1, &data.vbo);
 			glGenVertexArrays(1, &data.vao);
 
@@ -39,12 +40,12 @@ namespace CGEngine {
 			auto textureCoordOffset = sizeof(GLfloat) * 3;
 			auto normalOffset = sizeof(GLfloat) * 5;
 			//Enable and prepare vertex and texture coordinate attribute arrays
-			glEnableVertexAttribArray(data.shaders->attrib("position"));
-			glVertexAttribPointer(data.shaders->attrib("position"), 3, GL_FLOAT, GL_FALSE, stride, NULL);
-			glEnableVertexAttribArray(data.shaders->attrib("texCoord"));
-			glVertexAttribPointer(data.shaders->attrib("texCoord"), 2, GL_FLOAT, GL_FALSE, stride, (void*)textureCoordOffset);
-			glEnableVertexAttribArray(data.shaders->attrib("vertNormal"));
-			glVertexAttribPointer(data.shaders->attrib("vertNormal"), 3, GL_FLOAT, GL_FALSE, stride, (void*)normalOffset);
+			glEnableVertexAttribArray(program->attrib("position"));
+			glVertexAttribPointer(program->attrib("position"), 3, GL_FLOAT, GL_FALSE, stride, NULL);
+			glEnableVertexAttribArray(program->attrib("texCoord"));
+			glVertexAttribPointer(program->attrib("texCoord"), 2, GL_FLOAT, GL_FALSE, stride, (void*)textureCoordOffset);
+			glEnableVertexAttribArray(program->attrib("vertNormal"));
+			glVertexAttribPointer(program->attrib("vertNormal"), 3, GL_FLOAT, GL_FALSE, stride, (void*)normalOffset);
 			glBindVertexArray(0);
 
 			mesh->setModelData(data);
@@ -115,77 +116,21 @@ namespace CGEngine {
 
 		if (renderer.setGLWindowState(true)) {
 			glBindVertexArray(data.vao);
+			Program* program = data.material->getProgram();
 			//Bind the shaders.
-			data.shaders->use();
+			program->use();
 
 			//Set the uniforms for the shader to use
 			Vector3f camPos = currentCamera->getPosition();
-			data.shaders->setUniform("camera", currentCamera->getMatrix());
-			data.shaders->setUniform("model", modelTransform);
-			data.shaders->setUniform("cameraPosition", { camPos.x,camPos.y,camPos.z });
+			program->setUniform("model", modelTransform);
+			program->setUniform("camera", currentCamera->getMatrix());
+			program->setUniform("cameraPosition", { camPos.x,camPos.y,camPos.z });
 
-			for (auto iterator = data.material->materialParameters.begin(); iterator != data.material->materialParameters.end(); ++iterator) {
-				string paramName = (*iterator).first;
-				optional<ParamData> paramData = data.material->getParameter(paramName);
-				bool boolData = false;
-				int intData = 0;
-				float floatData = 0.0f;
-				Vector2f v2Data = { 0,0 };
-				Vector3f v3Data = { 0,0,0 };
-				Color colorData = { 0,0,0,0 };
-				if (paramData.has_value()) {
-					any paramVal = paramData.value().data;
-					ParamType paramType = paramData.value().type;
-					switch (paramType) {
-					case ParamType::Bool:
-						boolData = any_cast<bool>(paramVal);
-						data.shaders->setUniform(getUniformObjectPropertyName("material", paramName).c_str(), boolData);
-						break;
-					case ParamType::Int:
-						intData = any_cast<int>(paramVal);
-						data.shaders->setUniform(getUniformObjectPropertyName("material", paramName).c_str(), intData);
-						break;
-					case ParamType::Float:
-						floatData = any_cast<float>(paramVal);
-						data.shaders->setUniform(getUniformObjectPropertyName("material", paramName).c_str(), floatData);
-						break;
-					case ParamType::V2:
-						v2Data = any_cast<Vector2f>(paramVal);
-						data.shaders->setUniform(getUniformObjectPropertyName("material", paramName).c_str(), toGlm(v2Data));
-						break;
-					case ParamType::V3:
-						v3Data = any_cast<Vector3f>(paramVal);
-						data.shaders->setUniform(getUniformObjectPropertyName("material", paramName).c_str(), toGlm(v3Data));
-						break;
-					case ParamType::RGBA:
-						colorData = any_cast<Color>(paramVal);
-						data.shaders->setUniform(getUniformObjectPropertyName("material", paramName).c_str(), toGlm(colorData));
-						break;
-					//case MaterialParameterType::String:
-					//	string stringData = any_cast<string>(paramData);
-					//	data.shaders->setUniform(getUniformObjectPropertyName("material", paramName).c_str(), stringData);
-					//	break;
-					//case MaterialParameterType::Texture2D:
-					//	Vector3f v3Data = any_cast<Vector3f>(paramData);
-					//	data.shaders->setUniform(getUniformObjectPropertyName("material", paramName).c_str(), toGlm(v3Data));
-					//	break;
-					default:
-						break;
-					}
-				}
-			}
+			setMaterialUniforms(data.material, program);
 
-			data.shaders->setUniform("lightCount", (int)lights.size());
+			program->setUniform("lightCount", (int)lights.size());
 			for (size_t i = 0; i < lights.size(); ++i) {
-				glm::vec3 colorIntensities = { lights.get(i)->parameters.colorIntensities.x,lights.get(i)->parameters.colorIntensities.y,lights.get(i)->parameters.colorIntensities.z };
-				glm::vec3 lightDirection = { lights.get(i)->parameters.lightDirection.x,lights.get(i)->parameters.lightDirection.y,lights.get(i)->parameters.lightDirection.z };
-				data.shaders->setUniform(getUniformArrayPropertyName("lights",i,"position").c_str(), lights.get(i)->position);
-				data.shaders->setUniform(getUniformArrayPropertyName("lights", i, "brightness").c_str(), lights.get(i)->parameters.brightness);
-				data.shaders->setUniform(getUniformArrayPropertyName("lights", i, "intensities").c_str(), colorIntensities);
-				data.shaders->setUniform(getUniformArrayPropertyName("lights", i, "attenuation").c_str(), lights.get(i)->parameters.attenuation);
-				data.shaders->setUniform(getUniformArrayPropertyName("lights", i, "ambiance").c_str(), lights.get(i)->parameters.ambiance);
-				data.shaders->setUniform(getUniformArrayPropertyName("lights", i, "coneAngle").c_str(), lights.get(i)->parameters.coneAngle);
-				data.shaders->setUniform(getUniformArrayPropertyName("lights", i, "lightDirection").c_str(), lightDirection);
+				setLightUniforms(lights.get(i), i, program);
 			}
 
 			// Draw the cube
@@ -193,9 +138,68 @@ namespace CGEngine {
 
 			// Unbind varray, shaders, and texture
 			glBindVertexArray(0);
-			data.shaders->stop();
+			program->stop();
 		}
 		if (renderer.setGLWindowState(false));
+	}
+
+	void Renderer::setMaterialUniforms(Material* material, Program* program) {
+		for (auto iterator = material->materialParameters.begin(); iterator != material->materialParameters.end(); ++iterator) {
+			string paramName = (*iterator).first;
+			optional<ParamData> paramData = material->getParameter(paramName);
+			bool boolData = false;
+			int intData = 0;
+			float floatData = 0.0f;
+			Vector2f v2Data = { 0,0 };
+			Vector3f v3Data = { 0,0,0 };
+			Color colorData = { 0,0,0,0 };
+			if (paramData.has_value()) {
+				any paramVal = paramData.value().data;
+				ParamType paramType = paramData.value().type;
+				switch (paramType) {
+				case ParamType::Bool:
+					boolData = any_cast<bool>(paramVal);
+					program->setUniform(getUniformObjectPropertyName("material", paramName).c_str(), boolData);
+					break;
+				case ParamType::Int:
+					intData = any_cast<int>(paramVal);
+					program->setUniform(getUniformObjectPropertyName("material", paramName).c_str(), intData);
+					break;
+				case ParamType::Float:
+					floatData = any_cast<float>(paramVal);
+					program->setUniform(getUniformObjectPropertyName("material", paramName).c_str(), floatData);
+					break;
+				case ParamType::V2:
+					v2Data = any_cast<Vector2f>(paramVal);
+					program->setUniform(getUniformObjectPropertyName("material", paramName).c_str(), toGlm(v2Data));
+					break;
+				case ParamType::V3:
+					v3Data = any_cast<Vector3f>(paramVal);
+					program->setUniform(getUniformObjectPropertyName("material", paramName).c_str(), toGlm(v3Data));
+					break;
+				case ParamType::RGBA:
+					colorData = any_cast<Color>(paramVal);
+					program->setUniform(getUniformObjectPropertyName("material", paramName).c_str(), toGlm(colorData));
+					break;
+				//case MaterialParameterType::String:
+				//	break;
+				//case MaterialParameterType::Texture2D:
+				//	break;
+				default:
+					break;
+				}
+			}
+		}
+	}
+
+	void Renderer::setLightUniforms(Light* light, size_t lightIndex, Program* program) {
+		program->setUniform(getUniformArrayPropertyName("lights", lightIndex, "position").c_str(), light->position);
+		program->setUniform(getUniformArrayPropertyName("lights", lightIndex, "brightness").c_str(), light->parameters.brightness);
+		program->setUniform(getUniformArrayPropertyName("lights", lightIndex, "intensities").c_str(), toGlm(light->parameters.colorIntensities));
+		program->setUniform(getUniformArrayPropertyName("lights", lightIndex, "attenuation").c_str(), light->parameters.attenuation);
+		program->setUniform(getUniformArrayPropertyName("lights", lightIndex, "ambiance").c_str(), light->parameters.ambiance);
+		program->setUniform(getUniformArrayPropertyName("lights", lightIndex, "coneAngle").c_str(), light->parameters.coneAngle);
+		program->setUniform(getUniformArrayPropertyName("lights", lightIndex, "lightDirection").c_str(), toGlm(light->parameters.lightDirection));
 	}
 
 	string Renderer::getUniformArrayPropertyName(string arrayName, int index, string propertyName) {
