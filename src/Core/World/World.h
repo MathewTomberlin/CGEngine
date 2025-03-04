@@ -36,7 +36,7 @@ namespace CGEngine {
         //Bounds Renderings
         void setBoundsRenderingEnabled(bool enabled);
         void setBoundsRenderingEnabled(bool enabled, Body* body);
-        bool getBoundsRenderingEnabled();
+        bool getBoundsRenderingEnabled() const;
         void setBoundsColor(Color color);
         void setBoundsColor(Color color, Body* body);
         void setBoundsThickness(float thickness);
