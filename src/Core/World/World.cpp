@@ -344,8 +344,10 @@ namespace CGEngine {
                 callScripts(onUpdateEvent);
                 input->gather();
                 
-                renderer.clearGL(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-                if (!renderer.processRender()) return;
+                if (window->isOpen()) {
+                    renderer.clearGL(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                    if (!renderer.processRender()) return;
+                }
             }
         }
     }
@@ -420,16 +422,12 @@ namespace CGEngine {
     }
 
     id_t World::receiveBodyId(Body* body) {
-        //return ids.receive(&body->bodyId);
-
         id_t id = bodies.add(body);
         body->bodyId = id;
         return id;
     }
 
     void World::refundBodyId(Body* body) {
-        //ids.refund(&body->bodyId);
-
         optional<id_t> bodyId = body->getId();
         if (bodyId.has_value()) {
             bodies.remove(bodyId.value());
@@ -450,7 +448,7 @@ namespace CGEngine {
         }
     };
 
-    bool World::getBoundsRenderingEnabled() {
+    bool World:: getBoundsRenderingEnabled() const {
         return boundsRendering;
     };
 
