@@ -72,7 +72,7 @@ namespace CGEngine {
 		// Make the window no longer the active window for OpenGL calls
 		bool success = window->setActive(state);
 		if (!success) {
-			std::cerr << "Failed to set window to " << ((state) ? "active" : "inactive") << std::endl;
+			cerr << "Failed to set window to " << ((state) ? "active" : "inactive") << endl;
 		}
 		return success;
 	}
