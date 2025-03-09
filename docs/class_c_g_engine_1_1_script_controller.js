@@ -1,6 +1,5 @@
 var class_c_g_engine_1_1_script_controller =
 [
-    [ "ScriptController", "class_c_g_engine_1_1_script_controller.html#a59e930cb02cb955dd596236f0169ba1d", null ],
     [ "addDeleteScript", "class_c_g_engine_1_1_script_controller.html#ad370e11dbb4c0758c536615f851d3ef3", null ],
     [ "addScript", "class_c_g_engine_1_1_script_controller.html#a879ba558a20abd6304a7e7287059ad13", null ],
     [ "addScriptEventsByDomain", "class_c_g_engine_1_1_script_controller.html#ac50d9e22568563b053678cd2f0aa75a8", null ],
@@ -15,6 +14,5 @@ var class_c_g_engine_1_1_script_controller =
     [ "eraseScript", "class_c_g_engine_1_1_script_controller.html#a161b1d662e6a4ef231df894a5010314a", null ],
     [ "eraseStartScript", "class_c_g_engine_1_1_script_controller.html#a5a2d17c99ae45b5ce0f7330e520a7db8", null ],
     [ "eraseUpdateScript", "class_c_g_engine_1_1_script_controller.html#a243184a7e2d5b8080dcaadf26a0d51d3", null ],
-    [ "removeScript", "class_c_g_engine_1_1_script_controller.html#ac96deb1375fd5f158b64890725e20baa", null ],
-    [ "scripts", "class_c_g_engine_1_1_script_controller.html#ab720ff05544cd0c3d0559f7d77d666e7", null ]
+    [ "removeScript", "class_c_g_engine_1_1_script_controller.html#ac96deb1375fd5f158b64890725e20baa", null ]
 ];

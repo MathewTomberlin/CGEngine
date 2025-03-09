@@ -1,8 +1,5 @@
 var class_c_g_engine_1_1_body =
 [
-    [ "Body", "class_c_g_engine_1_1_body.html#a938b62e97c106fe02a148fa12eb4a9e6", null ],
-    [ "Body", "class_c_g_engine_1_1_body.html#a1c075a23301641b979bbd81920441c5f", null ],
-    [ "~Body", "class_c_g_engine_1_1_body.html#a1d298b26338b15836d193004dd0991ae", null ],
     [ "Body", "class_c_g_engine_1_1_body.html#a886df99e4f91c2cc1a4445b5835657c6", null ],
     [ "addBehavior", "class_c_g_engine_1_1_body.html#ab9ddf4c4cd70039d7f49b23c158e2813", null ],
     [ "addIntersectScript", "class_c_g_engine_1_1_body.html#a8a1f96d01078242bb9c40a70a11f00fb", null ],
@@ -35,7 +32,6 @@ var class_c_g_engine_1_1_body =
     [ "exchange", "class_c_g_engine_1_1_body.html#af2bf592b3684a7bf1ad79bbf3928ca74", null ],
     [ "exchangeBody", "class_c_g_engine_1_1_body.html#af7945688cc93d09651c7bf8a2bd951f4", null ],
     [ "get", "class_c_g_engine_1_1_body.html#a34f9c304b61de996dbfaf274dbbd2b59", null ],
-    [ "get", "class_c_g_engine_1_1_body.html#a724b94329f19fb8a24c248391fb1420b", null ],
     [ "getBehavior", "class_c_g_engine_1_1_body.html#a3b6fe31a50c5ce3d62e54f94d568c90a", null ],
     [ "getBoundsRenderingEnabled", "class_c_g_engine_1_1_body.html#a6c1838997d8d56f55b4714139e00c10d", null ],
     [ "getForward", "class_c_g_engine_1_1_body.html#a9b35ab9074777689c4a4655f8278c538", null ],
@@ -82,9 +78,6 @@ var class_c_g_engine_1_1_body =
     [ "update", "class_c_g_engine_1_1_body.html#a06eb58c69c8179c07543664a6fb62480", null ],
     [ "viewToGlobal", "class_c_g_engine_1_1_body.html#a403877144eb0e9fcb8e9cd55c39d3f8b", null ],
     [ "viewToLocal", "class_c_g_engine_1_1_body.html#a5b3f3f0cfb182228fe65eb7c803278e2", null ],
-    [ "InputMap", "class_c_g_engine_1_1_body.html#af967b515269908e4b2313874320c714a", null ],
-    [ "Renderer", "class_c_g_engine_1_1_body.html#a70538530bc36e033e360880ef311df61", null ],
-    [ "World", "class_c_g_engine_1_1_body.html#a7b4bcdf992c21ae83363f25df05b1d25", null ],
     [ "alignment", "class_c_g_engine_1_1_body.html#ab3c484aa80766063105df7f0921f1c57", null ],
     [ "getBodyGlobalBounds", "class_c_g_engine_1_1_body.html#a253e8b17400847aee96e47668ffea126", null ],
     [ "getBodyLocalBounds", "class_c_g_engine_1_1_body.html#af83d04301de0c26bd62f726d9abad18e", null ],
