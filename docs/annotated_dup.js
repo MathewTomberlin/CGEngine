@@ -45,6 +45,7 @@ var annotated_dup =
       [ "TextProperties", "struct_c_g_engine_1_1_text_properties.html", null ],
       [ "TextureCache", "class_c_g_engine_1_1_texture_cache.html", null ],
       [ "Tilemap", "class_c_g_engine_1_1_tilemap.html", null ],
+      [ "TilemapScene", "class_c_g_engine_1_1_tilemap_scene.html", null ],
       [ "Timer", "class_c_g_engine_1_1_timer.html", null ],
       [ "TimerMap", "class_c_g_engine_1_1_timer_map.html", "class_c_g_engine_1_1_timer_map" ],
       [ "Transformation", "struct_c_g_engine_1_1_transformation.html", null ],
