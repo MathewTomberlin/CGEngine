@@ -44,7 +44,7 @@ var NAVTREE =
 var NAVTREEINDEX =
 [
 "_actuator_8h_source.html",
-"struct_c_g_engine_1_1_transformation3_d.html"
+"struct_c_g_engine_1_1_text_properties.html"
 ];
 
 var SYNCONMSG = 'click to disable panel synchronization';

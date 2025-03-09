@@ -15,7 +15,8 @@ var hierarchy =
     [ "CGEngine::InputDataController", "class_c_g_engine_1_1_input_data_controller.html", [
       [ "CGEngine::Behavior", "class_c_g_engine_1_1_behavior.html", [
         [ "CGEngine::AnimationBehavior", "class_c_g_engine_1_1_animation_behavior.html", null ],
-        [ "CGEngine::BoundsBehavior", "class_c_g_engine_1_1_bounds_behavior.html", null ]
+        [ "CGEngine::BoundsBehavior", "class_c_g_engine_1_1_bounds_behavior.html", null ],
+        [ "CGEngine::TilemapScene", "class_c_g_engine_1_1_tilemap_scene.html", null ]
       ] ],
       [ "CGEngine::Script", "class_c_g_engine_1_1_script.html", [
         [ "CGEngine::Actuator", "class_c_g_engine_1_1_actuator.html", null ]
