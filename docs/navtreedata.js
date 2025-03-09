@@ -24,49 +24,27 @@
 */
 var NAVTREE =
 [
-  [ "CG Engine", "index.html", [
-    [ "Namespaces", "namespaces.html", [
-      [ "Namespace List", "namespaces.html", "namespaces_dup" ],
-      [ "Namespace Members", "namespacemembers.html", [
-        [ "All", "namespacemembers.html", null ],
-        [ "Functions", "namespacemembers_func.html", null ],
-        [ "Variables", "namespacemembers_vars.html", null ],
-        [ "Typedefs", "namespacemembers_type.html", null ],
-        [ "Enumerations", "namespacemembers_enum.html", null ],
-        [ "Enumerator", "namespacemembers_eval.html", null ]
-      ] ]
-    ] ],
+  [ "CGEngine", "index.html", [
     [ "Classes", "annotated.html", [
       [ "Class List", "annotated.html", "annotated_dup" ],
       [ "Class Index", "classes.html", null ],
       [ "Class Hierarchy", "hierarchy.html", "hierarchy" ],
       [ "Class Members", "functions.html", [
-        [ "All", "functions.html", "functions_dup" ],
-        [ "Functions", "functions_func.html", "functions_func" ],
-        [ "Variables", "functions_vars.html", null ],
-        [ "Related Symbols", "functions_rela.html", null ]
+        [ "All", "functions.html", null ],
+        [ "Functions", "functions_func.html", null ],
+        [ "Variables", "functions_vars.html", null ]
       ] ]
     ] ],
     [ "Files", "files.html", [
-      [ "File List", "files.html", "files_dup" ],
-      [ "File Members", "globals.html", [
-        [ "All", "globals.html", null ],
-        [ "Functions", "globals_func.html", null ],
-        [ "Macros", "globals_defs.html", null ]
-      ] ]
+      [ "File List", "files.html", "files_dup" ]
     ] ]
   ] ]
 ];
 
 var NAVTREEINDEX =
 [
-"_actuator_8h.html",
-"class_c_g_engine_1_1_body.html#a9996555574c42fb63c087bdf6311b09b",
-"class_c_g_engine_1_1_material.html#a70538530bc36e033e360880ef311df61",
-"class_c_g_engine_1_1_screen.html#add400fea25bd65cf41e3681408211cd9",
-"class_c_g_engine_1_1_v2f.html",
-"namespace_c_g_engine.html#a094d40389df016c2f15882bde4c30e5dab22922abdb5730ee47299790e8af1dce",
-"struct_c_g_engine_1_1_sc_args.html#aa2f4a95161fc3215ed793aa8ecd5da20"
+"_actuator_8h_source.html",
+"struct_c_g_engine_1_1_transformation3_d.html"
 ];
 
 var SYNCONMSG = 'click to disable panel synchronization';
