@@ -14,16 +14,23 @@ namespace CGEngine {
 	Material::Material(SurfaceParameters params, ShaderProgramPath shaderPath) : Material(shaderPath) {
 		setParameter("diffuseTexturePath", params.diffuseTexturePath, ParamType::String);
 		setParameter("diffuseTextureUVScale", params.diffuseTextureUVScale, ParamType::V2);
+		setParameter("diffuseTextureScrollSpeed", params.diffuseTextureScrollSpeed, ParamType::V2);
+		setParameter("diffuseTextureOffset", params.diffuseTextureOffset, ParamType::V2);
 		setParameter("diffuseTexture", textures->load(params.diffuseTexturePath), ParamType::Texture2D);
 		setParameter("diffuseColor", params.diffuseColor, ParamType::RGBA);
 		setParameter("specularTexturePath", params.specularTexturePath, ParamType::String);
 		setParameter("specularTextureUVScale", params.specularTextureUVScale, ParamType::V2);
+		setParameter("specularTextureScrollSpeed", params.specularTextureScrollSpeed, ParamType::V2);
+		setParameter("specularTextureOffset", params.specularTextureOffset, ParamType::V2);
 		setParameter("specularTexture", textures->load(params.specularTexturePath), ParamType::Texture2D);
 		setParameter("specularColor", params.specularColor, ParamType::RGBA);
 		setParameter("smoothnessFactor", params.smoothnessFactor, ParamType::Float);
 		setParameter("opacityTextureUVScale", params.opacityTextureUVScale, ParamType::V2);
+		setParameter("opacityTextureScrollSpeed", params.opacityTextureScrollSpeed, ParamType::V2);
+		setParameter("opacityTextureOffset", params.opacityTextureOffset, ParamType::V2);
 		setParameter("opacityTexture", textures->load(params.opacityTexturePath), ParamType::Texture2D);
 		setParameter("opacity", params.opacity, ParamType::Float);
+		setParameter("opacityMasked", params.opacityMasked, ParamType::Bool);
 		setParameter("alphaCutoff", params.alphaCutoff, ParamType::Float);
 		setParameter("gamma", params.gamma, ParamType::Float);
 		setParameter("useGammaCorrection", params.useGammaCorrection, ParamType::Bool);
