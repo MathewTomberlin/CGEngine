@@ -1,6 +1,6 @@
 #include "../Engine/Engine.h"
 #include "Renderer.h"
-#include "../../Standard/Meshes/CommonVArrays.h"
+#include "../../Standard/Models/CommonModels.h"
 namespace CGEngine {
 	void Renderer::setWindow(RenderWindow* window) {
 		this->window = window;
@@ -24,10 +24,10 @@ namespace CGEngine {
 	void Renderer::getModelData(Mesh* mesh) {
 		if (setGLWindowState(true)) {
 			VertexModel model = mesh->getModel();
-			Material* material = mesh->getMaterial();
-			Program* program = material->getProgram();
+			vector<Material*> material = mesh->getMaterials();
+			Program* program = material[0]->getProgram();
 			//Setup ModelData with drawCount, vertex buffer and array, and shader program
-			ModelData data = ModelData(model.vertexCount, material);
+			ModelData data = ModelData(model.vertexCount, { material });
 			glGenBuffers(1, &data.vbo);
 			glGenVertexArrays(1, &data.vao);
 
@@ -35,16 +35,19 @@ namespace CGEngine {
 			//Bind the vertex buffer and pass in the vertex data
 			glBindBuffer(GL_ARRAY_BUFFER, data.vbo);
 			glBufferData(GL_ARRAY_BUFFER, model.dataSpan, model.vertices.data(), GL_STATIC_DRAW);
-			auto stride = sizeof(GLfloat) * 8;
+			auto stride = sizeof(GLfloat) * 9;
 			auto textureCoordOffset = sizeof(GLfloat) * 3;
 			auto normalOffset = sizeof(GLfloat) * 5;
-			//Enable and prepare vertex and texture coordinate attribute arrays
+			auto materialIdOffset = sizeof(GLfloat) * 8;
+			//Enable and prepare vertex, texture coordinate, normal, and textureId attribute arrays
 			glEnableVertexAttribArray(program->attrib("position"));
 			glVertexAttribPointer(program->attrib("position"), 3, GL_FLOAT, GL_FALSE, stride, NULL);
 			glEnableVertexAttribArray(program->attrib("texCoord"));
 			glVertexAttribPointer(program->attrib("texCoord"), 2, GL_FLOAT, GL_FALSE, stride, (void*)textureCoordOffset);
 			glEnableVertexAttribArray(program->attrib("vertNormal"));
 			glVertexAttribPointer(program->attrib("vertNormal"), 3, GL_FLOAT, GL_FALSE, stride, (void*)normalOffset);
+			glEnableVertexAttribArray(program->attrib("materialId"));
+			glVertexAttribPointer(program->attrib("materialId"), 1, GL_FLOAT, GL_FALSE, stride, (void*)materialIdOffset);
 			glBindVertexArray(0);
 
 			mesh->setModelData(data);
@@ -104,7 +107,6 @@ namespace CGEngine {
 	}
 
 	void Renderer::renderMesh(VertexModel model, Transformation3D transform, ModelData data) {
-		//TODO: Apply scale
 		glm::mat4 modelPos = glm::translate(glm::vec3(transform.position.x, transform.position.y, transform.position.z));
 		glm::mat4 modelRotX = glm::rotate(transform.rotation.x, glm::vec3(1.f, 0.f, 0.f));
 		glm::mat4 modelRotY = glm::rotate(transform.rotation.y, glm::vec3(0.f, 1.f, 0.f));
@@ -115,7 +117,9 @@ namespace CGEngine {
 
 		if (renderer.setGLWindowState(true)) {
 			glBindVertexArray(data.vao);
-			Program* program = data.material->getProgram();
+			boundTextures = 0;
+			//TODO: Move Shader out to model
+			Program* program = data.materials[0]->getProgram();
 			//Bind the shaders.
 			program->use();
 
@@ -125,7 +129,9 @@ namespace CGEngine {
 			program->setUniform("camera", currentCamera->getMatrix());
 			program->setUniform("cameraPosition", { camPos.x,camPos.y,camPos.z });
 
-			setMaterialUniforms(data.material, program);
+			for (int i = 0; i < data.materials.size(); ++i) {
+				setMaterialUniforms(data.materials.at(i), program, i);
+			}
 
 			program->setUniform("lightCount", (int)lights.size());
 			for (size_t i = 0; i < lights.size(); ++i) {
@@ -136,12 +142,13 @@ namespace CGEngine {
 
 			// Unbind varray, shaders, and texture
 			glBindVertexArray(0);
+			glActiveTexture(GL_TEXTURE0);
 			program->stop();
 		}
 		if (renderer.setGLWindowState(false));
 	}
 
-	void Renderer::setMaterialUniforms(Material* material, Program* program) {
+	void Renderer::setMaterialUniforms(Material* material, Program* program, int materialId) {
 		for (auto iterator = material->materialParameters.begin(); iterator != material->materialParameters.end(); ++iterator) {
 			string paramName = (*iterator).first;
 			optional<ParamData> paramData = material->getParameter(paramName);
@@ -158,35 +165,35 @@ namespace CGEngine {
 				switch (paramType) {
 				case ParamType::Bool:
 					boolData = any_cast<bool>(paramVal);
-					program->setUniform(getUniformObjectPropertyName("material", paramName).c_str(), boolData);
+					program->setUniform(getUniformArrayPropertyName("materials", materialId, paramName).c_str(), boolData);
 					break;
 				case ParamType::Int:
 					intData = any_cast<int>(paramVal);
-					program->setUniform(getUniformObjectPropertyName("material", paramName).c_str(), intData);
+					program->setUniform(getUniformArrayPropertyName("materials", materialId, paramName).c_str(), intData);
 					break;
 				case ParamType::Float:
 					floatData = any_cast<float>(paramVal);
-					program->setUniform(getUniformObjectPropertyName("material", paramName).c_str(), floatData);
+					program->setUniform(getUniformArrayPropertyName("materials", materialId, paramName).c_str(), floatData);
 					break;
 				case ParamType::V2:
 					v2Data = any_cast<Vector2f>(paramVal);
-					program->setUniform(getUniformObjectPropertyName("material", paramName).c_str(), toGlm(v2Data));
+					program->setUniform(getUniformArrayPropertyName("materials", materialId, paramName).c_str(), toGlm(v2Data));
 					break;
 				case ParamType::V3:
 					v3Data = any_cast<Vector3f>(paramVal);
-					program->setUniform(getUniformObjectPropertyName("material", paramName).c_str(), toGlm(v3Data));
+					program->setUniform(getUniformArrayPropertyName("materials", materialId, paramName).c_str(), toGlm(v3Data));
 					break;
 				case ParamType::RGBA:
 					colorData = any_cast<Color>(paramVal);
-					program->setUniform(getUniformObjectPropertyName("material", paramName).c_str(), toGlm(colorData));
+					program->setUniform(getUniformArrayPropertyName("materials", materialId, paramName).c_str(), toGlm(colorData));
 					break;
 				case ParamType::Texture2D:
 					textureData = any_cast<Texture*>(paramVal);
 					if (textureData != nullptr) {
-						glActiveTexture(GL_TEXTURE0 + textureData->getNativeHandle());
+						glActiveTexture(GL_TEXTURE0 + boundTextures);
 						glBindTexture(GL_TEXTURE_2D, textureData->getNativeHandle());
-						program->setUniform(getUniformObjectPropertyName("material", paramName).c_str(), (int)textureData->getNativeHandle());
-						glActiveTexture(GL_TEXTURE0);
+						program->setUniform(getUniformArrayPropertyName("materials", materialId, paramName).c_str(), boundTextures);
+						boundTextures++;
 					}
 					break;
 				//case ParamType::String:
