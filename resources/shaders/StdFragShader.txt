@@ -23,116 +23,141 @@ uniform struct Material {
     bool useDiffuseTexture;
     sampler2D diffuseTexture;
     vec2 diffuseTextureUVScale;
+    vec2 diffuseTextureScrollSpeed;
+    vec2 diffuseTextureOffset;
     bool useSpecularTexture;
     sampler2D specularTexture;
     vec2 specularTextureUVScale;
+    vec2 specularTextureScrollSpeed;
+    vec2 specularTextureOffset;
     vec3 specularColor;
     float smoothnessFactor;
     bool useOpacityTexture;
     sampler2D opacityTexture;
     vec2 opacityTextureUVScale;
+    vec2 opacityTextureScrollSpeed;
+    vec2 opacityTextureOffset;
     float opacity;
     float alphaCutoff;
+    bool opacityMasked;
     float gamma;
     bool useGammaCorrection;
     bool useLighting;
 } materials[MAX_MATERIALS];
+uniform float timeSec;
 
 varying vec2 uv;
 varying vec3 normal;
 varying vec3 vertex;
 varying float matId;
 
-vec3 applyLight(Light inputLight, vec3 surfaceColor, vec3 surfaceNormal, vec3 surfacePos, vec3 surfaceViewDir, int materialId){
-    vec3 lightIntensities = normalize(inputLight.intensities);
-    vec3 surfaceLightDir;
+vec3 applyLight(Light light, vec3 surfColor, vec3 surfNormal, vec3 surfPos, vec3 surfViewDir, int mtl){
+    vec3 lightIntensities = normalize(light.intensities);
+    vec3 surfLightDir;
     float lightPercentage = 1.0;
-    if(inputLight.position.w == 0.0) {
-        //directional light
-        surfaceLightDir = normalize(-inputLight.lightDirection);
-    
+    if(light.position.w == 0.0) {
+        //Directional Light
+        surfLightDir = normalize(-light.lightDirection);
         lightPercentage = 1.0;
     } else {
-        //point light
-        surfaceLightDir = inputLight.position.xyz - surfacePos;
-        float distanceToLight = length(surfaceLightDir);
-        surfaceLightDir = normalize(surfaceLightDir);
+        //Point Light
+        surfLightDir = light.position.xyz - surfPos;
+        float distanceToLight = length(surfLightDir);
+        surfLightDir = normalize(surfLightDir);
 
-        float attenuation = inputLight.attenuation * pow(distanceToLight, 2);
+        float attenuation = light.attenuation * pow(distanceToLight, 2);
         lightPercentage = 1.0 / (1.0 + attenuation);
 
         //cone restrictions (affects attenuation)
-        float lightToSurfaceAngle = degrees(acos(dot(-surfaceLightDir, normalize(inputLight.lightDirection))));
-        if(inputLight.coneAngle <= 90.0 && lightToSurfaceAngle > inputLight.coneAngle){
+        float lightToSurfAngle = degrees(acos(dot(-surfLightDir, normalize(light.lightDirection))));
+        if(light.coneAngle <= 90.0 && lightToSurfAngle > light.coneAngle){
             lightPercentage = 0.0;
         }
     }
 
-    //ambient
-    vec3 ambient = inputLight.ambiance * surfaceColor.rgb * lightIntensities;
+    //Ambient lighting
+    vec3 ambient = light.ambiance * surfColor.rgb * lightIntensities;
 
-    //diffuse
-    float diffusion = max(0.0, dot(surfaceNormal, surfaceLightDir));
-    vec3 diffuse = diffusion * surfaceColor.rgb * lightIntensities;
+    //Diffuse lighting
+    float diffusion = max(0.0, dot(surfNormal, surfLightDir));
+    vec3 diffuse = diffusion * surfColor.rgb * lightIntensities;
     
-    //specular
+    //Specular lighting
     float specularity = 0.0;
-    float specularPower = max(1.0,materials[materialId].smoothnessFactor);
-    float specularOpacity = clamp(materials[materialId].smoothnessFactor,0.0,1.0);
-    vec3 specularMap = texture(materials[materialId].specularTexture, (uv * materials[materialId].specularTextureUVScale)).rgb;
-    if(!materials[materialId].useSpecularTexture){
-        specularMap = vec3(1,1,1);
+    vec3 specularColor = normalize(materials[mtl].specularColor);
+    float specularPower = max(1.0,materials[mtl].smoothnessFactor);
+    float specularOpacity = clamp(materials[mtl].smoothnessFactor,0.0,1.0);
+    vec3 specularMap = vec3(1,1,1);
+    if(materials[mtl].useSpecularTexture){
+        vec2 specularUV = (uv * materials[mtl].specularTextureUVScale);
+        specularUV += (materials[mtl].specularTextureScrollSpeed*timeSec);
+        specularUV += materials[mtl].specularTextureOffset;
+        specularMap = texture(materials[mtl].specularTexture, specularUV).rgb;
     }
     if(diffusion > 0.0){
-        vec3 reflectDir = reflect(-surfaceLightDir, surfaceNormal);
-        specularity = pow(max(0.0, dot(surfaceViewDir, reflectDir)), specularPower);
+        vec3 reflectDir = reflect(-surfLightDir, surfNormal);
+        specularity = pow(max(0.0, dot(surfViewDir, reflectDir)), specularPower);
     }
-    vec3 specular = specularMap * (specularity * specularOpacity * normalize(materials[materialId].specularColor) * lightIntensities);
+    vec3 specular = specularMap * (specularity * specularOpacity * specularColor * lightIntensities);
 
-    //linear color (color before gamma correction)
-    return max(inputLight.brightness,0.0) * (ambient + lightPercentage*(diffuse + specular));
+    //Linear lighting color
+    return max(light.brightness,0.0) * (ambient + lightPercentage*(diffuse + specular));
 }
 
 void main() {
-    // Calculated from material and model
-    int materialId = int(matId);
-    vec3 surfaceNormal = normalize(transpose(inverse(mat3(model))) * normal);
-    vec3 surfacePos = vec3(model * vec4(vertex, 1));
-    vec4 materialColor = vec4(normalize(materials[materialId].diffuseColor),1);
-    vec4 surfaceColor = texture(materials[materialId].diffuseTexture, (uv * materials[materialId].diffuseTextureUVScale));
-    if(!materials[materialId].useDiffuseTexture){
-        surfaceColor = vec4(1,1,1,1);
-    }
-    surfaceColor *=  materialColor;
-    vec3 surfaceViewDir = normalize(cameraPosition - surfacePos);
+    //Model-space surface position
+    vec3 surfPos = vec3(model * vec4(vertex, 1));
+    vec4 surfColor = vec4(1,1,1,1);
+    float surfOpacity = 1;
+    int mtl = int(matId);
 
-    vec3 opacityColor = texture(materials[materialId].opacityTexture, (uv * materials[materialId].opacityTextureUVScale)).rgb;
-    float opacityMap = max(max(opacityColor.r, opacityColor.g),opacityColor.b);
-    if(!materials[materialId].useOpacityTexture){
-        opacityMap = 1;
+    //Material Diffuse - Calculated without lighting
+    vec4 diffuseColor = vec4(normalize(materials[mtl].diffuseColor),1);                         //Normalize material diffuse color
+    if(materials[mtl].useDiffuseTexture){                                                       //Surface color is derived from diffuse texture color * material diffuse color, if set
+        vec2 diffuseUV = (uv * materials[mtl].diffuseTextureUVScale);
+        diffuseUV += (materials[mtl].diffuseTextureScrollSpeed*timeSec);
+        diffuseUV += materials[mtl].diffuseTextureOffset;
+        surfColor = texture(materials[mtl].diffuseTexture, diffuseUV);
     }
-    float opacity = clamp(materials[materialId].opacity,0.0,1.0);
-    float surfaceOpacity = min(opacityMap, opacity);
-    if(surfaceOpacity < materials[materialId].alphaCutoff) discard;
+    surfColor *=  diffuseColor;                                                                 //Modulate diffuse texture color with diffuse color
 
-    //combine color from all the lights
-    vec3 linearColor = vec3(0);
-    if(materials[materialId].useLighting){
-        for(int i = 0; i < lightCount; ++i){
-            if(lights[i].brightness > 0){
-                linearColor += applyLight(lights[i], surfaceColor.rgb, surfaceNormal, surfacePos, surfaceViewDir, materialId);
+    //Material Opacity --   Calculated without lighting
+    float opacity = clamp(materials[mtl].opacity,0.0,1.0);                                      //Normalize material opacity
+    if(materials[mtl].useOpacityTexture){                                                       //Surface opacity is derived from min of opacity texture color and material opacity, if set
+        vec2 opacityUV = (uv * materials[mtl].opacityTextureUVScale);
+        opacityUV += materials[mtl].opacityTextureScrollSpeed*timeSec;
+        opacityUV += materials[mtl].opacityTextureOffset;
+        vec4 opacityColor = texture(materials[mtl].opacityTexture, opacityUV);
+        float opacityIntensity = opacityColor.a;
+        if(!materials[mtl].opacityMasked){
+            surfOpacity = opacityIntensity;
+        } else {
+            if(opacityIntensity < materials[mtl].alphaCutoff){
+                surfOpacity = 0;
             }
         }
-    } else {
-        linearColor = surfaceColor.rgb;
+    }
+    if(surfOpacity < materials[mtl].alphaCutoff) discard;                                       //Discard fragments with alpha below the cutoff
+
+    //Surface lighting
+    vec3 linearColor = surfColor.rgb;
+    if(materials[mtl].useLighting){
+        vec3 surfNormal = normalize(transpose(inverse(mat3(model))) * normal);
+        vec3 surfViewDir = normalize(cameraPosition - surfPos);
+
+        for(int i = 0; i < lightCount; ++i){
+            if(lights[i].brightness > 0){
+                linearColor += applyLight(lights[i], surfColor.rgb, surfNormal, surfPos, surfViewDir, mtl);
+            }
+        }
     }
 
-	//final color (after gamma correction)
-    vec3 finalColor = linearColor.rgb;
-    if(materials[materialId].useGammaCorrection){
-        vec3 gammaCorrection = vec3(1.0/materials[materialId].gamma);
-        finalColor = pow(linearColor, gammaCorrection);
+	//Post-lighting Gamma correction
+    vec3 fragColor = linearColor.rgb;
+    if(materials[mtl].useGammaCorrection){
+        vec3 gammaCorrection = vec3(1.0/materials[mtl].gamma);
+        fragColor = pow(linearColor, gammaCorrection);
     }
     
-    gl_FragColor = vec4(finalColor, surfaceOpacity);
+    gl_FragColor = vec4(fragColor, surfOpacity);
 }

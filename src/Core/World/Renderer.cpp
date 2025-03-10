@@ -108,12 +108,12 @@ namespace CGEngine {
 
 	void Renderer::renderMesh(VertexModel model, Transformation3D transform, ModelData data) {
 		glm::mat4 modelPos = glm::translate(glm::vec3(transform.position.x, transform.position.y, transform.position.z));
-		glm::mat4 modelRotX = glm::rotate(transform.rotation.x, glm::vec3(1.f, 0.f, 0.f));
-		glm::mat4 modelRotY = glm::rotate(transform.rotation.y, glm::vec3(0.f, 1.f, 0.f));
-		glm::mat4 modelRotZ = glm::rotate(transform.rotation.z, glm::vec3(0.f, 0.f, 1.f));
+		glm::mat4 modelRotX = glm::rotate(degrees(transform.rotation.x).asRadians(), glm::vec3(1.f, 0.f, 0.f));
+		glm::mat4 modelRotY = glm::rotate(degrees(transform.rotation.y).asRadians(), glm::vec3(0.f, 1.f, 0.f));
+		glm::mat4 modelRotZ = glm::rotate(degrees(transform.rotation.z).asRadians(), glm::vec3(0.f, 0.f, 1.f));
 		glm::mat4 modelScale = glm::scale(glm::vec3(transform.scale.x, transform.scale.y, transform.scale.z));
 		glm::mat4 modelRotation = modelRotZ * modelRotY * modelRotX;
-		glm::mat4 modelTransform = modelPos * modelRotation *modelScale;
+		glm::mat4 modelTransform = modelPos * modelRotation * modelScale;
 
 		if (renderer.setGLWindowState(true)) {
 			glBindVertexArray(data.vao);
@@ -128,6 +128,7 @@ namespace CGEngine {
 			program->setUniform("model", modelTransform);
 			program->setUniform("camera", currentCamera->getMatrix());
 			program->setUniform("cameraPosition", { camPos.x,camPos.y,camPos.z });
+			program->setUniform("timeSec", time.getElapsedSec());
 
 			for (int i = 0; i < data.materials.size(); ++i) {
 				setMaterialUniforms(data.materials.at(i), program, i);
