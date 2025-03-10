@@ -22,14 +22,14 @@ namespace CGEngine {
 	class Mesh;
 
 	struct ModelData {
-		ModelData() :vbo(0), vao(0), drawType(GL_TRIANGLES), drawStart(0), drawCount(0), material(nullptr) {};
-		ModelData(GLint drawCount, Material* material = new Material(), GLint drawStart = 0, GLenum type = GL_TRIANGLES) :vbo(0), vao(0), drawType(type), drawStart(drawStart), drawCount(drawCount), material(material) {};
+		ModelData() :vbo(0), vao(0), drawType(GL_TRIANGLES), drawStart(0), drawCount(0), materials({}) {};
+		ModelData(GLint drawCount, vector<Material*> materials = { new Material() }, GLint drawStart = 0, GLenum type = GL_TRIANGLES) :vbo(0), vao(0), drawType(type), drawStart(drawStart), drawCount(drawCount), materials(materials) {};
 		GLuint vbo;
 		GLuint vao;
 		GLenum drawType;
 		GLint drawStart;
 		GLint drawCount;
-		Material* material;
+		vector<Material*> materials;
 	};
 	/// <summary>
 	/// Responsible for ordering Bodies for rendering. Allows for default ordering (children render on top of parents)
@@ -90,7 +90,7 @@ namespace CGEngine {
 		Light* getLight(id_t lightId);
 		string getUniformArrayPropertyName(string arrayName, int index, string propertyName);
 		string getUniformObjectPropertyName(string objectName, string propertyName);
-		void setMaterialUniforms(Material* material, Program* program);
+		void setMaterialUniforms(Material* material, Program* program, int materialId = 0);
 		void setLightUniforms(Light* light, size_t lightIndex, Program* program);
 		glm::vec2 toGlm(Vector2f v);
 		glm::vec3 toGlm(Vector3f v);
@@ -127,5 +127,6 @@ namespace CGEngine {
 		Program* program;
 
 		UniqueDomain<id_t, Light*> lights = UniqueDomain<id_t, Light*>(10);
+		int boundTextures = 0;
 	};
 }
