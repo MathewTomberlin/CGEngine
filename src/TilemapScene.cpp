@@ -82,7 +82,7 @@ namespace CGEngine {
                 Light* light2 = new Light({ 0,10,10 }, false, lightParams2);
 
                 //Materials
-                SurfaceParameters maskedParams = SurfaceParameters(SurfaceDomain(), SurfaceDomain(32.0f), SurfaceDomain("mask_tile.png"));
+                SurfaceParameters maskedParams = SurfaceParameters(SurfaceDomain(), SurfaceDomain(32.0f), SurfaceDomain("opacity_tile.png"),true);
                 maskedParams.useLighting = false;
                 id_t maskedMaterialId = world->createMaterial(maskedParams);
                 Material* maskedMaterial = world->getMaterial(maskedMaterialId);
@@ -107,9 +107,37 @@ namespace CGEngine {
                 Texture* grassTexture = grassMaterial->getParameterPtr<Texture>("diffuseTexture");
                 grassTexture->setRepeated(true);
 
+                SurfaceParameters waterMaterialParams = SurfaceParameters(SurfaceDomain("water_tile.png", { 10,10 },Color::White,1.f,{sin(time.getElapsedSec())*0.075f,cos(time.getElapsedSec())*0.033f}), SurfaceDomain(128.0f));
+                id_t waterMaterialId = world->createMaterial(waterMaterialParams);
+                Material* waterMaterial = world->getMaterial(waterMaterialId);
+                //Set material diffuse texture to repeating
+                Texture* waterTexture = waterMaterial->getParameterPtr<Texture>("diffuseTexture");
+                waterTexture->setRepeated(true);
+
+                SurfaceParameters animMatParams = SurfaceParameters(SurfaceDomain("triceratops.png", {0.125f,0.125f}), SurfaceDomain(128.f), SurfaceDomain("triceratops.png", { 0.125f,0.125f },Color::White,1.f));
+                id_t animMatId = world->createMaterial(animMatParams);
+                Material* animMat = world->getMaterial(animMatId);
+
                 //Bodies
                 id_t planeMeshId = world->create(new Mesh(tilemapModel, Transformation3D({ -15,10,-12 }, cubeScale), { grassMaterial, lavaMaterial, mudMaterial, maskedMaterial }));
                 id_t planeMeshId2 = world->create(new Mesh(tilemapModel, Transformation3D({ -15,10,-8 }, cubeScale), { grassMaterial, lavaMaterial, mudMaterial, maskedMaterial }));
+
+                id_t planeMeshId3 = world->create(new Mesh(planeModel, Transformation3D({ 0,0,-7 }), {animMat}));
+                Body* animPlaneBody = world->bodies.get(planeMeshId3);
+                animPlaneBody->addUpdateScript(new Script([&animMat](ScArgs args) {
+                    sec_t lastFrame = args.script->getOutputData<sec_t>("lastFrame");
+                    if (time.getElapsedSec() - lastFrame > 0.25f) {
+                        args.script->setOutputData("lastFrame", time.getElapsedSec());
+                        Vector2f offset = animMat->getParameter<Vector2f>("diffuseTextureOffset").value();
+                        if (offset.x > 0.75f) {
+                            offset.x = 0;
+                        }
+                        animMat->setParameter("diffuseTextureOffset", Vector2f{ offset.x + 0.125f,0 }, ParamType::V2);
+                        animMat->setParameter("opacityTextureOffset", Vector2f{ offset.x + 0.125f,0 }, ParamType::V2);
+                    }
+                    args.caller->get<Mesh*>()->move({0, 0, sin(time.getElapsedSec()) * 0.015f });
+                }));
+                animPlaneBody->rotate(degrees(180));
 
                 id_t meshId1 = world->create(new Mesh(cubeModel, Transformation3D({ 0,5,-10 }, cubeScale), {brickMaterial}));
                 id_t meshId2 = world->create(new Mesh(cubeModel, Transformation3D({ 0,-5,-10 }, cubeScale), {brickMaterial}));
@@ -119,7 +147,7 @@ namespace CGEngine {
                 id_t meshId7 = world->create(new Mesh(cubeModel, Transformation3D({ -10,-10,-10 }, cubeScale), {brickMaterial}));
                 id_t meshId8 = world->create(new Mesh(cubeModel, Transformation3D({ 10,10,-10 }, cubeScale), {brickMaterial}));
                 id_t meshId9 = world->create(new Mesh(cubeModel, Transformation3D({ -10,10,-10 }, cubeScale), {brickMaterial}));
-                id_t meshId3 = world->create(new Mesh(cubeModel, Transformation3D({ 0,0,-20 }, cubeScale), {grassMaterial}));
+                id_t meshId3 = world->create(new Mesh(cubeModel, Transformation3D({ 0,0,-20 }, cubeScale), { waterMaterial }));
                 Body* planeBody = world->bodies.get(meshId3);
                 planeBody->get<Mesh*>()->scale({ 100.f,100.f,0.0001f });
             };
