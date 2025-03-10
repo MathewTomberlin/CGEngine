@@ -1,6 +1,6 @@
 #include "World.h"
 #include "../Engine/Engine.h"
-#include "../../Standard/Meshes/CommonVArrays.h"
+#include "../../Standard/Models/CommonModels.h"
 
 namespace CGEngine {
     World::World() : root(bodies.get(create())) { }
