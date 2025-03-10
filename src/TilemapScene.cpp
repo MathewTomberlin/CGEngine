@@ -1,150 +1,29 @@
 #include "Core/Scripts/Script.h"
 #include "Core/Engine/Engine.h"
 #include "Standard/Scripts/CommonScripts.h"
+#include "Standard/Models/CommonModels.h"
 #include "Standard/Behaviors/AnimationBehavior.h"
 #include "Standard/Behaviors/BoundsBehavior.h"
 #include "Standard/Drawables/Tilemap.h"
-#include "Standard/Meshes/CommonVArrays.h"
 #include "Core/Light/Light.h"
 
 namespace CGEngine {
 	class TilemapScene : public Behavior {
     public:
+        //Scenes require you to add an onLoadEvent with the main ScriptEvent to call
         TilemapScene():Behavior(nullptr) { 
             addScript(onLoadEvent, new Script(mainEvt));
         }
 
-        vector<int> tileTypes = { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54 };
-        int assignedType = 0;
-        optional<Vector2f> clickedTilemapPos = nullopt;
-        string tilemapDataPath = "mapData_.txt";
-
-        ScriptEvent saveTilemapDataEvt = [](ScArgs args) { args.caller->get<Tilemap*>()->saveMapData(); };
-        ScriptEvent tileClickEvt = [this](ScArgs args) {
-            MouseReleaseInput* mouseEvt = args.script->getInputDataPtr<MouseReleaseInput>("evt");
-            Tilemap* tilemap = args.caller->get<Tilemap*>();
-            if (mouseEvt == nullptr || tilemap == nullptr) return;
-
-            //Convert the mouse click position to global space, then to tilemap local space, then as a flattened id
-            clickedTilemapPos = args.caller->viewToLocal(mouseEvt->position);
-            int tileId = tilemap->localPosToTileID(clickedTilemapPos.value());
-            //Set assignedType on RMB or assign the tile type on LMB
-            if (mouseEvt->button == Mouse::Button::Right) {
-                assignedType = tilemap->query(tileId);
-            } else {
-                tilemap->assign(tileId, assignedType);
-            }
-        };
-        ScriptEvent loadTilemapDataEvt = [this](ScArgs args) {
-            vector<string> strings = args.script->getInputData<vector<string>>("args");
-            Tilemap* tilemap = args.caller->get<Tilemap*>();
-            if (strings.size() < 1 && tilemap == nullptr) return;
-
-            tilemapDataPath = strings.at(0);
-            tilemap->setMapData(tilemap->loadMapData(tilemapDataPath), true);
-        };
-
-        ScriptEvent toolboxTileClickEvt = [this](ScArgs args) {
-            MouseReleaseInput* mouseEvt = args.script->getInputDataPtr<MouseReleaseInput>("evt");
-            Tilemap* tilemap = args.caller->get<Tilemap*>();
-            if (mouseEvt == nullptr || tilemap == nullptr) return;
-
-            //Convert the mouse click position to global space, then to tilemap local space, then as a flattened id
-            V2f localPos = args.caller->viewToLocal(mouseEvt->position);
-            int tileId = tilemap->localPosToTileID(localPos);
-            //Determine tile type based on button press
-            assignedType = tilemap->query(tileId);
-        };
-
+        //This is the ScriptEvent I have assigned to be called by onLoadEvent
         ScriptEvent mainEvt = [this](ScArgs args) {
-            ScriptEvent tilemapConstruction = [this](ScArgs args) {
-                //Create the Body and setup its properties, including alignment and transform
-                id_t gridId = world->create(new Tilemap("tilemap.png", { 32,32 }, { 10,10 }, vector<int>(), tilemapDataPath), new Script([&](ScArgs args) {
-                    //Create the BoundsBehavior with custom getLocalBounds and getGlobalBounds to call the Tilemap bounds functions
-                    //NOTE: Do this before applying moveToAlignment to avoid out-of-order errors
-                    new BoundsBehavior(args.caller, 
-                    [](const Body* body) {
-                        return dynamic_cast<Tilemap*>(body->get())->getGlobalBounds();
-                    }, 
-                    [](const Body* body) {
-                        return dynamic_cast<Tilemap*>(body->get())->getLocalBounds();
-                    });
-                    //Basic body properties
-                    args.caller->setName("map");
-                    args.caller->moveToAlignment({ 0.5, 0 });
-                    args.caller->setScale({ 1.5f,1.5f });
-
-                    //Add OnDelete script to save map data on game end or tilemap deleted
-                    args.caller->addDeleteScript(new Script(saveTilemapDataEvt));
-
-                    //Add a left click listener and the tileClickScript script
-                    args.caller->addOverlapMouseReleaseScript(new Script(tileClickEvt), Mouse::Button::Left);
-                    //Add a right click listener and the tileClickScript
-                    args.caller->addOverlapMouseReleaseScript(new Script(tileClickEvt), Mouse::Button::Right);
-
-                    //Console scripts
-                    //Add "LoadMapData" that expects 1 input string (the map data path)
-                    args.caller->addScript("LoadMapData", new Script(loadTilemapDataEvt));
-                    //Add "SaveMapData" that expects no input strings
-                    args.caller->addScript("SaveMapData", new Script(saveTilemapDataEvt));
-                }));
-
-                //id_t toolboxId = world->create(new Tilemap("tilemap.png", { 32,32 }, { 8,7 }, tileTypes), new Script([&](ScArgs args) {
-                //    //Create the BoundsBehavior with custom getLocalBounds and getGlobalBounds to call the Tilemap bounds functions
-                //    //NOTE: Do this before applying moveToAlignment to avoid out-of-order errors
-                //    new BoundsBehavior(args.caller,
-                //    [](const Body* body) {
-                //        return dynamic_cast<Tilemap*>(body->get())->getGlobalBounds();
-                //    },
-                //    [](const Body* body) {
-                //        return dynamic_cast<Tilemap*>(body->get())->getLocalBounds();
-                //    });
-                //    //Basic body properties
-                //    args.caller->setName("toolbox");
-                //    args.caller->setOrigin({ 0,0.5 });
-                //    args.caller->setScale({ 1.25f,1.25f });
-                //    args.caller->setBoundsRenderingEnabled(true);
-                //    args.caller->moveToAlignment({ 0,0.5 });
-                //
-                //    //Add a left click listener and the toolboxTileClickScript script
-                //    args.caller->addOverlapMouseReleaseScript(new Script(toolboxTileClickEvt), Mouse::Button::Left);
-                //}));
-
-                //ScriptEvent clickUpdateScript = [this](ScArgs args) {
-                //    MouseReleaseInput* mouseEvt = args.script->getInput().getDataPtr<MouseReleaseInput>("evt");
-                //    if (mouseEvt == nullptr || clickedTilemapPos == nullopt) return;
-                //
-                //    V2f mouseGlobalPos = screen->viewToGlobal(mouseEvt->position);
-                //    Body* worldGrid = world->bodies.get(gridId);
-                //    if (worldGrid->contains(mouseGlobalPos)) {
-                //        SpriteAnimBody* body = new SpriteAnimBody("animation.png", AnimationParameters({ 32,32 }, 30.f), Transformation(), worldGrid);
-                //        body->setTimer(0.5, new Script([](ScArgs args) { world->deleteBody(args.caller); }));
-                //        Vector2f pos = (Vector2f)clickedTilemapPos.value();
-                //        int d = (int)(pos.x) % 32;
-                //        pos.x = pos.x - d;
-                //        d = (int)(pos.y) % 32;
-                //        pos.y = pos.y - d;
-                //        body->setPosition(pos * 1.5f);
-                //    }
-                //    };
-                //world->getRoot()->addMouseReleaseScript(clickUpdateScript, Mouse::Button::Left);
-                //world->getRoot()->addMouseReleaseScript(clickUpdateScript, Mouse::Button::Right);
-
-                args.behavior->setOutput(map<string, any>({ {"gridId", gridId} }));
-            };
-
             ScriptEvent playerConstruction = [this](ScArgs args) {
-                //Get the id of the grid body output by tilemapConstruction
-                id_t gridId = args.behavior->getInput().getData<id_t>("gridId");
-                //Get a reference to the grid Body so we can parent the player to it
-                Body* gridBody = world->bodies.get(gridId);
                 //Player movement properties
                 float playerSpeed = 5.f;
-                //float updateInterval = -1.f; -- UNUSED
                 //Create a new instance of the player input layout and set their Input DataMaps with the playerSpeed
                 Script* keyboardMoveController = new Script(keyboardMovementController);
                 Script* keyboardRotateController = new Script(keyboardRotationController);
-                //Setup its input datastack with the desired input parameters
+                //Setup their input parameters
                 keyboardMoveController->setInput(DataMap(map<string, any>({ {"speed",playerSpeed} })));
                 keyboardRotateController->setInput(DataMap(map<string, any>({ {"speed",playerSpeed} })));
 
@@ -176,24 +55,19 @@ namespace CGEngine {
                 player->addKeyReleaseScript([](ScArgs args) {
                     args.behavior->callDomain("endAnimation");
                 }, Keyboard::Scan::D, animBehaviorId);
-
-                id_t rectId = world->create(new RectangleShape({ 32,32 }), Transformation(), gridBody, new Script([](ScArgs args) {
-                    args.caller->setName("Rectangle");
-                    args.caller->zOrder = 1;
-                    args.caller->setIntersectEnabled(true);
-                    args.caller->get()->setFillColor(Color(80, 80, 80, 0));
-                    args.caller->translate({ 48,48 });
-                }));
             };
 
             ScriptEvent meshConstruction = [](ScArgs args) {
-                //Get the id of the grid body output by tilemapConstruction
-                id_t gridId = args.behavior->getInput().getData<id_t>("gridId");
-                //Get a reference to the grid Body so we can parent the player to it
-                Body* gridBody = world->bodies.get(gridId);
-
                 VertexModel cubeModel = getCubeModel(1.f);
                 Vector3f cubeScale = { 1,1,0.0000000008f };
+
+                VertexModel planeModel = getPlaneModel(1.f, 0);
+                vector<vector<int>> tilemapData =  {{0,1,2,1,0,0,1,2,1,0,0,1,2,1,0,0,1,2,1,0},
+                                                    {1,2,3,2,1,1,2,3,2,1,1,2,3,2,1,1,2,3,2,1},
+                                                    {2,3,3,3,2,2,3,3,3,2,2,3,3,3,2,2,3,3,3,2},
+                                                    {1,2,3,2,1,1,2,3,2,1,1,2,3,2,1,1,2,3,2,1},
+                                                    {2,1,2,1,2,2,1,2,1,2,2,1,2,1,2,2,1,2,1,2}};
+                VertexModel tilemapModel = getTilemapModel(1.f, { 20,5 }, tilemapData);
 
                 //Spotlight
                 LightParameters lightParams = LightParameters();
@@ -206,14 +80,27 @@ namespace CGEngine {
                 lightParams2.attenuation = 0.005f;
                 lightParams2.colorIntensities = { 1,0.5f,0.5f };
                 Light* light2 = new Light({ 0,10,10 }, false, lightParams2);
-                
+
                 //Materials
-                SurfaceParameters brickParams = SurfaceParameters(SurfaceDomain(), SurfaceDomain(32.0f), SurfaceDomain("mask_tile.png"));
-                brickParams.useLighting = false;
+                SurfaceParameters maskedParams = SurfaceParameters(SurfaceDomain(), SurfaceDomain(32.0f), SurfaceDomain("mask_tile.png"));
+                maskedParams.useLighting = false;
+                id_t maskedMaterialId = world->createMaterial(maskedParams);
+                Material* maskedMaterial = world->getMaterial(maskedMaterialId);
+
+                SurfaceParameters brickParams = SurfaceParameters(SurfaceDomain("brick_tile.png"), SurfaceDomain(16.0f));
                 id_t brickMaterialId = world->createMaterial(brickParams);
                 Material* brickMaterial = world->getMaterial(brickMaterialId);
 
-                SurfaceParameters grassMaterialParams = SurfaceParameters(SurfaceDomain("grass_tile.png",{10,10}), SurfaceDomain(8.0f));
+                SurfaceParameters lavaParams = SurfaceParameters(SurfaceDomain("lava_tile.png"));
+                id_t lavaMaterialId = world->createMaterial(lavaParams);
+                Material* lavaMaterial = world->getMaterial(lavaMaterialId);
+
+                SurfaceParameters mudParams = SurfaceParameters(SurfaceDomain("grass_tile.png"), SurfaceDomain(128.0f) );
+                mudParams.diffuseColor = Color(250, 80, 80);
+                id_t mudMaterialId = world->createMaterial(mudParams);
+                Material* mudMaterial = world->getMaterial(mudMaterialId);
+
+                SurfaceParameters grassMaterialParams = SurfaceParameters(SurfaceDomain("grass_tile.png", { 10,10 }), SurfaceDomain(8.0f));
                 id_t grassMaterialId = world->createMaterial(grassMaterialParams);
                 Material* grassMaterial = world->getMaterial(grassMaterialId);
                 //Set material diffuse texture to repeating
@@ -221,43 +108,33 @@ namespace CGEngine {
                 grassTexture->setRepeated(true);
 
                 //Bodies
-                id_t meshId1 = world->create(new Mesh(cubeModel, Transformation3D({0,5,-10}, cubeScale), brickMaterial));
-                id_t meshId2 = world->create(new Mesh(cubeModel, Transformation3D({ 0,-5,-10 }, cubeScale), brickMaterial));
-                id_t meshId4 = world->create(new Mesh(cubeModel, Transformation3D({ 5,0,-10 }, cubeScale), brickMaterial));
-                id_t meshId5 = world->create(new Mesh(cubeModel, Transformation3D({ -5,0,-10 }, cubeScale), brickMaterial));
-                id_t meshId6 = world->create(new Mesh(cubeModel, Transformation3D({ 10,-10,-10 }, cubeScale), brickMaterial));
-                id_t meshId7 = world->create(new Mesh(cubeModel, Transformation3D({ -10,-10,-10 }, cubeScale), brickMaterial));
-                id_t meshId8 = world->create(new Mesh(cubeModel, Transformation3D({ 10,10,-10 }, cubeScale), brickMaterial));
-                id_t meshId9 = world->create(new Mesh(cubeModel, Transformation3D({ -10,10,-10 }, cubeScale), brickMaterial));
-                id_t meshId3 = world->create(new Mesh(cubeModel, Transformation3D({ 0,0,-20 }, cubeScale), grassMaterial));
+                id_t planeMeshId = world->create(new Mesh(tilemapModel, Transformation3D({ -15,10,-12 }, cubeScale), { grassMaterial, lavaMaterial, mudMaterial, maskedMaterial }));
+                id_t planeMeshId2 = world->create(new Mesh(tilemapModel, Transformation3D({ -15,10,-8 }, cubeScale), { grassMaterial, lavaMaterial, mudMaterial, maskedMaterial }));
+
+                id_t meshId1 = world->create(new Mesh(cubeModel, Transformation3D({ 0,5,-10 }, cubeScale), {brickMaterial}));
+                id_t meshId2 = world->create(new Mesh(cubeModel, Transformation3D({ 0,-5,-10 }, cubeScale), {brickMaterial}));
+                id_t meshId4 = world->create(new Mesh(cubeModel, Transformation3D({ 5,0,-10 }, cubeScale), {brickMaterial}));
+                id_t meshId5 = world->create(new Mesh(cubeModel, Transformation3D({ -5,0,-10 }, cubeScale), {brickMaterial}));
+                id_t meshId6 = world->create(new Mesh(cubeModel, Transformation3D({ 10,-10,-10 }, cubeScale), {brickMaterial}));
+                id_t meshId7 = world->create(new Mesh(cubeModel, Transformation3D({ -10,-10,-10 }, cubeScale), {brickMaterial}));
+                id_t meshId8 = world->create(new Mesh(cubeModel, Transformation3D({ 10,10,-10 }, cubeScale), {brickMaterial}));
+                id_t meshId9 = world->create(new Mesh(cubeModel, Transformation3D({ -10,10,-10 }, cubeScale), {brickMaterial}));
+                id_t meshId3 = world->create(new Mesh(cubeModel, Transformation3D({ 0,0,-20 }, cubeScale), {grassMaterial}));
                 Body* planeBody = world->bodies.get(meshId3);
                 planeBody->get<Mesh*>()->scale({ 100.f,100.f,0.0001f });
-                //planeBody->setTimer(15.0f, new Script([](ScArgs args) {
-                //    args.caller->addUpdateScript(new Script([](ScArgs args) {
-                //        Material* grassMat = world->getMaterial(args.caller->get<Mesh*>()->getMaterial()->materialId);
-                //        if (grassMat != nullptr) {
-                //            grassMat->setParameter("diffuseColor",Color{(uint8_t)((sin(time.getElapsedSec()) * 127) + 127),255,(uint8_t)((cos(time.getElapsedSec()) * 127) + 127),0}, ParamType::RGBA);
-                //        }
-                //    }));
-                //}));
             };
-
-            Behavior* tilemapScene = new Behavior(nullptr); 
-            tilemapScene->addScript(onLoadEvent,new Script(tilemapConstruction));
 
             Behavior* playerScene = new Behavior(nullptr); 
             playerScene->addScript(onLoadEvent, new Script(playerConstruction));
+            world->addScene("player", playerScene);
 
             Behavior* meshScene = new Behavior(nullptr);
             meshScene->addScript(onLoadEvent, new Script(meshConstruction));
-
-            world->addScene("tilemap", tilemapScene);
-            world->addScene("player", playerScene);
             world->addScene("meshes", meshScene);
 
-            world->loadSceneWithInput("meshes", tilemapScene->getOutput());
-            //world->loadScene("tilemap");
-            world->loadScene/*WithInput*/("player"/*, tilemapScene->getOutput()*/);
+            //Load each scene (without input)
+            world->loadScene("meshes");
+            world->loadScene("player");
 		};
 	};
 }
