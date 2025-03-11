@@ -119,12 +119,23 @@ namespace CGEngine {
                 Material* animMat = world->getMaterial(animMatId);
 
                 //Bodies
+                id_t testMesh = world->create(new Mesh(VertexModel({}, "Mesh.obj"), Transformation3D({-1,1,-2}), { mudMaterial }));
+                Body* testMeshBody = world->bodies.get(testMesh);
+
+                Script* ballScript = new Script([](ScArgs args) {
+                    args.caller->get<Mesh*>()->rotate({ 0, time.getDeltaSec() * 100, 0 });
+                    args.caller->get<Mesh*>()->move({ sin(time.getElapsedSec()) * 0.02f, cos(time.getElapsedSec()) * 0.02f, 0 });
+                });
+                testMeshBody->addUpdateScript(ballScript);
+
                 id_t planeMeshId = world->create(new Mesh(tilemapModel, Transformation3D({ -15,10,-12 }, cubeScale), { grassMaterial, lavaMaterial, mudMaterial, maskedMaterial }));
                 id_t planeMeshId2 = world->create(new Mesh(tilemapModel, Transformation3D({ -15,10,-8 }, cubeScale), { grassMaterial, lavaMaterial, mudMaterial, maskedMaterial }));
 
                 id_t planeMeshId3 = world->create(new Mesh(planeModel, Transformation3D({ 0,0,-7 }), {animMat}));
                 Body* animPlaneBody = world->bodies.get(planeMeshId3);
-                animPlaneBody->addUpdateScript(new Script([&animMat](ScArgs args) {
+
+                Script* scrollScript = new Script([](ScArgs args) {
+                    Material* animMat = args.script->getInputDataPtr<Material>("material");
                     sec_t lastFrame = args.script->getOutputData<sec_t>("lastFrame");
                     if (time.getElapsedSec() - lastFrame > 0.25f) {
                         args.script->setOutputData("lastFrame", time.getElapsedSec());
@@ -135,8 +146,10 @@ namespace CGEngine {
                         animMat->setParameter("diffuseTextureOffset", Vector2f{ offset.x + 0.125f,0 }, ParamType::V2);
                         animMat->setParameter("opacityTextureOffset", Vector2f{ offset.x + 0.125f,0 }, ParamType::V2);
                     }
-                    args.caller->get<Mesh*>()->move({0, 0, sin(time.getElapsedSec()) * 0.015f });
-                }));
+                    args.caller->get<Mesh*>()->move({ 0, 0, sin(time.getElapsedSec()) * 0.015f });
+                });
+                scrollScript->setInputData("material", animMat);
+                animPlaneBody->addUpdateScript(scrollScript);
                 animPlaneBody->rotate(degrees(180));
 
                 id_t meshId1 = world->create(new Mesh(cubeModel, Transformation3D({ 0,5,-10 }, cubeScale), {brickMaterial}));
