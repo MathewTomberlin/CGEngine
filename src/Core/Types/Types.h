@@ -111,12 +111,14 @@ namespace CGEngine {
     };
 
     struct VertexModel {
-        VertexModel(vector<float> vertices) :vertices(vertices),  vertexCount(vertices.size()/8.0f), vertexSpan(vertexCount * sizeof(float)), dataSpan(vertices.size() * sizeof(float)) {};
+        VertexModel(vector<float> vertices, string path = "", vector<unsigned> indices = {}) :vertices(vertices), vertexCount(vertices.size() / 8.0f), vertexSpan(vertexCount * sizeof(float)), dataSpan(vertices.size() * sizeof(float)), path(path), indices(indices){};
 
         vector<float> vertices;
+        vector<unsigned> indices;
         size_t vertexCount = 0U;
         size_t vertexSpan = 0U;
         size_t dataSpan = 0U;
+        string path;
     };
 
     struct Transformation3D {

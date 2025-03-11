@@ -1,6 +1,7 @@
 #include "../Engine/Engine.h"
 #include "Renderer.h"
 #include "../../Standard/Models/CommonModels.h"
+
 namespace CGEngine {
 	void Renderer::setWindow(RenderWindow* window) {
 		this->window = window;
@@ -24,17 +25,30 @@ namespace CGEngine {
 	void Renderer::getModelData(Mesh* mesh) {
 		if (setGLWindowState(true)) {
 			VertexModel model = mesh->getModel();
+			if (model.path != "") {
+				vector<VertexModel> importedModel = importModel(model.path);
+				model = VertexModel(importedModel[0].vertices, "", importedModel[0].indices);
+				mesh->setModel(model);
+			}
 			vector<Material*> material = mesh->getMaterials();
 			Program* program = material[0]->getProgram();
 			//Setup ModelData with drawCount, vertex buffer and array, and shader program
 			ModelData data = ModelData(model.vertexCount, { material });
 			glGenBuffers(1, &data.vbo);
+			glGenBuffers(1, &data.ebo);
 			glGenVertexArrays(1, &data.vao);
 
 			glBindVertexArray(data.vao);
 			//Bind the vertex buffer and pass in the vertex data
 			glBindBuffer(GL_ARRAY_BUFFER, data.vbo);
 			glBufferData(GL_ARRAY_BUFFER, model.dataSpan, model.vertices.data(), GL_STATIC_DRAW);
+
+			//Bind and buffert the element buffer, if the model has indices
+			if (model.indices.size() > 0) {
+				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.ebo);
+				glBufferData(GL_ELEMENT_ARRAY_BUFFER, model.indices.size() * sizeof(unsigned int), &model.indices[0], GL_STATIC_DRAW);
+			}
+
 			auto stride = sizeof(GLfloat) * 9;
 			auto textureCoordOffset = sizeof(GLfloat) * 3;
 			auto normalOffset = sizeof(GLfloat) * 5;
@@ -53,6 +67,77 @@ namespace CGEngine {
 			mesh->setModelData(data);
 			setGLWindowState(false);
 		}
+	}
+
+	vector<VertexModel> Renderer::importModel(string path, unsigned int options) {
+		//string directory = path.substr(0, path.find_last_of('/')); -- UNUSED
+		const aiScene* scene = modelImporter.ReadFile(path, options);
+		if (scene != nullptr) {
+			//TODO: Support models with multiple meshes?
+			vector<VertexModel> meshes = processNode(scene->mRootNode, scene);
+			if (meshes.size() > 0) {
+				cout << "Done importing " << meshes.size() << " meshes from " << path << "\n";
+				return meshes;
+			}
+			else {
+				cout << "No meshes imported from " << path << "\n";
+			}
+		}
+		else {
+			cout << "Failed to import from " << path << "\n";
+		}
+		return {};
+	}
+
+	vector<VertexModel> Renderer::processNode(aiNode* node, const aiScene* scene) {
+		vector<VertexModel> meshes = {};
+		// process all the node's meshes (if any)
+		for (unsigned int i = 0; i < node->mNumMeshes; i++) {
+			aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
+			vector<float> vertexArray = {};
+			vector<unsigned int> indices;
+			vector<Texture> textures;
+			for (unsigned int i = 0; i < mesh->mNumVertices; i++) {
+				//Pos
+				vertexArray.push_back(mesh->mVertices[i].x);
+				vertexArray.push_back(mesh->mVertices[i].y);
+				vertexArray.push_back(mesh->mVertices[i].z);
+				//TexCoord
+				//TODO: Support multiple texture coordinates?
+				glm::vec2 uv = { 0,0 };
+				if (mesh->mTextureCoords[0])  {
+					uv = { mesh->mTextureCoords[0][i].x,mesh->mTextureCoords[0][i].y };
+				}
+				vertexArray.push_back(uv.x);
+				vertexArray.push_back(uv.y);
+				//Normals
+				vertexArray.push_back(mesh->mNormals[i].x);
+				vertexArray.push_back(mesh->mNormals[i].y);
+				vertexArray.push_back(mesh->mNormals[i].z);
+				//TODO: Fix mesh materials
+				//TODO: Support external material definitions?
+				vertexArray.push_back(0);
+				
+				//TODO: Import Logging
+				//cout << "Vertex" << i << ": (" << mesh->mVertices[i].x << "," << mesh->mVertices[i].y << "," << mesh->mVertices[i].z << "),(" << uv.x<<","<<uv.y<<"),(" << mesh->mNormals[i].x << "," << mesh->mNormals[i].y << "," << mesh->mNormals[i].z << ")\n";
+			}
+			//Import indices
+			for (unsigned int i = 0; i < mesh->mNumFaces; i++) {
+				aiFace face = mesh->mFaces[i];
+				for (unsigned int j = 0; j < face.mNumIndices; j++) {
+					indices.push_back(face.mIndices[j]);
+				}
+			}
+
+			meshes.push_back(VertexModel(vertexArray,"",indices));
+			cout << "Imported mesh with " << vertexArray.size() << " vertex array positions and " << indices.size() << " indices " << "\n";
+		}
+		// then do the same for each of its children
+		for (unsigned int i = 0; i < node->mNumChildren; i++) {
+			vector<VertexModel> m = processNode(node->mChildren[i], scene);
+			meshes.insert(meshes.end(), m.begin(), m.end());
+		}
+		return meshes;
 	}
 
 	id_t Renderer::addLight(Light* light) {
@@ -139,7 +224,11 @@ namespace CGEngine {
 				setLightUniforms(lights.get(i), i, program);
 			}
 			// Draw the cube
-			glDrawArrays(GL_TRIANGLES, 0, model.vertices.size()/5);
+			if (model.indices.size()) {
+				glDrawElements(GL_TRIANGLES, model.indices.size(), GL_UNSIGNED_INT, 0);
+			} else {
+				glDrawArrays(GL_TRIANGLES, 0, model.vertices.size() / 5);
+			}
 
 			// Unbind varray, shaders, and texture
 			glBindVertexArray(0);

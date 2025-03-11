@@ -28,6 +28,7 @@ namespace CGEngine {
 		void scale(Vector3f delta);
 		void setModelData(ModelData data);
 		VertexModel getModel();
+		void setModel(VertexModel model);
 		vector<Material*> getMaterials();
 	private:
 		VertexModel model;

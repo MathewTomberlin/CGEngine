@@ -5,7 +5,7 @@ namespace CGEngine {
 
 	Camera::Camera(Vector3f position, float angleX, float angleY, float angleZ, float fov, float aspect, float nearPlane, float farPlane) : position(glm::vec3(position.x, position.y, position.z)), angleX(angleX), angleY(angleY), angleZ(angleZ), fov(fov), aspect(aspect), nearPlane(nearPlane), farPlane(farPlane) { };
 	Camera::Camera(float fov, float aspect, float nearPlane, float farPlane) : Camera({ 0,0,1 }, 0.0f, 0.0f, 0.0f, fov, aspect, nearPlane, farPlane) { }
-	Camera::Camera(float aspect) : Camera({0,0,1}, 0.0f, 0.0f, 0.0f, 93.f, aspect, 0.01f, 100.f) { }
+	Camera::Camera(float aspect) : Camera({0,0,10}, 0.0f, 0.0f, 0.0f, 30.f, aspect, 0.01f, 100.f) { }
 
 	Vector3f Camera::getPosition() {
 		return Vector3f({ position.x,-position.y,position.z });

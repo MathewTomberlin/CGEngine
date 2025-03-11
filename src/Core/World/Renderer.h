@@ -15,6 +15,10 @@
 #include "../Shader/Program.h"
 #include "../Light/Light.h"
 #include "../Material/Material.h"
+#include <assimp/Importer.hpp>
+#include <assimp/scene.h>
+#include <assimp/postprocess.h>
+using namespace Assimp;
 using namespace std;
 using namespace sf;
 
@@ -22,10 +26,11 @@ namespace CGEngine {
 	class Mesh;
 
 	struct ModelData {
-		ModelData() :vbo(0), vao(0), drawType(GL_TRIANGLES), drawStart(0), drawCount(0), materials({}) {};
-		ModelData(GLint drawCount, vector<Material*> materials = { new Material() }, GLint drawStart = 0, GLenum type = GL_TRIANGLES) :vbo(0), vao(0), drawType(type), drawStart(drawStart), drawCount(drawCount), materials(materials) {};
+		ModelData() :vbo(0), vao(0), ebo(0), drawType(GL_TRIANGLES), drawStart(0), drawCount(0), materials({}) {};
+		ModelData(GLint drawCount, vector<Material*> materials = { new Material() }, GLint drawStart = 0, GLenum type = GL_TRIANGLES) :vbo(0), vao(0), ebo(0), drawType(type), drawStart(drawStart), drawCount(drawCount), materials(materials) {};
 		GLuint vbo;
 		GLuint vao;
+		GLuint ebo;
 		GLenum drawType;
 		GLint drawStart;
 		GLint drawCount;
@@ -78,6 +83,8 @@ namespace CGEngine {
 		void commitGL();
 		void pullGL();
 
+		vector<VertexModel> processNode(aiNode* node, const aiScene* scene);
+
 		bool processRender();
 		void setWindow(RenderWindow* window);
 		Camera* getCurrentCamera();
@@ -118,14 +125,10 @@ namespace CGEngine {
 		/// </summary>
 		vector<Body*> renderOrder;
 		
+		Importer modelImporter = Importer();
+		vector<VertexModel> importModel(string path, unsigned int options = aiProcess_Triangulate | aiProcess_FlipUVs);
 		GLenum initGlew();
-
-		//Vertex Array and Buffer and Index Buffer
-		//GLuint vao = 0;
-		//GLuint vertexVBO = 0;
-		//GLuint indexVBO = 0;
 		Program* program;
-
 		UniqueDomain<id_t, Light*> lights = UniqueDomain<id_t, Light*>(10);
 		int boundTextures = 0;
 	};
