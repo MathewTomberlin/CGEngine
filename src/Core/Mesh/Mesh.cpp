@@ -13,6 +13,10 @@ namespace CGEngine {
 		return model;
 	}
 
+	void Mesh::setModel(VertexModel model) {
+		this->model = model;
+	}
+
 	void Mesh::render(Transform transform) {
 		renderer.pullGL();
 
