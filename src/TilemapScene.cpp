@@ -58,16 +58,16 @@ namespace CGEngine {
             };
 
             ScriptEvent meshConstruction = [](ScArgs args) {
-                VertexModel cubeModel = getCubeModel(1.f);
+                MeshData cubeModel = getCubeModel(1.f);
                 Vector3f cubeScale = { 1,1,0.0000000008f };
 
-                VertexModel planeModel = getPlaneModel(1.f, 0);
+                MeshData planeModel = getPlaneModel(1.f, 0);
                 vector<vector<int>> tilemapData =  {{0,1,2,1,0,0,1,2,1,0,0,1,2,1,0,0,1,2,1,0},
                                                     {1,2,3,2,1,1,2,3,2,1,1,2,3,2,1,1,2,3,2,1},
                                                     {2,3,3,3,2,2,3,3,3,2,2,3,3,3,2,2,3,3,3,2},
                                                     {1,2,3,2,1,1,2,3,2,1,1,2,3,2,1,1,2,3,2,1},
                                                     {2,1,2,1,2,2,1,2,1,2,2,1,2,1,2,2,1,2,1,2}};
-                VertexModel tilemapModel = getTilemapModel(1.f, { 20,5 }, tilemapData);
+                MeshData tilemapModel = getTilemapModel(1.f, { 20,5 }, tilemapData);
 
                 //Spotlight
                 LightParameters lightParams = LightParameters();
@@ -86,54 +86,54 @@ namespace CGEngine {
                 maskedParams.useLighting = false;
                 id_t maskedMaterialId = world->createMaterial(maskedParams);
                 Material* maskedMaterial = world->getMaterial(maskedMaterialId);
-
+                
                 SurfaceParameters brickParams = SurfaceParameters(SurfaceDomain("brick_tile.png"), SurfaceDomain(16.0f));
                 id_t brickMaterialId = world->createMaterial(brickParams);
                 Material* brickMaterial = world->getMaterial(brickMaterialId);
-
+                
                 SurfaceParameters lavaParams = SurfaceParameters(SurfaceDomain("lava_tile.png"));
                 id_t lavaMaterialId = world->createMaterial(lavaParams);
                 Material* lavaMaterial = world->getMaterial(lavaMaterialId);
-
+                
                 SurfaceParameters mudParams = SurfaceParameters(SurfaceDomain("grass_tile.png"), SurfaceDomain(128.0f) );
                 mudParams.diffuseColor = Color(250, 80, 80);
                 id_t mudMaterialId = world->createMaterial(mudParams);
                 Material* mudMaterial = world->getMaterial(mudMaterialId);
-
+                
                 SurfaceParameters grassMaterialParams = SurfaceParameters(SurfaceDomain("grass_tile.png", { 10,10 }), SurfaceDomain(8.0f));
                 id_t grassMaterialId = world->createMaterial(grassMaterialParams);
                 Material* grassMaterial = world->getMaterial(grassMaterialId);
                 //Set material diffuse texture to repeating
                 Texture* grassTexture = grassMaterial->getParameterPtr<Texture>("diffuseTexture");
                 grassTexture->setRepeated(true);
-
+                
                 SurfaceParameters waterMaterialParams = SurfaceParameters(SurfaceDomain("water_tile.png", { 10,10 },Color::White,1.f,{sin(time.getElapsedSec())*0.075f,cos(time.getElapsedSec())*0.033f}), SurfaceDomain(128.0f));
                 id_t waterMaterialId = world->createMaterial(waterMaterialParams);
                 Material* waterMaterial = world->getMaterial(waterMaterialId);
                 //Set material diffuse texture to repeating
                 Texture* waterTexture = waterMaterial->getParameterPtr<Texture>("diffuseTexture");
                 waterTexture->setRepeated(true);
-
+                
                 SurfaceParameters animMatParams = SurfaceParameters(SurfaceDomain("triceratops.png", {0.125f,0.125f}), SurfaceDomain(128.f), SurfaceDomain("triceratops.png", { 0.125f,0.125f },Color::White,1.f));
                 id_t animMatId = world->createMaterial(animMatParams);
                 Material* animMat = world->getMaterial(animMatId);
 
                 //Bodies
-                id_t testMesh = world->create(new Mesh(VertexModel({}, "Mesh.obj"), Transformation3D({-1,1,-2}), { mudMaterial }));
+                id_t testMesh = world->create(new Mesh("Mesh.obj", Transformation3D({-1,1,-2})));
                 Body* testMeshBody = world->bodies.get(testMesh);
 
                 Script* ballScript = new Script([](ScArgs args) {
                     args.caller->get<Mesh*>()->rotate({ 0, time.getDeltaSec() * 100, 0 });
-                    args.caller->get<Mesh*>()->move({ sin(time.getElapsedSec()) * 0.02f, cos(time.getElapsedSec()) * 0.02f, 0 });
+                    args.caller->get<Mesh*>()->move({ sin(time.getElapsedSec()) * 0.0015f, cos(time.getElapsedSec()) * 0.0015f, 0 });
                 });
                 testMeshBody->addUpdateScript(ballScript);
 
                 id_t planeMeshId = world->create(new Mesh(tilemapModel, Transformation3D({ -15,10,-12 }, cubeScale), { grassMaterial, lavaMaterial, mudMaterial, maskedMaterial }));
                 id_t planeMeshId2 = world->create(new Mesh(tilemapModel, Transformation3D({ -15,10,-8 }, cubeScale), { grassMaterial, lavaMaterial, mudMaterial, maskedMaterial }));
-
+                
                 id_t planeMeshId3 = world->create(new Mesh(planeModel, Transformation3D({ 0,0,-7 }), {animMat}));
                 Body* animPlaneBody = world->bodies.get(planeMeshId3);
-
+                
                 Script* scrollScript = new Script([](ScArgs args) {
                     Material* animMat = args.script->getInputDataPtr<Material>("material");
                     sec_t lastFrame = args.script->getOutputData<sec_t>("lastFrame");
@@ -151,7 +151,7 @@ namespace CGEngine {
                 scrollScript->setInputData("material", animMat);
                 animPlaneBody->addUpdateScript(scrollScript);
                 animPlaneBody->rotate(degrees(180));
-
+                
                 id_t meshId1 = world->create(new Mesh(cubeModel, Transformation3D({ 0,5,-10 }, cubeScale), {brickMaterial}));
                 id_t meshId2 = world->create(new Mesh(cubeModel, Transformation3D({ 0,-5,-10 }, cubeScale), {brickMaterial}));
                 id_t meshId4 = world->create(new Mesh(cubeModel, Transformation3D({ 5,0,-10 }, cubeScale), {brickMaterial}));
@@ -160,7 +160,7 @@ namespace CGEngine {
                 id_t meshId7 = world->create(new Mesh(cubeModel, Transformation3D({ -10,-10,-10 }, cubeScale), {brickMaterial}));
                 id_t meshId8 = world->create(new Mesh(cubeModel, Transformation3D({ 10,10,-10 }, cubeScale), {brickMaterial}));
                 id_t meshId9 = world->create(new Mesh(cubeModel, Transformation3D({ -10,10,-10 }, cubeScale), {brickMaterial}));
-                id_t meshId3 = world->create(new Mesh(cubeModel, Transformation3D({ 0,0,-20 }, cubeScale), { waterMaterial }));
+                id_t meshId3 = world->create(new Mesh(cubeModel, Transformation3D({ 0,0,-20 }, cubeScale), { grassMaterial }));
                 Body* planeBody = world->bodies.get(meshId3);
                 planeBody->get<Mesh*>()->scale({ 100.f,100.f,0.0001f });
             };
