@@ -27,11 +27,13 @@ namespace CGEngine {
 			MeshData meshData = mesh->getMeshData();
 			string path = mesh->getImportPath();
 			if (path != "") {
-				vector<MeshData> importedModel = importModel(path);
+				mesh->clearMaterials();
+				vector<MeshData> importedModel = importModel(path, mesh);
 				meshData = MeshData(importedModel[0].vertices, importedModel[0].indices);
 				mesh->setMeshData(meshData);
 			}
 			vector<Material*> material = mesh->getMaterials();
+			cout << "Found " << material.size();
 			Program* program = material[0]->getProgram();
 			//Setup ModelData with drawCount, vertex buffer and array, and shader program
 			ModelData data = ModelData(meshData.getCount(), {material});
@@ -70,12 +72,12 @@ namespace CGEngine {
 		}
 	}
 
-	vector<MeshData> Renderer::importModel(string path, unsigned int options) {
+	vector<MeshData> Renderer::importModel(string path, Mesh* mesh, unsigned int options) {
 		//string directory = path.substr(0, path.find_last_of('/')); -- UNUSED
 		const aiScene* scene = modelImporter.ReadFile(path, options);
 		if (scene != nullptr) {
 			//TODO: Support models with multiple meshes?
-			vector<MeshData> meshes = processNode(scene->mRootNode, scene);
+			vector<MeshData> meshes = processNode(scene->mRootNode, scene, mesh);
 			if (meshes.size() > 0) {
 				cout << "Done importing " << meshes.size() << " meshes from " << path << "\n";
 				return meshes;
@@ -83,38 +85,78 @@ namespace CGEngine {
 			else {
 				cout << "No meshes imported from " << path << "\n";
 			}
-		}
-		else {
+		} else {
 			cout << "Failed to import from " << path << "\n";
 		}
 		return {};
 	}
 
-	vector<MeshData> Renderer::processNode(aiNode* node, const aiScene* scene) {
+	vector<MeshData> Renderer::processNode(aiNode* node, const aiScene* scene, Mesh* mesh) {
 		vector<MeshData> meshes = {};
 		// process all the node's meshes (if any)
+		vector<Material*> materials = {};
 		for (unsigned int i = 0; i < node->mNumMeshes; i++) {
-			aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
+			aiMesh* importedMesh = scene->mMeshes[node->mMeshes[i]];
 			vector<float> vertexArray = {};
 			vector<unsigned int> indices;
 			vector<Texture> textures;
-			for (unsigned int i = 0; i < mesh->mNumVertices; i++) {
+			if (importedMesh->mMaterialIndex >= 0) {
+				aiMaterial* material = scene->mMaterials[importedMesh->mMaterialIndex];
+				
+				//Extract the first found diffuse, specular and opacity textures
+				vector<string> diffuseMaps = loadMaterialTextures(material, aiTextureType_DIFFUSE);
+				string diffuseTexture = "";
+				if (diffuseMaps.size() > 0) {
+					diffuseTexture = diffuseMaps[0];
+				}
+				vector<string> specularMaps = loadMaterialTextures(material, aiTextureType_SPECULAR);
+				string specularTexture = "";
+				if (specularMaps.size() > 0) {
+					specularTexture = specularMaps[0];
+				}
+				vector<string> opacityMaps = loadMaterialTextures(material, aiTextureType_OPACITY);
+				string opacityTexture = "";
+				if (opacityMaps.size() > 0) {
+					opacityTexture = opacityMaps[0];
+				}
+				//Extract the diffuse & specular colors and the opacity, shininess, and roughess
+				aiColor4D* diffuseColor = new aiColor4D(1, 1, 1, 1);
+				aiColor4D* specularColor = new aiColor4D(1, 1, 1, 1);
+				ai_real* opacity = new ai_real(1);
+				ai_real* shininess = new ai_real(1);
+				ai_real* roughness = new ai_real(1);
+				aiGetMaterialColor(material,AI_MATKEY_COLOR_DIFFUSE, diffuseColor);
+				aiGetMaterialColor(material, AI_MATKEY_COLOR_SPECULAR, specularColor);
+				aiGetMaterialFloat(material, AI_MATKEY_SHININESS, shininess);
+				aiGetMaterialFloat(material, AI_MATKEY_OPACITY, opacity);
+				aiGetMaterialFloat(material, AI_MATKEY_ROUGHNESS_FACTOR, roughness);
+				
+				//Create the material and assign it to the mesh
+				SurfaceDomain diffuseDomain = SurfaceDomain(diffuseTexture, fromAiColor4(diffuseColor));
+				SurfaceDomain specularDomain = SurfaceDomain(specularTexture, fromAiColor4(specularColor), (*roughness)*(*shininess));
+				SurfaceDomain opacityDomain = SurfaceDomain(opacityTexture, Color::White, *opacity);
+				SurfaceParameters importedSurfParams = SurfaceParameters(diffuseDomain, specularDomain);
+				id_t materialId = world->createMaterial(importedSurfParams);
+				Material* importedMaterial = world->getMaterial(materialId);
+				mesh->addMaterial(importedMaterial);
+			}
+			for (unsigned int i = 0; i < importedMesh->mNumVertices; i++) {
 				//Pos
-				vertexArray.push_back(mesh->mVertices[i].x);
-				vertexArray.push_back(mesh->mVertices[i].y);
-				vertexArray.push_back(mesh->mVertices[i].z);
+				vertexArray.push_back(importedMesh->mVertices[i].x);
+				vertexArray.push_back(importedMesh->mVertices[i].y);
+				vertexArray.push_back(importedMesh->mVertices[i].z);
 				//TexCoord
 				//TODO: Support multiple texture coordinates?
 				glm::vec2 uv = { 0,0 };
-				if (mesh->mTextureCoords[0])  {
-					uv = { mesh->mTextureCoords[0][i].x,mesh->mTextureCoords[0][i].y };
+				if (importedMesh->mTextureCoords[0])  {
+					uv = { importedMesh->mTextureCoords[0][i].x,importedMesh->mTextureCoords[0][i].y };
 				}
 				vertexArray.push_back(uv.x);
 				vertexArray.push_back(uv.y);
 				//Normals
-				vertexArray.push_back(mesh->mNormals[i].x);
-				vertexArray.push_back(mesh->mNormals[i].y);
-				vertexArray.push_back(mesh->mNormals[i].z);
+				vertexArray.push_back(importedMesh->mNormals[i].x);
+				vertexArray.push_back(importedMesh->mNormals[i].y);
+				vertexArray.push_back(importedMesh->mNormals[i].z);
 				//TODO: Fix mesh materials
 				//TODO: Support external material definitions?
 				vertexArray.push_back(0);
@@ -123,22 +165,31 @@ namespace CGEngine {
 				//cout << "Vertex" << i << ": (" << mesh->mVertices[i].x << "," << mesh->mVertices[i].y << "," << mesh->mVertices[i].z << "),(" << uv.x<<","<<uv.y<<"),(" << mesh->mNormals[i].x << "," << mesh->mNormals[i].y << "," << mesh->mNormals[i].z << ")\n";
 			}
 			//Import indices
-			for (unsigned int i = 0; i < mesh->mNumFaces; i++) {
-				aiFace face = mesh->mFaces[i];
+			for (unsigned int i = 0; i < importedMesh->mNumFaces; i++) {
+				aiFace face = importedMesh->mFaces[i];
 				for (unsigned int j = 0; j < face.mNumIndices; j++) {
 					indices.push_back(face.mIndices[j]);
 				}
 			}
-
 			meshes.push_back(MeshData(vertexArray,indices));
 			cout << "Imported mesh with " << vertexArray.size() << " vertex array positions and " << indices.size() << " indices " << "\n";
 		}
 		// then do the same for each of its children
 		for (unsigned int i = 0; i < node->mNumChildren; i++) {
-			vector<MeshData> m = processNode(node->mChildren[i], scene);
+			vector<MeshData> m = processNode(node->mChildren[i], scene, mesh);
 			meshes.insert(meshes.end(), m.begin(), m.end());
 		}
 		return meshes;
+	}
+
+	vector<string> Renderer::loadMaterialTextures(aiMaterial* mat, aiTextureType type) {
+		vector<string> importedTextures;
+		for (unsigned int i = 0; i < mat->GetTextureCount(type); i++) {
+			aiString str;
+			mat->GetTexture(type, i, &str);
+			importedTextures.push_back(str.C_Str());
+		}
+		return importedTextures;
 	}
 
 	id_t Renderer::addLight(Light* light) {
@@ -419,5 +470,8 @@ namespace CGEngine {
 	}
 	glm::vec3 Renderer::toGlm(Color c) {
 		return glm::vec3(c.r, c.g, c.b);
+	}
+	Color Renderer::fromAiColor4(aiColor4D* c) {
+		return Color(c->r * 255.f, c->g, c->b * 255.f, c->a * 255.f);
 	}
 }
