@@ -16,7 +16,8 @@ namespace CGEngine {
 
 	class Mesh : public Transformable{
 	public:
-		Mesh(VertexModel model, Transformation3D transformation = Transformation3D(), vector<Material*> materials = { new Material() }, RenderParameters renderParams = RenderParameters());
+		Mesh(MeshData model, Transformation3D transformation = Transformation3D(), vector<Material*> materials = { new Material() }, RenderParameters renderParams = RenderParameters(), string importPath = "");
+		Mesh(string importPath, Transformation3D transformation = Transformation3D(), vector<Material*> materials = { new Material() }, RenderParameters renderParams = RenderParameters()) : Mesh(MeshData(), transformation, materials, renderParams, importPath) {};
 
 		void render(Transform parentTransform);
 		void bindTexture(Texture* texture);
@@ -26,14 +27,16 @@ namespace CGEngine {
 		void rotate(Vector3f delta);
 		void setScale(Vector3f scale);
 		void scale(Vector3f delta);
+		void setImportPath(string path);
+		string getImportPath();
 		void setModelData(ModelData data);
-		VertexModel getModel();
-		void setModel(VertexModel model);
+		MeshData getMeshData();
+		void setMeshData(MeshData model);
 		vector<Material*> getMaterials();
 	private:
-		VertexModel model;
+		string importPath;
+		MeshData meshData;
 		ModelData modelData;
-		Texture* meshTexture = nullptr;
 		Transformation3D transformation;
 		RenderParameters renderParameters;
 		vector<Material*> materials;
