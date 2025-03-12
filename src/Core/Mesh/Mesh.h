@@ -33,6 +33,8 @@ namespace CGEngine {
 		MeshData getMeshData();
 		void setMeshData(MeshData model);
 		vector<Material*> getMaterials();
+		id_t addMaterial(Material* material);
+		void clearMaterials();
 	private:
 		string importPath;
 		MeshData meshData;
