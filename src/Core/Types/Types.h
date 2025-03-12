@@ -111,7 +111,12 @@ namespace CGEngine {
     };
 
     struct VertexModel {
-        VertexModel(vector<float> vertices, string path = "", vector<unsigned> indices = {}) :vertices(vertices), vertexCount(vertices.size() / 8.0f), vertexSpan(vertexCount * sizeof(float)), dataSpan(vertices.size() * sizeof(float)), path(path), indices(indices){};
+        VertexModel(vector<float> vertices, string path = "", vector<unsigned> indices = {}) : 
+            vertices(vertices), 
+            indices(indices),
+            path(path),
+            vertexCount(vertices.size() / 8.0f), 
+            vertexSpan(vertexCount * sizeof(float)), dataSpan(vertices.size() * sizeof(float)){};
 
         vector<float> vertices;
         vector<unsigned> indices;

@@ -24,16 +24,17 @@ namespace CGEngine {
 
 	void Renderer::getModelData(Mesh* mesh) {
 		if (setGLWindowState(true)) {
-			VertexModel model = mesh->getModel();
-			if (model.path != "") {
-				vector<VertexModel> importedModel = importModel(model.path);
-				model = VertexModel(importedModel[0].vertices, "", importedModel[0].indices);
-				mesh->setModel(model);
+			MeshData meshData = mesh->getMeshData();
+			string path = mesh->getImportPath();
+			if (path != "") {
+				vector<MeshData> importedModel = importModel(path);
+				meshData = MeshData(importedModel[0].vertices, importedModel[0].indices);
+				mesh->setMeshData(meshData);
 			}
 			vector<Material*> material = mesh->getMaterials();
 			Program* program = material[0]->getProgram();
 			//Setup ModelData with drawCount, vertex buffer and array, and shader program
-			ModelData data = ModelData(model.vertexCount, { material });
+			ModelData data = ModelData(meshData.getCount(), {material});
 			glGenBuffers(1, &data.vbo);
 			glGenBuffers(1, &data.ebo);
 			glGenVertexArrays(1, &data.vao);
@@ -41,12 +42,12 @@ namespace CGEngine {
 			glBindVertexArray(data.vao);
 			//Bind the vertex buffer and pass in the vertex data
 			glBindBuffer(GL_ARRAY_BUFFER, data.vbo);
-			glBufferData(GL_ARRAY_BUFFER, model.dataSpan, model.vertices.data(), GL_STATIC_DRAW);
+			glBufferData(GL_ARRAY_BUFFER, meshData.getVertexLayoutSize(), meshData.vertices.data(), GL_STATIC_DRAW);
 
 			//Bind and buffert the element buffer, if the model has indices
-			if (model.indices.size() > 0) {
+			if (meshData.indices.size() > 0) {
 				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.ebo);
-				glBufferData(GL_ELEMENT_ARRAY_BUFFER, model.indices.size() * sizeof(unsigned int), &model.indices[0], GL_STATIC_DRAW);
+				glBufferData(GL_ELEMENT_ARRAY_BUFFER, meshData.getIndexLayoutSize(), meshData.indices.data(), GL_STATIC_DRAW);
 			}
 
 			auto stride = sizeof(GLfloat) * 9;
@@ -69,12 +70,12 @@ namespace CGEngine {
 		}
 	}
 
-	vector<VertexModel> Renderer::importModel(string path, unsigned int options) {
+	vector<MeshData> Renderer::importModel(string path, unsigned int options) {
 		//string directory = path.substr(0, path.find_last_of('/')); -- UNUSED
 		const aiScene* scene = modelImporter.ReadFile(path, options);
 		if (scene != nullptr) {
 			//TODO: Support models with multiple meshes?
-			vector<VertexModel> meshes = processNode(scene->mRootNode, scene);
+			vector<MeshData> meshes = processNode(scene->mRootNode, scene);
 			if (meshes.size() > 0) {
 				cout << "Done importing " << meshes.size() << " meshes from " << path << "\n";
 				return meshes;
@@ -89,8 +90,8 @@ namespace CGEngine {
 		return {};
 	}
 
-	vector<VertexModel> Renderer::processNode(aiNode* node, const aiScene* scene) {
-		vector<VertexModel> meshes = {};
+	vector<MeshData> Renderer::processNode(aiNode* node, const aiScene* scene) {
+		vector<MeshData> meshes = {};
 		// process all the node's meshes (if any)
 		for (unsigned int i = 0; i < node->mNumMeshes; i++) {
 			aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
@@ -129,12 +130,12 @@ namespace CGEngine {
 				}
 			}
 
-			meshes.push_back(VertexModel(vertexArray,"",indices));
+			meshes.push_back(MeshData(vertexArray,indices));
 			cout << "Imported mesh with " << vertexArray.size() << " vertex array positions and " << indices.size() << " indices " << "\n";
 		}
 		// then do the same for each of its children
 		for (unsigned int i = 0; i < node->mNumChildren; i++) {
-			vector<VertexModel> m = processNode(node->mChildren[i], scene);
+			vector<MeshData> m = processNode(node->mChildren[i], scene);
 			meshes.insert(meshes.end(), m.begin(), m.end());
 		}
 		return meshes;
@@ -191,7 +192,7 @@ namespace CGEngine {
 		return true;
 	}
 
-	void Renderer::renderMesh(VertexModel model, Transformation3D transform, ModelData data) {
+	void Renderer::renderMesh(MeshData model, Transformation3D transform, ModelData data) {
 		glm::mat4 modelPos = glm::translate(glm::vec3(transform.position.x, transform.position.y, transform.position.z));
 		glm::mat4 modelRotX = glm::rotate(degrees(transform.rotation.x).asRadians(), glm::vec3(1.f, 0.f, 0.f));
 		glm::mat4 modelRotY = glm::rotate(degrees(transform.rotation.y).asRadians(), glm::vec3(0.f, 1.f, 0.f));
