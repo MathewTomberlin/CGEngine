@@ -22,7 +22,7 @@ namespace CGEngine {
 	};
 
 	struct SurfaceParameters {
-		SurfaceParameters(string diffuseTexturePath = "", Vector2f diffuseTextureUVScale = { 1,1 }, Vector2f diffuseTextureScrollSpeed = { 0,0 }, Vector2f diffuseTextureOffset = { 0,0 }, Color diffuseColor = Color::White, string specularTexturePath = "", Vector2f specularTextureUVScale = { 1,1 }, Vector2f specularTextureScrollSpeed = { 0,0 }, Vector2f specularTextureOffset = { 0,0 }, Color specularColor = Color::White, float smoothnessFactor = 32.f, string opacityTexturePath = "", Vector2f opacityTextureUVScale = { 1,1 }, Vector2f opacityTextureOffset = { 0,0 }, Vector2f opacityTextureScrollSpeed = { 0,0 }, float opacity = 1.0f, bool opacityMasked = true, float alphaCutoff = 0.01f, bool useGammaCorrection = false, float gamma = 2.2f, bool useLighting = true) :
+		SurfaceParameters(string diffuseTexturePath, Vector2f diffuseTextureUVScale = { 1,1 }, Vector2f diffuseTextureScrollSpeed = { 0,0 }, Vector2f diffuseTextureOffset = { 0,0 }, Color diffuseColor = Color::White, string specularTexturePath = "", Vector2f specularTextureUVScale = { 1,1 }, Vector2f specularTextureScrollSpeed = { 0,0 }, Vector2f specularTextureOffset = { 0,0 }, Color specularColor = Color::White, float smoothnessFactor = 32.f, string opacityTexturePath = "", Vector2f opacityTextureUVScale = { 1,1 }, Vector2f opacityTextureOffset = { 0,0 }, Vector2f opacityTextureScrollSpeed = { 0,0 }, float opacity = 1.0f, bool opacityMasked = true, float alphaCutoff = 0.01f, bool useGammaCorrection = false, float gamma = 2.2f, bool useLighting = true) :
 			diffuseTexturePath(diffuseTexturePath),
 			diffuseTextureUVScale(diffuseTextureUVScale),
 			diffuseTextureScrollSpeed(diffuseTextureScrollSpeed),
