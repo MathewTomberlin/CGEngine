@@ -76,6 +76,16 @@ namespace CGEngine {
 		return materials;
 	}
 
+	id_t Mesh::addMaterial(Material* material) {
+		id_t id = materials.size();
+		materials.push_back(material);
+		return id;
+	}
+
+	void Mesh::clearMaterials() {
+		materials.clear();
+	}
+
 	void Mesh::setImportPath(string path) {
 		importPath = path;
 	}

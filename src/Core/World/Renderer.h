@@ -37,6 +37,12 @@ namespace CGEngine {
 		vector<Material*> materials;
 	};
 
+	struct TextureData {
+		unsigned int id;
+		string type;
+		string path;
+	};
+
 	struct MeshData {
 		MeshData(vector<float> vertices = {}, vector<unsigned int> indices = {}) :vertices(vertices), indices(indices) {};
 		vector<float> vertices;
@@ -99,7 +105,7 @@ namespace CGEngine {
 		void commitGL();
 		void pullGL();
 
-		vector<MeshData> processNode(aiNode* node, const aiScene* scene);
+		vector<MeshData> processNode(aiNode* node, const aiScene* scene, Mesh* mesh);
 
 		bool processRender();
 		void setWindow(RenderWindow* window);
@@ -118,6 +124,7 @@ namespace CGEngine {
 		glm::vec2 toGlm(Vector2f v);
 		glm::vec3 toGlm(Vector3f v);
 		glm::vec3 toGlm(Color c);
+		Color fromAiColor4(aiColor4D* c);
 	private:
 		friend class World;
 		RenderWindow* window = nullptr;
@@ -142,7 +149,8 @@ namespace CGEngine {
 		vector<Body*> renderOrder;
 		
 		Importer modelImporter = Importer();
-		vector<MeshData> importModel(string path, unsigned int options = aiProcess_Triangulate | aiProcess_FlipUVs);
+		vector<MeshData> importModel(string path, Mesh* mesh, unsigned int options = aiProcess_Triangulate | aiProcess_FlipUVs);
+		vector<string> loadMaterialTextures(aiMaterial* mat, aiTextureType type);
 		GLenum initGlew();
 		Program* program;
 		UniqueDomain<id_t, Light*> lights = UniqueDomain<id_t, Light*>(10);

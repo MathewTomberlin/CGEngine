@@ -6,7 +6,6 @@ namespace CGEngine {
 		//TODO: Should materials using the same two shaders also use the same shader ref?
 		if (renderer.setGLWindowState(true)) {
 			shaderProgram = new Program(shaderPath);
-			renderer.setGLWindowState(false);
 		}
 
 		materialId = world->addMaterial(this);
