@@ -155,5 +155,8 @@ namespace CGEngine {
 		Program* program;
 		UniqueDomain<id_t, Light*> lights = UniqueDomain<id_t, Light*>(10);
 		int boundTextures = 0;
+
+		//Fallback Material
+		id_t fallbackMaterialId;
 	};
 }

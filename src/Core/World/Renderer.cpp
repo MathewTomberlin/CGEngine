@@ -33,8 +33,11 @@ namespace CGEngine {
 				mesh->setMeshData(meshData);
 			}
 			vector<Material*> material = mesh->getMaterials();
-			cout << "Found " << material.size();
-			Program* program = material[0]->getProgram();
+			Material* renderMaterial = world->getMaterial(fallbackMaterialId);
+			if (material.size() > 0 && material[0] && material[0]->getProgram()) {
+				renderMaterial = material[0];
+			}
+			Program* program = renderMaterial->getProgram();
 			//Setup ModelData with drawCount, vertex buffer and array, and shader program
 			ModelData data = ModelData(meshData.getCount(), {material});
 			glGenBuffers(1, &data.vbo);
@@ -255,8 +258,14 @@ namespace CGEngine {
 		if (renderer.setGLWindowState(true)) {
 			glBindVertexArray(data.vao);
 			boundTextures = 0;
-			//TODO: Move Shader out to model
-			Program* program = data.materials[0]->getProgram();
+			Material* renderMaterial = world->getMaterial(fallbackMaterialId);
+			if (data.materials.size() > 0 && data.materials[0] && data.materials[0]->getProgram()) {
+				renderMaterial = data.materials[0];
+			} else {
+				data.materials.clear();
+				data.materials.push_back(renderMaterial);
+			}
+			Program* program = renderMaterial->getProgram();
 			//Bind the shaders.
 			program->use();
 
