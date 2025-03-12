@@ -36,6 +36,22 @@ namespace CGEngine {
 		GLint drawCount;
 		vector<Material*> materials;
 	};
+
+	struct MeshData {
+		MeshData(vector<float> vertices = {}, vector<unsigned int> indices = {}) :vertices(vertices), indices(indices) {};
+		vector<float> vertices;
+		vector<unsigned int> indices;
+		GLint getCount() {
+			return vertices.size() / 9.0f;
+		}
+		GLint getVertexLayoutSize() {
+			return vertices.size() * sizeof(float);
+		}
+		GLint getIndexLayoutSize() {
+			return indices.size() * sizeof(unsigned int);
+		}
+	};
+
 	/// <summary>
 	/// Responsible for ordering Bodies for rendering. Allows for default ordering (children render on top of parents)
 	/// modified with per-object Z-Order
@@ -83,14 +99,14 @@ namespace CGEngine {
 		void commitGL();
 		void pullGL();
 
-		vector<VertexModel> processNode(aiNode* node, const aiScene* scene);
+		vector<MeshData> processNode(aiNode* node, const aiScene* scene);
 
 		bool processRender();
 		void setWindow(RenderWindow* window);
 		Camera* getCurrentCamera();
 		void setCurrentCamera(Camera* camera);
 
-		void renderMesh(VertexModel model, Transformation3D transform, ModelData data);
+		void renderMesh(MeshData model, Transformation3D transform, ModelData data);
 		void getModelData(Mesh* mesh);
 		id_t addLight(Light* light);
 		void removeLight(id_t lightId);
@@ -126,7 +142,7 @@ namespace CGEngine {
 		vector<Body*> renderOrder;
 		
 		Importer modelImporter = Importer();
-		vector<VertexModel> importModel(string path, unsigned int options = aiProcess_Triangulate | aiProcess_FlipUVs);
+		vector<MeshData> importModel(string path, unsigned int options = aiProcess_Triangulate | aiProcess_FlipUVs);
 		GLenum initGlew();
 		Program* program;
 		UniqueDomain<id_t, Light*> lights = UniqueDomain<id_t, Light*>(10);

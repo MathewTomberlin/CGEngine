@@ -1,7 +1,7 @@
 #include "Mesh.h"
 
 namespace CGEngine {
-	Mesh::Mesh(VertexModel model, Transformation3D transformation, vector<Material*> materials, RenderParameters renderParams) : model(model), transformation(transformation), renderParameters(renderParams), materials(materials) {
+	Mesh::Mesh(MeshData meshData, Transformation3D transformation, vector<Material*> materials, RenderParameters renderParams, string importPath) : meshData(meshData), transformation(transformation), renderParameters(renderParams), materials(materials), importPath(importPath) {
 		renderer.getModelData(this);
 	};
 
@@ -9,12 +9,12 @@ namespace CGEngine {
 		modelData = data;
 	}
 
-	VertexModel Mesh::getModel() {
-		return model;
+	MeshData Mesh::getMeshData() {
+		return meshData;
 	}
 
-	void Mesh::setModel(VertexModel model) {
-		this->model = model;
+	void Mesh::setMeshData(MeshData model) {
+		this->meshData = model;
 	}
 
 	void Mesh::render(Transform transform) {
@@ -31,7 +31,7 @@ namespace CGEngine {
 		Vector3f scale = { scale2d.x * transformation.scale.x,scale2d.y * transformation.scale.y, transformation.scale.z };
 		Transformation3D combinedTransformation = Transformation3D(position, rotation, scale);
 
-		renderer.renderMesh(model, combinedTransformation, modelData);
+		renderer.renderMesh(meshData, combinedTransformation, modelData);
 		renderer.commitGL();
 	}
 
@@ -74,5 +74,12 @@ namespace CGEngine {
 
 	vector<Material*> Mesh::getMaterials() {
 		return materials;
+	}
+
+	void Mesh::setImportPath(string path) {
+		importPath = path;
+	}
+	string Mesh::getImportPath() {
+		return importPath;
 	}
 }
