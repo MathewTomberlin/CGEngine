@@ -21,7 +21,7 @@
 using namespace Assimp;
 using namespace std;
 using namespace sf;
-//#define MAX_BONE_INFLUENCE 4
+#define MAX_BONE_INFLUENCE 4
 
 namespace CGEngine {
 	class Mesh;
@@ -34,6 +34,8 @@ namespace CGEngine {
 		glm::vec2 texCoord = { 0,0 };
 		glm::vec3 normal = { 0,0,0 };
 		GLfloat materialId = 0;
+		int boneIds[MAX_BONE_INFLUENCE];
+		float weights[MAX_BONE_INFLUENCE];
 	};
 
 	struct TextureData {
@@ -42,14 +44,21 @@ namespace CGEngine {
 		string path;
 	};
 
+	struct BoneData {
+		unsigned int id;
+		glm::mat4 offset;
+	};
+
 	struct MeshData {
-		MeshData(vector<VertexData> vertices = {}, vector<unsigned int> indices = {}, vector<Material*> materials = {new Material()}) :vertices(vertices), indices(indices), materials(materials), vao(0U), vbo(0U), ebo(0U) {};
+		MeshData(vector<VertexData> vertices = {}, vector<unsigned int> indices = {}, vector<Material*> materials = { new Material() }, map<string, BoneData> bones = {}, int boneCounter = 0) :vertices(vertices), indices(indices), materials(materials), vao(0U), vbo(0U), ebo(0U), bones(bones), boneCounter(boneCounter) {};
 		vector<VertexData> vertices;
 		vector<unsigned int> indices;
 		GLuint vbo = 0U;
 		GLuint vao = 0U;
 		GLuint ebo = 0U;
 		vector<Material*> materials;
+		map<string, BoneData> bones;
+		int boneCounter;
 
 		GLint getCount() {
 			return vertices.size() / 9.0f;
@@ -114,7 +123,7 @@ namespace CGEngine {
 		void commitGL();
 		void pullGL();
 
-		vector<MeshData> processNode(aiNode* node, const aiScene* scene, Mesh* mesh);
+		vector<MeshData> processNode(aiNode* node, const aiScene* scene, Mesh* mesh, string type);
 
 		bool processRender();
 		void setWindow(RenderWindow* window);
@@ -134,23 +143,23 @@ namespace CGEngine {
 		glm::vec3 toGlm(Vector3f v);
 		glm::vec3 toGlm(Color c);
 		Color fromAiColor4(aiColor4D* c);
-		//static inline glm::mat4 fromAiMatrix4toGlm(const aiMatrix4x4& from) {
-		//	glm::mat4 to;
-		//	//the a,b,c,d in assimp is the row ; the 1,2,3,4 is the column
-		//	to[0][0] = from.a1; to[1][0] = from.a2; to[2][0] = from.a3; to[3][0] = from.a4;
-		//	to[0][1] = from.b1; to[1][1] = from.b2; to[2][1] = from.b3; to[3][1] = from.b4;
-		//	to[0][2] = from.c1; to[1][2] = from.c2; to[2][2] = from.c3; to[3][2] = from.c4;
-		//	to[0][3] = from.d1; to[1][3] = from.d2; to[2][3] = from.d3; to[3][3] = from.d4;
-		//	return to;
-		//}
-		//
-		//static inline glm::vec3 fromAiVec3toGlm(const aiVector3D& vec) {
-		//	return glm::vec3(vec.x, vec.y, vec.z);
-		//}
-		//
-		//static inline glm::quat fromAiQuatToGlm(const aiQuaternion& pOrientation) {
-		//	return glm::quat(pOrientation.w, pOrientation.x, pOrientation.y, pOrientation.z);
-		//}
+		static inline glm::mat4 fromAiMatrix4toGlm(const aiMatrix4x4& from) {
+			glm::mat4 to;
+			//the a,b,c,d in assimp is the row ; the 1,2,3,4 is the column
+			to[0][0] = from.a1; to[1][0] = from.a2; to[2][0] = from.a3; to[3][0] = from.a4;
+			to[0][1] = from.b1; to[1][1] = from.b2; to[2][1] = from.b3; to[3][1] = from.b4;
+			to[0][2] = from.c1; to[1][2] = from.c2; to[2][2] = from.c3; to[3][2] = from.c4;
+			to[0][3] = from.d1; to[1][3] = from.d2; to[2][3] = from.d3; to[3][3] = from.d4;
+			return to;
+		}
+		
+		static inline glm::vec3 fromAiVec3toGlm(const aiVector3D& vec) {
+			return glm::vec3(vec.x, vec.y, vec.z);
+		}
+		
+		static inline glm::quat fromAiQuatToGlm(const aiQuaternion& pOrientation) {
+			return glm::quat(pOrientation.w, pOrientation.x, pOrientation.y, pOrientation.z);
+		}
 	private:
 		friend class World;
 		RenderWindow* window = nullptr;
