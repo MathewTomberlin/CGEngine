@@ -32,6 +32,10 @@ namespace CGEngine {
 			return def;
 		}
 
+		bool has(DomainKey key) {
+			return (domain.find(key) != domain.end());
+		}
+
 		void forEach(function<void(DomainValue)> function) {
 			for (auto iterator = domain.begin(); iterator != domain.end(); ++iterator) {
 				function((*iterator).second);

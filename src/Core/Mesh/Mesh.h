@@ -29,7 +29,6 @@ namespace CGEngine {
 		void scale(Vector3f delta);
 		void setImportPath(string path);
 		string getImportPath();
-		void setModelData(ModelData data);
 		MeshData getMeshData();
 		void setMeshData(MeshData model);
 		vector<Material*> getMaterials();
@@ -38,7 +37,6 @@ namespace CGEngine {
 	private:
 		string importPath;
 		MeshData meshData;
-		ModelData modelData;
 		Transformation3D transformation;
 		RenderParameters renderParameters;
 		vector<Material*> materials;

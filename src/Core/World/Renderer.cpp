@@ -34,31 +34,34 @@ namespace CGEngine {
 			}
 			vector<Material*> material = mesh->getMaterials();
 			Material* renderMaterial = world->getMaterial(fallbackMaterialId);
-			if (material.size() > 0 && material[0] && material[0]->getProgram()) {
-				renderMaterial = material[0];
-			}
+			renderMaterial = material[0];
+			//if (material.size() > 0 && material[0] && material[0]->getProgram()) {
+			//	renderMaterial = material[0];
+			//}
 			Program* program = renderMaterial->getProgram();
 			//Setup ModelData with drawCount, vertex buffer and array, and shader program
-			ModelData data = ModelData(meshData.getCount(), {material});
-			glGenBuffers(1, &data.vbo);
-			glGenBuffers(1, &data.ebo);
-			glGenVertexArrays(1, &data.vao);
+			meshData.materials = material;
+			glGenBuffers(1, &meshData.vbo);
+			glGenBuffers(1, &meshData.ebo);
+			glGenVertexArrays(1, &meshData.vao);
 
-			glBindVertexArray(data.vao);
+			glBindVertexArray(meshData.vao);
 			//Bind the vertex buffer and pass in the vertex data
-			glBindBuffer(GL_ARRAY_BUFFER, data.vbo);
-			glBufferData(GL_ARRAY_BUFFER, meshData.getVertexLayoutSize(), meshData.vertices.data(), GL_STATIC_DRAW);
+			glBindBuffer(GL_ARRAY_BUFFER, meshData.vbo);
+			glBufferData(GL_ARRAY_BUFFER, meshData.vertices.size()*sizeof(VertexData), meshData.vertices.data(), GL_STATIC_DRAW);
 
 			//Bind and buffert the element buffer, if the model has indices
 			if (meshData.indices.size() > 0) {
-				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.ebo);
-				glBufferData(GL_ELEMENT_ARRAY_BUFFER, meshData.getIndexLayoutSize(), meshData.indices.data(), GL_STATIC_DRAW);
+				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, meshData.ebo);
+				glBufferData(GL_ELEMENT_ARRAY_BUFFER, meshData.indices.size()*sizeof(unsigned int), meshData.indices.data(), GL_STATIC_DRAW);
 			}
 
 			auto stride = sizeof(GLfloat) * 9;
 			auto textureCoordOffset = sizeof(GLfloat) * 3;
 			auto normalOffset = sizeof(GLfloat) * 5;
 			auto materialIdOffset = sizeof(GLfloat) * 8;
+			//auto boneIdOffset = sizeof(GLfloat) * 9;
+			//auto weightOffset = sizeof(GLfloat) * 10;
 			//Enable and prepare vertex, texture coordinate, normal, and textureId attribute arrays
 			glEnableVertexAttribArray(program->attrib("position"));
 			glVertexAttribPointer(program->attrib("position"), 3, GL_FLOAT, GL_FALSE, stride, NULL);
@@ -68,9 +71,13 @@ namespace CGEngine {
 			glVertexAttribPointer(program->attrib("vertNormal"), 3, GL_FLOAT, GL_FALSE, stride, (void*)normalOffset);
 			glEnableVertexAttribArray(program->attrib("materialId"));
 			glVertexAttribPointer(program->attrib("materialId"), 1, GL_FLOAT, GL_FALSE, stride, (void*)materialIdOffset);
+			//glEnableVertexAttribArray(program->attrib("boneIds"));
+			//glVertexAttribPointer(program->attrib("boneIds"), 4, GL_FLOAT, GL_FALSE, stride, (void*)boneIdOffset);
+			//glEnableVertexAttribArray(program->attrib("weights"));
+			//glVertexAttribPointer(program->attrib("weights"), 4, GL_FLOAT, GL_FALSE, stride, (void*)weightOffset);
 			glBindVertexArray(0);
 
-			mesh->setModelData(data);
+			mesh->setMeshData(meshData);
 			setGLWindowState(false);
 		}
 	}
@@ -99,12 +106,12 @@ namespace CGEngine {
 		// process all the node's meshes (if any)
 		vector<Material*> materials = {};
 		for (unsigned int i = 0; i < node->mNumMeshes; i++) {
-			aiMesh* importedMesh = scene->mMeshes[node->mMeshes[i]];
+			aiMesh* imported = scene->mMeshes[node->mMeshes[i]];
 			vector<float> vertexArray = {};
 			vector<unsigned int> indices;
 			vector<Texture> textures;
-			if (importedMesh->mMaterialIndex >= 0) {
-				aiMaterial* material = scene->mMaterials[importedMesh->mMaterialIndex];
+			if (imported->mMaterialIndex >= 0) {
+				aiMaterial* material = scene->mMaterials[imported->mMaterialIndex];
 				
 				//Extract the first found diffuse, specular and opacity textures
 				vector<string> diffuseMaps = loadMaterialTextures(material, aiTextureType_DIFFUSE);
@@ -143,39 +150,59 @@ namespace CGEngine {
 				Material* importedMaterial = world->getMaterial(materialId);
 				mesh->addMaterial(importedMaterial);
 			}
-			for (unsigned int i = 0; i < importedMesh->mNumVertices; i++) {
-				//Pos
-				vertexArray.push_back(importedMesh->mVertices[i].x);
-				vertexArray.push_back(importedMesh->mVertices[i].y);
-				vertexArray.push_back(importedMesh->mVertices[i].z);
-				//TexCoord
-				//TODO: Support multiple texture coordinates?
-				glm::vec2 uv = { 0,0 };
-				if (importedMesh->mTextureCoords[0])  {
-					uv = { importedMesh->mTextureCoords[0][i].x,importedMesh->mTextureCoords[0][i].y };
-				}
-				vertexArray.push_back(uv.x);
-				vertexArray.push_back(uv.y);
-				//Normals
-				vertexArray.push_back(importedMesh->mNormals[i].x);
-				vertexArray.push_back(importedMesh->mNormals[i].y);
-				vertexArray.push_back(importedMesh->mNormals[i].z);
-				//TODO: Fix mesh materials
-				//TODO: Support external material definitions?
-				vertexArray.push_back(0);
-				
-				//TODO: Import Logging
-				//cout << "Vertex" << i << ": (" << mesh->mVertices[i].x << "," << mesh->mVertices[i].y << "," << mesh->mVertices[i].z << "),(" << uv.x<<","<<uv.y<<"),(" << mesh->mNormals[i].x << "," << mesh->mNormals[i].y << "," << mesh->mNormals[i].z << ")\n";
+			vector<VertexData> vertices;
+			for (unsigned int i = 0; i < imported->mNumVertices; i++) {
+				glm::vec3 position = glm::vec3(imported->mVertices[i].x, imported->mVertices[i].y, imported->mVertices[i].z);
+				glm::vec2 texCoord = (imported->mTextureCoords[0]) ? glm::vec2(imported->mTextureCoords[0][i].x, imported->mTextureCoords[0][i].y) : glm::vec2(0, 0);
+				glm::vec3 normal = glm::vec3(imported->mNormals[i].x, imported->mNormals[i].y, imported->mNormals[i].z);
+				int materialId = imported->mMaterialIndex-1;
+
+				VertexData vert = VertexData(position,texCoord,normal,(float)materialId);
+				vertices.push_back(vert);
 			}
 			//Import indices
-			for (unsigned int i = 0; i < importedMesh->mNumFaces; i++) {
-				aiFace face = importedMesh->mFaces[i];
+			for (unsigned int i = 0; i < imported->mNumFaces; i++) {
+				aiFace face = imported->mFaces[i];
 				for (unsigned int j = 0; j < face.mNumIndices; j++) {
 					indices.push_back(face.mIndices[j]);
 				}
 			}
-			meshes.push_back(MeshData(vertexArray,indices));
-			cout << "Imported mesh with " << vertexArray.size() << " vertex array positions and " << indices.size() << " indices " << "\n";
+			//Import bones and weights
+			//for (int boneIndex = 0; boneIndex < imported->mNumBones; ++boneIndex) {
+			//	int boneID = -1;
+			//	string boneName = imported->mBones[boneIndex]->mName.C_Str();
+			//	if (mesh->bones.find(boneName) == mesh->bones.end()) {
+			//		BoneData boneData;
+			//		boneData.id = mesh->boneCounter;
+			//		//newBoneData.id = m_BoneCounter;
+			//		boneData.offset = fromAiMatrix4toGlm(imported->mBones[boneIndex]->mOffsetMatrix);
+			//		mesh->bones[boneName] = boneData;
+			//		boneID = mesh->boneCounter;
+			//		mesh->boneCounter++;
+			//	} else {
+			//		boneID = mesh->bones[boneName].id;
+			//	}
+			//	assert(boneID != -1);
+			//	auto weights = imported->mBones[boneIndex]->mWeights;
+			//	int numWeights = imported->mBones[boneIndex]->mNumWeights;
+			//
+			//	for (int weightIndex = 0; weightIndex < numWeights; ++weightIndex)
+			//	{
+			//		int vertexId = weights[weightIndex].mVertexId;
+			//		float weight = weights[weightIndex].mWeight;
+			//		assert(vertexId <= vertices.size());
+			//		for (int i = 0; i < MAX_BONE_INFLUENCE; ++i) {
+			//			if (vertices[vertexId].boneIds[i] < 0)
+			//			{
+			//				vertices[vertexId].weights[i] = weight;
+			//				vertices[vertexId].boneIds[i] = boneID;
+			//				break;
+			//			}
+			//		}
+			//	}
+			//}
+			meshes.push_back(MeshData(vertices,indices));
+			cout << "Imported mesh with " << vertices.size() << " vertex array positions and " << indices.size() << " indices " << "\n";
 		}
 		// then do the same for each of its children
 		for (unsigned int i = 0; i < node->mNumChildren; i++) {
@@ -246,7 +273,7 @@ namespace CGEngine {
 		return true;
 	}
 
-	void Renderer::renderMesh(MeshData model, Transformation3D transform, ModelData data) {
+	void Renderer::renderMesh(MeshData model, Transformation3D transform) {
 		glm::mat4 modelPos = glm::translate(glm::vec3(transform.position.x, transform.position.y, transform.position.z));
 		glm::mat4 modelRotX = glm::rotate(degrees(transform.rotation.x).asRadians(), glm::vec3(1.f, 0.f, 0.f));
 		glm::mat4 modelRotY = glm::rotate(degrees(transform.rotation.y).asRadians(), glm::vec3(0.f, 1.f, 0.f));
@@ -256,14 +283,14 @@ namespace CGEngine {
 		glm::mat4 modelTransform = modelPos * modelRotation * modelScale;
 
 		if (renderer.setGLWindowState(true)) {
-			glBindVertexArray(data.vao);
+			glBindVertexArray(model.vao);
 			boundTextures = 0;
 			Material* renderMaterial = world->getMaterial(fallbackMaterialId);
-			if (data.materials.size() > 0 && data.materials[0] && data.materials[0]->getProgram()) {
-				renderMaterial = data.materials[0];
+			if (model.materials.size() > 0 && model.materials[0] && model.materials[0]->getProgram()) {
+				renderMaterial = model.materials[0];
 			} else {
-				data.materials.clear();
-				data.materials.push_back(renderMaterial);
+				model.materials.clear();
+				model.materials.push_back(renderMaterial);
 			}
 			Program* program = renderMaterial->getProgram();
 			//Bind the shaders.
@@ -276,8 +303,8 @@ namespace CGEngine {
 			program->setUniform("cameraPosition", { camPos.x,camPos.y,camPos.z });
 			program->setUniform("timeSec", time.getElapsedSec());
 
-			for (int i = 0; i < data.materials.size(); ++i) {
-				setMaterialUniforms(data.materials.at(i), program, i);
+			for (int i = 0; i < model.materials.size(); ++i) {
+				setMaterialUniforms(model.materials.at(i), program, i);
 			}
 
 			program->setUniform("lightCount", (int)lights.size());
