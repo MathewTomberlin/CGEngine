@@ -5,10 +5,6 @@ namespace CGEngine {
 		renderer.getModelData(this);
 	};
 
-	void Mesh::setModelData(ModelData data) {
-		modelData = data;
-	}
-
 	MeshData Mesh::getMeshData() {
 		return meshData;
 	}
@@ -31,7 +27,7 @@ namespace CGEngine {
 		Vector3f scale = { scale2d.x * transformation.scale.x,scale2d.y * transformation.scale.y, transformation.scale.z };
 		Transformation3D combinedTransformation = Transformation3D(position, rotation, scale);
 
-		renderer.renderMesh(meshData, combinedTransformation, modelData);
+		renderer.renderMesh(meshData, combinedTransformation);
 		renderer.commitGL();
 	}
 

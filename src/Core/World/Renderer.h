@@ -21,20 +21,19 @@
 using namespace Assimp;
 using namespace std;
 using namespace sf;
+//#define MAX_BONE_INFLUENCE 4
 
 namespace CGEngine {
 	class Mesh;
 
-	struct ModelData {
-		ModelData() :vbo(0), vao(0), ebo(0), drawType(GL_TRIANGLES), drawStart(0), drawCount(0), materials({}) {};
-		ModelData(GLint drawCount, vector<Material*> materials = { new Material() }, GLint drawStart = 0, GLenum type = GL_TRIANGLES) :vbo(0), vao(0), ebo(0), drawType(type), drawStart(drawStart), drawCount(drawCount), materials(materials) {};
-		GLuint vbo;
-		GLuint vao;
-		GLuint ebo;
-		GLenum drawType;
-		GLint drawStart;
-		GLint drawCount;
-		vector<Material*> materials;
+	class VertexData {
+	public:
+		VertexData() {};
+		VertexData(glm::vec3 position, glm::vec2 texCoord, glm::vec3 normal, GLfloat materialId, int* bones = {}, float* wgts = {}) : position(position), texCoord(texCoord), normal(normal), materialId(materialId) { };
+		glm::vec3 position = { 0,0,0 };
+		glm::vec2 texCoord = { 0,0 };
+		glm::vec3 normal = { 0,0,0 };
+		GLfloat materialId = 0;
 	};
 
 	struct TextureData {
@@ -44,9 +43,14 @@ namespace CGEngine {
 	};
 
 	struct MeshData {
-		MeshData(vector<float> vertices = {}, vector<unsigned int> indices = {}) :vertices(vertices), indices(indices) {};
-		vector<float> vertices;
+		MeshData(vector<VertexData> vertices = {}, vector<unsigned int> indices = {}, vector<Material*> materials = {new Material()}) :vertices(vertices), indices(indices), materials(materials), vao(0U), vbo(0U), ebo(0U) {};
+		vector<VertexData> vertices;
 		vector<unsigned int> indices;
+		GLuint vbo = 0U;
+		GLuint vao = 0U;
+		GLuint ebo = 0U;
+		vector<Material*> materials;
+
 		GLint getCount() {
 			return vertices.size() / 9.0f;
 		}
@@ -57,6 +61,11 @@ namespace CGEngine {
 			return indices.size() * sizeof(unsigned int);
 		}
 	};
+
+	//struct BoneData {
+	//	id_t id;
+	//	glm::mat4 offset;
+	//};
 
 	/// <summary>
 	/// Responsible for ordering Bodies for rendering. Allows for default ordering (children render on top of parents)
@@ -112,7 +121,7 @@ namespace CGEngine {
 		Camera* getCurrentCamera();
 		void setCurrentCamera(Camera* camera);
 
-		void renderMesh(MeshData model, Transformation3D transform, ModelData data);
+		void renderMesh(MeshData model, Transformation3D transform);
 		void getModelData(Mesh* mesh);
 		id_t addLight(Light* light);
 		void removeLight(id_t lightId);
@@ -125,6 +134,23 @@ namespace CGEngine {
 		glm::vec3 toGlm(Vector3f v);
 		glm::vec3 toGlm(Color c);
 		Color fromAiColor4(aiColor4D* c);
+		//static inline glm::mat4 fromAiMatrix4toGlm(const aiMatrix4x4& from) {
+		//	glm::mat4 to;
+		//	//the a,b,c,d in assimp is the row ; the 1,2,3,4 is the column
+		//	to[0][0] = from.a1; to[1][0] = from.a2; to[2][0] = from.a3; to[3][0] = from.a4;
+		//	to[0][1] = from.b1; to[1][1] = from.b2; to[2][1] = from.b3; to[3][1] = from.b4;
+		//	to[0][2] = from.c1; to[1][2] = from.c2; to[2][2] = from.c3; to[3][2] = from.c4;
+		//	to[0][3] = from.d1; to[1][3] = from.d2; to[2][3] = from.d3; to[3][3] = from.d4;
+		//	return to;
+		//}
+		//
+		//static inline glm::vec3 fromAiVec3toGlm(const aiVector3D& vec) {
+		//	return glm::vec3(vec.x, vec.y, vec.z);
+		//}
+		//
+		//static inline glm::quat fromAiQuatToGlm(const aiQuaternion& pOrientation) {
+		//	return glm::quat(pOrientation.w, pOrientation.x, pOrientation.y, pOrientation.z);
+		//}
 	private:
 		friend class World;
 		RenderWindow* window = nullptr;
