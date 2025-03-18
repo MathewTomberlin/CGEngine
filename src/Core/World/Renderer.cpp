@@ -34,10 +34,10 @@ namespace CGEngine {
 			}
 			vector<Material*> material = mesh->getMaterials();
 			Material* renderMaterial = world->getMaterial(fallbackMaterialId);
-			renderMaterial = material[0];
-			//if (material.size() > 0 && material[0] && material[0]->getProgram()) {
-			//	renderMaterial = material[0];
-			//}
+			if (material.size() > 0 && material[0] && material[0]->getProgram()) {
+				renderMaterial = material[0];
+			}
+
 			Program* program = renderMaterial->getProgram();
 			//Setup ModelData with drawCount, vertex buffer and array, and shader program
 			meshData.materials = material;
@@ -56,25 +56,22 @@ namespace CGEngine {
 				glBufferData(GL_ELEMENT_ARRAY_BUFFER, meshData.indices.size()*sizeof(unsigned int), meshData.indices.data(), GL_STATIC_DRAW);
 			}
 
-			auto stride = sizeof(GLfloat) * 9;
-			auto textureCoordOffset = sizeof(GLfloat) * 3;
-			auto normalOffset = sizeof(GLfloat) * 5;
-			auto materialIdOffset = sizeof(GLfloat) * 8;
-			//auto boneIdOffset = sizeof(GLfloat) * 9;
-			//auto weightOffset = sizeof(GLfloat) * 10;
 			//Enable and prepare vertex, texture coordinate, normal, and textureId attribute arrays
 			glEnableVertexAttribArray(program->attrib("position"));
-			glVertexAttribPointer(program->attrib("position"), 3, GL_FLOAT, GL_FALSE, stride, NULL);
+			glVertexAttribPointer(program->attrib("position"), 3, GL_FLOAT, GL_FALSE, sizeof(VertexData), NULL);
 			glEnableVertexAttribArray(program->attrib("texCoord"));
-			glVertexAttribPointer(program->attrib("texCoord"), 2, GL_FLOAT, GL_FALSE, stride, (void*)textureCoordOffset);
+			glVertexAttribPointer(program->attrib("texCoord"), 2, GL_FLOAT, GL_FALSE, sizeof(VertexData), (void*)offsetof(VertexData,texCoord));
 			glEnableVertexAttribArray(program->attrib("vertNormal"));
-			glVertexAttribPointer(program->attrib("vertNormal"), 3, GL_FLOAT, GL_FALSE, stride, (void*)normalOffset);
+			glVertexAttribPointer(program->attrib("vertNormal"), 3, GL_FLOAT, GL_FALSE, sizeof(VertexData), (void*)offsetof(VertexData, normal));
 			glEnableVertexAttribArray(program->attrib("materialId"));
-			glVertexAttribPointer(program->attrib("materialId"), 1, GL_FLOAT, GL_FALSE, stride, (void*)materialIdOffset);
-			//glEnableVertexAttribArray(program->attrib("boneIds"));
-			//glVertexAttribPointer(program->attrib("boneIds"), 4, GL_FLOAT, GL_FALSE, stride, (void*)boneIdOffset);
-			//glEnableVertexAttribArray(program->attrib("weights"));
-			//glVertexAttribPointer(program->attrib("weights"), 4, GL_FLOAT, GL_FALSE, stride, (void*)weightOffset);
+			glVertexAttribPointer(program->attrib("materialId"), 1, GL_FLOAT, GL_FALSE, sizeof(VertexData), (void*)offsetof(VertexData, materialId));
+			if (meshData.boneCounter>0) {
+				cout << "Enabling bones and weights for skeletal mesh" << "\n";
+				glEnableVertexAttribArray(program->attrib("boneIds"));
+				glVertexAttribPointer(program->attrib("boneIds"), 4, GL_FLOAT, GL_FALSE, sizeof(VertexData), (void*)offsetof(VertexData, boneIds));
+				glEnableVertexAttribArray(program->attrib("weights"));
+				glVertexAttribPointer(program->attrib("weights"), 4, GL_FLOAT, GL_FALSE, sizeof(VertexData), (void*)offsetof(VertexData, weights));
+			}
 			glBindVertexArray(0);
 
 			mesh->setMeshData(meshData);
@@ -84,12 +81,13 @@ namespace CGEngine {
 
 	vector<MeshData> Renderer::importModel(string path, Mesh* mesh, unsigned int options) {
 		//string directory = path.substr(0, path.find_last_of('/')); -- UNUSED
+		string type = path.substr(path.find_last_of('.') + 1, path.size());
 		const aiScene* scene = modelImporter.ReadFile(path, options);
 		if (scene != nullptr) {
 			//TODO: Support models with multiple meshes?
-			vector<MeshData> meshes = processNode(scene->mRootNode, scene, mesh);
+			vector<MeshData> meshes = processNode(scene->mRootNode, scene, mesh, type);
 			if (meshes.size() > 0) {
-				cout << "Done importing " << meshes.size() << " meshes from " << path << "\n";
+				cout << "Finished importing " << path << "\n\n";
 				return meshes;
 			}
 			else {
@@ -101,18 +99,36 @@ namespace CGEngine {
 		return {};
 	}
 
-	vector<MeshData> Renderer::processNode(aiNode* node, const aiScene* scene, Mesh* mesh) {
+	vector<MeshData> Renderer::processNode(aiNode* node, const aiScene* scene, Mesh* mesh, string type) {
 		vector<MeshData> meshes = {};
 		// process all the node's meshes (if any)
 		vector<Material*> materials = {};
 		for (unsigned int i = 0; i < node->mNumMeshes; i++) {
 			aiMesh* imported = scene->mMeshes[node->mMeshes[i]];
-			vector<float> vertexArray = {};
+			cout << "Importing " << imported->mName.C_Str() << "\n";
 			vector<unsigned int> indices;
+
+			vector<VertexData> vertices;
+			for (unsigned int i = 0; i < imported->mNumVertices; i++) {
+				glm::vec3 position = glm::vec3(imported->mVertices[i].x, imported->mVertices[i].y, imported->mVertices[i].z);
+				glm::vec2 texCoord = (imported->mTextureCoords[0]) ? glm::vec2(imported->mTextureCoords[0][i].x, imported->mTextureCoords[0][i].y) : glm::vec2(0, 0);
+				glm::vec3 normal = glm::vec3(imported->mNormals[i].x, imported->mNormals[i].y, imported->mNormals[i].z);
+				int materialId = imported->mMaterialIndex - (type == "obj" ? 1 : 0);
+
+				VertexData vert = VertexData(position, texCoord, normal, (float)materialId);
+				vertices.push_back(vert);
+			}
+			for (unsigned int i = 0; i < imported->mNumFaces; i++) {
+				aiFace face = imported->mFaces[i];
+				for (unsigned int j = 0; j < face.mNumIndices; j++) {
+					indices.push_back(face.mIndices[j]);
+				}
+			}
+			cout << "Imported " << vertices.size() << " vertices and " << indices.size() << " indices" << "\n";
+
 			vector<Texture> textures;
-			if (imported->mMaterialIndex >= 0) {
+			if (imported->mMaterialIndex >= 0 && scene->HasMaterials()) {
 				aiMaterial* material = scene->mMaterials[imported->mMaterialIndex];
-				
 				//Extract the first found diffuse, specular and opacity textures
 				vector<string> diffuseMaps = loadMaterialTextures(material, aiTextureType_DIFFUSE);
 				string diffuseTexture = "";
@@ -149,64 +165,49 @@ namespace CGEngine {
 				id_t materialId = world->createMaterial(importedSurfParams);
 				Material* importedMaterial = world->getMaterial(materialId);
 				mesh->addMaterial(importedMaterial);
-			}
-			vector<VertexData> vertices;
-			for (unsigned int i = 0; i < imported->mNumVertices; i++) {
-				glm::vec3 position = glm::vec3(imported->mVertices[i].x, imported->mVertices[i].y, imported->mVertices[i].z);
-				glm::vec2 texCoord = (imported->mTextureCoords[0]) ? glm::vec2(imported->mTextureCoords[0][i].x, imported->mTextureCoords[0][i].y) : glm::vec2(0, 0);
-				glm::vec3 normal = glm::vec3(imported->mNormals[i].x, imported->mNormals[i].y, imported->mNormals[i].z);
-				int materialId = imported->mMaterialIndex-1;
-
-				VertexData vert = VertexData(position,texCoord,normal,(float)materialId);
-				vertices.push_back(vert);
-			}
-			//Import indices
-			for (unsigned int i = 0; i < imported->mNumFaces; i++) {
-				aiFace face = imported->mFaces[i];
-				for (unsigned int j = 0; j < face.mNumIndices; j++) {
-					indices.push_back(face.mIndices[j]);
-				}
+				materials.push_back(importedMaterial);
+				cout << "Imported material " << material->GetName().C_Str() << "\n";
 			}
 			//Import bones and weights
-			//for (int boneIndex = 0; boneIndex < imported->mNumBones; ++boneIndex) {
-			//	int boneID = -1;
-			//	string boneName = imported->mBones[boneIndex]->mName.C_Str();
-			//	if (mesh->bones.find(boneName) == mesh->bones.end()) {
-			//		BoneData boneData;
-			//		boneData.id = mesh->boneCounter;
-			//		//newBoneData.id = m_BoneCounter;
-			//		boneData.offset = fromAiMatrix4toGlm(imported->mBones[boneIndex]->mOffsetMatrix);
-			//		mesh->bones[boneName] = boneData;
-			//		boneID = mesh->boneCounter;
-			//		mesh->boneCounter++;
-			//	} else {
-			//		boneID = mesh->bones[boneName].id;
-			//	}
-			//	assert(boneID != -1);
-			//	auto weights = imported->mBones[boneIndex]->mWeights;
-			//	int numWeights = imported->mBones[boneIndex]->mNumWeights;
-			//
-			//	for (int weightIndex = 0; weightIndex < numWeights; ++weightIndex)
-			//	{
-			//		int vertexId = weights[weightIndex].mVertexId;
-			//		float weight = weights[weightIndex].mWeight;
-			//		assert(vertexId <= vertices.size());
-			//		for (int i = 0; i < MAX_BONE_INFLUENCE; ++i) {
-			//			if (vertices[vertexId].boneIds[i] < 0)
-			//			{
-			//				vertices[vertexId].weights[i] = weight;
-			//				vertices[vertexId].boneIds[i] = boneID;
-			//				break;
-			//			}
-			//		}
-			//	}
-			//}
+			map<string, BoneData> bones;
+			int boneCounter = 0;
+			for (int boneIndex = 0; boneIndex < imported->mNumBones; ++boneIndex) {
+				int boneID = -1;
+				string boneName = imported->mBones[boneIndex]->mName.C_Str();
+				if (bones.find(boneName) == bones.end()) {
+					BoneData boneData;
+					boneData.id = boneCounter;
+					//newBoneData.id = m_BoneCounter;
+					boneData.offset = fromAiMatrix4toGlm(imported->mBones[boneIndex]->mOffsetMatrix);
+					bones[boneName] = boneData;
+					boneID = boneCounter;
+					cout << "Imported bone " << boneName << "\n";
+					boneCounter++;
+				} else {
+					boneID = bones[boneName].id;
+				}
+				assert(boneID != -1);
+				auto weights = imported->mBones[boneIndex]->mWeights;
+				int numWeights = imported->mBones[boneIndex]->mNumWeights;
+			
+				for (int weightIndex = 0; weightIndex < numWeights; ++weightIndex) {
+					int vertexId = weights[weightIndex].mVertexId;
+					float weight = weights[weightIndex].mWeight;
+					assert(vertexId <= vertices.size());
+					for (int i = 0; i < MAX_BONE_INFLUENCE; ++i) {
+						if (vertices[vertexId].boneIds[i] < 0) {
+							vertices[vertexId].weights[i] = weight;
+							vertices[vertexId].boneIds[i] = boneID;
+							break;
+						}
+					}
+				}
+			}
 			meshes.push_back(MeshData(vertices,indices));
-			cout << "Imported mesh with " << vertices.size() << " vertex array positions and " << indices.size() << " indices " << "\n";
 		}
 		// then do the same for each of its children
 		for (unsigned int i = 0; i < node->mNumChildren; i++) {
-			vector<MeshData> m = processNode(node->mChildren[i], scene, mesh);
+			vector<MeshData> m = processNode(node->mChildren[i], scene, mesh, type);
 			meshes.insert(meshes.end(), m.begin(), m.end());
 		}
 		return meshes;

@@ -121,7 +121,6 @@ namespace CGEngine {
                 map.insert(map.end(), indices.begin(), indices.end());
             }
         }
-        cout << "Inserted " << map.size() << " indices for tilemap";
         return map;
     }
 
@@ -141,7 +140,6 @@ namespace CGEngine {
                 map.insert(map.end(), plane.begin(), plane.end());
             }
         }
-        cout << "Inserted " << map.size() << " vertices for tilemap";
         return map;
     }
 }

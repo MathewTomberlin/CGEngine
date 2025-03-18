@@ -1,0 +1,40 @@
+#version 330
+
+#define MAX_BONES 100
+#define MAX_BONE_INFLUENCE 4
+
+uniform mat4 camera;
+uniform mat4 model;
+uniform mat4 boneMatrices;
+
+attribute vec3 position;
+attribute vec2 texCoord;
+attribute vec3 vertNormal;
+attribute float materialId;
+attribute ivec4 boneIds;
+attribute vec4 weights;
+
+varying vec2 uv;
+varying vec3 normal;
+varying vec3 vertex;
+varying float matId;
+
+void main() {
+    vec4 bonePosition = vec4(0.0f);
+	for(int i = 0 ; i < MAX_BONE_INFLUENCE ; i++) {
+        if(boneIds[i] == -1) continue;
+        if(boneIds[i] >=MAX_BONES)  {
+            totalPosition = vec4(pos,1.0f);
+            break;
+        }
+        vec4 localPosition = bonesMatrices[boneIds[i]] * vec4(pos,1.0f);
+        bonePosition += localPosition * weights[i];
+        vec3 localNormal = mat3(bonesMatrices[boneIds[i]]) * vertNormal;
+    }
+	uv = texCoord;
+	normal = vertNormal;
+	vertex = position;
+	matId = materialId;
+
+	gl_Position = camera * model * bonePosition;
+}
