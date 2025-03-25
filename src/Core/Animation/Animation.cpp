@@ -12,7 +12,7 @@ namespace CGEngine {
 			aiProcess_JoinIdenticalVertices |
 			aiProcess_OptimizeGraph |
 			aiProcess_OptimizeMeshes;
-		const aiScene* scene = renderer.modelImporter.ReadFile(path, flags);
+		const aiScene* scene = renderer.readFile(path, flags);
 		aiAnimation* animation = scene->mAnimations[0];
 		duration = animation->mDuration;
 		ticksPerSecond = animation->mTicksPerSecond;
@@ -29,7 +29,7 @@ namespace CGEngine {
 
 	void Animation::readHeirarchyData(NodeData& dest, const aiNode* src) {
 		dest.name = src->mName.C_Str();
-		dest.transformation = renderer.fromAiMatrix4toGlm(src->mTransformation);
+		dest.transformation = MeshImporter::fromAiMatrix4toGlm(src->mTransformation);
 		dest.childrenCount = src->mNumChildren;
 
 		for (int i = 0; i < src->mNumChildren; i++) {

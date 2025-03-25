@@ -7,7 +7,7 @@ namespace CGEngine {
 			aiVector3D aiPosition = channel->mPositionKeys[positionIndex].mValue;
 			float timestamp = channel->mPositionKeys[positionIndex].mTime;
 			KeyPosition data;
-			data.position = Renderer::fromAiVec3toGlm(aiPosition);
+			data.position = MeshImporter::fromAiVec3toGlm(aiPosition);
 			data.timeStamp = timestamp;
 			positions.push_back(data);
 		}
@@ -16,7 +16,7 @@ namespace CGEngine {
 			aiQuaternion aiOrientation = channel->mRotationKeys[rotationIndex].mValue;
 			float timestamp = channel->mRotationKeys[rotationIndex].mTime;
 			KeyRotation data;
-			data.orientation = Renderer::fromAiQuatToGlm(aiOrientation);
+			data.orientation = MeshImporter::fromAiQuatToGlm(aiOrientation);
 			data.timeStamp = timestamp;
 			rotations.push_back(data);
 		}
@@ -25,7 +25,7 @@ namespace CGEngine {
 			aiVector3D aiScale = channel->mScalingKeys[scaleIndex].mValue;
 			float timestamp = channel->mScalingKeys[scaleIndex].mTime;
 			KeyScale data;
-			data.scale = Renderer::fromAiVec3toGlm(aiScale);
+			data.scale = MeshImporter::fromAiVec3toGlm(aiScale);
 			data.timeStamp = timestamp;
 			scales.push_back(data);
 		}
