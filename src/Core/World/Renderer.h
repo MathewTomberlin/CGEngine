@@ -16,9 +16,7 @@
 #include "../Shader/Program.h"
 #include "../Light/Light.h"
 #include "../Material/Material.h"
-#include <assimp/Importer.hpp>
-#include <assimp/scene.h>
-#include <assimp/postprocess.h>
+#include "../Importer/MeshImporter.h"
 using namespace Assimp;
 using namespace std;
 using namespace sf;
@@ -102,6 +100,9 @@ namespace CGEngine {
 	/// </summary>
 	class Renderer {
 	public:
+		Renderer::Renderer() {
+			importer = new MeshImporter();
+		}
 		/// <summary>
 		/// Add the Body to the renderOrder and and it and its transform to the bodyTransform map for this frame
 		/// </summary>
@@ -143,8 +144,6 @@ namespace CGEngine {
 		void commitGL();
 		void pullGL();
 
-		vector<MeshData> processNode(aiNode* node, const aiScene* scene, Mesh* mesh, string type);
-
 		bool processRender();
 		void setWindow(RenderWindow* window);
 		Camera* getCurrentCamera();
@@ -161,28 +160,10 @@ namespace CGEngine {
 		string getUniformObjectPropertyName(string objectName, string propertyName);
 		void setMaterialUniforms(Material* material, Program* program, int materialId = 0);
 		void setLightUniforms(Light* light, size_t lightIndex, Program* program);
-		Importer modelImporter = Importer();
 		glm::vec2 toGlm(Vector2f v);
 		glm::vec3 toGlm(Vector3f v);
 		glm::vec3 toGlm(Color c);
-		Color fromAiColor4(aiColor4D* c);
-
-		static inline glm::mat4 fromAiMatrix4toGlm(const aiMatrix4x4& from) {
-			return glm::mat4(
-				(double)from.a1, (double)from.b1, (double)from.c1, (double)from.d1,
-				(double)from.a2, (double)from.b2, (double)from.c2, (double)from.d2,
-				(double)from.a3, (double)from.b3, (double)from.c3, (double)from.d3,
-				(double)from.a4, (double)from.b4, (double)from.c4, (double)from.d4
-			);
-		}
-		
-		static inline glm::vec3 fromAiVec3toGlm(const aiVector3D& vec) {
-			return glm::vec3(vec.x, vec.y, vec.z);
-		}
-		
-		static inline glm::quat fromAiQuatToGlm(const aiQuaternion& pOrientation) {
-			return glm::quat(pOrientation.w, pOrientation.x, pOrientation.y, pOrientation.z);
-		}
+		const aiScene* readFile(string path, unsigned int options);
 	private:
 		friend class World;
 		RenderWindow* window = nullptr;
@@ -206,8 +187,6 @@ namespace CGEngine {
 		/// </summary>
 		vector<Body*> renderOrder;
 		
-		vector<MeshData> importModel(string path, Mesh* mesh, unsigned int options = aiProcess_Triangulate | aiProcess_FlipUVs);
-		vector<string> loadMaterialTextures(aiMaterial* mat, aiTextureType type);
 		GLenum initGlew();
 		Program* program;
 		UniqueDomain<id_t, Light*> lights = UniqueDomain<id_t, Light*>(10);
@@ -215,5 +194,7 @@ namespace CGEngine {
 
 		//Fallback Material
 		id_t fallbackMaterialId;
+
+		MeshImporter* importer;
 	};
 }
