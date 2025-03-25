@@ -5,6 +5,8 @@
 #include "Standard/Behaviors/AnimationBehavior.h"
 #include "Standard/Behaviors/BoundsBehavior.h"
 #include "Standard/Drawables/Tilemap.h"
+#include "Core/Animation/Animation.h"
+#include "Core/Animation/Animator.h"
 #include "Core/Light/Light.h"
 
 namespace CGEngine {
@@ -62,11 +64,11 @@ namespace CGEngine {
                 Vector3f cubeScale = { 1,1,0.0000000008f };
 
                 MeshData planeModel = getPlaneModel(1.f, 0);
-                vector<vector<int>> tilemapData =  {{0,1,2,1,0,0,1,2,1,0,0,1,2,1,0,0,1,2,1,0},
+                vector<vector<int>> tilemapData = { {0,1,2,1,0,0,1,2,1,0,0,1,2,1,0,0,1,2,1,0},
                                                     {1,2,3,2,1,1,2,3,2,1,1,2,3,2,1,1,2,3,2,1},
                                                     {2,3,3,3,2,2,3,3,3,2,2,3,3,3,2,2,3,3,3,2},
                                                     {1,2,3,2,1,1,2,3,2,1,1,2,3,2,1,1,2,3,2,1},
-                                                    {2,1,2,1,2,2,1,2,1,2,2,1,2,1,2,2,1,2,1,2}};
+                                                    {2,1,2,1,2,2,1,2,1,2,2,1,2,1,2,2,1,2,1,2} };
                 MeshData tilemapModel = getTilemapModel(1.f, { 20,5 }, tilemapData);
 
                 //Spotlight
@@ -76,57 +78,68 @@ namespace CGEngine {
                 Light* light = new Light({ 0,-20,5 }, false, lightParams);
 
                 //Red Point Light
-                LightParameters lightParams2 = LightParameters();
-                lightParams2.attenuation = 0.005f;
-                lightParams2.colorIntensities = { 1,0.5f,0.5f };
-                Light* light2 = new Light({ 0,10,10 }, false, lightParams2);
+                //LightParameters lightParams2 = LightParameters();
+                //lightParams2.attenuation = 0.005f;
+                //lightParams2.colorIntensities = { 1,0.5f,0.5f };
+                //Light* light2 = new Light({ 0,10,10 }, false, lightParams2);
 
                 //Materials
-                SurfaceParameters maskedParams = SurfaceParameters(SurfaceDomain(), SurfaceDomain(32.0f), SurfaceDomain("opacity_tile.png"),true);
+                SurfaceParameters maskedParams = SurfaceParameters(SurfaceDomain(), SurfaceDomain(32.0f), SurfaceDomain("opacity_tile.png"), true);
                 maskedParams.useLighting = false;
                 id_t maskedMaterialId = world->createMaterial(maskedParams);
                 Material* maskedMaterial = world->getMaterial(maskedMaterialId);
-                
+
                 SurfaceParameters brickParams = SurfaceParameters(SurfaceDomain("brick_tile.png"), SurfaceDomain(16.0f));
                 id_t brickMaterialId = world->createMaterial(brickParams);
                 Material* brickMaterial = world->getMaterial(brickMaterialId);
-                
+
                 SurfaceParameters lavaParams = SurfaceParameters(SurfaceDomain("lava_tile.png"));
                 id_t lavaMaterialId = world->createMaterial(lavaParams);
                 Material* lavaMaterial = world->getMaterial(lavaMaterialId);
-                
-                SurfaceParameters mudParams = SurfaceParameters(SurfaceDomain("grass_tile.png"), SurfaceDomain(128.0f) );
+
+                SurfaceParameters mudParams = SurfaceParameters(SurfaceDomain("grass_tile.png"), SurfaceDomain(128.0f));
                 mudParams.diffuseColor = Color(250, 80, 80);
                 id_t mudMaterialId = world->createMaterial(mudParams);
                 Material* mudMaterial = world->getMaterial(mudMaterialId);
-                
+
                 SurfaceParameters grassMaterialParams = SurfaceParameters(SurfaceDomain("grass_tile.png", { 10,10 }), SurfaceDomain(8.0f));
                 id_t grassMaterialId = world->createMaterial(grassMaterialParams);
                 Material* grassMaterial = world->getMaterial(grassMaterialId);
                 //Set material diffuse texture to repeating
                 Texture* grassTexture = grassMaterial->getParameterPtr<Texture>("diffuseTexture");
                 grassTexture->setRepeated(true);
-                
-                SurfaceParameters waterMaterialParams = SurfaceParameters(SurfaceDomain("water_tile.png", { 10,10 },Color::White,1.f,{sin(time.getElapsedSec())*0.075f,cos(time.getElapsedSec())*0.033f}), SurfaceDomain(128.0f));
+
+                SurfaceParameters waterMaterialParams = SurfaceParameters(SurfaceDomain("water_tile.png", { 10,10 }, Color::White, 1.f, { sin(time.getElapsedSec()) * 0.075f,cos(time.getElapsedSec()) * 0.033f }), SurfaceDomain(128.0f));
                 id_t waterMaterialId = world->createMaterial(waterMaterialParams);
                 Material* waterMaterial = world->getMaterial(waterMaterialId);
                 //Set material diffuse texture to repeating
                 Texture* waterTexture = waterMaterial->getParameterPtr<Texture>("diffuseTexture");
                 waterTexture->setRepeated(true);
-                
-                SurfaceParameters animMatParams = SurfaceParameters(SurfaceDomain("triceratops.png", {0.125f,0.125f}), SurfaceDomain(128.f), SurfaceDomain("triceratops.png", { 0.125f,0.125f },Color::White,1.f));
+
+                SurfaceParameters animMatParams = SurfaceParameters(SurfaceDomain("triceratops.png", { 0.125f,0.125f }), SurfaceDomain(128.f), SurfaceDomain("triceratops.png", { 0.125f,0.125f }, Color::White, 1.f));
                 id_t animMatId = world->createMaterial(animMatParams);
                 Material* animMat = world->getMaterial(animMatId);
 
                 //Bodies
-                id_t testMesh = world->create(new Mesh("Mesh.obj", Transformation3D({-1,1,-2})));
-                Body* testMeshBody = world->bodies.get(testMesh);
+                id_t testMeshId = world->create(new Mesh("Mesh.obj", Transformation3D({ -1,1,-2 })));
+                Body* testMeshBody = world->bodies.get(testMeshId);
 
                 Script* ballScript = new Script([](ScArgs args) {
                     args.caller->get<Mesh*>()->rotate({ 0, time.getDeltaSec() * 100, 0 });
                     args.caller->get<Mesh*>()->move({ sin(time.getElapsedSec()) * 0.0015f, cos(time.getElapsedSec()) * 0.0015f, 0 });
-                });
+                    });
                 testMeshBody->addUpdateScript(ballScript);
+
+                id_t testMesh2Id = world->create(new Mesh("Caveman_Test.fbx", Transformation3D({ -1,2,-5 }, { 0,180,0 }, { 0.01f,0.01f,0.01f }), true));
+                Body* testMesh2Body = world->bodies.get(testMesh2Id);
+                Mesh* testMesh = testMesh2Body->get<Mesh*>();
+                MeshData meshUpdate = testMesh->getMeshData();
+                Animation* anim = new Animation("Caveman_Test.fbx", &meshUpdate);
+                testMesh->setMeshData(meshUpdate);
+                Animator* animator = new Animator(anim);
+                testMesh->setAnimator(animator);
+                renderer.updateModelData(testMesh);
+                cout << "Anim with " << testMesh->getMeshData().bones.size() << " bones\n";
 
                 id_t planeMeshId = world->create(new Mesh(tilemapModel, Transformation3D({ -15,10,-12 }, cubeScale), { grassMaterial, lavaMaterial, mudMaterial, maskedMaterial }));
                 id_t planeMeshId2 = world->create(new Mesh(tilemapModel, Transformation3D({ -15,10,-8 }, cubeScale), { grassMaterial, lavaMaterial, mudMaterial, maskedMaterial }));
