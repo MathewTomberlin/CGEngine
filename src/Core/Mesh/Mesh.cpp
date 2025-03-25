@@ -1,20 +1,17 @@
 #include "Mesh.h"
 
 namespace CGEngine {
-	Mesh::Mesh(VertexModel model, Transformation3D transformation, vector<Material*> materials, RenderParameters renderParams) : model(model), transformation(transformation), renderParameters(renderParams), materials(materials) {
+	Mesh::Mesh(MeshData* meshData, Transformation3D transformation, vector<Material*> materials, RenderParameters renderParams, string importPath, bool skeletalMesh) : meshData(meshData), transformation(transformation), renderParameters(renderParams), materials(materials), importPath(importPath), animator(nullptr) {
+		this->meshData->skeletalMesh = skeletalMesh;
 		renderer.getModelData(this);
 	};
 
-	void Mesh::setModelData(ModelData data) {
-		modelData = data;
+	MeshData* Mesh::getMeshData() {
+		return meshData;
 	}
 
-	VertexModel Mesh::getModel() {
-		return model;
-	}
-
-	void Mesh::setModel(VertexModel model) {
-		this->model = model;
+	void Mesh::setMeshData(MeshData* model) {
+		this->meshData = model;
 	}
 
 	void Mesh::render(Transform transform) {
@@ -31,7 +28,7 @@ namespace CGEngine {
 		Vector3f scale = { scale2d.x * transformation.scale.x,scale2d.y * transformation.scale.y, transformation.scale.z };
 		Transformation3D combinedTransformation = Transformation3D(position, rotation, scale);
 
-		renderer.renderMesh(model, combinedTransformation, modelData);
+		renderer.renderMesh(this, meshData, combinedTransformation);
 		renderer.commitGL();
 	}
 
@@ -74,5 +71,29 @@ namespace CGEngine {
 
 	vector<Material*> Mesh::getMaterials() {
 		return materials;
+	}
+
+	id_t Mesh::addMaterial(Material* material) {
+		id_t id = materials.size();
+		materials.push_back(material);
+		return id;
+	}
+
+	void Mesh::clearMaterials() {
+		materials.clear();
+	}
+
+	void Mesh::setImportPath(string path) {
+		importPath = path;
+	}
+	string Mesh::getImportPath() {
+		return importPath;
+	}
+
+	void Mesh::setAnimator(Animator* animator) {
+		this->animator = animator;
+	}
+	Animator* Mesh::getAnimator() {
+		return animator;
 	}
 }

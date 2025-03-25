@@ -1,6 +1,7 @@
 #include "../Engine/Engine.h"
 #include "Renderer.h"
 #include "../../Standard/Models/CommonModels.h"
+#include "../Animation/Animator.h"
 
 namespace CGEngine {
 	void Renderer::setWindow(RenderWindow* window) {
@@ -24,120 +25,87 @@ namespace CGEngine {
 
 	void Renderer::getModelData(Mesh* mesh) {
 		if (setGLWindowState(true)) {
-			VertexModel model = mesh->getModel();
-			if (model.path != "") {
-				vector<VertexModel> importedModel = importModel(model.path);
-				model = VertexModel(importedModel[0].vertices, "", importedModel[0].indices);
-				mesh->setModel(model);
+			MeshData* meshData = mesh->getMeshData();
+			bool skeletalMesh = meshData->skeletalMesh;
+			string path = mesh->getImportPath();
+			if (path != "") {
+				mesh->clearMaterials();
+				vector<MeshData> importedModel = importer->importModel(path, mesh);
+				meshData = new MeshData(importedModel[0].vertices, importedModel[0].indices);
+				meshData->bones = mesh->getMeshData()->bones;
+				meshData->skeletalMesh = skeletalMesh;
+				mesh->setMeshData(meshData);
 			}
 			vector<Material*> material = mesh->getMaterials();
-			Program* program = material[0]->getProgram();
-			//Setup ModelData with drawCount, vertex buffer and array, and shader program
-			ModelData data = ModelData(model.vertexCount, { material });
-			glGenBuffers(1, &data.vbo);
-			glGenBuffers(1, &data.ebo);
-			glGenVertexArrays(1, &data.vao);
-
-			glBindVertexArray(data.vao);
-			//Bind the vertex buffer and pass in the vertex data
-			glBindBuffer(GL_ARRAY_BUFFER, data.vbo);
-			glBufferData(GL_ARRAY_BUFFER, model.dataSpan, model.vertices.data(), GL_STATIC_DRAW);
-
-			//Bind and buffert the element buffer, if the model has indices
-			if (model.indices.size() > 0) {
-				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.ebo);
-				glBufferData(GL_ELEMENT_ARRAY_BUFFER, model.indices.size() * sizeof(unsigned int), &model.indices[0], GL_STATIC_DRAW);
+			Material* renderMaterial = world->getMaterial(fallbackMaterialId);
+			if (material.size() > 0 && material[0] && material[0]->getProgram()) {
+				renderMaterial = material[0];
 			}
 
-			auto stride = sizeof(GLfloat) * 9;
-			auto textureCoordOffset = sizeof(GLfloat) * 3;
-			auto normalOffset = sizeof(GLfloat) * 5;
-			auto materialIdOffset = sizeof(GLfloat) * 8;
+			Program* program = renderMaterial->getProgram();
+			glGenBuffers(1, & meshData->vbo);
+			glGenBuffers(1, &meshData->ebo);
+			glGenVertexArrays(1, &meshData->vao);
+
+			glBindVertexArray(meshData->vao);
+			//Bind the vertex buffer and pass in the vertex data
+			glBindBuffer(GL_ARRAY_BUFFER,  meshData->vbo);
+			glBufferData(GL_ARRAY_BUFFER,  meshData->vertices.size()*sizeof(VertexData), meshData->vertices.data(), GL_STATIC_DRAW);
+
+			//Bind and buffert the element buffer, if the model has indices
+			if (meshData->indices.size() > 0) {
+				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,  meshData->ebo);
+				glBufferData(GL_ELEMENT_ARRAY_BUFFER,  meshData->indices.size()*sizeof(unsigned int), meshData->indices.data(), GL_STATIC_DRAW);
+			}
+
 			//Enable and prepare vertex, texture coordinate, normal, and textureId attribute arrays
 			glEnableVertexAttribArray(program->attrib("position"));
-			glVertexAttribPointer(program->attrib("position"), 3, GL_FLOAT, GL_FALSE, stride, NULL);
+			glVertexAttribPointer(program->attrib("position"), 3, GL_FLOAT, GL_FALSE, sizeof(VertexData), NULL);
 			glEnableVertexAttribArray(program->attrib("texCoord"));
-			glVertexAttribPointer(program->attrib("texCoord"), 2, GL_FLOAT, GL_FALSE, stride, (void*)textureCoordOffset);
+			glVertexAttribPointer(program->attrib("texCoord"), 2, GL_FLOAT, GL_FALSE, sizeof(VertexData), (void*)offsetof(VertexData,texCoord));
 			glEnableVertexAttribArray(program->attrib("vertNormal"));
-			glVertexAttribPointer(program->attrib("vertNormal"), 3, GL_FLOAT, GL_FALSE, stride, (void*)normalOffset);
+			glVertexAttribPointer(program->attrib("vertNormal"), 3, GL_FLOAT, GL_FALSE, sizeof(VertexData), (void*)offsetof(VertexData, normal));
 			glEnableVertexAttribArray(program->attrib("materialId"));
-			glVertexAttribPointer(program->attrib("materialId"), 1, GL_FLOAT, GL_FALSE, stride, (void*)materialIdOffset);
+			glVertexAttribPointer(program->attrib("materialId"), 1, GL_FLOAT, GL_FALSE, sizeof(VertexData), (void*)offsetof(VertexData, materialId));
+			if (meshData->skeletalMesh) {
+				cout << "Enabling bones and weights for skeletal mesh" << "\n";
+				glEnableVertexAttribArray(program->attrib("boneIds"));
+				glVertexAttribIPointer(program->attrib("boneIds"), 4, GL_INT, sizeof(VertexData), (void*)offsetof(VertexData, boneIds));
+				glEnableVertexAttribArray(program->attrib("weights"));
+				glVertexAttribPointer(program->attrib("weights"), 4, GL_FLOAT, GL_FALSE, sizeof(VertexData), (void*)offsetof(VertexData, weights));
+			}
 			glBindVertexArray(0);
 
-			mesh->setModelData(data);
+			mesh->setMeshData(meshData);
 			setGLWindowState(false);
 		}
 	}
 
-	vector<VertexModel> Renderer::importModel(string path, unsigned int options) {
-		//string directory = path.substr(0, path.find_last_of('/')); -- UNUSED
-		const aiScene* scene = modelImporter.ReadFile(path, options);
-		if (scene != nullptr) {
-			//TODO: Support models with multiple meshes?
-			vector<VertexModel> meshes = processNode(scene->mRootNode, scene);
-			if (meshes.size() > 0) {
-				cout << "Done importing " << meshes.size() << " meshes from " << path << "\n";
-				return meshes;
-			}
-			else {
-				cout << "No meshes imported from " << path << "\n";
-			}
-		}
-		else {
-			cout << "Failed to import from " << path << "\n";
-		}
-		return {};
-	}
-
-	vector<VertexModel> Renderer::processNode(aiNode* node, const aiScene* scene) {
-		vector<VertexModel> meshes = {};
-		// process all the node's meshes (if any)
-		for (unsigned int i = 0; i < node->mNumMeshes; i++) {
-			aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
-			vector<float> vertexArray = {};
-			vector<unsigned int> indices;
-			vector<Texture> textures;
-			for (unsigned int i = 0; i < mesh->mNumVertices; i++) {
-				//Pos
-				vertexArray.push_back(mesh->mVertices[i].x);
-				vertexArray.push_back(mesh->mVertices[i].y);
-				vertexArray.push_back(mesh->mVertices[i].z);
-				//TexCoord
-				//TODO: Support multiple texture coordinates?
-				glm::vec2 uv = { 0,0 };
-				if (mesh->mTextureCoords[0])  {
-					uv = { mesh->mTextureCoords[0][i].x,mesh->mTextureCoords[0][i].y };
-				}
-				vertexArray.push_back(uv.x);
-				vertexArray.push_back(uv.y);
-				//Normals
-				vertexArray.push_back(mesh->mNormals[i].x);
-				vertexArray.push_back(mesh->mNormals[i].y);
-				vertexArray.push_back(mesh->mNormals[i].z);
-				//TODO: Fix mesh materials
-				//TODO: Support external material definitions?
-				vertexArray.push_back(0);
-				
-				//TODO: Import Logging
-				//cout << "Vertex" << i << ": (" << mesh->mVertices[i].x << "," << mesh->mVertices[i].y << "," << mesh->mVertices[i].z << "),(" << uv.x<<","<<uv.y<<"),(" << mesh->mNormals[i].x << "," << mesh->mNormals[i].y << "," << mesh->mNormals[i].z << ")\n";
-			}
-			//Import indices
-			for (unsigned int i = 0; i < mesh->mNumFaces; i++) {
-				aiFace face = mesh->mFaces[i];
-				for (unsigned int j = 0; j < face.mNumIndices; j++) {
-					indices.push_back(face.mIndices[j]);
-				}
+	void Renderer::updateModelData(Mesh* mesh) {
+		if (setGLWindowState(true)) {
+			MeshData* meshData = mesh->getMeshData();
+			bool skeletalMesh = meshData->skeletalMesh;
+			vector<Material*> material = mesh->getMaterials();
+			Material* renderMaterial = world->getMaterial(fallbackMaterialId);
+			if (material.size() > 0 && material[0] && material[0]->getProgram()) {
+				renderMaterial = material[0];
 			}
 
-			meshes.push_back(VertexModel(vertexArray,"",indices));
-			cout << "Imported mesh with " << vertexArray.size() << " vertex array positions and " << indices.size() << " indices " << "\n";
+			glBindVertexArray(meshData->vao);
+			//Bind the vertex buffer and pass in the vertex data
+			glBindBuffer(GL_ARRAY_BUFFER, meshData->vbo);
+			glBufferData(GL_ARRAY_BUFFER, meshData->vertices.size() * sizeof(VertexData), meshData->vertices.data(), GL_STATIC_DRAW);
+
+			//Bind and buffert the element buffer, if the model has indices
+			if (meshData->indices.size() > 0) {
+				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, meshData->ebo);
+				glBufferData(GL_ELEMENT_ARRAY_BUFFER, meshData->indices.size() * sizeof(unsigned int), meshData->indices.data(), GL_STATIC_DRAW);
+			}
+			glBindVertexArray(0);
+
+			mesh->setMeshData(meshData);
+			setGLWindowState(false);
 		}
-		// then do the same for each of its children
-		for (unsigned int i = 0; i < node->mNumChildren; i++) {
-			vector<VertexModel> m = processNode(node->mChildren[i], scene);
-			meshes.insert(meshes.end(), m.begin(), m.end());
-		}
-		return meshes;
 	}
 
 	id_t Renderer::addLight(Light* light) {
@@ -191,7 +159,7 @@ namespace CGEngine {
 		return true;
 	}
 
-	void Renderer::renderMesh(VertexModel model, Transformation3D transform, ModelData data) {
+	void Renderer::renderMesh(Mesh* mesh, MeshData* model, Transformation3D transform) {
 		glm::mat4 modelPos = glm::translate(glm::vec3(transform.position.x, transform.position.y, transform.position.z));
 		glm::mat4 modelRotX = glm::rotate(degrees(transform.rotation.x).asRadians(), glm::vec3(1.f, 0.f, 0.f));
 		glm::mat4 modelRotY = glm::rotate(degrees(transform.rotation.y).asRadians(), glm::vec3(0.f, 1.f, 0.f));
@@ -201,10 +169,25 @@ namespace CGEngine {
 		glm::mat4 modelTransform = modelPos * modelRotation * modelScale;
 
 		if (renderer.setGLWindowState(true)) {
-			glBindVertexArray(data.vao);
+			glBindVertexArray(model->vao);
 			boundTextures = 0;
-			//TODO: Move Shader out to model
-			Program* program = data.materials[0]->getProgram();
+			Material* renderMaterial = world->getMaterial(fallbackMaterialId);
+			vector<Material*> materials = mesh->getMaterials();
+			if (mesh->getMaterials().size() > 0) {
+				Material* material = mesh->getMaterials().at(0);
+				if (material && material->getProgram()) {
+					renderMaterial = material;
+				} else {
+					mesh->clearMaterials();
+					mesh->addMaterial(renderMaterial);
+				}
+			}
+			materials = mesh->getMaterials();
+			Animator* animator = mesh->getAnimator();
+			if (animator) {
+				animator->updateAnimation(time.getDeltaSec());
+			}
+			Program* program = renderMaterial->getProgram();
 			//Bind the shaders.
 			program->use();
 
@@ -214,9 +197,14 @@ namespace CGEngine {
 			program->setUniform("camera", currentCamera->getMatrix());
 			program->setUniform("cameraPosition", { camPos.x,camPos.y,camPos.z });
 			program->setUniform("timeSec", time.getElapsedSec());
-
-			for (int i = 0; i < data.materials.size(); ++i) {
-				setMaterialUniforms(data.materials.at(i), program, i);
+			if (animator) {
+				vector<glm::mat4> transforms = animator->getBoneMatrices();
+				for (int i = 0; i < transforms.size(); ++i) {
+					program->setUniform(getUniformArrayIndexName("boneMatrices", i).c_str(), transforms[i]);
+				}
+			}
+			for (int i = 0; i < materials.size(); ++i) {
+				setMaterialUniforms(materials.at(i), program, i);
 			}
 
 			program->setUniform("lightCount", (int)lights.size());
@@ -224,10 +212,11 @@ namespace CGEngine {
 				setLightUniforms(lights.get(i), i, program);
 			}
 			// Draw the cube
-			if (model.indices.size()) {
-				glDrawElements(GL_TRIANGLES, model.indices.size(), GL_UNSIGNED_INT, 0);
-			} else {
-				glDrawArrays(GL_TRIANGLES, 0, model.vertices.size() / 5);
+			if (model->indices.size()) {
+				glDrawElements(GL_TRIANGLES, model->indices.size(), GL_UNSIGNED_INT, 0);
+			}
+			else {
+				glDrawArrays(GL_TRIANGLES, 0, model->vertices.size() / 5);
 			}
 
 			// Unbind varray, shaders, and texture
@@ -303,6 +292,12 @@ namespace CGEngine {
 		program->setUniform(getUniformArrayPropertyName("lights", lightIndex, "ambiance").c_str(), light->parameters.ambiance);
 		program->setUniform(getUniformArrayPropertyName("lights", lightIndex, "coneAngle").c_str(), light->parameters.coneAngle);
 		program->setUniform(getUniformArrayPropertyName("lights", lightIndex, "lightDirection").c_str(), toGlm(light->parameters.lightDirection));
+	}
+
+	string Renderer::getUniformArrayIndexName(string arrayName, int index) {
+		std::ostringstream ss;
+		ss << arrayName << "[" << index << "]";
+		return ss.str();
 	}
 
 	string Renderer::getUniformArrayPropertyName(string arrayName, int index, string propertyName) {
@@ -413,10 +408,16 @@ namespace CGEngine {
 	glm::vec2 Renderer::toGlm(Vector2f v) {
 		return glm::vec2(v.x, v.y);
 	}
+
 	glm::vec3 Renderer::toGlm(Vector3f v) {
 		return glm::vec3(v.x, v.y, v.z);
 	}
+
 	glm::vec3 Renderer::toGlm(Color c) {
 		return glm::vec3(c.r, c.g, c.b);
+	}
+
+	const aiScene* Renderer::readFile(string path, unsigned int options) {
+		return importer->readFile(path, options);
 	}
 }
