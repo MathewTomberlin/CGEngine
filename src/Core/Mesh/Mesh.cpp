@@ -1,7 +1,7 @@
 #include "Mesh.h"
 
 namespace CGEngine {
-	Mesh::Mesh(MeshData* meshData, Transformation3D transformation, vector<Material*> materials, RenderParameters renderParams, string importPath, bool skeletalMesh) : meshData(meshData), transformation(transformation), renderParameters(renderParams), materials(materials), importPath(importPath) {
+	Mesh::Mesh(MeshData* meshData, Transformation3D transformation, vector<Material*> materials, RenderParameters renderParams, string importPath, bool skeletalMesh) : meshData(meshData), transformation(transformation), renderParameters(renderParams), materials(materials), importPath(importPath), animator(nullptr) {
 		this->meshData->skeletalMesh = skeletalMesh;
 		renderer.getModelData(this);
 	};
@@ -91,10 +91,9 @@ namespace CGEngine {
 	}
 
 	void Mesh::setAnimator(Animator* animator) {
-		meshData->animator = animator;
-		renderer.updateModelData(this);
+		this->animator = animator;
 	}
 	Animator* Mesh::getAnimator() {
-		return meshData->animator;
+		return animator;
 	}
 }

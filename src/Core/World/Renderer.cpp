@@ -369,7 +369,7 @@ namespace CGEngine {
 				}
 			}
 			materials = mesh->getMaterials();
-			Animator* animator = model->animator;
+			Animator* animator = mesh->getAnimator();
 			if (animator) {
 				animator->updateAnimation(time.getDeltaSec());
 			}
