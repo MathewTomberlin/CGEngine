@@ -76,6 +76,9 @@ namespace CGEngine {
 		void setUniform(const GLchar* uniformName, const glm::vec4& v) {
 			glUniform4fv(uniform(uniformName), 1, glm::value_ptr(v));
 		}
+		void setUniform(const GLchar* uniformName, const glm::mat4& m, GLboolean transpose = false) {
+			glUniformMatrix4fv(uniform(uniformName), 1, transpose, glm::value_ptr(m));
+		}
 		void use();
 		void stop();
 		GLint inUse();
