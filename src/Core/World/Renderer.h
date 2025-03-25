@@ -70,13 +70,12 @@ namespace CGEngine {
 	};
 
 	struct MeshData {
-		MeshData(vector<VertexData> vertices = {}, vector<unsigned int> indices = {}, vector<Material*> materials = { new Material() }, bool skeletalMesh = false, map<string, BoneData> bones = {}, int boneCounter = 0) :vertices(vertices), indices(indices), materials(materials), vao(0U), vbo(0U), ebo(0U), bones(bones), boneCounter(boneCounter), animator(nullptr), skeletalMesh(skeletalMesh) {};
+		MeshData(vector<VertexData> vertices = {}, vector<unsigned int> indices = {}, vector<Material*> materials = { new Material() }, bool skeletalMesh = false, map<string, BoneData> bones = {}, int boneCounter = 0) :vertices(vertices), indices(indices), vao(0U), vbo(0U), ebo(0U), bones(bones), boneCounter(boneCounter), animator(nullptr), skeletalMesh(skeletalMesh) {};
 		vector<VertexData> vertices;
 		vector<unsigned int> indices;
 		GLuint vbo = 0U;
 		GLuint vao = 0U;
 		GLuint ebo = 0U;
-		vector<Material*> materials;
 		map<string, BoneData> bones;
 		int boneCounter;
 		bool skeletalMesh = false;
@@ -165,7 +164,7 @@ namespace CGEngine {
 		Camera* getCurrentCamera();
 		void setCurrentCamera(Camera* camera);
 
-		void renderMesh(MeshData* model, Transformation3D transform);
+		void renderMesh(Mesh* mesh, MeshData* model, Transformation3D transform);
 		void getModelData(Mesh* mesh);
 		void updateModelData(Mesh* mesh);
 		id_t addLight(Light* light);

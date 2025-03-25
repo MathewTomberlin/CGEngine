@@ -43,8 +43,6 @@ namespace CGEngine {
 			}
 
 			Program* program = renderMaterial->getProgram();
-			//Setup ModelData with drawCount, vertex buffer and array, and shader program
-			meshData->materials = material;
 			glGenBuffers(1, & meshData->vbo);
 			glGenBuffers(1, &meshData->ebo);
 			glGenVertexArrays(1, &meshData->vao);
@@ -93,8 +91,6 @@ namespace CGEngine {
 				renderMaterial = material[0];
 			}
 
-			//Setup ModelData with drawCount, vertex buffer and array, and shader program
-			meshData->materials = material;
 			glBindVertexArray(meshData->vao);
 			//Bind the vertex buffer and pass in the vertex data
 			glBindBuffer(GL_ARRAY_BUFFER, meshData->vbo);
@@ -349,7 +345,7 @@ namespace CGEngine {
 		return true;
 	}
 
-	void Renderer::renderMesh(MeshData* model, Transformation3D transform) {
+	void Renderer::renderMesh(Mesh* mesh, MeshData* model, Transformation3D transform) {
 		glm::mat4 modelPos = glm::translate(glm::vec3(transform.position.x, transform.position.y, transform.position.z));
 		glm::mat4 modelRotX = glm::rotate(degrees(transform.rotation.x).asRadians(), glm::vec3(1.f, 0.f, 0.f));
 		glm::mat4 modelRotY = glm::rotate(degrees(transform.rotation.y).asRadians(), glm::vec3(0.f, 1.f, 0.f));
@@ -362,13 +358,17 @@ namespace CGEngine {
 			glBindVertexArray(model->vao);
 			boundTextures = 0;
 			Material* renderMaterial = world->getMaterial(fallbackMaterialId);
-			if (model->materials.size() > 0 && model->materials[0] && model->materials[0]->getProgram()) {
-				renderMaterial = model->materials[0];
+			vector<Material*> materials = mesh->getMaterials();
+			if (mesh->getMaterials().size() > 0) {
+				Material* material = mesh->getMaterials().at(0);
+				if (material && material->getProgram()) {
+					renderMaterial = material;
+				} else {
+					mesh->clearMaterials();
+					mesh->addMaterial(renderMaterial);
+				}
 			}
-			else {
-				model->materials.clear();
-				model->materials.push_back(renderMaterial);
-			}
+			materials = mesh->getMaterials();
 			Animator* animator = model->animator;
 			if (animator) {
 				animator->updateAnimation(time.getDeltaSec());
@@ -386,15 +386,11 @@ namespace CGEngine {
 			if (animator) {
 				vector<glm::mat4> transforms = animator->getBoneMatrices();
 				for (int i = 0; i < transforms.size(); ++i) {
-					//glm::quat rotation;
-					//glm::decompose(transforms[i], glm::vec3(), rotation, glm::vec3(), glm::vec3(), glm::vec4());
-					//rotation = glm::conjugate(rotation);
-					//cout << "Updating bone " << i << ": " << rotation.x << "," << rotation.y << "," << rotation.z << "\n";
 					program->setUniform(getUniformArrayIndexName("boneMatrices", i).c_str(), transforms[i]);
 				}
 			}
-			for (int i = 0; i < model->materials.size(); ++i) {
-				setMaterialUniforms(model->materials.at(i), program, i);
+			for (int i = 0; i < materials.size(); ++i) {
+				setMaterialUniforms(materials.at(i), program, i);
 			}
 
 			program->setUniform("lightCount", (int)lights.size());
