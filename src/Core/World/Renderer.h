@@ -5,6 +5,7 @@
 #define GLM_ENABLE_EXPERIMENTAL
 #include "glm.hpp" 
 #include "gtx/transform.hpp"
+#include "gtx/matrix_decompose.hpp"
 #include "SFML/OpenGL.hpp"
 #include <vector>
 #include <map>
@@ -25,17 +26,36 @@ using namespace sf;
 
 namespace CGEngine {
 	class Mesh;
+	class Bone;
+	class Animation;
+	class Animator;
 
-	class VertexData {
-	public:
-		VertexData() {};
-		VertexData(glm::vec3 position, glm::vec2 texCoord, glm::vec3 normal, GLfloat materialId, int* bones = {}, float* wgts = {}) : position(position), texCoord(texCoord), normal(normal), materialId(materialId) { };
+	struct VertexData {
+		VertexData() {
+			for (int i = 0; i < MAX_BONE_INFLUENCE; i++) {
+				boneIds[i] = -1;
+				weights[i] = 0.0f;
+			}
+		};
+		VertexData(glm::vec3 position, glm::vec2 texCoord, glm::vec3 normal, GLfloat materialId) : position(position), texCoord(texCoord), normal(normal), materialId(materialId) {
+			for (int i = 0; i < MAX_BONE_INFLUENCE; i++) {
+				boneIds[i] = -1;
+				weights[i] = 0.0f;
+			}
+		};
 		glm::vec3 position = { 0,0,0 };
 		glm::vec2 texCoord = { 0,0 };
 		glm::vec3 normal = { 0,0,0 };
 		GLfloat materialId = 0;
-		int boneIds[MAX_BONE_INFLUENCE];
-		float weights[MAX_BONE_INFLUENCE];
+		int boneIds[MAX_BONE_INFLUENCE] = {-1,-1,-1,-1};
+		float weights[MAX_BONE_INFLUENCE] = {};
+	};
+
+	struct NodeData {
+		glm::mat4 transformation;
+		string name;
+		int childrenCount;
+		vector<NodeData> children;
 	};
 
 	struct TextureData {
@@ -50,7 +70,7 @@ namespace CGEngine {
 	};
 
 	struct MeshData {
-		MeshData(vector<VertexData> vertices = {}, vector<unsigned int> indices = {}, vector<Material*> materials = { new Material() }, map<string, BoneData> bones = {}, int boneCounter = 0) :vertices(vertices), indices(indices), materials(materials), vao(0U), vbo(0U), ebo(0U), bones(bones), boneCounter(boneCounter) {};
+		MeshData(vector<VertexData> vertices = {}, vector<unsigned int> indices = {}, vector<Material*> materials = { new Material() }, bool skeletalMesh = false, map<string, BoneData> bones = {}, int boneCounter = 0) :vertices(vertices), indices(indices), materials(materials), vao(0U), vbo(0U), ebo(0U), bones(bones), boneCounter(boneCounter), animator(nullptr), skeletalMesh(skeletalMesh) {};
 		vector<VertexData> vertices;
 		vector<unsigned int> indices;
 		GLuint vbo = 0U;
@@ -59,22 +79,37 @@ namespace CGEngine {
 		vector<Material*> materials;
 		map<string, BoneData> bones;
 		int boneCounter;
+		bool skeletalMesh = false;
+		Animator* animator = nullptr;
 
-		GLint getCount() {
-			return vertices.size() / 9.0f;
+		void setAnimator(Animator* animator) {
+			this->animator = animator;
 		}
-		GLint getVertexLayoutSize() {
-			return vertices.size() * sizeof(float);
-		}
-		GLint getIndexLayoutSize() {
-			return indices.size() * sizeof(unsigned int);
+
+		void setVertexBoneDataToDefault(VertexData& vertex)
+		{
+			for (int i = 0; i < MAX_BONE_INFLUENCE; i++)
+			{
+				vertex.boneIds[i] = -1;
+				vertex.weights[i] = 0.0f;
+			}
 		}
 	};
 
-	//struct BoneData {
-	//	id_t id;
-	//	glm::mat4 offset;
-	//};
+	struct KeyPosition {
+		glm::vec3 position;
+		float timeStamp;
+	};
+
+	struct KeyRotation {
+		glm::quat orientation;
+		float timeStamp;
+	};
+
+	struct KeyScale {
+		glm::vec3 scale;
+		float timeStamp;
+	};
 
 	/// <summary>
 	/// Responsible for ordering Bodies for rendering. Allows for default ordering (children render on top of parents)
@@ -130,27 +165,30 @@ namespace CGEngine {
 		Camera* getCurrentCamera();
 		void setCurrentCamera(Camera* camera);
 
-		void renderMesh(MeshData model, Transformation3D transform);
+		void renderMesh(MeshData* model, Transformation3D transform);
 		void getModelData(Mesh* mesh);
+		void updateModelData(Mesh* mesh);
 		id_t addLight(Light* light);
 		void removeLight(id_t lightId);
 		Light* getLight(id_t lightId);
+		string getUniformArrayIndexName(string arrayName, int index);
 		string getUniformArrayPropertyName(string arrayName, int index, string propertyName);
 		string getUniformObjectPropertyName(string objectName, string propertyName);
 		void setMaterialUniforms(Material* material, Program* program, int materialId = 0);
 		void setLightUniforms(Light* light, size_t lightIndex, Program* program);
+		Importer modelImporter = Importer();
 		glm::vec2 toGlm(Vector2f v);
 		glm::vec3 toGlm(Vector3f v);
 		glm::vec3 toGlm(Color c);
 		Color fromAiColor4(aiColor4D* c);
+
 		static inline glm::mat4 fromAiMatrix4toGlm(const aiMatrix4x4& from) {
-			glm::mat4 to;
-			//the a,b,c,d in assimp is the row ; the 1,2,3,4 is the column
-			to[0][0] = from.a1; to[1][0] = from.a2; to[2][0] = from.a3; to[3][0] = from.a4;
-			to[0][1] = from.b1; to[1][1] = from.b2; to[2][1] = from.b3; to[3][1] = from.b4;
-			to[0][2] = from.c1; to[1][2] = from.c2; to[2][2] = from.c3; to[3][2] = from.c4;
-			to[0][3] = from.d1; to[1][3] = from.d2; to[2][3] = from.d3; to[3][3] = from.d4;
-			return to;
+			return glm::mat4(
+				(double)from.a1, (double)from.b1, (double)from.c1, (double)from.d1,
+				(double)from.a2, (double)from.b2, (double)from.c2, (double)from.d2,
+				(double)from.a3, (double)from.b3, (double)from.c3, (double)from.d3,
+				(double)from.a4, (double)from.b4, (double)from.c4, (double)from.d4
+			);
 		}
 		
 		static inline glm::vec3 fromAiVec3toGlm(const aiVector3D& vec) {
@@ -183,7 +221,6 @@ namespace CGEngine {
 		/// </summary>
 		vector<Body*> renderOrder;
 		
-		Importer modelImporter = Importer();
 		vector<MeshData> importModel(string path, Mesh* mesh, unsigned int options = aiProcess_Triangulate | aiProcess_FlipUVs);
 		vector<string> loadMaterialTextures(aiMaterial* mat, aiTextureType type);
 		GLenum initGlew();

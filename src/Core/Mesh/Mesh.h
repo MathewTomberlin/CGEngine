@@ -2,6 +2,7 @@
 
 #include "../Engine/Engine.h"
 #include "../Material/Material.h"
+#include "../Animation/Animator.h"
 
 namespace CGEngine {
 	struct RenderParameters {
@@ -16,8 +17,8 @@ namespace CGEngine {
 
 	class Mesh : public Transformable{
 	public:
-		Mesh(MeshData model, Transformation3D transformation = Transformation3D(), vector<Material*> materials = { new Material(SurfaceParameters()) }, RenderParameters renderParams = RenderParameters(), string importPath = "");
-		Mesh(string importPath, Transformation3D transformation = Transformation3D(), vector<Material*> materials = { new Material(SurfaceParameters()) }, RenderParameters renderParams = RenderParameters()) : Mesh(MeshData(), transformation, materials, renderParams, importPath) {};
+		Mesh(MeshData* model, Transformation3D transformation = Transformation3D(), vector<Material*> materials = { new Material(SurfaceParameters()) }, RenderParameters renderParams = RenderParameters(), string importPath = "", bool skeletalMesh = false);
+		Mesh(string importPath, Transformation3D transformation = Transformation3D(), bool skeletalMesh = false, vector<Material*> materials = { new Material(SurfaceParameters()) }, RenderParameters renderParams = RenderParameters()) : Mesh(new MeshData(), transformation, materials, renderParams, importPath, skeletalMesh) {};
 
 		void render(Transform parentTransform);
 		void bindTexture(Texture* texture);
@@ -29,14 +30,16 @@ namespace CGEngine {
 		void scale(Vector3f delta);
 		void setImportPath(string path);
 		string getImportPath();
-		MeshData getMeshData();
-		void setMeshData(MeshData model);
+		MeshData* getMeshData();
+		void setMeshData(MeshData* model);
 		vector<Material*> getMaterials();
 		id_t addMaterial(Material* material);
 		void clearMaterials();
+		void setAnimator(Animator* animator);
+		Animator* getAnimator();
 	private:
 		string importPath;
-		MeshData meshData;
+		MeshData* meshData;
 		Transformation3D transformation;
 		RenderParameters renderParameters;
 		vector<Material*> materials;
