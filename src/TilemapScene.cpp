@@ -60,16 +60,16 @@ namespace CGEngine {
             };
 
             ScriptEvent meshConstruction = [](ScArgs args) {
-                MeshData cubeModel = getCubeModel(1.f);
+                MeshData* cubeModel = getCubeModel(1.f);
                 Vector3f cubeScale = { 1,1,0.0000000008f };
 
-                MeshData planeModel = getPlaneModel(1.f, 0);
+                MeshData* planeModel = getPlaneModel(1.f, 0);
                 vector<vector<int>> tilemapData = { {0,1,2,1,0,0,1,2,1,0,0,1,2,1,0,0,1,2,1,0},
                                                     {1,2,3,2,1,1,2,3,2,1,1,2,3,2,1,1,2,3,2,1},
                                                     {2,3,3,3,2,2,3,3,3,2,2,3,3,3,2,2,3,3,3,2},
                                                     {1,2,3,2,1,1,2,3,2,1,1,2,3,2,1,1,2,3,2,1},
                                                     {2,1,2,1,2,2,1,2,1,2,2,1,2,1,2,2,1,2,1,2} };
-                MeshData tilemapModel = getTilemapModel(1.f, { 20,5 }, tilemapData);
+                MeshData* tilemapModel = getTilemapModel(1.f, { 20,5 }, tilemapData);
 
                 //Spotlight
                 LightParameters lightParams = LightParameters();
@@ -133,13 +133,13 @@ namespace CGEngine {
                 id_t testMesh2Id = world->create(new Mesh("Caveman_Test.fbx", Transformation3D({ -1,2,-5 }, { 0,180,0 }, { 0.01f,0.01f,0.01f }), true));
                 Body* testMesh2Body = world->bodies.get(testMesh2Id);
                 Mesh* testMesh = testMesh2Body->get<Mesh*>();
-                MeshData meshUpdate = testMesh->getMeshData();
-                Animation* anim = new Animation("Caveman_Test.fbx", &meshUpdate);
+                MeshData* meshUpdate = testMesh->getMeshData();
+                Animation* anim = new Animation("Caveman_Test.fbx", meshUpdate);
                 testMesh->setMeshData(meshUpdate);
+                renderer.updateModelData(testMesh);
                 Animator* animator = new Animator(anim);
                 testMesh->setAnimator(animator);
-                renderer.updateModelData(testMesh);
-                cout << "Anim with " << testMesh->getMeshData().bones.size() << " bones\n";
+                cout << "Anim with " << testMesh->getMeshData()->bones.size() << " bones\n";
 
                 id_t planeMeshId = world->create(new Mesh(tilemapModel, Transformation3D({ -15,10,-12 }, cubeScale), { grassMaterial, lavaMaterial, mudMaterial, maskedMaterial }));
                 id_t planeMeshId2 = world->create(new Mesh(tilemapModel, Transformation3D({ -15,10,-8 }, cubeScale), { grassMaterial, lavaMaterial, mudMaterial, maskedMaterial }));
