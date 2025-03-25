@@ -43,5 +43,6 @@ namespace CGEngine {
 		Transformation3D transformation;
 		RenderParameters renderParameters;
 		vector<Material*> materials;
+		Animator* animator = nullptr;
 	};
 }
