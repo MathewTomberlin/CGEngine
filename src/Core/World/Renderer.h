@@ -68,7 +68,7 @@ namespace CGEngine {
 	};
 
 	struct MeshData {
-		MeshData(vector<VertexData> vertices = {}, vector<unsigned int> indices = {}, vector<Material*> materials = { new Material() }, bool skeletalMesh = false, map<string, BoneData> bones = {}, int boneCounter = 0) :vertices(vertices), indices(indices), vao(0U), vbo(0U), ebo(0U), bones(bones), boneCounter(boneCounter), skeletalMesh(skeletalMesh) {};
+		MeshData(vector<VertexData> vertices = {}, vector<unsigned int> indices = {}, map<string, BoneData> bones = {}, int boneCounter = 0) :vertices(vertices), indices(indices), vao(0U), vbo(0U), ebo(0U), bones(bones), boneCounter(boneCounter) {};
 		vector<VertexData> vertices;
 		vector<unsigned int> indices;
 		GLuint vbo = 0U;
@@ -77,6 +77,8 @@ namespace CGEngine {
 		map<string, BoneData> bones;
 		int boneCounter;
 		bool skeletalMesh = false;
+		string sourcePath = "";
+		string meshName = "";
 	};
 
 	struct KeyPosition {
@@ -164,6 +166,7 @@ namespace CGEngine {
 		glm::vec3 toGlm(Vector3f v);
 		glm::vec3 toGlm(Color c);
 		const aiScene* readFile(string path, unsigned int options);
+		ImportResult import(string path);
 	private:
 		friend class World;
 		RenderWindow* window = nullptr;

@@ -1,10 +1,37 @@
 #include "Mesh.h"
 
 namespace CGEngine {
-	Mesh::Mesh(MeshData* meshData, Transformation3D transformation, vector<Material*> materials, RenderParameters renderParams, string importPath, bool skeletalMesh) : meshData(meshData), transformation(transformation), renderParameters(renderParams), materials(materials), importPath(importPath), animator(nullptr) {
-		this->meshData->skeletalMesh = skeletalMesh;
+	Mesh::Mesh(MeshData* meshData, Transformation3D transformation, vector<Material*> materials, RenderParameters renderParams, string importPath) : meshData(meshData), transformation(transformation), renderParameters(renderParams), materials(materials), importPath(importPath), animator(nullptr) {
+		if (!importPath.empty()) {
+			import(importPath);
+		}
 		renderer.getModelData(this);
 	};
+
+	//TODO: ImportResult meshes should be in a tree, not a vector
+	//TODO: ImportResult meshes should be SubMesh structs of MeshData and Material Id. Should Material Id be world id or id among materials on mesh?
+	//TODO: Assign imported submesh mesh its correct material. Only assign root mesh its correct material?
+	void Mesh::import(string importPath) {
+		clearMaterials();
+		ImportResult importResult = renderer.import(importPath);
+		vector<Material*> materials;
+		for (id_t matId : importResult.materialIds) {
+			Material* material = world->getMaterial(matId);
+			this->addMaterial(material);
+			materials.push_back(material);
+		}
+
+		if (importResult.meshes.size() > 0) {
+			this->meshData = new MeshData(importResult.meshes[0].vertices, importResult.meshes[0].indices, importResult.meshes[0].bones);
+			this->meshData->skeletalMesh = importResult.meshes[0].bones.size() > 0;
+			this->meshData->sourcePath = importPath;
+			for (int i = 1; i < importResult.meshes.size(); i++) {
+				MeshData* meshData = &importResult.meshes[i];
+				Mesh* mesh = new Mesh(meshData, Transformation3D(), materials);
+				world->create(mesh);
+			}
+		}
+	}
 
 	MeshData* Mesh::getMeshData() {
 		return meshData;
@@ -96,4 +123,7 @@ namespace CGEngine {
 	Animator* Mesh::getAnimator() {
 		return animator;
 	}
+
+	string Mesh::getMeshName() const { return meshData ? meshData->meshName : ""; }
+	string Mesh::getSourcePath() const { return meshData ? meshData->sourcePath : ""; }
 }
