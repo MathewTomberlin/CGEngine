@@ -38,3 +38,10 @@ target_link_libraries (main PRIVATE ${OPENGL_LIBRARIES})
 target_link_libraries(main PRIVATE ${GLEW_LIBRARY})
 target_link_libraries(main PRIVATE ${ASSIMP_LIBRARY})
 
+add_custom_target(update_resources
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/resources"
+        "${CMAKE_BINARY_DIR}/bin"
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    COMMENT "Updating resource files in build directory"
+)
