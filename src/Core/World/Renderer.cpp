@@ -1,6 +1,7 @@
 #include "../Engine/Engine.h"
 #include "Renderer.h"
 #include "../../Standard/Models/CommonModels.h"
+#include "../Animation/Animator.h"
 
 namespace CGEngine {
 	void Renderer::setWindow(RenderWindow* window) {
@@ -24,12 +25,15 @@ namespace CGEngine {
 
 	void Renderer::getModelData(Mesh* mesh) {
 		if (setGLWindowState(true)) {
-			MeshData meshData = mesh->getMeshData();
+			MeshData* meshData = mesh->getMeshData();
+			bool skeletalMesh = meshData->skeletalMesh;
 			string path = mesh->getImportPath();
 			if (path != "") {
 				mesh->clearMaterials();
 				vector<MeshData> importedModel = importModel(path, mesh);
-				meshData = MeshData(importedModel[0].vertices, importedModel[0].indices);
+				meshData = new MeshData(importedModel[0].vertices, importedModel[0].indices);
+				meshData->bones = mesh->getMeshData()->bones;
+				meshData->skeletalMesh = skeletalMesh;
 				mesh->setMeshData(meshData);
 			}
 			vector<Material*> material = mesh->getMaterials();
@@ -40,20 +44,20 @@ namespace CGEngine {
 
 			Program* program = renderMaterial->getProgram();
 			//Setup ModelData with drawCount, vertex buffer and array, and shader program
-			meshData.materials = material;
-			glGenBuffers(1, &meshData.vbo);
-			glGenBuffers(1, &meshData.ebo);
-			glGenVertexArrays(1, &meshData.vao);
+			meshData->materials = material;
+			glGenBuffers(1, & meshData->vbo);
+			glGenBuffers(1, &meshData->ebo);
+			glGenVertexArrays(1, &meshData->vao);
 
-			glBindVertexArray(meshData.vao);
+			glBindVertexArray(meshData->vao);
 			//Bind the vertex buffer and pass in the vertex data
-			glBindBuffer(GL_ARRAY_BUFFER, meshData.vbo);
-			glBufferData(GL_ARRAY_BUFFER, meshData.vertices.size()*sizeof(VertexData), meshData.vertices.data(), GL_STATIC_DRAW);
+			glBindBuffer(GL_ARRAY_BUFFER,  meshData->vbo);
+			glBufferData(GL_ARRAY_BUFFER,  meshData->vertices.size()*sizeof(VertexData), meshData->vertices.data(), GL_STATIC_DRAW);
 
 			//Bind and buffert the element buffer, if the model has indices
-			if (meshData.indices.size() > 0) {
-				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, meshData.ebo);
-				glBufferData(GL_ELEMENT_ARRAY_BUFFER, meshData.indices.size()*sizeof(unsigned int), meshData.indices.data(), GL_STATIC_DRAW);
+			if (meshData->indices.size() > 0) {
+				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER,  meshData->ebo);
+				glBufferData(GL_ELEMENT_ARRAY_BUFFER,  meshData->indices.size()*sizeof(unsigned int), meshData->indices.data(), GL_STATIC_DRAW);
 			}
 
 			//Enable and prepare vertex, texture coordinate, normal, and textureId attribute arrays
@@ -65,10 +69,10 @@ namespace CGEngine {
 			glVertexAttribPointer(program->attrib("vertNormal"), 3, GL_FLOAT, GL_FALSE, sizeof(VertexData), (void*)offsetof(VertexData, normal));
 			glEnableVertexAttribArray(program->attrib("materialId"));
 			glVertexAttribPointer(program->attrib("materialId"), 1, GL_FLOAT, GL_FALSE, sizeof(VertexData), (void*)offsetof(VertexData, materialId));
-			if (meshData.boneCounter>0) {
+			if (meshData->skeletalMesh) {
 				cout << "Enabling bones and weights for skeletal mesh" << "\n";
 				glEnableVertexAttribArray(program->attrib("boneIds"));
-				glVertexAttribPointer(program->attrib("boneIds"), 4, GL_FLOAT, GL_FALSE, sizeof(VertexData), (void*)offsetof(VertexData, boneIds));
+				glVertexAttribIPointer(program->attrib("boneIds"), 4, GL_INT, sizeof(VertexData), (void*)offsetof(VertexData, boneIds));
 				glEnableVertexAttribArray(program->attrib("weights"));
 				glVertexAttribPointer(program->attrib("weights"), 4, GL_FLOAT, GL_FALSE, sizeof(VertexData), (void*)offsetof(VertexData, weights));
 			}
@@ -79,9 +83,40 @@ namespace CGEngine {
 		}
 	}
 
+	void Renderer::updateModelData(Mesh* mesh) {
+		if (setGLWindowState(true)) {
+			MeshData* meshData = mesh->getMeshData();
+			bool skeletalMesh = meshData->skeletalMesh;
+			vector<Material*> material = mesh->getMaterials();
+			Material* renderMaterial = world->getMaterial(fallbackMaterialId);
+			if (material.size() > 0 && material[0] && material[0]->getProgram()) {
+				renderMaterial = material[0];
+			}
+
+			//Setup ModelData with drawCount, vertex buffer and array, and shader program
+			meshData->materials = material;
+			glBindVertexArray(meshData->vao);
+			//Bind the vertex buffer and pass in the vertex data
+			glBindBuffer(GL_ARRAY_BUFFER, meshData->vbo);
+			glBufferData(GL_ARRAY_BUFFER, meshData->vertices.size() * sizeof(VertexData), meshData->vertices.data(), GL_STATIC_DRAW);
+
+			//Bind and buffert the element buffer, if the model has indices
+			if (meshData->indices.size() > 0) {
+				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, meshData->ebo);
+				glBufferData(GL_ELEMENT_ARRAY_BUFFER, meshData->indices.size() * sizeof(unsigned int), meshData->indices.data(), GL_STATIC_DRAW);
+			}
+			glBindVertexArray(0);
+
+			mesh->setMeshData(meshData);
+			setGLWindowState(false);
+		}
+	}
+
 	vector<MeshData> Renderer::importModel(string path, Mesh* mesh, unsigned int options) {
-		//string directory = path.substr(0, path.find_last_of('/')); -- UNUSED
 		string type = path.substr(path.find_last_of('.') + 1, path.size());
+		if (type == "fbx") {
+			options |= aiProcess_RemoveRedundantMaterials;
+		}
 		const aiScene* scene = modelImporter.ReadFile(path, options);
 		if (scene != nullptr) {
 			//TODO: Support models with multiple meshes?
@@ -113,7 +148,10 @@ namespace CGEngine {
 				glm::vec3 position = glm::vec3(imported->mVertices[i].x, imported->mVertices[i].y, imported->mVertices[i].z);
 				glm::vec2 texCoord = (imported->mTextureCoords[0]) ? glm::vec2(imported->mTextureCoords[0][i].x, imported->mTextureCoords[0][i].y) : glm::vec2(0, 0);
 				glm::vec3 normal = glm::vec3(imported->mNormals[i].x, imported->mNormals[i].y, imported->mNormals[i].z);
-				int materialId = imported->mMaterialIndex - (type == "obj" ? 1 : 0);
+				int materialId = imported->mMaterialIndex;
+				if (type == "obj") {
+					materialId -= 1;
+				}
 
 				VertexData vert = VertexData(position, texCoord, normal, (float)materialId);
 				vertices.push_back(vert);
@@ -129,20 +167,24 @@ namespace CGEngine {
 			vector<Texture> textures;
 			if (imported->mMaterialIndex >= 0 && scene->HasMaterials()) {
 				aiMaterial* material = scene->mMaterials[imported->mMaterialIndex];
+				cout << "Importing material index " << imported->mMaterialIndex << "\n";
 				//Extract the first found diffuse, specular and opacity textures
 				vector<string> diffuseMaps = loadMaterialTextures(material, aiTextureType_DIFFUSE);
 				string diffuseTexture = "";
 				if (diffuseMaps.size() > 0) {
+					cout << "Found diffuse texture\n";
 					diffuseTexture = diffuseMaps[0];
 				}
 				vector<string> specularMaps = loadMaterialTextures(material, aiTextureType_SPECULAR);
 				string specularTexture = "";
 				if (specularMaps.size() > 0) {
+					cout << "Found specular texture\n";
 					specularTexture = specularMaps[0];
 				}
 				vector<string> opacityMaps = loadMaterialTextures(material, aiTextureType_OPACITY);
 				string opacityTexture = "";
 				if (opacityMaps.size() > 0) {
+					cout << "Found opacity texture\n";
 					opacityTexture = opacityMaps[0];
 				}
 				//Extract the diffuse & specular colors and the opacity, shininess, and roughess
@@ -151,14 +193,17 @@ namespace CGEngine {
 				ai_real* opacity = new ai_real(1);
 				ai_real* shininess = new ai_real(1);
 				ai_real* roughness = new ai_real(1);
-				aiGetMaterialColor(material,AI_MATKEY_COLOR_DIFFUSE, diffuseColor);
+				//aiGetMaterialColor(material,AI_MATKEY_COLOR_DIFFUSE, diffuseColor);
+				aiGetMaterialColor(material, AI_MATKEY_BASE_COLOR, diffuseColor);
 				aiGetMaterialColor(material, AI_MATKEY_COLOR_SPECULAR, specularColor);
 				aiGetMaterialFloat(material, AI_MATKEY_SHININESS, shininess);
 				aiGetMaterialFloat(material, AI_MATKEY_OPACITY, opacity);
 				aiGetMaterialFloat(material, AI_MATKEY_ROUGHNESS_FACTOR, roughness);
+				cout << "Diffuse color (" << diffuseColor->r << ", " << diffuseColor->g << ", " << diffuseColor->b << ", " << diffuseColor->a << ")\n";
 				
 				//Create the material and assign it to the mesh
 				SurfaceDomain diffuseDomain = SurfaceDomain(diffuseTexture, fromAiColor4(diffuseColor));
+				cout << "MaterialColor: " << diffuseColor->r << "," << diffuseColor->g << "," << diffuseColor->b << "," << diffuseColor->a << "\n";	
 				SurfaceDomain specularDomain = SurfaceDomain(specularTexture, fromAiColor4(specularColor), (*roughness)*(*shininess));
 				SurfaceDomain opacityDomain = SurfaceDomain(opacityTexture, Color::White, *opacity);
 				SurfaceParameters importedSurfParams = SurfaceParameters(diffuseDomain, specularDomain);
@@ -169,40 +214,70 @@ namespace CGEngine {
 				cout << "Imported material " << material->GetName().C_Str() << "\n";
 			}
 			//Import bones and weights
+			map<int, vector<pair<int, float>>> vertexWeights;  // vertex_id -> [(bone_id, weight)]
 			map<string, BoneData> bones;
-			int boneCounter = 0;
+			// First collect all weights per vertex
 			for (int boneIndex = 0; boneIndex < imported->mNumBones; ++boneIndex) {
-				int boneID = -1;
-				string boneName = imported->mBones[boneIndex]->mName.C_Str();
-				if (bones.find(boneName) == bones.end()) {
-					BoneData boneData;
-					boneData.id = boneCounter;
-					//newBoneData.id = m_BoneCounter;
-					boneData.offset = fromAiMatrix4toGlm(imported->mBones[boneIndex]->mOffsetMatrix);
-					bones[boneName] = boneData;
-					boneID = boneCounter;
-					cout << "Imported bone " << boneName << "\n";
-					boneCounter++;
-				} else {
-					boneID = bones[boneName].id;
-				}
-				assert(boneID != -1);
-				auto weights = imported->mBones[boneIndex]->mWeights;
-				int numWeights = imported->mBones[boneIndex]->mNumWeights;
-			
-				for (int weightIndex = 0; weightIndex < numWeights; ++weightIndex) {
-					int vertexId = weights[weightIndex].mVertexId;
-					float weight = weights[weightIndex].mWeight;
-					assert(vertexId <= vertices.size());
-					for (int i = 0; i < MAX_BONE_INFLUENCE; ++i) {
-						if (vertices[vertexId].boneIds[i] < 0) {
-							vertices[vertexId].weights[i] = weight;
-							vertices[vertexId].boneIds[i] = boneID;
-							break;
-						}
+				auto bone = imported->mBones[boneIndex];
+				for (int weightIndex = 0; weightIndex < bone->mNumWeights; ++weightIndex) {
+					int vertexId = bone->mWeights[weightIndex].mVertexId;
+					float weight = bone->mWeights[weightIndex].mWeight;
+					vertexWeights[vertexId].push_back({ boneIndex, weight });
+
+					string boneName = imported->mBones[boneIndex]->mName.C_Str();
+					if (bones.find(boneName) == bones.end()) {
+						BoneData boneData;
+						boneData.id = boneIndex;
+						boneData.offset = fromAiMatrix4toGlm(imported->mBones[boneIndex]->mOffsetMatrix);
+						bones[boneName] = boneData;
+						cout << "Imported bone " << boneIndex << ": " << boneName << "\n";
 					}
 				}
 			}
+
+			// Then assign the strongest weights to each vertex
+			for (auto& [vertexId, weights] : vertexWeights) {
+				// Sort weights in descending order
+				std::sort(weights.begin(), weights.end(),
+					[](const auto& a, const auto& b) { return a.second > b.second; });
+
+				float totalWeight = 0.0f;
+				int assignedInfluences = 0;
+
+				// Assign up to MAX_BONE_INFLUENCE weights
+				for (size_t i = 0; i < std::min(weights.size(), size_t(MAX_BONE_INFLUENCE)); ++i) {
+					vertices[vertexId].boneIds[i] = weights[i].first;
+					vertices[vertexId].weights[i] = weights[i].second;
+					totalWeight += weights[i].second;
+					assignedInfluences++;
+				}
+
+				// Fill remaining slots with -1 and 0
+				for (int i = assignedInfluences; i < MAX_BONE_INFLUENCE; ++i) {
+					vertices[vertexId].boneIds[i] = -1;
+					vertices[vertexId].weights[i] = 0.0f;
+				}
+
+				// Normalize weights only if they don't sum to 1
+				if (std::abs(totalWeight - 1.0f) > 0.001f) {
+					for (int i = 0; i < assignedInfluences; ++i) {
+						vertices[vertexId].weights[i] /= totalWeight;
+					}
+				}
+
+				// Debug output for weight verification
+				if (vertexId % 100 == 0) {  // Print every 100th vertex to avoid spam
+					cout << "Vertex " << vertexId << " weights: ";
+					for (int i = 0; i < MAX_BONE_INFLUENCE; ++i) {
+						if (vertices[vertexId].weights[i] > 0) {
+							cout << vertices[vertexId].weights[i] << " ";
+						}
+					}
+					cout << "\n";
+				}
+			}
+
+			mesh->getMeshData()->bones = bones;
 			meshes.push_back(MeshData(vertices,indices));
 		}
 		// then do the same for each of its children
@@ -274,7 +349,7 @@ namespace CGEngine {
 		return true;
 	}
 
-	void Renderer::renderMesh(MeshData model, Transformation3D transform) {
+	void Renderer::renderMesh(MeshData* model, Transformation3D transform) {
 		glm::mat4 modelPos = glm::translate(glm::vec3(transform.position.x, transform.position.y, transform.position.z));
 		glm::mat4 modelRotX = glm::rotate(degrees(transform.rotation.x).asRadians(), glm::vec3(1.f, 0.f, 0.f));
 		glm::mat4 modelRotY = glm::rotate(degrees(transform.rotation.y).asRadians(), glm::vec3(0.f, 1.f, 0.f));
@@ -284,14 +359,19 @@ namespace CGEngine {
 		glm::mat4 modelTransform = modelPos * modelRotation * modelScale;
 
 		if (renderer.setGLWindowState(true)) {
-			glBindVertexArray(model.vao);
+			glBindVertexArray(model->vao);
 			boundTextures = 0;
 			Material* renderMaterial = world->getMaterial(fallbackMaterialId);
-			if (model.materials.size() > 0 && model.materials[0] && model.materials[0]->getProgram()) {
-				renderMaterial = model.materials[0];
-			} else {
-				model.materials.clear();
-				model.materials.push_back(renderMaterial);
+			if (model->materials.size() > 0 && model->materials[0] && model->materials[0]->getProgram()) {
+				renderMaterial = model->materials[0];
+			}
+			else {
+				model->materials.clear();
+				model->materials.push_back(renderMaterial);
+			}
+			Animator* animator = model->animator;
+			if (animator) {
+				animator->updateAnimation(time.getDeltaSec());
 			}
 			Program* program = renderMaterial->getProgram();
 			//Bind the shaders.
@@ -303,9 +383,18 @@ namespace CGEngine {
 			program->setUniform("camera", currentCamera->getMatrix());
 			program->setUniform("cameraPosition", { camPos.x,camPos.y,camPos.z });
 			program->setUniform("timeSec", time.getElapsedSec());
-
-			for (int i = 0; i < model.materials.size(); ++i) {
-				setMaterialUniforms(model.materials.at(i), program, i);
+			if (animator) {
+				vector<glm::mat4> transforms = animator->getBoneMatrices();
+				for (int i = 0; i < transforms.size(); ++i) {
+					//glm::quat rotation;
+					//glm::decompose(transforms[i], glm::vec3(), rotation, glm::vec3(), glm::vec3(), glm::vec4());
+					//rotation = glm::conjugate(rotation);
+					//cout << "Updating bone " << i << ": " << rotation.x << "," << rotation.y << "," << rotation.z << "\n";
+					program->setUniform(getUniformArrayIndexName("boneMatrices", i).c_str(), transforms[i]);
+				}
+			}
+			for (int i = 0; i < model->materials.size(); ++i) {
+				setMaterialUniforms(model->materials.at(i), program, i);
 			}
 
 			program->setUniform("lightCount", (int)lights.size());
@@ -313,10 +402,11 @@ namespace CGEngine {
 				setLightUniforms(lights.get(i), i, program);
 			}
 			// Draw the cube
-			if (model.indices.size()) {
-				glDrawElements(GL_TRIANGLES, model.indices.size(), GL_UNSIGNED_INT, 0);
-			} else {
-				glDrawArrays(GL_TRIANGLES, 0, model.vertices.size() / 5);
+			if (model->indices.size()) {
+				glDrawElements(GL_TRIANGLES, model->indices.size(), GL_UNSIGNED_INT, 0);
+			}
+			else {
+				glDrawArrays(GL_TRIANGLES, 0, model->vertices.size() / 5);
 			}
 
 			// Unbind varray, shaders, and texture
@@ -392,6 +482,12 @@ namespace CGEngine {
 		program->setUniform(getUniformArrayPropertyName("lights", lightIndex, "ambiance").c_str(), light->parameters.ambiance);
 		program->setUniform(getUniformArrayPropertyName("lights", lightIndex, "coneAngle").c_str(), light->parameters.coneAngle);
 		program->setUniform(getUniformArrayPropertyName("lights", lightIndex, "lightDirection").c_str(), toGlm(light->parameters.lightDirection));
+	}
+
+	string Renderer::getUniformArrayIndexName(string arrayName, int index) {
+		std::ostringstream ss;
+		ss << arrayName << "[" << index << "]";
+		return ss.str();
 	}
 
 	string Renderer::getUniformArrayPropertyName(string arrayName, int index, string propertyName) {
