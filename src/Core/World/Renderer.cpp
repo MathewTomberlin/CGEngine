@@ -27,15 +27,6 @@ namespace CGEngine {
 		if (setGLWindowState(true)) {
 			MeshData* meshData = mesh->getMeshData();
 			bool skeletalMesh = meshData->skeletalMesh;
-			string path = mesh->getImportPath();
-			if (path != "") {
-				mesh->clearMaterials();
-				vector<MeshData> importedModel = importer->importModel(path, mesh);
-				meshData = new MeshData(importedModel[0].vertices, importedModel[0].indices);
-				meshData->bones = mesh->getMeshData()->bones;
-				meshData->skeletalMesh = skeletalMesh;
-				mesh->setMeshData(meshData);
-			}
 			vector<Material*> material = mesh->getMaterials();
 			Material* renderMaterial = world->getMaterial(fallbackMaterialId);
 			if (material.size() > 0 && material[0] && material[0]->getProgram()) {
@@ -79,6 +70,10 @@ namespace CGEngine {
 			mesh->setMeshData(meshData);
 			setGLWindowState(false);
 		}
+	}
+
+	ImportResult Renderer::import(string path) {
+		return importer->importModel(path);
 	}
 
 	void Renderer::updateModelData(Mesh* mesh) {
