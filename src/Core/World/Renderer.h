@@ -70,7 +70,7 @@ namespace CGEngine {
 	};
 
 	struct MeshData {
-		MeshData(vector<VertexData> vertices = {}, vector<unsigned int> indices = {}, vector<Material*> materials = { new Material() }, bool skeletalMesh = false, map<string, BoneData> bones = {}, int boneCounter = 0) :vertices(vertices), indices(indices), vao(0U), vbo(0U), ebo(0U), bones(bones), boneCounter(boneCounter), animator(nullptr), skeletalMesh(skeletalMesh) {};
+		MeshData(vector<VertexData> vertices = {}, vector<unsigned int> indices = {}, vector<Material*> materials = { new Material() }, bool skeletalMesh = false, map<string, BoneData> bones = {}, int boneCounter = 0) :vertices(vertices), indices(indices), vao(0U), vbo(0U), ebo(0U), bones(bones), boneCounter(boneCounter), skeletalMesh(skeletalMesh) {};
 		vector<VertexData> vertices;
 		vector<unsigned int> indices;
 		GLuint vbo = 0U;
@@ -79,20 +79,6 @@ namespace CGEngine {
 		map<string, BoneData> bones;
 		int boneCounter;
 		bool skeletalMesh = false;
-		Animator* animator = nullptr;
-
-		void setAnimator(Animator* animator) {
-			this->animator = animator;
-		}
-
-		void setVertexBoneDataToDefault(VertexData& vertex)
-		{
-			for (int i = 0; i < MAX_BONE_INFLUENCE; i++)
-			{
-				vertex.boneIds[i] = -1;
-				vertex.weights[i] = 0.0f;
-			}
-		}
 	};
 
 	struct KeyPosition {
