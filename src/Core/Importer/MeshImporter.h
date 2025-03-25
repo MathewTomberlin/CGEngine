@@ -8,9 +8,14 @@ namespace CGEngine {
 	class Mesh;
 	struct MeshData;
 
+	struct ImportResult {
+		vector<MeshData> meshes;
+		vector<id_t> materialIds;
+	};
+
 	class MeshImporter {
     public:
-        vector<MeshData> importModel(string path, Mesh* mesh, unsigned int options = aiProcess_Triangulate | aiProcess_FlipUVs);
+		ImportResult importModel(string path, unsigned int options = aiProcess_Triangulate | aiProcess_FlipUVs);
 		const aiScene* readFile(string path, unsigned int options);
 
 		static inline glm::mat4 fromAiMatrix4toGlm(const aiMatrix4x4& from) {
@@ -32,7 +37,7 @@ namespace CGEngine {
         static Color fromAiColor4(aiColor4D* c);
 
     private:
-        vector<MeshData> processNode(aiNode* node, const aiScene* scene, Mesh* mesh, string type);
+		ImportResult processNode(aiNode* node, const aiScene* scene, string type);
         vector<string> loadMaterialTextures(aiMaterial* mat, aiTextureType type);
 
         Assimp::Importer modelImporter;

@@ -4,17 +4,17 @@
 #include "../Mesh/Mesh.h"
 
 namespace CGEngine {
-    vector<MeshData> MeshImporter::importModel(string path, Mesh* mesh, unsigned int options) {
+    ImportResult MeshImporter::importModel(string path, unsigned int options) {
         string type = path.substr(path.find_last_of('.') + 1, path.size());
         if (type == "fbx") {
             options |= aiProcess_RemoveRedundantMaterials;
         }
         const aiScene* scene = modelImporter.ReadFile(path, options);
         if (scene != nullptr) {
-            vector<MeshData> meshes = processNode(scene->mRootNode, scene, mesh, type);
-            if (meshes.size() > 0) {
+			ImportResult result = processNode(scene->mRootNode, scene, type);
+            if (result.meshes.size() > 0) {
                 cout << "Finished importing " << path << "\n\n";
-                return meshes;
+                return result;
             }
             else {
                 cout << "No meshes imported from " << path << "\n";
@@ -23,14 +23,14 @@ namespace CGEngine {
         else {
             cout << "Failed to import from " << path << "\n";
         }
-        return {};
+        return ImportResult();
     }
 
     // Move the implementation of processNode from Renderer.cpp
-    vector<MeshData> MeshImporter::processNode(aiNode* node, const aiScene* scene, Mesh* mesh, string type) {
+	ImportResult MeshImporter::processNode(aiNode* node, const aiScene* scene, string type) {
 		vector<MeshData> meshes = {};
 		// process all the node's meshes (if any)
-		vector<Material*> materials = {};
+		vector<id_t> materials = {};
 		for (unsigned int i = 0; i < node->mNumMeshes; i++) {
 			aiMesh* imported = scene->mMeshes[node->mMeshes[i]];
 			cout << "Importing " << imported->mName.C_Str() << "\n";
@@ -102,8 +102,7 @@ namespace CGEngine {
 				SurfaceParameters importedSurfParams = SurfaceParameters(diffuseDomain, specularDomain);
 				id_t materialId = world->createMaterial(importedSurfParams);
 				Material* importedMaterial = world->getMaterial(materialId);
-				mesh->addMaterial(importedMaterial);
-				materials.push_back(importedMaterial);
+				materials.push_back(materialId);
 				cout << "Imported material " << material->GetName().C_Str() << "\n";
 			}
 			//Import bones and weights
@@ -170,15 +169,18 @@ namespace CGEngine {
 				}
 			}
 
-			mesh->getMeshData()->bones = bones;
-			meshes.push_back(MeshData(vertices, indices));
+			meshes.push_back(MeshData(vertices, indices, bones));
 		}
-		// then do the same for each of its children
+		
 		for (unsigned int i = 0; i < node->mNumChildren; i++) {
-			vector<MeshData> m = processNode(node->mChildren[i], scene, mesh, type);
-			meshes.insert(meshes.end(), m.begin(), m.end());
+			ImportResult r = processNode(node->mChildren[i], scene, type);
+			meshes.insert(meshes.end(), r.meshes.begin(), r.meshes.end());
+			materials.insert(materials.end(), r.materialIds.begin(), r.materialIds.end());
 		}
-		return meshes;
+		ImportResult result = ImportResult();
+		result.meshes = meshes;
+		result.materialIds = materials;
+		return result;
     }
 
     // Move the implementation of loadMaterialTextures from Renderer.cpp
