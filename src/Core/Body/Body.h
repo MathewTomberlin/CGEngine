@@ -582,6 +582,11 @@ namespace CGEngine {
         /// <param name="behaviorId">The id of the Behavior</param>
         /// <returns>The Behavior, if it was found</returns>
         Behavior* getBehavior(id_t behaviorId);
+		/// <summary>
+		/// Return the number of children attached to this Body
+		/// </summary>
+		/// <returns>Number of children attached</returns>
+		size_t getChildCount() const;
     protected:
         /// <summary>
         /// Base Body initialization with a display name, taking a unique ID from world's body IDs stack, and assigning itself to the ScriptMap's owner pointer.

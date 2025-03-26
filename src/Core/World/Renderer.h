@@ -165,8 +165,13 @@ namespace CGEngine {
 		glm::vec2 toGlm(Vector2f v);
 		glm::vec3 toGlm(Vector3f v);
 		glm::vec3 toGlm(Color c);
+		Vector2f fromGlm(glm::vec2 v);
+		Vector3f fromGlm(glm::vec3 v);
 		const aiScene* readFile(string path, unsigned int options);
 		ImportResult import(string path);
+		void importAnimation(string path, Model* model);
+		Material* getFallbackMaterial();
+		glm::mat4 getCombinedModelMatrix(Body* body);
 	private:
 		friend class World;
 		RenderWindow* window = nullptr;

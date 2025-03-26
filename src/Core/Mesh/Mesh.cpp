@@ -14,23 +14,58 @@ namespace CGEngine {
 	void Mesh::import(string importPath) {
 		clearMaterials();
 		ImportResult importResult = renderer.import(importPath);
-		vector<Material*> materials;
-		for (id_t matId : importResult.materialIds) {
-			Material* material = world->getMaterial(matId);
-			this->addMaterial(material);
-			materials.push_back(material);
-		}
-
-		if (importResult.meshes.size() > 0) {
-			this->meshData = new MeshData(importResult.meshes[0].vertices, importResult.meshes[0].indices, importResult.meshes[0].bones);
-			this->meshData->skeletalMesh = importResult.meshes[0].bones.size() > 0;
+		if (importResult.rootNode && importResult.rootNode->meshData) {
+			cout << "Setting up mesh successfully imported from '" << importPath << "'\n";
+			this->meshData = importResult.rootNode->meshData;
 			this->meshData->sourcePath = importPath;
-			for (int i = 1; i < importResult.meshes.size(); i++) {
-				MeshData* meshData = &importResult.meshes[i];
-				Mesh* mesh = new Mesh(meshData, Transformation3D(), materials);
-				world->create(mesh);
+			if (importResult.skeletalMesh) {
+				cout << "Setting up Skeletal Mesh!\n";
 			}
+			// Set root transformation
+			glm::vec3 translation, scale, skew;
+			glm::quat rotation;
+			glm::vec4 perspective;
+			glm::decompose(importResult.rootNode->transformation, scale, rotation, translation, skew, perspective);
+
+			this->transformation = Transformation3D(
+				Vector3f(translation.x, translation.y, translation.z),
+				Vector3f(renderer.fromGlm(glm::degrees(glm::eulerAngles(rotation)))),
+				Vector3f(scale.x, scale.y, scale.z)
+			);
+
+			vector<MeshNodeData*> nodes = importResult.rootNode->children;
+			while (nodes.size() > 0) {
+				MeshNodeData* node = nodes.back();
+				nodes.pop_back();
+				if (node->meshData) {
+					glm::decompose(node->transformation, scale, rotation, translation, skew, perspective);
+
+					Vector3f pos(translation.x, translation.y, translation.z);
+					Vector3f rot = renderer.fromGlm(glm::degrees(glm::eulerAngles(rotation)));
+					Vector3f scl(scale.x, scale.y, scale.z);
+
+					Mesh* nodeMesh = new Mesh(node->meshData, Transformation3D(pos, rot, scl), { world->getMaterial(node->materialId) }, renderParameters);
+					nodeMesh->meshData->skeletalMesh = !nodeMesh->meshData->bones.empty();
+					nodeMesh->meshData->sourcePath = importPath;
+					id_t childMeshBodyId = world->create(nodeMesh);
+					Body* childBody = world->bodies.get(childMeshBodyId);
+					if (childBody) {
+						world->getRoot()->attachBody(childBody);
+					}
+				}
+				nodes.insert(nodes.end(), node->children.begin(), node->children.end());
+			}
+
+			deleteImportHeirarchy(importResult.rootNode);
 		}
+	}
+
+	void Mesh::deleteImportHeirarchy(MeshNodeData* node) {
+		if (!node) return;
+		for (MeshNodeData* child : node->children) {
+			deleteImportHeirarchy(child);
+		}
+		delete node;
 	}
 
 	MeshData* Mesh::getMeshData() {
@@ -85,6 +120,8 @@ namespace CGEngine {
 	}
 
 	void Mesh::rotate(Vector3f delta) {
+		cout << "Mesh::rotate called on " << getMeshName()
+			<< " with delta: " << delta.x << "," << delta.y << "," << delta.z << "\n";
 		transformation.rotation += delta;
 	}
 
