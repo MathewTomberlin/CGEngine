@@ -43,10 +43,6 @@ namespace CGEngine {
 				if (index >= 0 && index < 100) {
 					glm::mat4 offset = boneData[nodeName].offset;
 					boneMatrices[index] = globalTransformation * offset;
-					//glm::quat rotation;
-					//glm::decompose(boneMatrices[index], glm::vec3(), rotation, glm::vec3(), glm::vec3(), glm::vec4());
-					//rotation = glm::conjugate(rotation);
-					//cout << "Updating bone " << index << " " << nodeName << ": " << rotation.x << "," << rotation.y << "," << rotation.z << "\n";
 				}
 			}
 		}
