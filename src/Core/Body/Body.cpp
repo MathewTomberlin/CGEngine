@@ -358,6 +358,10 @@ namespace CGEngine {
         bodyParams.intersecting = enabled;
     }
 
+    size_t Body::getChildCount() const {
+        return children.size();
+    }
+
     void Body::attachBody(Body* child) {
         //Do nothing on null input
         if (child != nullptr) {

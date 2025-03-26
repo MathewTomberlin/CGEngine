@@ -6,17 +6,31 @@
 
 namespace CGEngine {
 	class Mesh;
+	class Model;
 	struct MeshData;
 
+	struct MeshNodeData {
+		MeshData* meshData = nullptr;
+		id_t materialId;
+		string nodeName;
+		vector<MeshNodeData*> children;
+		MeshNodeData* parent = nullptr;
+		glm::mat4 transformation;
+	};
+
 	struct ImportResult {
-		vector<MeshData> meshes;
-		vector<id_t> materialIds;
+		MeshNodeData* rootNode = nullptr;
+		bool skeletalMesh = false;
 	};
 
 	class MeshImporter {
     public:
 		ImportResult importModel(string path, unsigned int options = aiProcess_Triangulate | aiProcess_FlipUVs);
 		const aiScene* readFile(string path, unsigned int options);
+		// Add direct model creation to support importing animations
+		Model* createModel(MeshData* meshData, string name = "");
+		// Add animation import to manually created model
+		bool importAnimation(const string& path, Model* targetModel);
 
 		static inline glm::mat4 fromAiMatrix4toGlm(const aiMatrix4x4& from) {
 			return glm::mat4(

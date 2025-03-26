@@ -26,7 +26,7 @@ namespace CGEngine {
 	void Renderer::getModelData(Mesh* mesh) {
 		if (setGLWindowState(true)) {
 			MeshData* meshData = mesh->getMeshData();
-			bool skeletalMesh = meshData->skeletalMesh;
+			if (!meshData) return;
 			vector<Material*> material = mesh->getMaterials();
 			Material* renderMaterial = world->getMaterial(fallbackMaterialId);
 			if (material.size() > 0 && material[0] && material[0]->getProgram()) {
@@ -74,6 +74,14 @@ namespace CGEngine {
 
 	ImportResult Renderer::import(string path) {
 		return importer->importModel(path);
+	}
+
+	void Renderer::importAnimation(string path, Model* model) {
+		importer->importAnimation(path, model);
+	}
+
+	Material* Renderer::getFallbackMaterial() {
+		return world->getMaterial(fallbackMaterialId);
 	}
 
 	void Renderer::updateModelData(Mesh* mesh) {
@@ -155,72 +163,98 @@ namespace CGEngine {
 	}
 
 	void Renderer::renderMesh(Mesh* mesh, MeshData* model, Transformation3D transform) {
-		glm::mat4 modelPos = glm::translate(glm::vec3(transform.position.x, transform.position.y, transform.position.z));
-		glm::mat4 modelRotX = glm::rotate(degrees(transform.rotation.x).asRadians(), glm::vec3(1.f, 0.f, 0.f));
-		glm::mat4 modelRotY = glm::rotate(degrees(transform.rotation.y).asRadians(), glm::vec3(0.f, 1.f, 0.f));
-		glm::mat4 modelRotZ = glm::rotate(degrees(transform.rotation.z).asRadians(), glm::vec3(0.f, 0.f, 1.f));
-		glm::mat4 modelScale = glm::scale(glm::vec3(transform.scale.x, transform.scale.y, transform.scale.z));
-		glm::mat4 modelRotation = modelRotZ * modelRotY * modelRotX;
-		glm::mat4 modelTransform = modelPos * modelRotation * modelScale;
+		if (!mesh) return;
+		// Get the body that owns this mesh
+		Body* meshBody = nullptr;
+		world->bodies.forEach([&mesh, &meshBody](Body* body) {
+			if (body->get<Mesh*>() == mesh) {
+				meshBody = body;
+				return;
+			}
+		});
+		if (!meshBody) return;
+
+		// Get combined transform from entire hierarchy
+		glm::mat4 combinedTransform = getCombinedModelMatrix(meshBody);
 
 		if (renderer.setGLWindowState(true)) {
-			glBindVertexArray(model->vao);
-			boundTextures = 0;
-			Material* renderMaterial = world->getMaterial(fallbackMaterialId);
-			vector<Material*> materials = mesh->getMaterials();
-			if (mesh->getMaterials().size() > 0) {
-				Material* material = mesh->getMaterials().at(0);
-				if (material && material->getProgram()) {
-					renderMaterial = material;
+			// Only proceed with mesh rendering if we have mesh data
+			if (model && model->vertices.size() > 0) {
+				glBindVertexArray(model->vao);
+				boundTextures = 0;
+				Material* renderMaterial = world->getMaterial(fallbackMaterialId);
+				vector<Material*> materials = mesh->getMaterials();
+				if (mesh->getMaterials().size() > 0) {
+					Material* material = mesh->getMaterials().at(0);
+					if (material && material->getProgram()) {
+						renderMaterial = material;
+					}
+					else {
+						mesh->clearMaterials();
+						mesh->addMaterial(renderMaterial);
+					}
+				}
+				materials = mesh->getMaterials();
+				Animator* animator = mesh->getAnimator();
+				if (animator) {
+					animator->updateAnimation(time.getDeltaSec());
+				}
+				Program* program = renderMaterial->getProgram();
+				//Bind the shaders.
+				program->use();
+
+				//Set the uniforms for the shader to use
+				Vector3f camPos = currentCamera->getPosition();
+				program->setUniform("model", combinedTransform);
+				program->setUniform("camera", currentCamera->getMatrix());
+				program->setUniform("cameraPosition", { camPos.x,camPos.y,camPos.z });
+				program->setUniform("timeSec", time.getElapsedSec());
+				if (animator) {
+					vector<glm::mat4> transforms = animator->getBoneMatrices();
+					for (int i = 0; i < transforms.size(); ++i) {
+						program->setUniform(getUniformArrayIndexName("boneMatrices", i).c_str(), transforms[i]);
+					}
+				}
+				for (int i = 0; i < materials.size(); ++i) {
+					setMaterialUniforms(materials.at(i), program, i);
+				}
+
+				program->setUniform("lightCount", (int)lights.size());
+				for (size_t i = 0; i < lights.size(); ++i) {
+					setLightUniforms(lights.get(i), i, program);
+				}
+				// Draw the cube
+				if (model->indices.size()) {
+					glDrawElements(GL_TRIANGLES, model->indices.size(), GL_UNSIGNED_INT, 0);
 				} else {
-					mesh->clearMaterials();
-					mesh->addMaterial(renderMaterial);
+					glDrawArrays(GL_TRIANGLES, 0, model->vertices.size() / 5);
 				}
-			}
-			materials = mesh->getMaterials();
-			Animator* animator = mesh->getAnimator();
-			if (animator) {
-				animator->updateAnimation(time.getDeltaSec());
-			}
-			Program* program = renderMaterial->getProgram();
-			//Bind the shaders.
-			program->use();
 
-			//Set the uniforms for the shader to use
-			Vector3f camPos = currentCamera->getPosition();
-			program->setUniform("model", modelTransform);
-			program->setUniform("camera", currentCamera->getMatrix());
-			program->setUniform("cameraPosition", { camPos.x,camPos.y,camPos.z });
-			program->setUniform("timeSec", time.getElapsedSec());
-			if (animator) {
-				vector<glm::mat4> transforms = animator->getBoneMatrices();
-				for (int i = 0; i < transforms.size(); ++i) {
-					program->setUniform(getUniformArrayIndexName("boneMatrices", i).c_str(), transforms[i]);
-				}
+				// Unbind varray, shaders, and texture
+				glBindVertexArray(0);
+				glActiveTexture(GL_TEXTURE0);
+				program->stop();
 			}
-			for (int i = 0; i < materials.size(); ++i) {
-				setMaterialUniforms(materials.at(i), program, i);
-			}
-
-			program->setUniform("lightCount", (int)lights.size());
-			for (size_t i = 0; i < lights.size(); ++i) {
-				setLightUniforms(lights.get(i), i, program);
-			}
-			// Draw the cube
-			if (model->indices.size()) {
-				glDrawElements(GL_TRIANGLES, model->indices.size(), GL_UNSIGNED_INT, 0);
-			}
-			else {
-				glDrawArrays(GL_TRIANGLES, 0, model->vertices.size() / 5);
-			}
-
-			// Unbind varray, shaders, and texture
-			glBindVertexArray(0);
-			glActiveTexture(GL_TEXTURE0);
-			program->stop();
 		}
 		if (renderer.setGLWindowState(false));
 	}
+
+	glm::mat4 Renderer::getCombinedModelMatrix(Body* body) {
+		glm::mat4 localTransform = glm::mat4(1.0f);
+
+		// Get mesh transform if available
+		Mesh* mesh = body->get<Mesh*>();
+		if (mesh) {
+			localTransform = mesh->getModelMatrix();
+		}
+
+		// Combine with parent transform
+		if (body->parent && body->parent != world->getRoot()) {
+			return getCombinedModelMatrix(body->parent) * localTransform;
+		}
+
+		return localTransform;
+	};
 
 	void Renderer::setMaterialUniforms(Material* material, Program* program, int materialId) {
 		for (auto iterator = material->materialParameters.begin(); iterator != material->materialParameters.end(); ++iterator) {
@@ -410,6 +444,14 @@ namespace CGEngine {
 
 	glm::vec3 Renderer::toGlm(Color c) {
 		return glm::vec3(c.r, c.g, c.b);
+	}
+
+	Vector2f Renderer::fromGlm(glm::vec2 v) {
+		return Vector2f(v.x, v.y);
+	}
+
+	Vector3f Renderer::fromGlm(glm::vec3 v) {
+		return Vector3f(v.x, v.y, v.z);
 	}
 
 	const aiScene* Renderer::readFile(string path, unsigned int options) {
