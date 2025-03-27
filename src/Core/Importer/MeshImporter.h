@@ -39,7 +39,7 @@ namespace CGEngine {
 		Model* createModel(MeshData* meshData, string name = "");
 		// Add animation import to manually created model
 		bool importAnimation(const string& path, Model* targetModel);
-		Animation* createAnimation(const string& path, MeshData* mesh, const string& animationName = "");
+		Animation* createAnimation(const aiScene* scene, MeshData* mesh, const string& animationName = "");
 
 		static inline glm::mat4 fromAiMatrix4toGlm(const aiMatrix4x4& from) {
 			return glm::mat4(

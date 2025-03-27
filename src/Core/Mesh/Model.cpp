@@ -7,7 +7,7 @@ namespace CGEngine {
 		// Import the model using MeshImporter
 		ImportResult importResult = renderer.import(sourcePath);
 		if (!importResult.rootNode) {
-			cout << "Failed to import model from '" << sourcePath << "'\n";
+			cout << "ERROR: Failed to import model from '" << sourcePath << "'\n";
 			return;
 		}
 
@@ -416,5 +416,28 @@ namespace CGEngine {
 		}
 
 		delete node;
+	}
+
+	void Model::setRootNode(ModelNode * node) {
+		if (rootNode) delete rootNode;
+		rootNode = node;
+	}
+
+	void Model::addNode(ModelNode* parent, ModelNode* child) {
+		if (!parent || !child) return;
+		child->parent = parent;
+		parent->children.push_back(child);
+
+		// Update bone data if present
+		if (child->meshData) {
+			updateBoneData(child->meshData);
+		}
+	}
+
+	bool Model::validate() const {
+		if (!rootNode) return false;
+		if (modelMaterials.empty()) return false;
+		// Add other validation as needed
+		return true;
 	}
 }

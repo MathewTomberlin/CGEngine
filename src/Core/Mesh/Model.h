@@ -70,6 +70,11 @@ namespace CGEngine {
 		ModelNode* convertAnimationNode(const NodeData& animNode, ModelNode* parent = nullptr);
 		void mapAnimationNodes(const Animation* anim);
 		bool setupAnimations(const string& path);
+
+		ModelNode* getRootNode() const { return rootNode; }
+		void addNode(ModelNode* parent, ModelNode* child);
+		void setRootNode(ModelNode* node);
+		bool validate() const;
 	private:
 		friend class MeshImporter;
 

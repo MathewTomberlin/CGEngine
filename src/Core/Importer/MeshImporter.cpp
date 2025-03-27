@@ -317,7 +317,7 @@ namespace CGEngine {
 			}
 
 			// Create animation through factory method
-			Animation* animation = createAnimation(path, skeletalMesh, animName);
+			Animation* animation = createAnimation(scene, skeletalMesh, animName);
 			if (!animation) continue;
 
 			//Map animation nodes to model hierarchy
@@ -330,39 +330,23 @@ namespace CGEngine {
 		return true;
 	}
 
-	Animation* MeshImporter::createAnimation(const string& path, MeshData* mesh, const string& animationName) {
-		if (!mesh) {
+	Animation* MeshImporter::createAnimation(const aiScene* scene, MeshData* mesh, const string& animationName) {
+		if (!scene || !mesh) {
 			cout << "Error: Cannot create animation without valid mesh data\n";
-			return nullptr;
-		}
-
-		unsigned int flags = aiProcess_Triangulate |
-			aiProcess_GenNormals |
-			aiProcess_LimitBoneWeights |
-			aiProcess_ConvertToLeftHanded |
-			aiProcess_ValidateDataStructure |
-			aiProcess_JoinIdenticalVertices |
-			aiProcess_OptimizeGraph |
-			aiProcess_OptimizeMeshes;
-
-		// Load scene
-		currentScene = modelImporter.ReadFile(path, flags);
-		if (!currentScene || !currentScene->HasAnimations()) {
-			cout << "Error: No animations found in " << path << "\n";
 			return nullptr;
 		}
 
 		try {
 			// Create animation with scene data
 			Animation* animation = new Animation();
-			aiAnimation* aiAnim = currentScene->mAnimations[0];
+			aiAnimation* aiAnim = scene->mAnimations[0];
 
 			// Setup animation data
 			animation->setName(!animationName.empty() ? animationName : (aiAnim->mName.length > 0 ? aiAnim->mName.C_Str() : "Animation"));
 			animation->duration = aiAnim->mDuration;
 			animation->ticksPerSecond = aiAnim->mTicksPerSecond != 0 ? aiAnim->mTicksPerSecond : 24.0f;
 			// Read hierarchy
-			animation->readHeirarchyData(animation->root, currentScene->mRootNode);
+			animation->readHeirarchyData(animation->root, scene->mRootNode);
 			// Process bones
 			animation->readMissingBones(aiAnim, mesh);
 
