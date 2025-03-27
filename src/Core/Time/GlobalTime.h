@@ -17,5 +17,6 @@ namespace CGEngine {
 		sec_t deltaSec = 0.f;
 		sec_t currentFrameSec = 0.0f;
 		sec_t lastFrameSec = 0.0f;
+		size_t frame = 0;
 	};
 }

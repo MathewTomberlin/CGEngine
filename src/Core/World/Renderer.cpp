@@ -59,7 +59,6 @@ namespace CGEngine {
 			glEnableVertexAttribArray(program->attrib("materialId"));
 			glVertexAttribPointer(program->attrib("materialId"), 1, GL_FLOAT, GL_FALSE, sizeof(VertexData), (void*)offsetof(VertexData, materialId));
 			if (meshData->skeletalMesh) {
-				cout << "Enabling bones and weights for skeletal mesh" << "\n";
 				glEnableVertexAttribArray(program->attrib("boneIds"));
 				glVertexAttribIPointer(program->attrib("boneIds"), 4, GL_INT, sizeof(VertexData), (void*)offsetof(VertexData, boneIds));
 				glEnableVertexAttribArray(program->attrib("weights"));
@@ -76,8 +75,8 @@ namespace CGEngine {
 		return importer->importModel(path);
 	}
 
-	void Renderer::importAnimation(string path, Model* model) {
-		importer->importAnimation(path, model);
+	bool Renderer::importAnimation(string path, Model* model) {
+		return importer->importAnimation(path, model);
 	}
 
 	Material* Renderer::getFallbackMaterial() {
@@ -158,12 +157,16 @@ namespace CGEngine {
 		root->render(*window, root->getTransform());
 		//Sort and render Meshes and SFML entities
 		render(window);
+		endFrame();
 		window->display();
 		return true;
 	}
 
 	void Renderer::renderMesh(Mesh* mesh, MeshData* model, Transformation3D transform) {
-		if (!mesh) return;
+		if (!mesh || !model || model->vertices.empty()) return;
+
+		Model* meshModel = mesh->getModel();
+
 		// Get the body that owns this mesh
 		Body* meshBody = nullptr;
 		world->bodies.forEach([&mesh, &meshBody](Body* body) {
@@ -196,8 +199,12 @@ namespace CGEngine {
 				}
 				materials = mesh->getMaterials();
 				Animator* animator = mesh->getAnimator();
-				if (animator) {
-					animator->updateAnimation(time.getDeltaSec());
+				if (meshModel && animator) {
+					// Only update animation once per model per frame
+					if (updatedModels.find(meshModel) == updatedModels.end()) {
+						mesh->getAnimator()->updateAnimation(time.getDeltaSec());
+						updatedModels.insert(meshModel);
+					}
 				}
 				Program* program = renderMaterial->getProgram();
 				//Bind the shaders.
@@ -237,6 +244,10 @@ namespace CGEngine {
 			}
 		}
 		if (renderer.setGLWindowState(false));
+	}
+
+	void Renderer::endFrame() {
+		updatedModels.clear();
 	}
 
 	glm::mat4 Renderer::getCombinedModelMatrix(Body* body) {
