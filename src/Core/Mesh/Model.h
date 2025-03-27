@@ -44,9 +44,10 @@ namespace CGEngine {
 		id_t instantiate(Transformation3D rootTransform = Transformation3D(), vector<Material*> overrideMaterials = {});
 
 		//Get Model info
-		bool isSkeletal() const { return !modelBones.empty(); };
+		bool isSkeletal() const;
 		string getModelPath() const { return sourcePath; };
 		size_t getBoneCount() const { return modelBones.size(); };
+		Animator* getAnimator() const { return modelAnimator; }
 
 		// Material management
 		id_t getMaterialCount() const { return modelMaterials.size(); }
@@ -68,8 +69,6 @@ namespace CGEngine {
 		// Helper method to convert NodeData to ModelNode for animations
 		ModelNode* convertAnimationNode(const NodeData& animNode, ModelNode* parent = nullptr);
 		void mapAnimationNodes(const Animation* anim);
-		void validateHierarchy() const;
-		// Add new method to handle animation import and setup
 		bool setupAnimations(const string& path);
 	private:
 		friend class MeshImporter;
@@ -81,6 +80,8 @@ namespace CGEngine {
 		vector<Material*> modelMaterials;
 		map<string, Animation*> modelAnimations;
 		map<string, AnimationNodeMapping> animationNodeMap;
+		Animator* modelAnimator = nullptr;
+		size_t bodyCount = 0;
 
 		// Helper to update modelBones when adding mesh data
 		void updateBoneData(const MeshData* meshData);

@@ -7,7 +7,9 @@
 namespace CGEngine {
 	class Mesh;
 	class Model;
+	class Animation;
 	struct MeshData;
+	struct BoneData;
 
 	struct MeshNodeData {
 		MeshData* meshData = nullptr;
@@ -23,6 +25,12 @@ namespace CGEngine {
 		bool skeletalMesh = false;
 	};
 
+	// Add new helper struct to track skeletal data during import
+	struct SkeletalData {
+		map<string, BoneData> allBones;
+		bool isSkeletal = false;
+	};
+
 	class MeshImporter {
     public:
 		ImportResult importModel(string path, unsigned int options = aiProcess_Triangulate | aiProcess_FlipUVs);
@@ -31,6 +39,7 @@ namespace CGEngine {
 		Model* createModel(MeshData* meshData, string name = "");
 		// Add animation import to manually created model
 		bool importAnimation(const string& path, Model* targetModel);
+		Animation* createAnimation(const string& path, MeshData* mesh, const string& animationName = "");
 
 		static inline glm::mat4 fromAiMatrix4toGlm(const aiMatrix4x4& from) {
 			return glm::mat4(
@@ -51,9 +60,11 @@ namespace CGEngine {
         static Color fromAiColor4(aiColor4D* c);
 
     private:
-		ImportResult processNode(aiNode* node, const aiScene* scene, string type);
+		ImportResult processNode(aiNode* node, const aiScene* scene, string type, SkeletalData& skeletalData);
         vector<string> loadMaterialTextures(aiMaterial* mat, aiTextureType type);
+		void propagateBoneData(MeshNodeData* node, const map<string, BoneData>& allBones);
 
         Assimp::Importer modelImporter;
+		const aiScene* currentScene = nullptr;  // Track current scene
     };
 }

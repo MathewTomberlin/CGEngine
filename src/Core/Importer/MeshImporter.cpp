@@ -3,39 +3,56 @@
 #include "MeshImporter.h"
 #include "../Mesh/Mesh.h"
 #include "../Mesh/Model.h"
+#include "../Animation/Animation.h"
 
 namespace CGEngine {
     ImportResult MeshImporter::importModel(string path, unsigned int options) {
+		cout << "\n=== Importing Model: " << path << " ===\n";
         string type = path.substr(path.find_last_of('.') + 1, path.size());
         if (type == "fbx") {
             options |= aiProcess_RemoveRedundantMaterials;
         }
         const aiScene* scene = modelImporter.ReadFile(path, options);
         if (scene != nullptr) {
-			return processNode(scene->mRootNode, scene, type);
+			// Track skeletal data during node processing
+			SkeletalData skeletalData;
+			ImportResult result = processNode(scene->mRootNode, scene, type, skeletalData);
+			result.skeletalMesh = skeletalData.isSkeletal;
+
+			// If skeletal, ensure all meshes have access to complete bone data
+			if (skeletalData.isSkeletal) {
+				propagateBoneData(result.rootNode, skeletalData.allBones);
+			}
+
+			return result;
         } else {
-            cout << "Failed to import from " << path << "\n";
+            cout << "ERROR: Failed to import from " << path << "\n";
         }
         return ImportResult();
     }
 
     // Move the implementation of processNode from Renderer.cpp
-	ImportResult MeshImporter::processNode(aiNode* node, const aiScene* scene, string type) {
+	ImportResult MeshImporter::processNode(aiNode* node, const aiScene* scene, string type, SkeletalData& skeletalData) {
+		if (node->mNumMeshes > 0) {
+			cout << "Processing node '" << node->mName.C_Str()
+				<< "' [Meshes: " << node->mNumMeshes
+				<< ", Children: " << node->mNumChildren << "]\n";
+		}
+
 		MeshNodeData* currentNode = new MeshNodeData();
 		currentNode->nodeName = node->mName.C_Str();
 		currentNode->transformation = fromAiMatrix4toGlm(node->mTransformation);
 		currentNode->parent = nullptr;
-		bool skeletal = false;
-		// Create empty MeshData by default
-		currentNode->meshData = new MeshData();
-		currentNode->meshData->meshName = node->mName.C_Str();
-		cout << "Processing node '" << node->mName.C_Str() << "' with " << node->mNumMeshes << " meshes and " << node->mNumChildren << " children\n";
+
 		//Only handle the first mesh at each node
 		//TODO: How should we handle multiple meshes per node?
-		if (node->mNumMeshes > 0){
+		if (node->mNumMeshes > 0) {
+			// Create empty MeshData by default
+			currentNode->meshData = new MeshData();
+			currentNode->meshData->meshName = node->mName.C_Str();
 			// Verify mesh index is valid
 			if (node->mMeshes[0] >= scene->mNumMeshes) {
-				cout << "Invalid mesh index " << node->mMeshes[0] << " for node '"
+				cout << "ERROR: Invalid mesh index " << node->mMeshes[0] << " for node '"
 					<< node->mName.C_Str() << "'\n";
 				return ImportResult();
 			}
@@ -82,7 +99,6 @@ namespace CGEngine {
 			id_t materialId = 0;
 			if (imported->mMaterialIndex >= 0 && scene->HasMaterials()) {
 				aiMaterial* material = scene->mMaterials[imported->mMaterialIndex];
-				cout << "Importing material " << material->GetName().C_Str() << " at mesh node material index " << imported->mMaterialIndex << "\n";
 				//Extract the first found diffuse, specular and opacity textures
 				vector<string> diffuseMaps = loadMaterialTextures(material, aiTextureType_DIFFUSE);
 				string diffuseTexture = "";
@@ -118,14 +134,20 @@ namespace CGEngine {
 				SurfaceDomain opacityDomain = SurfaceDomain(opacityTexture, Color::White, *opacity);
 				SurfaceParameters importedSurfParams = SurfaceParameters(diffuseDomain, specularDomain);
 				materialId = world->createMaterial(importedSurfParams);
+				cout << "  Material: " << material->GetName().C_Str() << " (ID: " << materialId << ")\n";
 			}
 			//Import bones and weights
 			map<int, vector<pair<int, float>>> vertexWeights;  // vertex_id -> [(bone_id, weight)]
 			map<string, BoneData> bones;
 			if (imported->HasBones()) {
+				skeletalData.isSkeletal = true;
+
+				cout << "  Bones ("<< imported->mNumBones<<"):\n";
 				// First collect all weights per vertex
 				for (int boneIndex = 0; boneIndex < imported->mNumBones; ++boneIndex) {
 					auto bone = imported->mBones[boneIndex];
+					string boneName = bone->mName.C_Str();
+
 					for (int weightIndex = 0; weightIndex < bone->mNumWeights; ++weightIndex) {
 						int vertexId = bone->mWeights[weightIndex].mVertexId;
 						float weight = bone->mWeights[weightIndex].mWeight;
@@ -137,9 +159,10 @@ namespace CGEngine {
 							boneData.id = boneIndex;
 							boneData.offset = fromAiMatrix4toGlm(imported->mBones[boneIndex]->mOffsetMatrix);
 							bones[boneName] = boneData;
-							cout << "Imported bone " << boneIndex << ": " << boneName << "\n";
+							skeletalData.allBones[boneName] = boneData;
 						}
 					}
+					cout << "    " << boneName << " (Weights: " << imported->mBones[boneIndex]->mNumWeights << ")\n";
 				}
 
 				// Then assign the strongest weights to each vertex
@@ -172,16 +195,16 @@ namespace CGEngine {
 						}
 					}
 
-					// Debug output for weight verification
-					if (vertexId % 100 == 0) {  // Print every 100th vertex to avoid spam
-						cout << "Vertex " << vertexId << " weights: ";
-						for (int i = 0; i < MAX_BONE_INFLUENCE; ++i) {
-							if (vertices[vertexId].weights[i] > 0) {
-								cout << vertices[vertexId].weights[i] << " ";
-							}
-						}
-						cout << "\n";
-					}
+					// Debug output for weight verification -- Disabled, possibly deprecated
+					//if (vertexId % 1000 == 0) {  // Print every 1000th vertex to avoid spam
+					//	cout << "Vertex " << vertexId << " weights: ";
+					//	for (int i = 0; i < MAX_BONE_INFLUENCE; ++i) {
+					//		if (vertices[vertexId].weights[i] > 0) {
+					//			cout << vertices[vertexId].weights[i] << " ";
+					//		}
+					//	}
+					//	cout << "\n";
+					//}
 				}
 			}
 
@@ -190,17 +213,22 @@ namespace CGEngine {
 			currentNode->meshData->bones = bones;
 			currentNode->meshData->skeletalMesh = bones.size() > 0;
 			currentNode->materialId = materialId;
+		} else {
+			currentNode->meshData = nullptr;
 		}
 		
 		for (unsigned int i = 0; i < node->mNumChildren; i++) {
-			ImportResult childResult = processNode(node->mChildren[i], scene, type);
+			ImportResult childResult = processNode(node->mChildren[i], scene, type, skeletalData);
 			childResult.rootNode->parent = currentNode;
-			skeletal = childResult.rootNode->meshData->skeletalMesh || currentNode->meshData->skeletalMesh;
 			currentNode->children.push_back(childResult.rootNode);
 		}
-		currentNode->meshData->skeletalMesh = skeletal;
-
-		cout << "Imported mesh node '" << currentNode->meshData->meshName << "' with " << currentNode->meshData->vertices.size() << " vertices and " << currentNode->meshData->indices.size() << " indices and " << currentNode->meshData->bones.size() << " bones" << "\n";
+		if (currentNode->meshData) {
+			currentNode->meshData->skeletalMesh = skeletalData.isSkeletal;
+			cout << "  Created node with "
+				<< currentNode->meshData->vertices.size() << " vertices, "
+				<< currentNode->meshData->indices.size() << " indices, "
+				<< currentNode->meshData->bones.size() << " bones\n";
+		}
 		ImportResult result = ImportResult();
 		result.rootNode = currentNode;
 		return result;
@@ -237,43 +265,132 @@ namespace CGEngine {
     }
 
 	bool MeshImporter::importAnimation(const string& path, Model* targetModel) {
-		if (!targetModel) return false;
+		cout << "\n=== Importing Animations ===\n";
+		if (!targetModel) {
+			cout << "ERROR: Cannot import animations without a valid model\n";
+			return false;
+		}
 
 		// Import scene with animation data
 		const aiScene* scene = modelImporter.ReadFile(path, aiProcess_Triangulate | aiProcess_FlipUVs);
+		if (!scene) {
+			cout << "ERROR: Failed to load scene for animation import\n";
+			return false;
+		}
 
-		if (!scene || !scene->HasAnimations()) {
-			cout << "No animations found in " << path << "\n";
+		cout << "Scene has " << scene->mNumAnimations << " animations\n";
+		if (!scene->HasAnimations()) {
+			cout << "WARNING: No animations found in " << path << "\n";
+			return false;
+		}
+
+		//TODO: findSkeletalMesh is reused in Model.setupAnimations, consider moving to a higher-level function
+		// Find the mesh with bone data first
+		MeshData* skeletalMesh = nullptr;
+		std::function<void(ModelNode*)> findSkeletalMesh =
+			[&skeletalMesh, &findSkeletalMesh](ModelNode* node) {
+			if (node && node->meshData && !node->meshData->bones.empty()) {
+				skeletalMesh = node->meshData;
+				return;
+			}
+			if (node) {
+				for (auto* child : node->children) {
+					findSkeletalMesh(child);
+					if (skeletalMesh) return;
+				}
+			}
+			return;
+		};
+		findSkeletalMesh(targetModel->rootNode);
+		if (!skeletalMesh) {
+			cout << "ERROR: No skeletal mesh found during animation import\n";
 			return false;
 		}
 
 		// Process each animation in the file
 		for (unsigned int i = 0; i < scene->mNumAnimations; i++) {
+			if (!scene) continue;
 			aiAnimation* anim = scene->mAnimations[i];
-			string animName = anim->mName.length > 0 ?
-				anim->mName.C_Str() : "Animation_" + to_string(i);
+			string animName = anim->mName.length > 0 ? anim->mName.C_Str() : scene->mAnimations[i]->mName.C_Str();
+			if (animName.empty()) {
+				animName = "Animation_" + to_string(i);
+			}
 
-			// Create animation and map to model's node hierarchy
-			Animation* animation = new Animation();
-			animation->setName(animName);
-			animation->duration = anim->mDuration;
-			animation->ticksPerSecond = anim->mTicksPerSecond;
-
-			//Build the animation heirarchy
-			animation->readHeirarchyData(animation->root, scene->mRootNode);
+			// Create animation through factory method
+			Animation* animation = createAnimation(path, skeletalMesh, animName);
+			if (!animation) continue;
 
 			//Map animation nodes to model hierarchy
 			targetModel->mapAnimationNodes(animation);
-
-			//Process bone animations
-			animation->readMissingBones(anim, targetModel->rootNode->meshData);
-
 			targetModel->addAnimation(animation);
 
-			cout << "Imported animation '" << animName << "' with " << animation->bones.size() << " bone channels\n";
+			cout << "  Imported animation '" << animName << "' with " << animation->bones.size() << " bone channels\n";
 		}
 
 		return true;
+	}
+
+	Animation* MeshImporter::createAnimation(const string& path, MeshData* mesh, const string& animationName) {
+		if (!mesh) {
+			cout << "Error: Cannot create animation without valid mesh data\n";
+			return nullptr;
+		}
+
+		unsigned int flags = aiProcess_Triangulate |
+			aiProcess_GenNormals |
+			aiProcess_LimitBoneWeights |
+			aiProcess_ConvertToLeftHanded |
+			aiProcess_ValidateDataStructure |
+			aiProcess_JoinIdenticalVertices |
+			aiProcess_OptimizeGraph |
+			aiProcess_OptimizeMeshes;
+
+		// Load scene
+		currentScene = modelImporter.ReadFile(path, flags);
+		if (!currentScene || !currentScene->HasAnimations()) {
+			cout << "Error: No animations found in " << path << "\n";
+			return nullptr;
+		}
+
+		try {
+			// Create animation with scene data
+			Animation* animation = new Animation();
+			aiAnimation* aiAnim = currentScene->mAnimations[0];
+
+			// Setup animation data
+			animation->setName(!animationName.empty() ? animationName : (aiAnim->mName.length > 0 ? aiAnim->mName.C_Str() : "Animation"));
+			animation->duration = aiAnim->mDuration;
+			animation->ticksPerSecond = aiAnim->mTicksPerSecond != 0 ? aiAnim->mTicksPerSecond : 24.0f;
+			// Read hierarchy
+			animation->readHeirarchyData(animation->root, currentScene->mRootNode);
+			// Process bones
+			animation->readMissingBones(aiAnim, mesh);
+
+			return animation;
+		}
+		catch (const std::exception& e) {
+			cout << "Error creating animation: " << e.what() << "\n";
+			return nullptr;
+		}
+	}
+
+	void MeshImporter::propagateBoneData(MeshNodeData* node, const map<string, BoneData>& allBones) {
+		if (!node) return;
+
+		if (node->meshData) {
+			// Ensure this mesh has all bones
+			for (const auto& [boneName, boneData] : allBones) {
+				if (node->meshData->bones.find(boneName) == node->meshData->bones.end()) {
+					node->meshData->bones[boneName] = boneData;
+				}
+			}
+			node->meshData->skeletalMesh = true;
+		}
+
+		// Process children
+		for (auto* child : node->children) {
+			propagateBoneData(child, allBones);
+		}
 	}
 
 	// Helper to find nodes by name in model hierarchy
