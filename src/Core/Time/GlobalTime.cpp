@@ -1,4 +1,7 @@
 #include "GlobalTime.h"
+#include <iostream>
+
+using namespace std;
 
 namespace CGEngine {
 	sec_t GlobalTime::getElapsedSec() {
@@ -17,5 +20,8 @@ namespace CGEngine {
 		lastFrameSec = currentFrameSec;
 		currentFrameSec = getElapsedSec();
 		deltaSec = frameClock.restart().asSeconds();
+		//if (frame++ % 60 == 0) {
+		//	cout << "FPS: " << (1.0f / deltaSec) << "\n";
+		//}
 	}
 }

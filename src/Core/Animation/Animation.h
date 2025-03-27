@@ -7,8 +7,7 @@ namespace CGEngine {
 	class Bone;
 	class Animation {
 	public:
-		Animation() = default;
-		Animation(const string& path, MeshData* mesh);
+		Animation();
 		Bone* findBone(const string name);
 		inline float getTicksPerSecond() { return ticksPerSecond; }
 		inline float getDuration() { return duration; }

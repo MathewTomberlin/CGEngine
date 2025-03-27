@@ -120,8 +120,6 @@ namespace CGEngine {
 	}
 
 	void Mesh::rotate(Vector3f delta) {
-		cout << "Mesh::rotate called on " << getMeshName()
-			<< " with delta: " << delta.x << "," << delta.y << "," << delta.z << "\n";
 		transformation.rotation += delta;
 	}
 

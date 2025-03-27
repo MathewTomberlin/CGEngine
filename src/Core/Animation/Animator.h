@@ -16,6 +16,5 @@ namespace CGEngine {
 		vector<glm::mat4> boneMatrices;
 		Animation* currentAnimation;
 		float currentTime = 0.0;
-		float deltaTime = 0.0;
 	};
 }

@@ -11,13 +11,19 @@ namespace CGEngine {
 			return;
 		}
 
+		//TODO: I believe I can combine these two lambdas, as they both seem to visit all nodes in the imported tree
+		
 		// Create materials
 		// Track materials we've already created to avoid duplicates
+		bool hasBones = false;
 		map<id_t, id_t> materialIdMap;  // originalId -> newId
 		// Function to process materials recursively
 		function<void(MeshNodeData*)> processMaterials = [&](MeshNodeData* node) {
 			if (node) {
 				if (node->meshData) {
+					if (!node->meshData->bones.empty()) {
+						hasBones = true;
+					}
 					// If we haven't processed this material ID yet
 					if (materialIdMap.find(node->materialId) == materialIdMap.end()) {
 						// Get material from world
@@ -26,7 +32,7 @@ namespace CGEngine {
 							// Add to model materials and map the ID
 							id_t newMatId = addMaterial(material);
 							materialIdMap[node->materialId] = newMatId;
-							cout << "Added material " << node->materialId << " as " << newMatId << "\n";
+							cout << "Mapped world material id " << node->materialId << " with model material id " << newMatId << "\n";
 						}
 					}
 				}
@@ -40,26 +46,29 @@ namespace CGEngine {
 
 		// Process all materials in the hierarchy
 		processMaterials(importResult.rootNode);
-
-		cout << "Processed " << materialIdMap.size() << " materials\n";
+		cout << "Mapped " << materialIdMap.size() << " materials!\n";
 
 		// Convert nodes with updated material indices
 		function<ModelNode* (MeshNodeData*, ModelNode*)> convertNode =
 			[&](MeshNodeData* importNode, ModelNode* parent) -> ModelNode* {
 			if (!importNode) return nullptr;
 
+			//Map the Assimp node data to Model node data
 			ModelNode* node = new ModelNode();
 			node->nodeName = importNode->nodeName;
 			node->meshData = importNode->meshData;
 			node->parent = parent;
 			node->localTransform = importNode->transformation;
 
+			// Update bone data if this node has a mesh with bones
+			if (node->meshData && !node->meshData->bones.empty()) {
+				updateBoneData(node->meshData);
+			}
+
 			// Map the material ID
 			if (materialIdMap.find(importNode->materialId) != materialIdMap.end()) {
 				node->materialIndex = materialIdMap[importNode->materialId];
-			}
-			else {
-				cout << "Warning: No material mapping for ID " << importNode->materialId << "\n";
+			} else {
 				node->materialIndex = 0;  // Default to first material
 			}
 
@@ -77,17 +86,11 @@ namespace CGEngine {
 		// Convert ImportResult to ModelNode hierarchy with proper material indices
 		rootNode = convertNode(importResult.rootNode, nullptr);
 
-		// Debug output
-		cout << "Model conversion complete:\n"
-			<< "- Materials: " << modelMaterials.size() << "\n"
-			<< "- Root material index: " << (rootNode ? rootNode->materialIndex : -1) << "\n";
-
-		// Debug output
-		if (isSkeletal()) {
-			cout << "Model is skeletal with " << importResult.rootNode->meshData->bones.size() << " bones\n";
-			renderer.importAnimation(sourcePath, this);
+		// Create animator if skeletal
+		if (hasBones || !modelBones.empty()) {
+			setupAnimations(sourcePath);
 		}
-		cout << "Imported model from '" << sourcePath << "'\n";
+		cout << "Successfully imported model from '" << sourcePath << "'!\n";
 	}
 
 	// Method for manually creating the Model from MeshData
@@ -98,9 +101,9 @@ namespace CGEngine {
 
 	//Method to update the Model bone data from MeshData
 	void Model::updateBoneData(const MeshData* meshData) {
-		if (!meshData || meshData->bones.empty()) return;
+		if (!meshData) return;
 
-		// Merge bone data
+		// Merge bone data from MeshData to Model
 		for (const auto& [boneName, boneData] : meshData->bones) {
 			modelBones[boneName] = boneData;
 		}
@@ -120,6 +123,8 @@ namespace CGEngine {
 	}
 
 	Model::~Model() {
+		delete modelAnimator;
+
 		// Clean up node hierarchy
 		cleanupModelNodes(rootNode);
 
@@ -135,6 +140,8 @@ namespace CGEngine {
 	}
 	
 	id_t Model::instantiate(Transformation3D rootTransform, vector<Material*> overrideMaterials) {
+		cout << "\n=== Instantiating Model: "<< rootNode->nodeName <<" ===\n";
+
 		if (!rootNode) {
 			cout << "Cannot instantiate - model has no root node\n";
 			return 0;
@@ -162,11 +169,11 @@ namespace CGEngine {
 		rootBody->get<Mesh*>()->setRotation(rootTransform.rotation);
 		rootBody->get<Mesh*>()->setScale(rootTransform.scale);
 
-		cout << "Created empty root body with ID " << rootId << "\n";
-
 		// Create hierarchy recursively
+		bodyCount = 1;
+		cout << "  " << bodyCount << ") ROOT (ID:" << rootId << ")\n";
 		createChildBodies(rootNode, rootBody, materialsToUse);
-
+		cout << "  - Total Body Count: " << bodyCount << "\n";
 		return rootId;
 	}
 
@@ -242,7 +249,7 @@ namespace CGEngine {
 			}
 		}
 
-		cout << "Added animation '" << animation->getName() << "' to model '" << sourcePath << "'\n";
+		cout << "  Added animation '" << animation->getName() << "' to model '" << sourcePath << "'\n";
 	}
 	Animation* Model::getAnimation(string animationName) {
 		auto it = modelAnimations.find(animationName);
@@ -251,6 +258,7 @@ namespace CGEngine {
 		}
 		return nullptr;
 	}
+
 	vector<string> Model::getAnimationNames() const {
 		vector<string> names;
 		for (const auto& [name, animation] : modelAnimations) {
@@ -258,6 +266,7 @@ namespace CGEngine {
 		}
 		return names;
 	}
+
 	Animator* Model::createAnimator() const {
 		if(!isSkeletal() || modelAnimations.empty()) {
 			return nullptr;
@@ -268,21 +277,24 @@ namespace CGEngine {
 		return animator;
 	}
 
+	bool Model::isSkeletal() const {
+		return !modelBones.empty();
+	}
+
 	void Model::mapAnimationNodes(const Animation* anim) {
 		if (!anim) return;
 
-		cout << "Mapping animation '" << anim->getName()
-			<< "' to model '" << sourcePath << "'...\n";
+		cout << "  Mapping animation '" << anim->getName() << "' nodes to model '" << sourcePath << "' nodes\n";
 
 		// Map animation nodes to model nodes
 		mapAnimationNodeRecursive(anim->getRoot(), rootNode);
 
 		// Verify mapping success
 		size_t mappedNodes = animationNodeMap.size();
-		cout << "Mapped " << mappedNodes << " nodes for animation\n";
+		cout << "    Mapped " << mappedNodes << " nodes for animation\n";
 
 		if (anim->bones.size() > 0 && mappedNodes == 0) {
-			cout << "Warning: No nodes mapped for skeletal animation!\n";
+			cout << "    Warning: No nodes mapped for skeletal animation!\n";
 		}
 	}
 
@@ -314,7 +326,6 @@ namespace CGEngine {
 		glm::quat rotation;
 		glm::vec4 perspective;
 		glm::decompose(node->localTransform, scale, rotation, translation, skew, perspective);
-
 		Transformation3D nodeTransform(
 			Vector3f(translation.x, translation.y, translation.z),
 			Vector3f(renderer.fromGlm(glm::degrees(glm::eulerAngles(rotation)))),
@@ -327,6 +338,8 @@ namespace CGEngine {
 
 		// Create and attach child body
 		id_t bodyId = world->create(mesh);
+		bodyCount++;
+		cout << "  " << bodyCount << ") " << node->nodeName << " (ID:" << bodyId << ")" << (node->meshData && !node->meshData->vertices.empty() ? " <Has Mesh>" : "") << "\n";
 		Body* body = world->bodies.get(bodyId);
 		if (body) {
 			// Attach to parent
@@ -335,15 +348,62 @@ namespace CGEngine {
 			}
 
 			// Set animator if this is a skeletal mesh
-			if (isSkeletal()) {
-				mesh->setAnimator(createAnimator());
+			if (isSkeletal() && modelAnimator && node->meshData &&
+				!node->meshData->vertices.empty()) {
+				mesh->setAnimator(modelAnimator);
 			}
 
 			// Process children with this new body as parent
 			for (ModelNode* childNode : node->children) {
 				createChildBodies(childNode, body, materials);
 			}
+		} else {
+			cout << "ERROR: Failed to create body for node '" << node->nodeName << "'\n";
 		}
+	}
+
+	// Add new method to handle animation import and setup
+	bool Model::setupAnimations(const string& path) {
+		cout << "\n=== Setting up Animations ===\n"
+			<< "Source Path: " << path << "\n"
+			<< "Bone count: " << modelBones.size() << "\n";
+
+		//TODO: Create a class or higher-level function for this, as findSkeletalMesh is reused in MeshImporter.importAnimation
+		// Find the mesh with bone data
+		MeshData* skeletalMesh = nullptr;
+		std::function<void(ModelNode*)> findSkeletalMesh =
+			[&skeletalMesh, &findSkeletalMesh](ModelNode* node) {
+			if (node->meshData && !node->meshData->bones.empty()) {
+				skeletalMesh = node->meshData;
+				return;
+			}
+			for (auto* child : node->children) {
+				findSkeletalMesh(child);
+				if (skeletalMesh) return;
+			}
+		};
+		findSkeletalMesh(rootNode);
+		if (!skeletalMesh) {
+			cout << "WARNING: No skeletal mesh found for animation import\n";
+			return false;
+		}
+		cout << "Found skeletal mesh with " << skeletalMesh->bones.size() << " bones\n";
+
+		// Import animations
+		if (!renderer.importAnimation(path, this)) {
+			cout << "Failed to import animations from " << path << "\n";
+			return false;
+		}
+		cout << "Successfully imported " << modelAnimations.size() << " animations!\n";
+
+		// Create single animator instance for the model
+		modelAnimator = createAnimator();
+		if (!modelAnimator) {
+			cout << "ERROR: Failed to create animator for " << path << "\n";
+			return false;
+		}
+
+		return true;
 	}
 
 	//Recursively clean up ModelNode hierarchy
@@ -356,31 +416,5 @@ namespace CGEngine {
 		}
 
 		delete node;
-	}
-
-	//Debug information
-	void Model::validateHierarchy() const {
-		cout << "\nValidating model '" << sourcePath << "':\n";
-		cout << "Skeletal: " << (isSkeletal() ? "yes" : "no") << "\n";
-		cout << "Materials: " << modelMaterials.size() << "\n";
-		cout << "Animations: " << modelAnimations.size() << "\n";
-		cout << "Bones: " << modelBones.size() << "\n";
-
-		// Validate node hierarchy
-		std::function<void(const ModelNode*, int)> printNode =
-			[&](const ModelNode* node, int depth) {
-			string indent(depth * 2, ' ');
-			cout << indent << "Node: " << node->nodeName;
-			if (node->meshData) {
-				cout << " (Mesh: " << node->meshData->meshName << ")";
-			}
-			cout << "\n";
-
-			for (const auto* child : node->children) {
-				printNode(child, depth + 1);
-			}
-			};
-
-		printNode(rootNode, 0);
 	}
 }

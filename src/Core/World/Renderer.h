@@ -169,9 +169,10 @@ namespace CGEngine {
 		Vector3f fromGlm(glm::vec3 v);
 		const aiScene* readFile(string path, unsigned int options);
 		ImportResult import(string path);
-		void importAnimation(string path, Model* model);
+		bool importAnimation(string path, Model* model);
 		Material* getFallbackMaterial();
 		glm::mat4 getCombinedModelMatrix(Body* body);
+		void endFrame();
 	private:
 		friend class World;
 		RenderWindow* window = nullptr;
@@ -194,7 +195,7 @@ namespace CGEngine {
 		/// The order in which to draw bodies, with Bodies further back in the vector drawn on top of other Bodies. This is cleared and re-calculated each frame
 		/// </summary>
 		vector<Body*> renderOrder;
-		
+		std::set<Model*> updatedModels;
 		GLenum initGlew();
 		Program* program;
 		UniqueDomain<id_t, Light*> lights = UniqueDomain<id_t, Light*>(10);
