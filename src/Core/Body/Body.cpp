@@ -4,7 +4,6 @@
 namespace CGEngine {
     Body::Body(string displayName) : ScriptController(this) {
         bodyParams.name = displayName;
-        world->receiveBodyId(this);
         scripts.initialize();
     }
 
