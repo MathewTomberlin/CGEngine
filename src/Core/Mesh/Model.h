@@ -41,7 +41,7 @@ namespace CGEngine {
 		~Model();
 
 		//Create a hierarchy of Bodies from imported MeshNodeData and return the root Body id
-		id_t instantiate(Transformation3D rootTransform = Transformation3D(), vector<Material*> overrideMaterials = {});
+		id_t instantiate(Transformation3D rootTransform = Transformation3D(), vector<id_t> overrideMaterials = {});
 
 		//Get Model info
 		bool isSkeletal() const;
@@ -52,8 +52,9 @@ namespace CGEngine {
 		// Material management
 		id_t getMaterialCount() const { return modelMaterials.size(); }
 		Material* getMaterial(id_t index);
-		void setMaterial(id_t index, Material* material);
-		id_t addMaterial(Material* material);
+		vector<Material*> getMaterials();
+		void setMaterial(id_t index, id_t material);
+		id_t addMaterial(id_t material);
 		void setNodeMaterial(ModelNode* node, id_t materialIndex);
 
 		// Animation
@@ -69,12 +70,14 @@ namespace CGEngine {
 		// Helper method to convert NodeData to ModelNode for animations
 		ModelNode* convertAnimationNode(const NodeData& animNode, ModelNode* parent = nullptr);
 		void mapAnimationNodes(const Animation* anim);
-		bool setupAnimations(const string& path);
+		bool setupAnimator();
 
 		ModelNode* getRootNode() const { return rootNode; }
 		void addNode(ModelNode* parent, ModelNode* child);
 		void setRootNode(ModelNode* node);
 		bool validate() const;
+
+		ModelNode* meshNodeToModelNode(MeshNodeData* meshNode, ModelNode* modelNode);
 	private:
 		friend class MeshImporter;
 
@@ -82,7 +85,7 @@ namespace CGEngine {
 		string sourcePath;
 		ModelNode* rootNode = nullptr;
 		map<string, BoneData> modelBones;
-		vector<Material*> modelMaterials;
+		vector<id_t> modelMaterials;
 		map<string, Animation*> modelAnimations;
 		map<string, AnimationNodeMapping> animationNodeMap;
 		Animator* modelAnimator = nullptr;
@@ -93,7 +96,7 @@ namespace CGEngine {
 		// Helper to deep copy a node hierarchy
 		ModelNode* copyNodeHierarchy(const ModelNode* source, ModelNode* newParent = nullptr);
 		void mapAnimationNodeRecursive(const NodeData& animNode, ModelNode* modelNode);
-		void createChildBodies(ModelNode* node, Body* parentBody, const vector<Material*>& materials);
+		void createChildBodies(ModelNode* node, Body* parentBody, const vector<id_t>& materials);
 		void cleanupModelNodes(ModelNode* node);
 
 		// Prevent copying
