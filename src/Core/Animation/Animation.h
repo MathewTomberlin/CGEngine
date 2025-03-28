@@ -7,16 +7,20 @@ namespace CGEngine {
 	class Bone;
 	class Animation {
 	public:
-		Animation() = default;
-		Animation(const string& path, MeshData* mesh);
+		Animation();
 		Bone* findBone(const string name);
 		inline float getTicksPerSecond() { return ticksPerSecond; }
 		inline float getDuration() { return duration; }
 		inline const NodeData& getRoot() { return root; }
 		inline const std::map<std::string, BoneData>& getBoneData() { return boneData; }
 		void readHeirarchyData(NodeData& dest, const aiNode* src);
-		void readMissingBones(const aiAnimation* animation, MeshData* mesh);
-
+		void readMissingBones(const aiAnimation* animation, map<string, BoneData> modelBones);
+		string getName() const { return animationName; }
+		void setName(const string& name) { animationName = name; }
+		// Make root node accessible for hierarchy building
+		const NodeData& getRoot() const { return root; }
+	
+		string animationName;
 		float duration;
 		int ticksPerSecond;
 		std::vector<Bone> bones;

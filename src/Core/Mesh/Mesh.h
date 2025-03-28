@@ -17,8 +17,8 @@ namespace CGEngine {
 
 	class Mesh : public Transformable{
 	public:
-		Mesh(MeshData* model, Transformation3D transformation = Transformation3D(), vector<Material*> materials = { new Material(SurfaceParameters()) }, RenderParameters renderParams = RenderParameters(), string importPath = "", bool skeletalMesh = false);
-		Mesh(string importPath, Transformation3D transformation = Transformation3D(), bool skeletalMesh = false, vector<Material*> materials = { new Material(SurfaceParameters()) }, RenderParameters renderParams = RenderParameters()) : Mesh(new MeshData(), transformation, materials, renderParams, importPath, skeletalMesh) {};
+		Mesh(MeshData* model, Transformation3D transformation = Transformation3D(), vector<Material*> materials = { new Material(SurfaceParameters()) }, RenderParameters renderParams = RenderParameters(), string importPath = "");
+		Mesh(string importPath, Transformation3D transformation = Transformation3D(), vector<Material*> materials = { new Material(SurfaceParameters()) }, RenderParameters renderParams = RenderParameters()) : Mesh(new MeshData(), transformation, materials, renderParams, importPath) {};
 
 		void render(Transform parentTransform);
 		void bindTexture(Texture* texture);
@@ -37,12 +37,30 @@ namespace CGEngine {
 		void clearMaterials();
 		void setAnimator(Animator* animator);
 		Animator* getAnimator();
+		string getMeshName() const;
+		string getSourcePath() const;
+		void import(string importPath);
+		Model* getModel() const { return model; }
+		void setModel(Model* m) { model = m; }
+		// Add new method to get combined transform
+		glm::mat4 getModelMatrix() const {
+			glm::mat4 modelPos = glm::translate(glm::vec3(transformation.position.x, transformation.position.y, transformation.position.z));
+			glm::mat4 modelRotX = glm::rotate(degrees(transformation.rotation.x).asRadians(), glm::vec3(1.f, 0.f, 0.f));
+			glm::mat4 modelRotY = glm::rotate(degrees(transformation.rotation.y).asRadians(), glm::vec3(0.f, 1.f, 0.f));
+			glm::mat4 modelRotZ = glm::rotate(degrees(transformation.rotation.z).asRadians(), glm::vec3(0.f, 0.f, 1.f));
+			glm::mat4 modelRotation = modelRotZ * modelRotY * modelRotX;
+			glm::mat4 modelScale = glm::scale(glm::vec3(transformation.scale.x, transformation.scale.y, transformation.scale.z));
+			return modelPos * modelRotation * modelScale;
+		}
 	private:
 		string importPath;
+		Model* model = nullptr;
 		MeshData* meshData;
 		Transformation3D transformation;
 		RenderParameters renderParameters;
 		vector<Material*> materials;
 		Animator* animator = nullptr;
+
+		void deleteImportHeirarchy(MeshNodeData* node);
 	};
 }

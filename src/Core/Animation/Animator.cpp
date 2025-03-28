@@ -2,7 +2,6 @@
 
 namespace CGEngine {
 	Animator::Animator(Animation* animation) {
-		deltaTime = 0.0;
 		currentTime = 0.0;
 		currentAnimation = animation;
 		boneMatrices.reserve(100);
@@ -12,12 +11,23 @@ namespace CGEngine {
 	}
 
 	void Animator::updateAnimation(float dt) {
-		deltaTime = dt;
-		if (currentAnimation) {
-			currentTime += currentAnimation->getTicksPerSecond() * dt;
-			currentTime = fmod(currentTime, currentAnimation->getDuration());
-			calculateBoneTransform(&currentAnimation->getRoot(), glm::mat4(1.0f));
+		if (!currentAnimation) {
+			cout << "No animation to update\n";
+			return;
 		}
+
+		// Use a fixed ticks per second if none specified
+		float ticksPerSecond = currentAnimation->getTicksPerSecond();
+		if (ticksPerSecond <= 0) {
+			ticksPerSecond = 24.0f; // Standard animation rate
+		}
+		currentTime += dt * ticksPerSecond;
+		// Wrap time for looping
+		float duration = currentAnimation->getDuration();
+		if (currentTime >= duration) {
+			currentTime = 0;
+		}
+		calculateBoneTransform(&currentAnimation->getRoot(), glm::mat4(1.0f));
 	}
 
 	void Animator::playAnimation(Animation* animation) {
@@ -33,26 +43,16 @@ namespace CGEngine {
 			bone->update(currentTime);
 			nodeTransform = bone->getLocalTransform();
 		}
-		glm::mat4 globalTransformation = parentTransform * nodeTransform;
+		glm::mat4 globalTransform = parentTransform * nodeTransform;
 
-		map<string,BoneData> boneData = currentAnimation->getBoneData();
-		auto iter = boneData.find(nodeName);
-		if (iter != boneData.end()) {
-			if (nodeName != "Armature") {
-				int index = iter->second.id;
-				if (index >= 0 && index < 100) {
-					glm::mat4 offset = boneData[nodeName].offset;
-					boneMatrices[index] = globalTransformation * offset;
-					//glm::quat rotation;
-					//glm::decompose(boneMatrices[index], glm::vec3(), rotation, glm::vec3(), glm::vec3(), glm::vec4());
-					//rotation = glm::conjugate(rotation);
-					//cout << "Updating bone " << index << " " << nodeName << ": " << rotation.x << "," << rotation.y << "," << rotation.z << "\n";
-				}
-			}
+		auto& boneInfoMap = currentAnimation->getBoneData();
+		if (boneInfoMap.find(nodeName) != boneInfoMap.end()) {
+			int index = boneInfoMap.at(nodeName).id;
+			glm::mat4 offset = boneInfoMap.at(nodeName).offset;
+			boneMatrices[index] = globalTransform * offset;
 		}
 		for (int i = 0; i < node->childrenCount; i++) {
-			//cout << "Updating children " << i << "\n";
-			calculateBoneTransform(&node->children[i], globalTransformation);
+			calculateBoneTransform(&node->children[i], globalTransform);
 		}
 	}
 

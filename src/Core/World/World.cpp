@@ -538,14 +538,17 @@ namespace CGEngine {
     }
 
     id_t World::createMaterial(SurfaceParameters params, ShaderProgramPath shaderPath) {
-        return materials.add(new Material(params, shaderPath));
+        Material* newMaterial = new Material(params, shaderPath);
+        return newMaterial->materialId;
     }
 
     id_t World::createMaterial(ShaderProgramPath shaderPath) {
-        return materials.add(new Material(shaderPath));
+        Material* newMaterial = new Material(shaderPath);
+        return newMaterial->materialId;
     }
     id_t World::createMaterial(map<string, ParamData> materialParams, ShaderProgramPath shaderPath) {
-        return materials.add(new Material(materialParams, shaderPath));
+        Material* newMaterial = new Material(materialParams, shaderPath);
+        return newMaterial->materialId;
     }
 
 }

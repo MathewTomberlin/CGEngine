@@ -27,6 +27,7 @@ namespace CGEngine {
 	class Bone;
 	class Animation;
 	class Animator;
+	class Model;
 
 	struct VertexData {
 		VertexData() {
@@ -63,20 +64,23 @@ namespace CGEngine {
 	};
 
 	struct BoneData {
+		BoneData() :id(0), offset(glm::mat4(1.0f)) {};
+		BoneData(unsigned int id, glm::mat4 offset) :id(id), offset(offset) {};
 		unsigned int id;
 		glm::mat4 offset;
 	};
 
 	struct MeshData {
-		MeshData(vector<VertexData> vertices = {}, vector<unsigned int> indices = {}, vector<Material*> materials = { new Material() }, bool skeletalMesh = false, map<string, BoneData> bones = {}, int boneCounter = 0) :vertices(vertices), indices(indices), vao(0U), vbo(0U), ebo(0U), bones(bones), boneCounter(boneCounter), skeletalMesh(skeletalMesh) {};
+		MeshData(string meshName = "", vector<VertexData> vertices = {}, vector<unsigned int> indices = {}, map<string, BoneData> bones = {}) : meshName(meshName), vertices(vertices), indices(indices), vao(0U), vbo(0U), ebo(0U), bones(bones) {};
+		MeshData(vector<VertexData> vertices, vector<unsigned int> indices = {}, map<string, BoneData> bones = {}, string meshName = "") : meshName(meshName), vertices(vertices), indices(indices), vao(0U), vbo(0U), ebo(0U), bones(bones) {};
+		string sourcePath = "";
+		string meshName = "";
 		vector<VertexData> vertices;
 		vector<unsigned int> indices;
+		map<string, BoneData> bones;
 		GLuint vbo = 0U;
 		GLuint vao = 0U;
 		GLuint ebo = 0U;
-		map<string, BoneData> bones;
-		int boneCounter;
-		bool skeletalMesh = false;
 	};
 
 	struct KeyPosition {
@@ -163,7 +167,13 @@ namespace CGEngine {
 		glm::vec2 toGlm(Vector2f v);
 		glm::vec3 toGlm(Vector3f v);
 		glm::vec3 toGlm(Color c);
+		Vector2f fromGlm(glm::vec2 v);
+		Vector3f fromGlm(glm::vec3 v);
 		const aiScene* readFile(string path, unsigned int options);
+		ImportResult import(string path);
+		Material* getFallbackMaterial();
+		glm::mat4 getCombinedModelMatrix(Body* body);
+		void endFrame();
 	private:
 		friend class World;
 		RenderWindow* window = nullptr;
@@ -186,7 +196,7 @@ namespace CGEngine {
 		/// The order in which to draw bodies, with Bodies further back in the vector drawn on top of other Bodies. This is cleared and re-calculated each frame
 		/// </summary>
 		vector<Body*> renderOrder;
-		
+		std::set<Model*> updatedModels;
 		GLenum initGlew();
 		Program* program;
 		UniqueDomain<id_t, Light*> lights = UniqueDomain<id_t, Light*>(10);

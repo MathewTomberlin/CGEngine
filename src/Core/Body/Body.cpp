@@ -4,7 +4,6 @@
 namespace CGEngine {
     Body::Body(string displayName) : ScriptController(this) {
         bodyParams.name = displayName;
-        world->receiveBodyId(this);
         scripts.initialize();
     }
 
@@ -356,6 +355,10 @@ namespace CGEngine {
 
     void Body::setIntersectEnabled(bool enabled) {
         bodyParams.intersecting = enabled;
+    }
+
+    size_t Body::getChildCount() const {
+        return children.size();
     }
 
     void Body::attachBody(Body* child) {
