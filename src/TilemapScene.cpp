@@ -67,7 +67,7 @@ namespace CGEngine {
                     Model* staticModel = new Model("Mesh.obj");
 					
                     // Create instance with default transform
-                    id_t staticMeshId = staticModel->instantiate(Transformation3D({ 0, 0, -2 }));
+                    id_t staticMeshId = staticModel->instantiate(Transformation3D({ -2, 0, -1 }));
 
                     // Add rotation animation to validate transform
                     Body* staticMeshBody = world->bodies.get(staticMeshId);
@@ -77,9 +77,9 @@ namespace CGEngine {
                 // 2. Test animated skeletal mesh import
                 {
                     // Import skeletal mesh using existing "Caveman_Test.fbx"
-                    Model* skeletalModel = new Model("Caveman_Test.fbx");
+                    Model* skeletalModel = new Model("Caveman_Test2.fbx");
                     // Create instance with adjusted transform
-                    id_t skeletalMeshId = skeletalModel->instantiate( Transformation3D({ -1, 2, -5 }, { 0, 180, 0 }, { 0.01f, 0.01f, 0.01f }));
+                    id_t skeletalMeshId = skeletalModel->instantiate( Transformation3D({ -1, 0.5, -5 }, { 0, 0, 0 }, { 0.005f, 0.005f, 0.005f }));
                 }
 
                 // 3. Test manual model creation
@@ -89,16 +89,11 @@ namespace CGEngine {
                     Model* manualModel = new Model(cubeData, "ManualCube");
                 
                     // Create material for the cube
-                    SurfaceParameters cubeParams = SurfaceParameters(
-                        SurfaceDomain("brick_tile.png"),
-                        SurfaceDomain(16.0f)
-                    );
+                    SurfaceParameters cubeParams = SurfaceParameters(SurfaceDomain("brick_tile.png"),SurfaceDomain(16.0f));
                     id_t cubeMaterialId = world->createMaterial(cubeParams);
-                    Material* cubeMaterial = world->getMaterial(cubeMaterialId);
                 
                     // Create instance with materials
-                    id_t manualMeshId = manualModel->instantiate(Transformation3D({ 0, 0, -5 }),{ cubeMaterial }
-                    );
+                    id_t manualMeshId = manualModel->instantiate(Transformation3D({ 2, -1, -5 }),{ cubeMaterialId });
                 
                     // Add simple animation to verify transformation
                     Body* manualBody = world->bodies.get(manualMeshId);
