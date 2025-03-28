@@ -14,7 +14,7 @@ namespace CGEngine {
 		inline const NodeData& getRoot() { return root; }
 		inline const std::map<std::string, BoneData>& getBoneData() { return boneData; }
 		void readHeirarchyData(NodeData& dest, const aiNode* src);
-		void readMissingBones(const aiAnimation* animation, MeshData* mesh);
+		void readMissingBones(const aiAnimation* animation, map<string, BoneData> modelBones);
 		string getName() const { return animationName; }
 		void setName(const string& name) { animationName = name; }
 		// Make root node accessible for hierarchy building

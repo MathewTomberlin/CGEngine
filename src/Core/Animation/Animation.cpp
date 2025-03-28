@@ -33,23 +33,22 @@ namespace CGEngine {
 		}
 	}
 
-	void Animation::readMissingBones(const aiAnimation* animation, MeshData* mesh) {
+	void Animation::readMissingBones(const aiAnimation* animation, map<string,BoneData> modelBones) {
 		if (!animation) {
 			cout << "Error: Invalid animation data\n";
 			return;
 		}
-		if (!mesh || mesh->bones.empty()) {
+		if (modelBones.empty()) {
 			cout << "Error: Invalid mesh data\n";
 			return;
 		}
 
 		//Get Bone Ids/Offsets and Bone Count from Mesh
-		auto& boneInfoMap = mesh->bones;
-		int& boneCount = mesh->boneCounter;
+		auto& boneInfoMap = modelBones;
 
-		cout << "\nProcessing Animation: "<< animation->mName.C_Str()<<"\n"
+		cout << "Processing Animation: "<< animation->mName.C_Str()<<"\n"
 			<< "  Channels: " << animation->mNumChannels << "\n"
-			<< "  MeshData Bones: " << mesh->bones.size() << "\n";
+			<< "  MeshData Bones: " << modelBones.size() << "\n";
 		
 		//Read animation channels
 		for (unsigned int i = 0; i < animation->mNumChannels; i++) {
@@ -57,22 +56,13 @@ namespace CGEngine {
 			if (!channel) continue;
 
 			//Get the bone name for the animation channel
-			std::string boneName = channel->mNodeName.data;
-			//Possibly obsolete debug output
-			//cout << "  Channel " << i << ": " << channel->mNodeName.data
-			//	<< " [pos: " << channel->mNumPositionKeys
-			//	<< ", rot: " << channel->mNumRotationKeys
-			//	<< ", scale: " << channel->mNumScalingKeys << "]\n";
+			string boneName = channel->mNodeName.data;
 			// Create or update bone data
 			BoneData& boneData = boneInfoMap[boneName];
-			if (boneData.id == 0) {
-				boneData.id = boneCount++;
-			}
 			bones.push_back(Bone(boneName, boneData.id, channel));
 		}
 
 		//Update the animation's bone data
 		boneData = boneInfoMap;
-		cout << "  Found Bones: " << boneCount << "\n";
 	}
 }

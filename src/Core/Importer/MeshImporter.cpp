@@ -8,22 +8,20 @@
 namespace CGEngine {
     ImportResult MeshImporter::importModel(string path, unsigned int options) {
 		cout << "\n=== Importing Model: " << path << " ===\n";
-        string type = path.substr(path.find_last_of('.') + 1, path.size());
-        if (type == "fbx") {
-            options |= aiProcess_RemoveRedundantMaterials;
-        }
+		string format = getFormat(path);
+		options |= getFormatOptions(format);
+
         const aiScene* scene = modelImporter.ReadFile(path, options);
         if (scene != nullptr) {
-			// Track skeletal data during node processing
-			SkeletalData skeletalData;
-			ImportResult result = processNode(scene->mRootNode, scene, type, skeletalData);
-			result.skeletalMesh = skeletalData.isSkeletal;
-
-			// If skeletal, ensure all meshes have access to complete bone data
-			if (skeletalData.isSkeletal) {
-				propagateBoneData(result.rootNode, skeletalData.allBones);
-			}
-
+			//Import all materials from the scene. Model materials is the ordered vector of world material ids for the imported materials
+			vector<id_t> modelMaterials = importSceneMaterials(scene);
+			//Tracks the model skeletal state and total bones during recursive node visits
+			map<string, BoneData> modelBones;
+			//Import all nodes from the scene recursively
+			ImportResult result = processNode(scene->mRootNode, scene, format, modelBones, modelMaterials);
+			result.materials = modelMaterials;
+			//Import animations for the model bones
+			importAnimations(scene, modelBones, result.animations);
 			return result;
         } else {
             cout << "ERROR: Failed to import from " << path << "\n";
@@ -31,221 +29,213 @@ namespace CGEngine {
         return ImportResult();
     }
 
-    // Move the implementation of processNode from Renderer.cpp
-	ImportResult MeshImporter::processNode(aiNode* node, const aiScene* scene, string type, SkeletalData& skeletalData) {
-		if (node->mNumMeshes > 0) {
-			cout << "Processing node '" << node->mName.C_Str()
-				<< "' [Meshes: " << node->mNumMeshes
-				<< ", Children: " << node->mNumChildren << "]\n";
+	void MeshImporter::importAnimations(const aiScene* scene, map<string,BoneData> modelBones, map<string, Animation*>& modelAnimations) {
+		if (scene->HasAnimations()){
+			cout << "\n=== Importing Animations: " << scene->mNumAnimations << " ===\n";
+
+			int animationCount = scene->mNumAnimations;
+			// Process each animation in the file
+			for (int i = 0; i < animationCount; i++) {
+				if (!scene) continue;
+				aiAnimation* anim = scene->mAnimations[i];
+				string animName = anim->mName.length > 0 ? anim->mName.C_Str() : scene->mAnimations[i]->mName.C_Str();
+				if (animName.empty()) animName = "Animation_" + to_string(i);
+
+				// Create animation through factory method
+				Animation* animation = createAnimation(scene, modelBones, animName);
+				if (!animation) continue;
+				cout << "Imported animation " << animation->getName() << "\n";
+				modelAnimations[animation->getName()] = animation;
+			}
+			cout << "=== Successfully Imported " << modelAnimations.size() << " Animations ===\n";
 		}
+		return;
+	}
 
-		MeshNodeData* currentNode = new MeshNodeData();
-		currentNode->nodeName = node->mName.C_Str();
-		currentNode->transformation = fromAiMatrix4toGlm(node->mTransformation);
-		currentNode->parent = nullptr;
+	string MeshImporter::getFormat(string path) {
+		return path.substr(path.find_last_of('.') + 1, path.size());
+	}
 
-		//Only handle the first mesh at each node
-		//TODO: How should we handle multiple meshes per node?
-		if (node->mNumMeshes > 0) {
-			// Create empty MeshData by default
-			currentNode->meshData = new MeshData();
-			currentNode->meshData->meshName = node->mName.C_Str();
-			// Verify mesh index is valid
-			if (node->mMeshes[0] >= scene->mNumMeshes) {
-				cout << "ERROR: Invalid mesh index " << node->mMeshes[0] << " for node '"
-					<< node->mName.C_Str() << "'\n";
-				return ImportResult();
-			}
-			aiMesh* imported = scene->mMeshes[node->mMeshes[0]];
-			
-			//Read vertices
-			vector<VertexData> vertices;
-			vertices.reserve(imported->mNumVertices);
-			for (unsigned int i = 0; i < imported->mNumVertices; i++) {
-				glm::vec3 position = glm::vec3(
-					imported->mVertices[i].x,
-					imported->mVertices[i].y,
-					imported->mVertices[i].z
-				);
+	unsigned int MeshImporter::getFormatOptions(string format) {
+		cout << "File Format: " << format << "\n";
+		if (format == "fbx") {
+			return aiProcess_RemoveRedundantMaterials;
+		}
+		if (format == "obj") {
+			return 0;
+		}
+		return 0;
+	}
 
-				glm::vec2 texCoord(0, 0);
-				if (imported->HasTextureCoords(0) && imported->mTextureCoords[0]) {
-					texCoord.x = imported->mTextureCoords[0][i].x;
-					texCoord.y = imported->mTextureCoords[0][i].y;
-				}
+	vector<id_t> MeshImporter::importSceneMaterials(const aiScene* scene) {
+		cout << "Importing Model Materials:\n";
+		vector<id_t> modelMaterials;
+		if (scene->HasMaterials()) {
+			for (size_t modelMaterialId = 0; modelMaterialId < scene->mNumMaterials; ++modelMaterialId) {
+				aiMaterial* modelMaterial = scene->mMaterials[modelMaterialId];
 
-				glm::vec3 normal = glm::vec3(0, 1, 0);
-				if (imported->HasNormals()) {
-					glm::vec3 normal = glm::vec3(imported->mNormals[i].x, imported->mNormals[i].y, imported->mNormals[i].z);
-				}
+				//Extract material textures from imported materials
+				vector<string> diffuseMaps = loadMaterialTextures(modelMaterial, aiTextureType_DIFFUSE);
+				string diffuseTexture = diffuseMaps.size() > 0 ? diffuseMaps[0] : "";
+				vector<string> specularMaps = loadMaterialTextures(modelMaterial, aiTextureType_SPECULAR);
+				string specularTexture = specularMaps.size() > 0 ? specularMaps[0] : "";
+				vector<string> opacityMaps = loadMaterialTextures(modelMaterial, aiTextureType_OPACITY);
+				string opacityTexture = opacityMaps.size() > 0 ? opacityMaps[0] : "";
 
-				int materialId = imported->mMaterialIndex;
-				if (type == "obj" && materialId > 0) {  // Only adjust if positive
-					materialId -= 1;
-				}
-
-				vertices.push_back(VertexData(position, texCoord, normal, (float)materialId));
-			}
-
-			//Read indices
-			vector<unsigned int> indices;
-			for (unsigned int i = 0; i < imported->mNumFaces; i++) {
-				aiFace face = imported->mFaces[i];
-				for (unsigned int j = 0; j < face.mNumIndices; j++) {
-					indices.push_back(face.mIndices[j]);
-				}
-			}
-
-			id_t materialId = 0;
-			if (imported->mMaterialIndex >= 0 && scene->HasMaterials()) {
-				aiMaterial* material = scene->mMaterials[imported->mMaterialIndex];
-				//Extract the first found diffuse, specular and opacity textures
-				vector<string> diffuseMaps = loadMaterialTextures(material, aiTextureType_DIFFUSE);
-				string diffuseTexture = "";
-				if (diffuseMaps.size() > 0) {
-					diffuseTexture = diffuseMaps[0];
-				}
-				vector<string> specularMaps = loadMaterialTextures(material, aiTextureType_SPECULAR);
-				string specularTexture = "";
-				if (specularMaps.size() > 0) {
-					specularTexture = specularMaps[0];
-				}
-				vector<string> opacityMaps = loadMaterialTextures(material, aiTextureType_OPACITY);
-				string opacityTexture = "";
-				if (opacityMaps.size() > 0) {
-					opacityTexture = opacityMaps[0];
-				}
 				//Extract the diffuse & specular colors and the opacity, shininess, and roughess
 				aiColor4D* diffuseColor = new aiColor4D(1, 1, 1, 1);
 				aiColor4D* specularColor = new aiColor4D(1, 1, 1, 1);
 				ai_real* opacity = new ai_real(1);
 				ai_real* shininess = new ai_real(1);
 				ai_real* roughness = new ai_real(1);
-				//aiGetMaterialColor(material,AI_MATKEY_COLOR_DIFFUSE, diffuseColor);
-				aiGetMaterialColor(material, AI_MATKEY_BASE_COLOR, diffuseColor);
-				aiGetMaterialColor(material, AI_MATKEY_COLOR_SPECULAR, specularColor);
-				aiGetMaterialFloat(material, AI_MATKEY_SHININESS, shininess);
-				aiGetMaterialFloat(material, AI_MATKEY_OPACITY, opacity);
-				aiGetMaterialFloat(material, AI_MATKEY_ROUGHNESS_FACTOR, roughness);
+				aiGetMaterialColor(modelMaterial, AI_MATKEY_COLOR_DIFFUSE, diffuseColor);
+				aiGetMaterialColor(modelMaterial, AI_MATKEY_COLOR_SPECULAR, specularColor);
+				aiGetMaterialFloat(modelMaterial, AI_MATKEY_SHININESS, shininess);
+				aiGetMaterialFloat(modelMaterial, AI_MATKEY_OPACITY, opacity);
+				aiGetMaterialFloat(modelMaterial, AI_MATKEY_ROUGHNESS_FACTOR, roughness);
 
 				//Create the material and assign it to the mesh
 				SurfaceDomain diffuseDomain = SurfaceDomain(diffuseTexture, fromAiColor4(diffuseColor));
 				SurfaceDomain specularDomain = SurfaceDomain(specularTexture, fromAiColor4(specularColor), (*roughness) * (*shininess));
 				SurfaceDomain opacityDomain = SurfaceDomain(opacityTexture, Color::White, *opacity);
-				SurfaceParameters importedSurfParams = SurfaceParameters(diffuseDomain, specularDomain);
-				materialId = world->createMaterial(importedSurfParams);
-				cout << "  Material: " << material->GetName().C_Str() << " (ID: " << materialId << ")\n";
+				SurfaceParameters surfaceParams = SurfaceParameters(diffuseDomain, specularDomain);
+				id_t worldMaterialId = world->createMaterial(surfaceParams);
+				modelMaterials.push_back(worldMaterialId);
+
+				cout << "  - " << modelMaterialId << " Material: " << modelMaterial->GetName().C_Str() << " (World ID: " << worldMaterialId << ") "
+					<< ", Color: " << diffuseColor->r << "," << diffuseColor->g << "," << diffuseColor->b << ")\n";
+
+				// Cleanup
+				delete diffuseColor;
+				delete specularColor;
+				delete opacity;
+				delete shininess;
+				delete roughness;
 			}
-			//Import bones and weights
-			map<int, vector<pair<int, float>>> vertexWeights;  // vertex_id -> [(bone_id, weight)]
-			map<string, BoneData> bones;
-			if (imported->HasBones()) {
-				skeletalData.isSkeletal = true;
+		}
+		return modelMaterials;
+	}
 
-				cout << "  Bones ("<< imported->mNumBones<<"):\n";
-				// First collect all weights per vertex
-				for (int boneIndex = 0; boneIndex < imported->mNumBones; ++boneIndex) {
-					auto bone = imported->mBones[boneIndex];
+	ImportResult MeshImporter::processNode(aiNode* node, const aiScene* scene, string type, map<string, BoneData>& modelBones, vector<id_t> modelMaterials) {
+		//Create a new MeshNodeData for this node and assign this node's name and transform to it
+		MeshNodeData* meshNode = new MeshNodeData(node->mName.C_Str(), fromAiMatrix4toGlm(node->mTransformation));
+
+		//Try to import mesh data from this node to the new mesh node
+		if (!importMesh(meshNode, node, scene, modelBones, modelMaterials)) {
+			cout << "ERROR: Mesh node at id is out-of-bounds for scene meshes\n";
+			return ImportResult();
+		}
+
+		//Recursively visit all children, setting the child node's parent to this node and assigning the child node to this node's children
+		for (unsigned int i = 0; i < node->mNumChildren; i++) {
+			ImportResult childResult = processNode(node->mChildren[i], scene, type, modelBones, modelMaterials);
+			childResult.rootNode->parent = meshNode;
+			meshNode->children.push_back(childResult.rootNode);
+		}
+		return ImportResult(meshNode);
+    }
+
+	bool MeshImporter::importMesh(MeshNodeData* targetNode, aiNode* node, const aiScene* scene, map<string, BoneData>& modelBones, vector<id_t> modelMaterials) {
+		//Import MeshData only for nodes with meshes
+		if (node->mNumMeshes > 0) {
+			if (node->mMeshes[0] >= scene->mNumMeshes) return false;
+			aiMesh* mesh = scene->mMeshes[node->mMeshes[0]];
+			cout << "Importing MeshData for node '" << node->mName.C_Str() << "' [Meshes: " << node->mNumMeshes << ", Children: " << node->mNumChildren << "]\n";
+
+			//Get position, texture coordinates, and normal from the import mesh node or, if not available, the use the default value
+			vector<VertexData> vertices;
+			vertices.reserve(mesh->mNumVertices);
+			for (unsigned int vertexId = 0; vertexId < mesh->mNumVertices; vertexId++) {
+				glm::vec3 position = aiV3toGlm(mesh->mVertices[vertexId]);
+				glm::vec2 texCoord = (mesh->HasTextureCoords(0) && mesh->mTextureCoords[0]) ? texCoord = aiV2toGlm(mesh->mTextureCoords[0][vertexId]) : glm::vec2(0, 0);
+				glm::vec3 normal = (mesh->HasNormals()) ? aiV3toGlm(mesh->mNormals[vertexId]) : glm::vec3(0, 1, 0);
+				vertices.push_back(VertexData(position, texCoord, normal, 0));
+			}
+
+			//Get the vertex indices for each mesh face
+			vector<unsigned int> indices;
+			for (unsigned int faceId = 0; faceId < mesh->mNumFaces; faceId++) {
+				aiFace face = mesh->mFaces[faceId];
+				for (unsigned int faceVertexId = 0; faceVertexId < face.mNumIndices; faceVertexId++) {
+					indices.push_back(face.mIndices[faceVertexId]);
+				}
+			}
+
+			//Map of <boneId, weight> pair by vertexId
+			map<int, vector<pair<int, float>>> vertexWeights;
+			if (mesh->HasBones()) {
+				for (int boneIndex = 0; boneIndex < mesh->mNumBones; ++boneIndex) {
+					auto bone = mesh->mBones[boneIndex];
 					string boneName = bone->mName.C_Str();
-
+					
+					//Map <boneId, weight> pair to vertex Id for each weight of this bone
 					for (int weightIndex = 0; weightIndex < bone->mNumWeights; ++weightIndex) {
 						int vertexId = bone->mWeights[weightIndex].mVertexId;
 						float weight = bone->mWeights[weightIndex].mWeight;
-						vertexWeights[vertexId].push_back({ boneIndex, weight });
-
-						string boneName = imported->mBones[boneIndex]->mName.C_Str();
-						if (bones.find(boneName) == bones.end()) {
-							BoneData boneData;
-							boneData.id = boneIndex;
-							boneData.offset = fromAiMatrix4toGlm(imported->mBones[boneIndex]->mOffsetMatrix);
-							bones[boneName] = boneData;
-							skeletalData.allBones[boneName] = boneData;
-						}
+						vertexWeights[vertexId].push_back({boneIndex, weight});
 					}
-					cout << "    " << boneName << " (Weights: " << imported->mBones[boneIndex]->mNumWeights << ")\n";
+
+					//Create BoneData for this bone and add it to the modelBones map, if not already added
+					if (modelBones.find(boneName) == modelBones.end()) {
+						modelBones[boneName] = BoneData(boneIndex, fromAiMatrix4toGlm(bone->mOffsetMatrix));
+					}
 				}
 
 				// Then assign the strongest weights to each vertex
 				for (auto& [vertexId, weights] : vertexWeights) {
-					// Sort weights in descending order
-					std::sort(weights.begin(), weights.end(),
-						[](const auto& a, const auto& b) { return a.second > b.second; });
-
 					float totalWeight = 0.0f;
 					int assignedInfluences = 0;
+					sort(weights.begin(), weights.end());
 
 					// Assign up to MAX_BONE_INFLUENCE weights
-					for (size_t i = 0; i < std::min(weights.size(), size_t(MAX_BONE_INFLUENCE)); ++i) {
-						vertices[vertexId].boneIds[i] = weights[i].first;
-						vertices[vertexId].weights[i] = weights[i].second;
-						totalWeight += weights[i].second;
+					for (size_t influenceId = 0; influenceId < min(weights.size(), size_t(MAX_BONE_INFLUENCE)); ++influenceId) {
+						int boneId = weights[influenceId].first;
+						float weight = weights[influenceId].second;
+						vertices[vertexId].boneIds[influenceId] = boneId;
+						vertices[vertexId].weights[influenceId] = weight;
+						totalWeight += weight;
 						assignedInfluences++;
 					}
 
 					// Fill remaining slots with -1 and 0
-					for (int i = assignedInfluences; i < MAX_BONE_INFLUENCE; ++i) {
-						vertices[vertexId].boneIds[i] = -1;
-						vertices[vertexId].weights[i] = 0.0f;
+					for (int influenceId = assignedInfluences; influenceId < MAX_BONE_INFLUENCE; ++influenceId) {
+						vertices[vertexId].boneIds[influenceId] = -1;
+						vertices[vertexId].weights[influenceId] = 0.0f;
 					}
 
 					// Normalize weights only if they don't sum to 1
-					if (std::abs(totalWeight - 1.0f) > 0.001f) {
-						for (int i = 0; i < assignedInfluences; ++i) {
-							vertices[vertexId].weights[i] /= totalWeight;
+					if (abs(totalWeight - 1.0f) > 0.001f) {
+						for (int influenceId = 0; influenceId < assignedInfluences; ++influenceId) {
+							vertices[vertexId].weights[influenceId] /= totalWeight;
 						}
 					}
-
-					// Debug output for weight verification -- Disabled, possibly deprecated
-					//if (vertexId % 1000 == 0) {  // Print every 1000th vertex to avoid spam
-					//	cout << "Vertex " << vertexId << " weights: ";
-					//	for (int i = 0; i < MAX_BONE_INFLUENCE; ++i) {
-					//		if (vertices[vertexId].weights[i] > 0) {
-					//			cout << vertices[vertexId].weights[i] << " ";
-					//		}
-					//	}
-					//	cout << "\n";
-					//}
 				}
 			}
-
-			currentNode->meshData->vertices = vertices;
-			currentNode->meshData->indices = indices;
-			currentNode->meshData->bones = bones;
-			currentNode->meshData->skeletalMesh = bones.size() > 0;
-			currentNode->materialId = materialId;
+			
+			//Finally, create MeshData with node name, vertices, indices, and modelBones
+			targetNode->meshData = new MeshData(node->mName.C_Str(), vertices, indices, modelBones);
+			//Set the node materialId to the world material id for this node
+			targetNode->materialId = modelMaterials[mesh->mMaterialIndex];
+			cout << "  - Created node with" << " Material Id " << targetNode->materialId << ", " << targetNode->meshData->vertices.size() << " vertices, " << targetNode->meshData->indices.size() << " indices, and " << targetNode->meshData->bones.size() << " bones\n";
 		} else {
-			currentNode->meshData = nullptr;
+			targetNode->meshData = nullptr;
 		}
-		
-		for (unsigned int i = 0; i < node->mNumChildren; i++) {
-			ImportResult childResult = processNode(node->mChildren[i], scene, type, skeletalData);
-			childResult.rootNode->parent = currentNode;
-			currentNode->children.push_back(childResult.rootNode);
-		}
-		if (currentNode->meshData) {
-			currentNode->meshData->skeletalMesh = skeletalData.isSkeletal;
-			cout << "  Created node with "
-				<< currentNode->meshData->vertices.size() << " vertices, "
-				<< currentNode->meshData->indices.size() << " indices, "
-				<< currentNode->meshData->bones.size() << " bones\n";
-		}
-		ImportResult result = ImportResult();
-		result.rootNode = currentNode;
-		return result;
-    }
+		return true;
+	}
 
 	Model* MeshImporter::createModel(MeshData* meshData, string name) {
 		Model* model = new Model(meshData, name);
 
 		// Import animations if path available
 		if (!meshData->sourcePath.empty()) {
-			importAnimation(meshData->sourcePath, model);
+			const aiScene* scene = modelImporter.ReadFile(meshData->sourcePath,0U);
+			map<string, Animation*> modelAnimations;
+			importAnimations(scene, meshData->bones, modelAnimations);
 		}
 
 		return model;
 	}
 
-    // Move the implementation of loadMaterialTextures from Renderer.cpp
     vector<string> MeshImporter::loadMaterialTextures(aiMaterial* mat, aiTextureType type) {
 		vector<string> importedTextures;
 		for (unsigned int i = 0; i < mat->GetTextureCount(type); i++) {
@@ -264,74 +254,13 @@ namespace CGEngine {
         return Color(c->r * 255.f, c->g * 255.f, c->b * 255.f, c->a * 255.f);
     }
 
-	bool MeshImporter::importAnimation(const string& path, Model* targetModel) {
-		cout << "\n=== Importing Animations ===\n";
-		if (!targetModel) {
-			cout << "ERROR: Cannot import animations without a valid model\n";
-			return false;
-		}
-
-		// Import scene with animation data
-		const aiScene* scene = modelImporter.ReadFile(path, aiProcess_Triangulate | aiProcess_FlipUVs);
-		if (!scene) {
-			cout << "ERROR: Failed to load scene for animation import\n";
-			return false;
-		}
-
-		cout << "Scene has " << scene->mNumAnimations << " animations\n";
-		if (!scene->HasAnimations()) {
-			cout << "WARNING: No animations found in " << path << "\n";
-			return false;
-		}
-
-		//TODO: findSkeletalMesh is reused in Model.setupAnimations, consider moving to a higher-level function
-		// Find the mesh with bone data first
-		MeshData* skeletalMesh = nullptr;
-		std::function<void(ModelNode*)> findSkeletalMesh =
-			[&skeletalMesh, &findSkeletalMesh](ModelNode* node) {
-			if (node && node->meshData && !node->meshData->bones.empty()) {
-				skeletalMesh = node->meshData;
-				return;
-			}
-			if (node) {
-				for (auto* child : node->children) {
-					findSkeletalMesh(child);
-					if (skeletalMesh) return;
-				}
-			}
-			return;
-		};
-		findSkeletalMesh(targetModel->rootNode);
-		if (!skeletalMesh) {
-			cout << "ERROR: No skeletal mesh found during animation import\n";
-			return false;
-		}
-
-		// Process each animation in the file
-		for (unsigned int i = 0; i < scene->mNumAnimations; i++) {
-			if (!scene) continue;
-			aiAnimation* anim = scene->mAnimations[i];
-			string animName = anim->mName.length > 0 ? anim->mName.C_Str() : scene->mAnimations[i]->mName.C_Str();
-			if (animName.empty()) {
-				animName = "Animation_" + to_string(i);
-			}
-
-			// Create animation through factory method
-			Animation* animation = createAnimation(scene, skeletalMesh, animName);
-			if (!animation) continue;
-
-			//Map animation nodes to model hierarchy
-			targetModel->mapAnimationNodes(animation);
-			targetModel->addAnimation(animation);
-
-			cout << "  Imported animation '" << animName << "' with " << animation->bones.size() << " bone channels\n";
-		}
-
-		return true;
+	void MeshImporter::mapAnimation(Model* targetModel, Animation* animation) {
+		targetModel->mapAnimationNodes(animation);
+		targetModel->addAnimation(animation);
 	}
 
-	Animation* MeshImporter::createAnimation(const aiScene* scene, MeshData* mesh, const string& animationName) {
-		if (!scene || !mesh) {
+	Animation* MeshImporter::createAnimation(const aiScene* scene, map<string,BoneData> bones, const string& animationName) {
+		if (!scene) {
 			cout << "Error: Cannot create animation without valid mesh data\n";
 			return nullptr;
 		}
@@ -348,32 +277,13 @@ namespace CGEngine {
 			// Read hierarchy
 			animation->readHeirarchyData(animation->root, scene->mRootNode);
 			// Process bones
-			animation->readMissingBones(aiAnim, mesh);
+			animation->readMissingBones(aiAnim, bones);
 
 			return animation;
 		}
 		catch (const std::exception& e) {
 			cout << "Error creating animation: " << e.what() << "\n";
 			return nullptr;
-		}
-	}
-
-	void MeshImporter::propagateBoneData(MeshNodeData* node, const map<string, BoneData>& allBones) {
-		if (!node) return;
-
-		if (node->meshData) {
-			// Ensure this mesh has all bones
-			for (const auto& [boneName, boneData] : allBones) {
-				if (node->meshData->bones.find(boneName) == node->meshData->bones.end()) {
-					node->meshData->bones[boneName] = boneData;
-				}
-			}
-			node->meshData->skeletalMesh = true;
-		}
-
-		// Process children
-		for (auto* child : node->children) {
-			propagateBoneData(child, allBones);
 		}
 	}
 
