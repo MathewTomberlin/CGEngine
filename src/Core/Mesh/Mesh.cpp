@@ -18,7 +18,7 @@ namespace CGEngine {
 			cout << "Setting up mesh successfully imported from '" << importPath << "'\n";
 			this->meshData = importResult.rootNode->meshData;
 			this->meshData->sourcePath = importPath;
-			if (importResult.skeletalMesh) {
+			if (importResult.rootNode->hasMesh() && !importResult.rootNode->meshData->bones.empty()) {
 				cout << "Setting up Skeletal Mesh!\n";
 			}
 			// Set root transformation
@@ -45,7 +45,6 @@ namespace CGEngine {
 					Vector3f scl(scale.x, scale.y, scale.z);
 
 					Mesh* nodeMesh = new Mesh(node->meshData, Transformation3D(pos, rot, scl), { world->getMaterial(node->materialId) }, renderParameters);
-					nodeMesh->meshData->skeletalMesh = !nodeMesh->meshData->bones.empty();
 					nodeMesh->meshData->sourcePath = importPath;
 					id_t childMeshBodyId = world->create(nodeMesh);
 					Body* childBody = world->bodies.get(childMeshBodyId);

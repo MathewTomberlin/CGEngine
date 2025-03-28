@@ -2,6 +2,7 @@
 #include "Renderer.h"
 #include "../../Standard/Models/CommonModels.h"
 #include "../Animation/Animator.h"
+#include "../Mesh/Model.h"
 
 namespace CGEngine {
 	void Renderer::setWindow(RenderWindow* window) {
@@ -58,7 +59,7 @@ namespace CGEngine {
 			glVertexAttribPointer(program->attrib("vertNormal"), 3, GL_FLOAT, GL_FALSE, sizeof(VertexData), (void*)offsetof(VertexData, normal));
 			glEnableVertexAttribArray(program->attrib("materialId"));
 			glVertexAttribPointer(program->attrib("materialId"), 1, GL_FLOAT, GL_FALSE, sizeof(VertexData), (void*)offsetof(VertexData, materialId));
-			if (meshData->skeletalMesh) {
+			if (!meshData->bones.empty()) {
 				glEnableVertexAttribArray(program->attrib("boneIds"));
 				glVertexAttribIPointer(program->attrib("boneIds"), 4, GL_INT, sizeof(VertexData), (void*)offsetof(VertexData, boneIds));
 				glEnableVertexAttribArray(program->attrib("weights"));
@@ -75,10 +76,6 @@ namespace CGEngine {
 		return importer->importModel(path);
 	}
 
-	bool Renderer::importAnimation(string path, Model* model) {
-		return importer->importAnimation(path, model);
-	}
-
 	Material* Renderer::getFallbackMaterial() {
 		return world->getMaterial(fallbackMaterialId);
 	}
@@ -86,7 +83,6 @@ namespace CGEngine {
 	void Renderer::updateModelData(Mesh* mesh) {
 		if (setGLWindowState(true)) {
 			MeshData* meshData = mesh->getMeshData();
-			bool skeletalMesh = meshData->skeletalMesh;
 			vector<Material*> material = mesh->getMaterials();
 			Material* renderMaterial = world->getMaterial(fallbackMaterialId);
 			if (material.size() > 0 && material[0] && material[0]->getProgram()) {
@@ -185,19 +181,16 @@ namespace CGEngine {
 			if (model && model->vertices.size() > 0) {
 				glBindVertexArray(model->vao);
 				boundTextures = 0;
-				Material* renderMaterial = world->getMaterial(fallbackMaterialId);
-				vector<Material*> materials = mesh->getMaterials();
-				if (mesh->getMaterials().size() > 0) {
-					Material* material = mesh->getMaterials().at(0);
-					if (material && material->getProgram()) {
-						renderMaterial = material;
-					}
-					else {
-						mesh->clearMaterials();
-						mesh->addMaterial(renderMaterial);
-					}
+				
+				// Get materials from Model instead of Mesh
+				vector<Material*> modelMaterials = mesh->getMaterials();
+
+				// Ensure at least one material (fallback)
+				if (modelMaterials.empty()) {
+					cout << "WARNING: No model materials in renderer, falling back!\n";
+					modelMaterials.push_back(world->getMaterial(fallbackMaterialId));
 				}
-				materials = mesh->getMaterials();
+				Material* renderMaterial = modelMaterials.at(0);
 				Animator* animator = mesh->getAnimator();
 				if (meshModel && animator) {
 					// Only update animation once per model per frame
@@ -209,7 +202,6 @@ namespace CGEngine {
 				Program* program = renderMaterial->getProgram();
 				//Bind the shaders.
 				program->use();
-
 				//Set the uniforms for the shader to use
 				Vector3f camPos = currentCamera->getPosition();
 				program->setUniform("model", combinedTransform);
@@ -222,10 +214,9 @@ namespace CGEngine {
 						program->setUniform(getUniformArrayIndexName("boneMatrices", i).c_str(), transforms[i]);
 					}
 				}
-				for (int i = 0; i < materials.size(); ++i) {
-					setMaterialUniforms(materials.at(i), program, i);
+				for (int i = 0; i < modelMaterials.size(); ++i) {
+					setMaterialUniforms(modelMaterials.at(i), program, i);
 				}
-
 				program->setUniform("lightCount", (int)lights.size());
 				for (size_t i = 0; i < lights.size(); ++i) {
 					setLightUniforms(lights.get(i), i, program);

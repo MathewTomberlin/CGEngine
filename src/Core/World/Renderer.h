@@ -27,6 +27,7 @@ namespace CGEngine {
 	class Bone;
 	class Animation;
 	class Animator;
+	class Model;
 
 	struct VertexData {
 		VertexData() {
@@ -63,22 +64,23 @@ namespace CGEngine {
 	};
 
 	struct BoneData {
+		BoneData() :id(0), offset(glm::mat4(1.0f)) {};
+		BoneData(unsigned int id, glm::mat4 offset) :id(id), offset(offset) {};
 		unsigned int id;
 		glm::mat4 offset;
 	};
 
 	struct MeshData {
-		MeshData(vector<VertexData> vertices = {}, vector<unsigned int> indices = {}, map<string, BoneData> bones = {}, int boneCounter = 0) :vertices(vertices), indices(indices), vao(0U), vbo(0U), ebo(0U), bones(bones), boneCounter(boneCounter) {};
+		MeshData(string meshName = "", vector<VertexData> vertices = {}, vector<unsigned int> indices = {}, map<string, BoneData> bones = {}) : meshName(meshName), vertices(vertices), indices(indices), vao(0U), vbo(0U), ebo(0U), bones(bones) {};
+		MeshData(vector<VertexData> vertices, vector<unsigned int> indices = {}, map<string, BoneData> bones = {}, string meshName = "") : meshName(meshName), vertices(vertices), indices(indices), vao(0U), vbo(0U), ebo(0U), bones(bones) {};
+		string sourcePath = "";
+		string meshName = "";
 		vector<VertexData> vertices;
 		vector<unsigned int> indices;
+		map<string, BoneData> bones;
 		GLuint vbo = 0U;
 		GLuint vao = 0U;
 		GLuint ebo = 0U;
-		map<string, BoneData> bones;
-		int boneCounter;
-		bool skeletalMesh = false;
-		string sourcePath = "";
-		string meshName = "";
 	};
 
 	struct KeyPosition {
@@ -169,7 +171,6 @@ namespace CGEngine {
 		Vector3f fromGlm(glm::vec3 v);
 		const aiScene* readFile(string path, unsigned int options);
 		ImportResult import(string path);
-		bool importAnimation(string path, Model* model);
 		Material* getFallbackMaterial();
 		glm::mat4 getCombinedModelMatrix(Body* body);
 		void endFrame();
