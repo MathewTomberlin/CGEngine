@@ -102,9 +102,10 @@ namespace CGEngine {
 	/// Responsible for ordering Bodies for rendering. Allows for default ordering (children render on top of parents)
 	/// modified with per-object Z-Order
 	/// </summary>
-	class Renderer {
+	class Renderer : public EngineSystem {
 	public:
 		Renderer::Renderer() {
+			init();
 			importer = new MeshImporter();
 		}
 		/// <summary>

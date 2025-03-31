@@ -126,7 +126,7 @@ namespace CGEngine {
 		// Make the window no longer the active window for OpenGL calls
 		bool success = window->setActive(state);
 		if (!success) {
-			cerr << "Failed to set window to " << ((state) ? "active" : "inactive") << endl;
+			log(this, LogError, "Failed to set window state to {}", (state) ? "active" : "inactive");
 		}
 		return success;
 	}
@@ -187,7 +187,7 @@ namespace CGEngine {
 
 				// Ensure at least one material (fallback)
 				if (modelMaterials.empty()) {
-					cout << "WARNING: No model materials in renderer, falling back!\n";
+					log(this, LogWarn, "No model materials in renderer. Using fallback.");
 					modelMaterials.push_back(world->getMaterial(fallbackMaterialId));
 				}
 				Material* renderMaterial = modelMaterials.at(0);
@@ -429,9 +429,7 @@ namespace CGEngine {
 		glewExperimental = GL_TRUE;
 		GLenum state = glewInit();
 		if (state != GLEW_OK) {
-			cout << "GLEW not ok" << "\n";
-		} else {
-			cout << "GLEW initialized" << "\n";
+			log(this, LogError, "GLEW is invalid.");
 		}
 		return state;
 	}

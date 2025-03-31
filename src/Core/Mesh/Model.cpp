@@ -4,10 +4,13 @@
 
 namespace CGEngine {
 	Model::Model(string sourcePath) : sourcePath(sourcePath) {
+		init();
+		setLogLevel(LogInfo);
 		//Import the model using the MeshImporter
+		log(this, LogInfo, "Importing Model: {}", sourcePath);
 		ImportResult importResult = renderer.import(sourcePath);
 		if (!importResult.rootNode) {
-			cout << "ERROR: Failed to import model from '" << sourcePath << "'\n";
+			log(this, LogError, "Failed to import model from '{}'", sourcePath);
 			return;
 		}
 
@@ -18,11 +21,13 @@ namespace CGEngine {
 		rootNode = meshNodeToModelNode(importResult.rootNode, nullptr);
 		// Create animator if skeletal
 		if (!modelBones.empty()) setupAnimator();
-		cout << "\n=== Successfully Imported '" << sourcePath << "' ===\n";
+		log(this, LogInfo, "Successfully Imported '{}'", sourcePath);
 	}
 
 	// Method for manually creating the Model from MeshData
 	Model::Model(MeshData* meshData, string name) : sourcePath(name) {
+		init();
+		setLogLevel(LogInfo);
 		rootNode = createNode(name, meshData);
 		updateBoneData(meshData);
 	}
@@ -77,10 +82,10 @@ namespace CGEngine {
 	}
 	
 	id_t Model::instantiate(Transformation3D rootTransform, vector<id_t> overrideMaterials) {
-		cout << "\n=== Instantiating Model: '"<< sourcePath <<"' ===\n";
+		log(this, LogInfo, "Instantiating Model: '{}'", sourcePath);
 
 		if (!rootNode) {
-			cout << "ERROR: Failed to instantiate model with root node\n";
+			log(this, LogError, "Failed to instantiate model with root node");
 			return 0;
 		}
 
@@ -89,7 +94,7 @@ namespace CGEngine {
 
 		// Ensure we have at least one material
 		if (materialsToUse.empty() && modelMaterials.empty()) {
-			cout << "WARNING: No materials to use during instantiation. Using fallback material.\n";
+			log(this, LogWarn, "No materials to use during instantiation. Using fallback material.");
 			modelMaterials.push_back(renderer.getFallbackMaterial()->materialId);
 		}
 
@@ -97,11 +102,11 @@ namespace CGEngine {
 		id_t rootId = world->create(new Mesh(nullptr));
 		Body* rootBody = world->bodies.get(rootId);
 		if (!rootBody) {
-			cout << "ERROR: Failed to create root body\n";
+			log(this, LogError, " Failed to create root body");
 			return 0;
 		}
 		bodyCount = 1;
-		cout << "  " << bodyCount << ") ROOT (ID:" << rootId << ")\n";
+		log(this, LogDebug, "  {}) ROOT (ID: {})", bodyCount, rootId);
 
 		// Apply root transform to the root body
 		rootBody->get<Mesh*>()->setPosition(rootTransform.position);
@@ -110,7 +115,7 @@ namespace CGEngine {
 
 		// Create node hierarchy recursively
 		createChildBodies(rootNode, rootBody, materialsToUse);
-		cout << "=== '" << sourcePath << "' Body Count: " << bodyCount << " ===\n";
+		log(this, LogInfo, "Successfully Instantiated Model '{}' with Body Count: {}", sourcePath, bodyCount);
 		return rootId;
 	}
 
@@ -156,8 +161,7 @@ namespace CGEngine {
 			Material* nodeMaterial = world->getMaterial(materialId);
 			if (nodeMaterial) {
 				nodeMaterials.push_back(nodeMaterial);
-				cout << "    - Created Mesh for '" << node->nodeName
-					<< "' with Material ID: " << materialId << "\n";
+				log(this, LogDebug, "      - Created Mesh for '{}' with Material ID: {}", node->nodeName, materialId);
 			}
 		}
 
@@ -168,7 +172,7 @@ namespace CGEngine {
 		// Create and attach child body
 		id_t bodyId = world->create(mesh);
 		bodyCount++;
-		cout << "  " << bodyCount << ") " << node->nodeName << " (ID:" << bodyId << ")" << (node->meshData && !node->meshData->vertices.empty() ? " <Has Mesh>" : "") << "\n";
+		log(this, LogDebug, "  {}) {} (ID: {}) {}", bodyCount, node->nodeName, bodyId, node->meshData && !node->meshData->vertices.empty() ? " <Has Mesh>" : "");
 		Body* body = world->bodies.get(bodyId);
 		if (body) {
 			// Attach to parent
@@ -187,18 +191,18 @@ namespace CGEngine {
 				createChildBodies(childNode, body, materials);
 			}
 		} else {
-			cout << "ERROR: Failed to create body for node '" << node->nodeName << "'\n";
+			log(this, LogError, "Failed to create body for node '{}'", node->nodeName);
 		}
 	}
 
 	// Add new method to handle animation import and setup
 	bool Model::setupAnimator() {
-		cout << "\n=== Creating Default Animator ===\n";
+		log(this, LogInfo, "- Creating Default Animator ===");
 
 		// Create single animator instance for the model
 		modelAnimator = createAnimator();
 		if (!modelAnimator) {
-			cout << "ERROR: Failed to create animator\n";
+			log(this, LogError, "Failed to create animator");
 			return false;
 		}
 

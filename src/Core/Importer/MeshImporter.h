@@ -36,8 +36,9 @@ namespace CGEngine {
 		map<string, BoneData> allBones;
 	};
 
-	class MeshImporter {
+	class MeshImporter : public EngineSystem {
     public:
+		MeshImporter();
 		ImportResult importModel(string path, unsigned int options = aiProcess_Triangulate | aiProcess_FlipUVs);
 		const aiScene* readFile(string path, unsigned int options);
 		// Add direct model creation to support importing animations
