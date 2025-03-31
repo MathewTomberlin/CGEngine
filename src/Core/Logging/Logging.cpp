@@ -15,24 +15,9 @@ namespace CGEngine {
 	}
 
 	void Logging::findUniqueFilepath() {
-		string filetype = ".txt";
-		string logDirectory = "logs/";
 		string systemTime = time.getSystemmTimeNowString();
 		string dot = ".";
-		filepath.reserve(logDirectory.size() + logFilename.size() + dot.size() + systemTime.size() + filetype.size());
-		filepath.append(logDirectory).append(logFilename).append(dot).append(systemTime).append(filetype);
-	}
-
-	void Logging::operator()(LogLevel level, string caller, string msg, bool newLine, bool toFile) {
-		log(level, caller, msg, newLine, toFile);
-	}
-
-	void Logging::operator()(string msg, LogLevel level, string caller, bool newLine, bool toFile) {
-		log(level, caller, msg, newLine, toFile);
-	}
-
-	void Logging::operator()(string msg, string caller, LogLevel level, bool newLine, bool toFile) {
-		log(level, caller, msg, newLine, toFile);
+		filepath.append(logDirectory).append(logFilename).append(".").append(systemTime).append(".txt");
 	}
 
 	bool Logging::willLog(LogLevel level) {
@@ -47,36 +32,37 @@ namespace CGEngine {
 		return active;
 	}
 
-	void Logging::log(LogLevel level, string caller, string msg, bool newLine, bool toFile) {
+	void Logging::log(LogLevel level, string caller, string msg, vector<string> args, size_t precision) {
 		if (level <= logLevel) {
-			string logMsg;
+			string formattedMsg = format(msg, args);
 			//Build log level prompt
-			string logLevelPrompt;
-			string leftBracket = "[";
-			string rightBracket = "]";
-			string logLevel = levelToString(level);
-			logLevelPrompt.reserve(leftBracket.size() + logLevel.size() + rightBracket.size());
-			logLevelPrompt.append(leftBracket).append(logLevel).append(rightBracket);
+			string logLevelPrompt = string("[").append(levelToString(level)).append("] ");
 			//Build caller prompt
-			string prompter = ":";
-			string space = " ";
-			string callerPrompt;
-			if (caller != "") {
-				callerPrompt.reserve(space.size() + caller.size() + prompter.size() + space.size());
-				callerPrompt.append(space).append(caller).append(prompter).append(space);
-			}
-			else {
-				callerPrompt = " ";
-			}
-			//Build newline
-			string nl = (newLine) ? "\n" : "";
+			string callerPrompt = (caller == "") ? caller : string(caller).append(": ");
 			//Build log message
-			logMsg.reserve(logLevelPrompt.size() + callerPrompt.size() + msg.size() + nl.size());
-			logMsg.append(logLevelPrompt).append(callerPrompt).append(msg).append(nl);
+			string logMsg = string(logLevelPrompt).append(callerPrompt).append(formattedMsg).append("\n");
 			//Print and queue message
 			cout << logMsg;
 			queueMsg(LogEvent(time.getElapsedSec(), logMsg));
 		}
+	}
+
+	string Logging::format(string msg, vector<string> args) {
+		int index = 0;
+		int argIndex = 0;
+		stringstream msgStream;
+		while (index < msg.size()) {
+			if (msg[index] == '{' && index + 1 < msg.size() && msg[index + 1] == '}') {
+				msgStream << args[argIndex];
+				index += 2;
+				argIndex++;
+			}
+			else {
+				msgStream << msg[index];
+				index++;
+			}
+		}
+		return msgStream.str();
 	}
 
 	void Logging::queueMsg(LogEvent msgEvt) {
@@ -91,12 +77,16 @@ namespace CGEngine {
 			msgBuffer.insert(msgBuffer.end(),logEvt.msg.begin(), logEvt.msg.end());
 		}
 		ofstream logFile(filepath, ios::binary);
-		if (logFile.is_open()) {
+		if (logFile.is_open() && msgBuffer.size() > 0) {
 			logFile.write(msgBuffer.data(), msgBuffer.size());
 			logFile.close();
 		} else {
 			cout << "[ERROR] Can't open log file for writing.\n";
 		}
+	}
+
+	void Logging::setPrecision(size_t precision) {
+		this->precision = precision;
 	}
 
 	string Logging::levelToString(LogLevel level) {
