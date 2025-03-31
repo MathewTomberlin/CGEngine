@@ -63,7 +63,7 @@ namespace CGEngine {
 		/// <param name="timerName">The timer display name</param>
 		/// <param name="timerId">The timer id</param>
 		/// <param name="msg">The log message</param>
-		void log(string timerName, size_t timerId, string msg);
+		void logger(string timerName, size_t timerId, string msg);
 		/// <summary>
 		/// A unique id list of timers
 		/// </summary>
