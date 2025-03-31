@@ -5,6 +5,7 @@
 #include "../Types/UniqueDomain.h"
 #include "../Mesh/Mesh.h"
 #include "../Light/Light.h"
+#include "../Engine/EngineSystem.h"
 #include <sstream>
 #include <memory>
 #include <queue>
@@ -12,10 +13,9 @@ using namespace sf;
 using namespace std;
 
 namespace CGEngine {
-    class World {
+    class World : public EngineSystem {
     public:
         World();
-        
         //World state
         void runWorld();
         void startWorld();

@@ -5,6 +5,8 @@
 #include <fstream>
 #include <filesystem>
 #include <cmath>
+#include "../Types/Types.h"
+#include "../Engine/EngineSystem.h"
 using std::string;
 using std::cout;
 using std::queue;
@@ -13,8 +15,6 @@ using std::ios;
 namespace fs = std::filesystem;
 
 namespace CGEngine {
-	enum LogLevel { LogError, LogWarn, LogInfo, LogDebug, LogDebug1, LogDebug2 };
-	const string logLevels[6] = { "ERROR", "WARN", "INFO", "DEBUG", "DEBUG1", "DEBUG2" };
 	struct LogEvent {
 		LogEvent(sec_t timestamp, string msg) :timestamp(timestamp), msg(msg) {};
 		sec_t timestamp;
@@ -58,6 +58,14 @@ namespace CGEngine {
 			log(level, caller, msg, { argToString(forward<Args>(args))... });
 		}
 
+		template <typename... Args>
+		void operator()(EngineSystem* system, LogLevel level, string msg, Args... args) {
+			if(!system) return;
+			if (level <= system->getLogLevel()) {
+				log(level, system->getSystemName(), msg, {argToString(forward<Args>(args))...});
+			}
+		}
+
 		bool willLog(LogLevel level);
 		void setActive(bool enabled);
 		bool getActive();
@@ -65,8 +73,9 @@ namespace CGEngine {
 		void queueMsg(LogEvent msgEvt);
 		void writeQueue();
 		void setPrecision(size_t precision);
+		void setLogLevel(LogLevel level);
 	protected:
-		static LogLevel logLevel;
+		LogLevel logLevel;
 	private:
 		string filepath;
 		string logDirectory = "logs/";
