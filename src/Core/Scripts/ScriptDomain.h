@@ -8,7 +8,7 @@
 using namespace std;
 
 namespace CGEngine {
-    class ScriptDomain {
+    class ScriptDomain : public EngineSystem {
     public:
         ScriptDomain(string name, string bodyName = "");
         ~ScriptDomain();
@@ -67,14 +67,11 @@ namespace CGEngine {
         /// <param name="scriptId">The id of the Script to assign the data to</param>
         /// <param name="data">The DataStack to pass as input</param>
         void setScriptInput(size_t scriptId, DataMap data);
-        
-        LogLevel logLevel = LogLevel::LogInfo;
     private:
         string domainName;
         string ownerName = "";
         map<size_t, Script*> scripts;
         UniqueIntegerStack<size_t> domainIds = UniqueIntegerStack<size_t>(1000U);
         void deleteScript(Script* script, optional<id_t> scriptId = nullopt);
-        void logger(string msg);
     };
 }

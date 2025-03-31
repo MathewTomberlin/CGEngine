@@ -5,6 +5,8 @@ namespace CGEngine {
     ScriptDomain::ScriptDomain(string name, string bodyName) {
         domainName = name;
         ownerName = bodyName;
+        init();
+        setSystemName(ownerName.append(ownerName==""?"":" ").append("Domain(").append(name).append(")"));
     }
 
     ScriptDomain::~ScriptDomain() {
@@ -22,7 +24,7 @@ namespace CGEngine {
     size_t ScriptDomain::addScript(Script* script) {
         size_t id = domainIds.receive(&script->id);
         scripts[id] = script;
-        logger("Added Script[" + to_string(id) + "]('" + domainName + "')");
+        log(this, LogInfo, "Added Script Id {}", id);
         return id;
     }
 
@@ -46,7 +48,7 @@ namespace CGEngine {
         if (script->id.has_value()) {
             size_t scriptId = script->id.value();
             if (shouldLog) {
-                logger("Removed Script[" + to_string(scriptId) + "]('" + domainName + "')");
+                log(this, LogInfo, "Removed Script Id {}", scriptId);
             }
             //Refund the script id and erase it from the scripts map
             domainIds.refund(&script->id);
@@ -168,26 +170,20 @@ namespace CGEngine {
             }
         }
         if (scripts.size() > 0) {
-            log(LogLevel::LogWarn, "ScriptDomainError", "Not all scripts of domain were deleted");
+            log(this, LogWarn, "Scripts remain after deletion");
             clear();
         }
-        logger("Deleted Domain('" + domainName + "')");
+        log(this, LogInfo, "Deleted Domain");
         delete this;
     }
 
     void ScriptDomain::deleteScript(Script* script, optional<id_t> scriptId) {
         if (script == nullptr) return;
         if (script->id.has_value()) {
-            logger("Deleted Script[" + to_string(script->id.value()) + "]('" + domainName + "')");
-        }
-        else if (scriptId.has_value()) {
-            logger("Deleted Script[" + to_string(scriptId.value()) + "]('" + domainName + "')");
+            log(this, LogInfo, "Deleted Script Id {}", script->id.value());
+        } else if (scriptId.has_value()) {
+            log(this, LogInfo, "Deleted Script Id {}", scriptId.value());
         }
         delete script;
-    }
-
-    void ScriptDomain::logger(string msg) {
-        if (!log.willLog(logLevel)) return;
-        log(LogLevel::LogWarn, ownerName, msg);
     }
 }
