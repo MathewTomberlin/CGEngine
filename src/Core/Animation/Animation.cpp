@@ -3,7 +3,10 @@
 
 using namespace std;
 namespace CGEngine {
-	Animation::Animation() :duration(0), ticksPerSecond(24.0f) { }
+	Animation::Animation() :duration(0), ticksPerSecond(24.0f) { 
+		init();
+		setLogLevel(LogInfo);
+	}
 
 	Bone* Animation::findBone(const string name) {
 		auto iter = std::find_if(bones.begin(), bones.end(), [&](const Bone& bone) { return bone.getBoneName() == name; });
@@ -13,7 +16,7 @@ namespace CGEngine {
 
 	void Animation::readHeirarchyData(NodeData& dest, const aiNode* src) {
 		if (!src) {
-			cout << "Error: Invalid source node\n";
+			log(this, LogError, "Invalid source node");
 			return;
 		}
 
@@ -26,29 +29,24 @@ namespace CGEngine {
 				readHeirarchyData(newData, src->mChildren[i]);
 				dest.children.push_back(newData);
 			}
-		}
-		catch (const std::exception& e) {
-			cout << "Error processing node " << (src->mName.length ? src->mName.C_Str() : "unnamed")
-				<< ": " << e.what() << "\n";
+		} catch (const std::exception& e) {
+			string nodeName = src->mName.length ? src->mName.C_Str() : "unnamed";
+			log(this, LogError, "Error processing node {}: {}", nodeName, e.what());
 		}
 	}
 
 	void Animation::readMissingBones(const aiAnimation* animation, map<string,BoneData> modelBones) {
 		if (!animation) {
-			cout << "Error: Invalid animation data\n";
+			log(this, LogError, "Invalid animation data");
 			return;
 		}
 		if (modelBones.empty()) {
-			cout << "Error: Invalid mesh data\n";
+			log(this, LogError, "Invalid mesh data");
 			return;
 		}
 
 		//Get Bone Ids/Offsets and Bone Count from Mesh
 		auto& boneInfoMap = modelBones;
-
-		cout << "Processing Animation: "<< animation->mName.C_Str()<<"\n"
-			<< "  Channels: " << animation->mNumChannels << "\n"
-			<< "  MeshData Bones: " << modelBones.size() << "\n";
 		
 		//Read animation channels
 		for (unsigned int i = 0; i < animation->mNumChannels; i++) {

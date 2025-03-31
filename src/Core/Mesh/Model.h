@@ -32,7 +32,7 @@ namespace CGEngine {
 
 	class Animation;
 
-	class Model {
+	class Model : public EngineSystem {
 	public:
 		//Constructor to create a Model from an imported file via Assimp
 		Model(string sourcePath);

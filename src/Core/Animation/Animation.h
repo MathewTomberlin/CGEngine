@@ -5,7 +5,7 @@
 
 namespace CGEngine {
 	class Bone;
-	class Animation {
+	class Animation : public EngineSystem{
 	public:
 		Animation();
 		Bone* findBone(const string name);

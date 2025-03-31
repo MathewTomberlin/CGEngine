@@ -6,8 +6,11 @@
 #include "../Animation/Animation.h"
 
 namespace CGEngine {
+	MeshImporter::MeshImporter() {
+		init();
+		setLogLevel(LogInfo);
+	}
     ImportResult MeshImporter::importModel(string path, unsigned int options) {
-		cout << "\n=== Importing Model: " << path << " ===\n";
 		string format = getFormat(path);
 		options |= getFormatOptions(format);
 
@@ -24,14 +27,14 @@ namespace CGEngine {
 			importAnimations(scene, modelBones, result.animations);
 			return result;
         } else {
-            cout << "ERROR: Failed to import from " << path << "\n";
+			log(this, LogError, "Failed to import from {}", path);
         }
         return ImportResult();
     }
 
 	void MeshImporter::importAnimations(const aiScene* scene, map<string,BoneData> modelBones, map<string, Animation*>& modelAnimations) {
 		if (scene->HasAnimations()){
-			cout << "\n=== Importing Animations: " << scene->mNumAnimations << " ===\n";
+			log(this, LogInfo, "- Importing {} Animations", scene->mNumAnimations);
 
 			int animationCount = scene->mNumAnimations;
 			// Process each animation in the file
@@ -44,10 +47,10 @@ namespace CGEngine {
 				// Create animation through factory method
 				Animation* animation = createAnimation(scene, modelBones, animName);
 				if (!animation) continue;
-				cout << "Imported animation " << animation->getName() << "\n";
+				log(this, LogInfo, "  - Successfully Imported Animation '{}' with {} Channels and {} Bones", animation->getName(), anim->mNumChannels, animation->bones.size());
 				modelAnimations[animation->getName()] = animation;
 			}
-			cout << "=== Successfully Imported " << modelAnimations.size() << " Animations ===\n";
+			log(this, LogInfo, "- Imported {} Animations", modelAnimations.size());
 		}
 		return;
 	}
@@ -57,7 +60,7 @@ namespace CGEngine {
 	}
 
 	unsigned int MeshImporter::getFormatOptions(string format) {
-		cout << "File Format: " << format << "\n";
+		log(this, LogInfo, "- File Format: {}", format);
 		if (format == "fbx") {
 			return aiProcess_RemoveRedundantMaterials;
 		}
@@ -68,7 +71,7 @@ namespace CGEngine {
 	}
 
 	vector<id_t> MeshImporter::importSceneMaterials(const aiScene* scene) {
-		cout << "Importing Model Materials:\n";
+		log(this, LogInfo, "- Importing Model Materials:");
 		vector<id_t> modelMaterials;
 		if (scene->HasMaterials()) {
 			for (size_t modelMaterialId = 0; modelMaterialId < scene->mNumMaterials; ++modelMaterialId) {
@@ -101,9 +104,7 @@ namespace CGEngine {
 				SurfaceParameters surfaceParams = SurfaceParameters(diffuseDomain, specularDomain);
 				id_t worldMaterialId = world->createMaterial(surfaceParams);
 				modelMaterials.push_back(worldMaterialId);
-
-				cout << "  - " << modelMaterialId << " Material: " << modelMaterial->GetName().C_Str() << " (World ID: " << worldMaterialId << ") "
-					<< ", Color: " << diffuseColor->r << "," << diffuseColor->g << "," << diffuseColor->b << ")\n";
+				log(this, LogInfo, "  - {} Material: {}  (World ID: {}) Color: ({},{},{})", modelMaterialId, modelMaterial->GetName().C_Str(), worldMaterialId, diffuseColor->r, diffuseColor->g, diffuseColor->b);
 
 				// Cleanup
 				delete diffuseColor;
@@ -122,7 +123,7 @@ namespace CGEngine {
 
 		//Try to import mesh data from this node to the new mesh node
 		if (!importMesh(meshNode, node, scene, modelBones, modelMaterials)) {
-			cout << "ERROR: Mesh node at id is out-of-bounds for scene meshes\n";
+			log(this, LogError, "Mesh node at id is out-of-bounds for scene meshes");
 			return ImportResult();
 		}
 
@@ -140,7 +141,7 @@ namespace CGEngine {
 		if (node->mNumMeshes > 0) {
 			if (node->mMeshes[0] >= scene->mNumMeshes) return false;
 			aiMesh* mesh = scene->mMeshes[node->mMeshes[0]];
-			cout << "Importing MeshData for node '" << node->mName.C_Str() << "' [Meshes: " << node->mNumMeshes << ", Children: " << node->mNumChildren << "]\n";
+			log(this, LogInfo, "- Importing MeshData for node '{}' [Meshes: {}, Children: {}]", node->mName.C_Str(), node->mNumMeshes, node->mNumChildren);
 
 			//Get position, texture coordinates, and normal from the import mesh node or, if not available, the use the default value
 			vector<VertexData> vertices;
@@ -216,7 +217,7 @@ namespace CGEngine {
 			targetNode->meshData = new MeshData(node->mName.C_Str(), vertices, indices, modelBones);
 			//Set the node materialId to the world material id for this node
 			targetNode->materialId = modelMaterials[mesh->mMaterialIndex];
-			cout << "  - Created node with" << " Material Id " << targetNode->materialId << ", " << targetNode->meshData->vertices.size() << " vertices, " << targetNode->meshData->indices.size() << " indices, and " << targetNode->meshData->bones.size() << " bones\n";
+			log(this, LogDebug, "  - Created node with Material Id {}, {} vertices, {} indices, and {} bones", targetNode->materialId, targetNode->meshData->vertices.size(), targetNode->meshData->indices.size(), targetNode->meshData->bones.size());
 		} else {
 			targetNode->meshData = nullptr;
 		}
@@ -256,7 +257,7 @@ namespace CGEngine {
 
 	Animation* MeshImporter::createAnimation(const aiScene* scene, map<string,BoneData> bones, const string& animationName) {
 		if (!scene) {
-			cout << "Error: Cannot create animation without valid mesh data\n";
+			log(this, LogError, "Cannot create animation, mesh is invalid");
 			return nullptr;
 		}
 
@@ -277,7 +278,7 @@ namespace CGEngine {
 			return animation;
 		}
 		catch (const std::exception& e) {
-			cout << "Error creating animation: " << e.what() << "\n";
+			log(this, LogError, "Error creating animation: {}", e.what());
 			return nullptr;
 		}
 	}
