@@ -7,7 +7,7 @@ namespace CGEngine {
     OpenGLSettings openGLSettings = OpenGLSettings(true, true);
     //List of Scenes to create, add to World and load sceneList[0]
     vector<Behavior*> sceneList = { };
-    Logging logging;
+    Logging log;
     GlobalTime time;
     Renderer renderer;
     TextureCache* textures = new TextureCache();

@@ -23,7 +23,7 @@ namespace CGEngine {
 	extern function<void()> beginWorld;
 	extern function<Camera*()> getCamera;
 	extern vector<Behavior*> sceneList;
-	extern Logging logging;
+	extern Logging log;
 
 	extern const string onUpdateEvent;
 	extern const string onStartEvent;
