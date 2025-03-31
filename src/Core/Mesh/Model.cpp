@@ -17,9 +17,7 @@ namespace CGEngine {
 		// Convert ImportResult node tree to ModelNode tree
 		rootNode = meshNodeToModelNode(importResult.rootNode, nullptr);
 		// Create animator if skeletal
-		if (!modelBones.empty()) {
-			setupAnimator();
-		}
+		if (!modelBones.empty()) setupAnimator();
 		cout << "\n=== Successfully Imported '" << sourcePath << "' ===\n";
 	}
 
@@ -66,19 +64,6 @@ namespace CGEngine {
 		}
 	}
 
-	ModelNode* Model::convertAnimationNode(const NodeData& animNode, ModelNode* parent) {
-		ModelNode* node = createNode(animNode.name);
-		node->localTransform = animNode.transformation;
-		node->parent = parent;
-
-		for (const auto& child : animNode.children) {
-			ModelNode* childNode = convertAnimationNode(child, node);
-			node->children.push_back(childNode);
-		}
-
-		return node;
-	}
-
 	Model::~Model() {
 		delete modelAnimator;
 
@@ -95,7 +80,7 @@ namespace CGEngine {
 		cout << "\n=== Instantiating Model: '"<< sourcePath <<"' ===\n";
 
 		if (!rootNode) {
-			cout << "Cannot instantiate - model has no root node\n";
+			cout << "ERROR: Failed to instantiate model with root node\n";
 			return 0;
 		}
 
@@ -104,26 +89,26 @@ namespace CGEngine {
 
 		// Ensure we have at least one material
 		if (materialsToUse.empty() && modelMaterials.empty()) {
-			cout << "No materials available for model instantiation\n";
+			cout << "WARNING: No materials to use during instantiation. Using fallback material.\n";
 			modelMaterials.push_back(renderer.getFallbackMaterial()->materialId);
 		}
 
-		// Create empty root body first
+		// Create null Mesh Body root
 		id_t rootId = world->create(new Mesh(nullptr));
-		Body* rootBody = world->bodies.get(rootId);  // Create empty root
+		Body* rootBody = world->bodies.get(rootId);
 		if (!rootBody) {
-			cout << "Failed to create root body\n";
+			cout << "ERROR: Failed to create root body\n";
 			return 0;
 		}
+		bodyCount = 1;
+		cout << "  " << bodyCount << ") ROOT (ID:" << rootId << ")\n";
 
 		// Apply root transform to the root body
 		rootBody->get<Mesh*>()->setPosition(rootTransform.position);
 		rootBody->get<Mesh*>()->setRotation(rootTransform.rotation);
 		rootBody->get<Mesh*>()->setScale(rootTransform.scale);
 
-		// Create hierarchy recursively
-		bodyCount = 1;
-		cout << "  " << bodyCount << ") ROOT (ID:" << rootId << ")\n";
+		// Create node hierarchy recursively
 		createChildBodies(rootNode, rootBody, materialsToUse);
 		cout << "=== '" << sourcePath << "' Body Count: " << bodyCount << " ===\n";
 		return rootId;
@@ -138,87 +123,6 @@ namespace CGEngine {
 		return node;
 	}
 
-	void Model::attachNode(ModelNode* parent, ModelNode* child) {
-		if (!parent || !child) return;
-
-		child->parent = parent;
-		parent->children.push_back(child);
-
-		// Update bone data if needed
-		if (child->meshData) {
-			updateBoneData(child->meshData);
-		}
-	}
-
-	ModelNode* Model::copyNodeHierarchy(const ModelNode* source, ModelNode* newParent) {
-		if (!source) return nullptr;
-
-		ModelNode* copy = createNode(source->nodeName, source->meshData, source->materialIndex);
-		copy->localTransform = source->localTransform;
-		copy->parent = newParent;
-
-		for (const auto* childSource : source->children) {
-			ModelNode* childCopy = copyNodeHierarchy(childSource, copy);
-			copy->children.push_back(childCopy);
-		}
-
-		return copy;
-	}
-
-	Material* Model::getMaterial(id_t index) {
-		if (index < modelMaterials.size()) {
-			return world->getMaterial(modelMaterials[index]);
-		}
-		return nullptr;
-	}
-	id_t Model::addMaterial(id_t material) {
-		modelMaterials.push_back(material);
-		return modelMaterials.size() - 1;
-	}
-
-	void Model::setNodeMaterial(ModelNode* node, id_t materialIndex) {
-		if (node && materialIndex < modelMaterials.size()) {
-			node->materialIndex = materialIndex;
-		}
-	}
-	void Model::setMaterial(id_t index, id_t material) {
-		if (index >= modelMaterials.size()) {
-			modelMaterials.resize(index + 1, -1);
-		}
-		modelMaterials[index] = material;
-	}
-	// Add to Animation creation
-	void Model::addAnimation(Animation* animation) {
-		if (!animation) return;
-
-		// Store the animation
-		modelAnimations[animation->getName()] = animation;
-
-		// Update bone data from animation
-		for (const auto& [boneName, boneData] : animation->getBoneData()) {
-			if (modelBones.find(boneName) == modelBones.end()) {
-				modelBones[boneName] = boneData;
-			}
-		}
-
-		cout << "  Added animation '" << animation->getName() << "' to model '" << sourcePath << "'\n";
-	}
-	Animation* Model::getAnimation(string animationName) {
-		auto it = modelAnimations.find(animationName);
-		if (it != modelAnimations.end()) {
-			return it->second;
-		}
-		return nullptr;
-	}
-
-	vector<string> Model::getAnimationNames() const {
-		vector<string> names;
-		for (const auto& [name, animation] : modelAnimations) {
-			names.push_back(name);
-		}
-		return names;
-	}
-
 	Animator* Model::createAnimator() const {
 		if(!isSkeletal() || modelAnimations.empty()) {
 			return nullptr;
@@ -230,44 +134,6 @@ namespace CGEngine {
 
 	bool Model::isSkeletal() const {
 		return !modelBones.empty();
-	}
-
-	void Model::mapAnimationNodes(const Animation* anim) {
-		if (!anim) return;
-
-		cout << "  Mapping animation '" << anim->getName() << "' nodes to model '" << sourcePath << "' nodes\n";
-
-		// Map animation nodes to model nodes
-		mapAnimationNodeRecursive(anim->getRoot(), rootNode);
-
-		// Verify mapping success
-		size_t mappedNodes = animationNodeMap.size();
-		cout << "    Mapped " << mappedNodes << " nodes for animation\n";
-
-		if (anim->bones.size() > 0 && mappedNodes == 0) {
-			cout << "    Warning: No nodes mapped for skeletal animation!\n";
-		}
-	}
-
-	void Model::mapAnimationNodeRecursive(const NodeData& animNode, ModelNode* modelNode) {
-		if (!modelNode) return;
-
-		// Create mapping
-		AnimationNodeMapping mapping;
-		mapping.modelNode = modelNode;
-		mapping.animationNode = const_cast<NodeData*>(&animNode);
-		mapping.bindPose = animNode.transformation;
-		animationNodeMap[animNode.name] = mapping;
-
-		// Process children
-		for (const auto& animChild : animNode.children) {
-			for (auto* modelChild : modelNode->children) {
-				if (modelChild->nodeName == animChild.name) {
-					mapAnimationNodeRecursive(animChild, modelChild);
-					break;
-				}
-			}
-		}
 	}
 
 	// Recursively create child bodies from ModelNode hierarchy
@@ -349,29 +215,6 @@ namespace CGEngine {
 		}
 
 		delete node;
-	}
-
-	void Model::setRootNode(ModelNode * node) {
-		if (rootNode) delete rootNode;
-		rootNode = node;
-	}
-
-	void Model::addNode(ModelNode* parent, ModelNode* child) {
-		if (!parent || !child) return;
-		child->parent = parent;
-		parent->children.push_back(child);
-
-		// Update bone data if present
-		if (child->meshData) {
-			updateBoneData(child->meshData);
-		}
-	}
-
-	bool Model::validate() const {
-		if (!rootNode) return false;
-		if (modelMaterials.empty()) return false;
-		// Add other validation as needed
-		return true;
 	}
 
 	vector<Material*> Model::getMaterials() {

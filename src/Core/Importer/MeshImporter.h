@@ -78,7 +78,6 @@ namespace CGEngine {
 		unsigned int getFormatOptions(string format);
 		string getFormat(string path);
 		void importAnimations(const aiScene* scene, map<string, BoneData> modelBones, map<string, Animation*>& modelAnimations);
-		void mapAnimation(Model* targetModel, Animation* animation);
         Assimp::Importer modelImporter;
 		const aiScene* currentScene = nullptr;
     };

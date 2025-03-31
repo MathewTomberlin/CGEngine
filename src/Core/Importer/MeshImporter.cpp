@@ -254,11 +254,6 @@ namespace CGEngine {
         return Color(c->r * 255.f, c->g * 255.f, c->b * 255.f, c->a * 255.f);
     }
 
-	void MeshImporter::mapAnimation(Model* targetModel, Animation* animation) {
-		targetModel->mapAnimationNodes(animation);
-		targetModel->addAnimation(animation);
-	}
-
 	Animation* MeshImporter::createAnimation(const aiScene* scene, map<string,BoneData> bones, const string& animationName) {
 		if (!scene) {
 			cout << "Error: Cannot create animation without valid mesh data\n";
