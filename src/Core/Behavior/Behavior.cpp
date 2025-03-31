@@ -7,6 +7,7 @@ namespace CGEngine {
 		if (owner != nullptr) {
 			behaviorId = owner->addBehavior(this);
 		}
+		scripts.initialize();
 	};
 
 	id_t Behavior::addScript(string domain, Script* script) {

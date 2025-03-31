@@ -75,6 +75,7 @@ namespace CGEngine {
 
     void Body::setName(string name) {
         bodyParams.name = name;
+        scripts.initialize();
     }
 
     Transformable* Body::get() const {
