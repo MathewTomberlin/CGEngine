@@ -2,12 +2,8 @@
 #include "Logging.h"
 
 namespace CGEngine {
-	LogLevel Logging::logLevel;
-
-	Logging::Logging(LogLevel level): logFilename("cgengine_log") {
+	Logging::Logging(LogLevel level): logFilename("cgengine_log"), logLevel(level) {
 		findUniqueFilepath();
-
-		logLevel = level;
 	}
 
 	Logging::~Logging() {
@@ -104,5 +100,10 @@ namespace CGEngine {
 		case LogLevel::LogDebug2:
 			return "DEBUG2";
 		}
+		return "INVALID";
+	}
+
+	void Logging::setLogLevel(LogLevel level) {
+		logLevel = level;
 	}
 }
