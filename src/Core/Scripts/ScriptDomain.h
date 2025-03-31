@@ -75,6 +75,6 @@ namespace CGEngine {
         map<size_t, Script*> scripts;
         UniqueIntegerStack<size_t> domainIds = UniqueIntegerStack<size_t>(1000U);
         void deleteScript(Script* script, optional<id_t> scriptId = nullopt);
-        void log(string msg);
+        void logger(string msg);
     };
 }

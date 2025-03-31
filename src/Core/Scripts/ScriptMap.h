@@ -30,6 +30,6 @@ namespace CGEngine {
 		ScriptDomain* getDomain(string domainName);
 		void deleteDomains();
 		void deleteDomain(ScriptDomain* domain);
-		void log(string msg);
+		void logger(string msg);
 	};
 }

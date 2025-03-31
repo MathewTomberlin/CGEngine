@@ -290,7 +290,7 @@ namespace CGEngine {
         screen->setWindowParameters(windowParameters);
         window = screen->createWindow();
         if(!window->setActive(true)) {
-            logging(LogLevel::LogError, "World", "Failed to set window as active OpenGL context");
+            log(LogLevel::LogError, "World", "Failed to set window as active OpenGL context");
         }
         renderer.setWindow(window);
         renderer.initGlew();
