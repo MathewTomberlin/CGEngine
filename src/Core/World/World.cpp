@@ -5,7 +5,6 @@
 namespace CGEngine {
     World::World() : root(bodies.get(create())) {
         init();
-        log(this, LogLevel::LogWarn, "Warning! Warning! {} Things are wrong!", 3);
     }
 
     void World::initializeConsole() {
