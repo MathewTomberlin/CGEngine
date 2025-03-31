@@ -143,4 +143,7 @@ namespace CGEngine {
         any data;
         ParamType type;
     };
+
+    enum LogLevel { LogError, LogWarn, LogInfo, LogDebug, LogDebug1, LogDebug2 };
+    const string logLevels[6] = { "ERROR", "WARN", "INFO", "DEBUG", "DEBUG1", "DEBUG2" };
 }
