@@ -42,6 +42,8 @@ namespace CGEngine {
 		void import(string importPath);
 		Model* getModel() const { return model; }
 		void setModel(Model* m) { model = m; }
+		Body* getBody() const { return body; }
+		void setBody(Body* body) { this->body = body; }
 		// Add new method to get combined transform
 		glm::mat4 getModelMatrix() const {
 			glm::mat4 modelPos = glm::translate(glm::vec3(transformation.position.x, transformation.position.y, transformation.position.z));
@@ -55,6 +57,7 @@ namespace CGEngine {
 	private:
 		string importPath;
 		Model* model = nullptr;
+		Body* body = nullptr;
 		MeshData* meshData;
 		Transformation3D transformation;
 		RenderParameters renderParameters;

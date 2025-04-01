@@ -16,6 +16,10 @@ namespace CGEngine {
     }
 
     Body::Body(Transformable* d, Transformation handle, Body* p, Vector2f uv) : Body() {
+        Mesh* meshEntity = dynamic_cast<Mesh*>(d);
+        if (meshEntity) {
+            meshEntity->setBody(this);
+        }
         //Cache the base transformable and cast it to a shape
         entity = d;
         //Create the bounds rect and set draw bounds to world's value
