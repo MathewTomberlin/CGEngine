@@ -1,7 +1,9 @@
 #include "Animator.h"
+#include "../Engine/Engine.h"
 
 namespace CGEngine {
 	Animator::Animator(Animation* animation) {
+		init();
 		currentTime = 0.0;
 		currentAnimation = animation;
 		boneMatrices.reserve(100);
@@ -12,7 +14,7 @@ namespace CGEngine {
 
 	void Animator::updateAnimation(float dt) {
 		if (!currentAnimation) {
-			cout << "No animation to update\n";
+			log(this, LogError, "No animation assigned to animator");
 			return;
 		}
 

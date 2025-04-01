@@ -209,6 +209,9 @@ namespace CGEngine {
 
 		MeshImporter* importer;
 
-		GLenum Renderer::checkGLError(const char* operation, const char* file, int line);
+		GLenum checkGLError(const char* operation, const char* file, int line);
+		bool validateShader(Shader* shader);
+		bool validateProgram(Program* program);
+
 	};
 }

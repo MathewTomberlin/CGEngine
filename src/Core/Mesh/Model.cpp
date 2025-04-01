@@ -5,7 +5,6 @@
 namespace CGEngine {
 	Model::Model(string sourcePath) : sourcePath(sourcePath) {
 		init();
-		setLogLevel(LogInfo);
 		//Import the model using the MeshImporter
 		log(this, LogInfo, "Importing Model: {}", sourcePath);
 		ImportResult importResult = renderer.import(sourcePath);
@@ -27,7 +26,6 @@ namespace CGEngine {
 	// Method for manually creating the Model from MeshData
 	Model::Model(MeshData* meshData, string name) : sourcePath(name) {
 		init();
-		setLogLevel(LogInfo);
 		rootNode = createNode(name, meshData);
 		updateBoneData(meshData);
 	}

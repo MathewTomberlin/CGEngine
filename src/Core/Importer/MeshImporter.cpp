@@ -8,7 +8,6 @@
 namespace CGEngine {
 	MeshImporter::MeshImporter() {
 		init();
-		setLogLevel(LogInfo);
 	}
     ImportResult MeshImporter::importModel(string path, unsigned int options) {
 		string format = getFormat(path);

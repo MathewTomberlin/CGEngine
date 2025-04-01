@@ -3,11 +3,12 @@
 #include "SFML/Graphics.hpp"
 #include "../Types/V2.h"
 #include "../Types/Types.h"
+#include "../Engine/EngineSystem.h"
 using namespace std;
 using namespace sf;
 
 namespace CGEngine {
-    class Screen {
+    class Screen : public EngineSystem {
     public:
         Screen(Vector2i size, string title, bool fullscreen = false);
         void setWindowParameters(Vector2i size, optional<string> title = "");
