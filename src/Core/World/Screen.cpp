@@ -1,4 +1,5 @@
 #include "Screen.h"
+#include "../Engine/Engine.h"
 
 namespace CGEngine {
     Screen::Screen(Vector2i size, string title, bool fullscreen) : windowTitle(title) {
@@ -10,6 +11,7 @@ namespace CGEngine {
         if (title.has_value()) {
             windowTitle = title.value();
         }
+        log(this, LogInfo, "Screen Size:({},{}), and Title: '{}'", size.x, size.y, windowTitle);
     }
 
     void Screen::setWindowParameters(WindowParameters windowParams) {

@@ -39,7 +39,6 @@ namespace CGEngine {
 		Animator* getAnimator();
 		string getMeshName() const;
 		string getSourcePath() const;
-		void import(string importPath);
 		Model* getModel() const { return model; }
 		void setModel(Model* m) { model = m; }
 		Body* getBody() const { return body; }
@@ -63,7 +62,5 @@ namespace CGEngine {
 		RenderParameters renderParameters;
 		vector<Material*> materials;
 		Animator* animator = nullptr;
-
-		void deleteImportHeirarchy(MeshNodeData* node);
 	};
 }

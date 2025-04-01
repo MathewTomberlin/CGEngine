@@ -4,7 +4,7 @@
 #include "Animation.h"
 
 namespace CGEngine {
-	class Animator {
+	class Animator : public EngineSystem {
 	public:
 		Animator(Animation* animation);
 		void updateAnimation(float dt);

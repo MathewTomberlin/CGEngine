@@ -5,6 +5,8 @@
 #include <glm.hpp>
 #include <gtc/type_ptr.hpp>
 
+#define GL_CHECK(x) x; checkGLError(#x, __FILE__, __LINE__)
+
 namespace CGEngine {
 	struct ShaderProgramPath {
 		ShaderProgramPath(string vShaderPath = "shaders/StdVertexShader.txt", string fShaderPath = "shaders/StdFragShader.txt") :vertexShaderPath(vShaderPath), fragmentShaderPath(fShaderPath) {};
@@ -12,7 +14,21 @@ namespace CGEngine {
 		string fragmentShaderPath = "shaders/StdFragShader.txt";
 	};
 
-	class Program {
+	struct UniformInfo {
+		std::string name;
+		GLenum type;
+		GLint size;
+		GLint location;
+	};
+
+	struct AttributeInfo {
+		std::string name;
+		GLenum type;
+		GLint size;
+		GLint location;
+	};
+
+	class Program : public EngineSystem {
 	public:
 		Program(const vector<Shader>& shaders);
 		Program(string vertexShader, string fragmentShader);
@@ -79,6 +95,9 @@ namespace CGEngine {
 		void setUniform(const GLchar* uniformName, const glm::mat4& m, GLboolean transpose = false) {
 			glUniformMatrix4fv(uniform(uniformName), 1, transpose, glm::value_ptr(m));
 		}
+		vector<UniformInfo> getActiveUniforms();
+		vector<AttributeInfo> getActiveAttributes();
+		bool isValid() const;
 		void use();
 		void stop();
 		GLint inUse();
@@ -87,5 +106,6 @@ namespace CGEngine {
 
 		Program(const Program&);
 		const Program& operator=(const Program&);
+		GLenum checkGLError(const char* operation, const char* file, int line);
 	};
 }
