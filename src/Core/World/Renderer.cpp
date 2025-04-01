@@ -28,6 +28,39 @@ namespace CGEngine {
 		return errorCode;
 	}
 
+	bool Renderer::validateShader(Shader* shader) {
+		if (!shader || !shader->isValid()) {
+			log(this, LogError, "Invalid shader");
+			return false;
+		}
+		return true;
+	}
+
+	bool Renderer::validateProgram(Program* program) {
+		if (!program || !program->isValid()) {
+			log(this, LogError, "Invalid shader program");
+			return false;
+		}
+
+		GLuint programId = program->getObjectId();
+		GLint status;
+		GL_CHECK(glValidateProgram(programId));
+		GL_CHECK(glGetProgramiv(programId, GL_VALIDATE_STATUS, &status));
+
+		if (status == GL_FALSE) {
+			GLint infoLength;
+			GL_CHECK(glGetProgramiv(programId, GL_INFO_LOG_LENGTH, &infoLength));
+
+			std::vector<char> infoLog(infoLength + 1);
+			GL_CHECK(glGetProgramInfoLog(programId, infoLength, NULL, infoLog.data()));
+
+			log(this, LogError, "Program validation failed: {}", infoLog.data());
+			return false;
+		}
+
+		return true;
+	}
+
 	void Renderer::initializeOpenGL() {
 		if (!setGLWindowState(true)) return;
 
