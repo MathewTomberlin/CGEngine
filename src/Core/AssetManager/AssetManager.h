@@ -400,6 +400,13 @@ namespace CGEngine {
 			logMessage(LogInfo, string("Resource '").append(resourceContainers[resourceTypeId].first).append("' Count: ").append(to_string(resourceContainers[resourceTypeId].second.resources.size())));
 			return resourceId;
 		}
+
+		//Get the default id for T type
+		template<typename T>
+		optional<id_t> getDefaultId() {
+			type_index typeId = type_index(typeid(T));
+			return resourceDefaultIds[typeId];
+		}
 		string defaultTextureName = "default_texture";
 		string defaultProgramName = "default_program";
 		string defaultMaterialName = "default_material";
@@ -440,13 +447,6 @@ namespace CGEngine {
 			type_index typeId = type_index(typeid(T));
 			resourceDefaultIds[typeId] = defaultId;
 			return defaultId;
-		}
-
-		//Get the default id for T type
-		template<typename T>
-		optional<id_t> getDefaultId() {
-			type_index typeId = type_index(typeid(T));
-			return resourceDefaultIds[typeId];
 		}
 	};
 }
