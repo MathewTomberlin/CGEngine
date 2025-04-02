@@ -15,7 +15,7 @@ namespace CGEngine {
 		bool textureCoordinatesEnabled = true;
 	};
 
-	class Mesh : public Transformable{
+	class Mesh : public IResource, public Transformable{
 	public:
 		Mesh(MeshData* model, Transformation3D transformation = Transformation3D(), vector<Material*> materials = { new Material(SurfaceParameters()) }, RenderParameters renderParams = RenderParameters(), string importPath = "");
 		Mesh(string importPath, Transformation3D transformation = Transformation3D(), vector<Material*> materials = { new Material(SurfaceParameters()) }, RenderParameters renderParams = RenderParameters()) : Mesh(new MeshData(), transformation, materials, renderParams, importPath) {};
@@ -52,6 +52,9 @@ namespace CGEngine {
 			glm::mat4 modelRotation = modelRotZ * modelRotY * modelRotX;
 			glm::mat4 modelScale = glm::scale(glm::vec3(transformation.scale.x, transformation.scale.y, transformation.scale.z));
 			return modelPos * modelRotation * modelScale;
+		}
+		bool isValid() const override {
+			return meshData != nullptr && !meshData->vertices.empty();
 		}
 	private:
 		string importPath;

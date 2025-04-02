@@ -6,19 +6,18 @@
 namespace CGEngine {
 	Shader::Shader(const string& shaderCode, GLenum shaderType) : objectId(0), refCount(NULL) {
 		init();
-
 		// Get shader type name for logging
 		switch (shaderType) {
-			case GL_VERTEX_SHADER: shaderTypeName = "vertex"; break;
-			case GL_FRAGMENT_SHADER: shaderTypeName = "fragment"; break;
-			case GL_GEOMETRY_SHADER: shaderTypeName = "geometry"; break;
-			case GL_COMPUTE_SHADER: shaderTypeName = "compute"; break;
-			case GL_TESS_CONTROL_SHADER: shaderTypeName = "tessellation control"; break;
-			case GL_TESS_EVALUATION_SHADER: shaderTypeName = "tessellation evaluation"; break;
-			default: shaderTypeName = "unknown"; break;
+		case GL_VERTEX_SHADER: shaderTypeName = "vertex"; break;
+		case GL_FRAGMENT_SHADER: shaderTypeName = "fragment"; break;
+		case GL_GEOMETRY_SHADER: shaderTypeName = "geometry"; break;
+		case GL_COMPUTE_SHADER: shaderTypeName = "compute"; break;
+		case GL_TESS_CONTROL_SHADER: shaderTypeName = "tessellation control"; break;
+		case GL_TESS_EVALUATION_SHADER: shaderTypeName = "tessellation evaluation"; break;
+		default: shaderTypeName = "unknown"; break;
 		}
 
-		objectId = glCreateShader(shaderType);
+		objectId = GL_CHECK(glCreateShader(shaderType));
 		if (objectId == 0) {
 			log(this, LogError, "Failed to create {} shader", shaderTypeName);
 			return;
@@ -41,7 +40,8 @@ namespace CGEngine {
 
 			GL_CHECK(glDeleteShader(objectId));
 			objectId = 0;
-		} else {
+		}
+		else {
 			log(this, LogInfo, "{} shader compiled successfully (ID: {})", shaderTypeName, objectId);
 		}
 

@@ -86,7 +86,7 @@ namespace CGEngine {
 			if (!meshData) return;
 
 			vector<Material*> material = mesh->getMaterials();
-			Material* renderMaterial = world->getMaterial(fallbackMaterialId);
+			Material* renderMaterial = assets.get<Material>(fallbackMaterialId); //TODO: Ensure Renderer.fallbackMaterial is using AssetManager
 			if (material.size() > 0 && material[0] && material[0]->getProgram()) {
 				renderMaterial = material[0];
 			}
@@ -151,7 +151,7 @@ namespace CGEngine {
 	}
 
 	Material* Renderer::getFallbackMaterial() {
-		return world->getMaterial(fallbackMaterialId);
+		return assets.get<Material>(fallbackMaterialId);
 	}
 
 	void Renderer::updateModelData(Mesh* mesh) {
@@ -161,7 +161,7 @@ namespace CGEngine {
 			if (!meshData) return;
 
 			vector<Material*> material = mesh->getMaterials();
-			Material* renderMaterial = world->getMaterial(fallbackMaterialId);
+			Material* renderMaterial = assets.get<Material>(fallbackMaterialId); //TODO: Ensure Renderer.fallbackMaterial is using AssetManager
 			if (material.size() > 0 && material[0] && material[0]->getProgram()) {
 				renderMaterial = material[0];
 			}
@@ -294,7 +294,7 @@ namespace CGEngine {
 				// Ensure at least one material (fallback)
 				if (modelMaterials.empty()) {
 					log(this, LogWarn, "No model materials in renderer. Using fallback.");
-					modelMaterials.push_back(world->getMaterial(fallbackMaterialId));
+					modelMaterials.push_back(assets.get<Material>(fallbackMaterialId)); //TODO: Ensure Renderer.fallbackMaterial is using AssetManager
 				}
 				Material* renderMaterial = modelMaterials.at(0);
 
@@ -378,6 +378,8 @@ namespace CGEngine {
 		for (auto iterator = material->materialParameters.begin(); iterator != material->materialParameters.end(); ++iterator) {
 			string paramName = (*iterator).first;
 			optional<ParamData> paramData = material->getParameter(paramName);
+
+			//Data buffers
 			bool boolData = false;
 			int intData = 0;
 			float floatData = 0.0f;
@@ -390,40 +392,68 @@ namespace CGEngine {
 				ParamType paramType = paramData.value().type;
 				switch (paramType) {
 				case ParamType::Bool:
-					boolData = any_cast<bool>(paramVal);
-					program->setUniform(getUniformArrayPropertyName("materials", materialId, paramName).c_str(), boolData);
-					break;
-				case ParamType::Int:
-					intData = any_cast<int>(paramVal);
-					program->setUniform(getUniformArrayPropertyName("materials", materialId, paramName).c_str(), intData);
-					break;
-				case ParamType::Float:
-					floatData = any_cast<float>(paramVal);
-					program->setUniform(getUniformArrayPropertyName("materials", materialId, paramName).c_str(), floatData);
-					break;
-				case ParamType::V2:
-					v2Data = any_cast<Vector2f>(paramVal);
-					program->setUniform(getUniformArrayPropertyName("materials", materialId, paramName).c_str(), toGlm(v2Data));
-					break;
-				case ParamType::V3:
-					v3Data = any_cast<Vector3f>(paramVal);
-					program->setUniform(getUniformArrayPropertyName("materials", materialId, paramName).c_str(), toGlm(v3Data));
-					break;
-				case ParamType::RGBA:
-					colorData = any_cast<Color>(paramVal);
-					program->setUniform(getUniformArrayPropertyName("materials", materialId, paramName).c_str(), toGlm(colorData));
-					break;
-				case ParamType::Texture2D:
-					textureData = any_cast<Texture*>(paramVal);
-					if (textureData != nullptr) {
-						GL_CHECK(glActiveTexture(GL_TEXTURE0 + boundTextures));
-						GL_CHECK(glBindTexture(GL_TEXTURE_2D, textureData->getNativeHandle()));
-						program->setUniform(getUniformArrayPropertyName("materials", materialId, paramName).c_str(), boundTextures);
-						boundTextures++;
+					try {
+						boolData = any_cast<bool>(paramVal);
+						program->setUniform(getUniformArrayPropertyName("materials", materialId, paramName).c_str(), boolData);
+					} catch (bad_any_cast ex) {
+						log(this, LogWarn, "Failed to set bool shader uniform {} from material {}: {}", paramName, materialId, ex.what());
 					}
 					break;
-				//case ParamType::String:
-					//	break;
+				case ParamType::Int:
+					try {
+						intData = any_cast<int>(paramVal);
+						program->setUniform(getUniformArrayPropertyName("materials", materialId, paramName).c_str(), intData);
+					} catch (bad_any_cast ex) {
+						log(this, LogWarn, "Failed to set int shader uniform {} from material {}: {}", paramName, materialId, ex.what());
+					}
+					break;
+				case ParamType::Float:
+					try {
+						floatData = any_cast<float>(paramVal);
+						program->setUniform(getUniformArrayPropertyName("materials", materialId, paramName).c_str(), floatData);
+					} catch (bad_any_cast ex) {
+						log(this, LogWarn, "Failed to set float shader uniform {} from material {}: {}", paramName, materialId, ex.what());
+					}
+					break;
+				case ParamType::V2:
+					try {
+						v2Data = any_cast<Vector2f>(paramVal);
+						program->setUniform(getUniformArrayPropertyName("materials", materialId, paramName).c_str(), toGlm(v2Data));
+					} catch (bad_any_cast ex) {
+						log(this, LogWarn, "Failed to set v2 shader uniform {} from material {}: {}", paramName, materialId, ex.what());
+					}
+					break;
+				case ParamType::V3:
+					try {
+						v3Data = any_cast<Vector3f>(paramVal);
+						program->setUniform(getUniformArrayPropertyName("materials", materialId, paramName).c_str(), toGlm(v3Data));
+					} catch (bad_any_cast ex) {
+						log(this, LogWarn, "Failed to set v3 shader uniform {} from material {}: {}", paramName, materialId, ex.what());
+					}
+					break;
+				case ParamType::RGBA:
+					try {
+						colorData = any_cast<Color>(paramVal);
+						program->setUniform(getUniformArrayPropertyName("materials", materialId, paramName).c_str(), toGlm(colorData));
+					} catch (bad_any_cast ex) {
+						log(this, LogWarn, "Failed to set color shader uniform {} from material {}: {}", paramName, materialId, ex.what());
+					}
+					break;
+				case ParamType::Texture2D:
+					try{
+						textureData = any_cast<Texture*>(paramVal);
+						if (textureData != nullptr) {
+							GL_CHECK(glActiveTexture(GL_TEXTURE0 + boundTextures));
+							GL_CHECK(glBindTexture(GL_TEXTURE_2D, textureData->getNativeHandle()));
+							program->setUniform(getUniformArrayPropertyName("materials", materialId, paramName).c_str(), boundTextures);
+							boundTextures++;
+						}
+					} catch (bad_any_cast ex) {
+						log(this, LogWarn, "Failed to set texture2D shader uniform {} from material {}: {}", paramName, materialId, ex.what());
+					}
+					break;
+					//case ParamType::String:
+						//	break;
 				default:
 					break;
 				}

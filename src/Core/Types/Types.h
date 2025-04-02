@@ -146,4 +146,44 @@ namespace CGEngine {
 
     enum LogLevel { LogError, LogWarn, LogInfo, LogDebug, LogDebug1, LogDebug2 };
     const string logLevels[6] = { "ERROR", "WARN", "INFO", "DEBUG", "DEBUG1", "DEBUG2" };
+
+    class IResource {
+    public:
+        virtual ~IResource() = default;
+        virtual bool isValid() const = 0;
+    };
+
+    class TextureResource : public IResource {
+    private:
+        sf::Texture* texture;
+    public:
+        TextureResource() = default;
+
+        bool isValid() const override {
+            return true;
+        }
+
+        sf::Texture* getTexture() { return texture; }
+        const sf::Texture* getTexture() const { return texture; }
+        void setTexture(sf::Texture* texture) {
+            this->texture = texture;
+        }
+    };
+
+    class FontResource : public IResource {
+    private:
+        sf::Font* font;
+    public:
+        FontResource() = default;
+
+        bool isValid() const override {
+            return font->getInfo().family != "";
+        }
+
+        sf::Font* getFont() { return font; }
+        const sf::Font* getFont() const { return font; }
+        void setFont(sf::Font* font) {
+            this->font = font;
+        }
+    };
 }
