@@ -9,9 +9,9 @@
 
 namespace CGEngine {
 	struct ShaderProgramPath {
-		ShaderProgramPath(string vShaderPath = "shaders/StdVertexShader.txt", string fShaderPath = "shaders/StdFragShader.txt") :vertexShaderPath(vShaderPath), fragmentShaderPath(fShaderPath) {};
-		string vertexShaderPath = "shaders/StdVertexShader.txt";
-		string fragmentShaderPath = "shaders/StdFragShader.txt";
+		ShaderProgramPath(string vShaderPath = "shaders/StdVertexShader.vert", string fShaderPath = "shaders/StdFragShader.frag") :vertexShaderPath(vShaderPath), fragmentShaderPath(fShaderPath) {};
+		string vertexShaderPath = "shaders/StdVertexShader.vert";
+		string fragmentShaderPath = "shaders/StdFragShader.frag";
 	};
 
 	struct UniformInfo {
@@ -28,11 +28,11 @@ namespace CGEngine {
 		GLint location;
 	};
 
-	class Program : public EngineSystem {
+	class Program : public IResource, public EngineSystem {
 	public:
-		Program(const vector<Shader>& shaders);
-		Program(string vertexShader, string fragmentShader);
-		Program(ShaderProgramPath shaderPath);
+		Program(const vector<Shader>& shaders, string programName ="");
+		Program(string vertexShader, string fragmentShader, string programName = "");
+		Program(ShaderProgramPath shaderPath, string programName = "");
 		~Program();
 		GLuint getObjectId() const;
 		GLint attrib(const GLchar* attribName) const;
@@ -103,6 +103,8 @@ namespace CGEngine {
 		GLint inUse();
 	private:
 		GLuint objectId;
+		string programName;
+		ShaderProgramPath programPath;
 
 		Program(const Program&);
 		const Program& operator=(const Program&);

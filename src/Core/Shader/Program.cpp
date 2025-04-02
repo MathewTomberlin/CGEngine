@@ -3,8 +3,11 @@
 #include <stdexcept>
 
 namespace CGEngine {
-	Program::Program(const vector<Shader>& shaders) : objectId(0) {
+	//Given vert and frag shaders (possibly loaded from file) and a program name
+	//programPath is empty if shaders are not loaded
+	Program::Program(const vector<Shader>& shaders, string programName) : objectId(0) {
 		init();
+		this->programName = programName;
 		if (shaders.size() <= 0) {
 			log(this, LogError, "No shaders provided to program");
 		}
@@ -49,15 +52,29 @@ namespace CGEngine {
 		}
 	}
 
-	Program::Program(string vertexShaderPath, string fragmentShaderPath) : 
-		Program({ Shader::readFile(vertexShaderPath, GL_VERTEX_SHADER),Shader::readFile(fragmentShaderPath, GL_FRAGMENT_SHADER) }) { }
+	//Given vert and frag shader paths
+	Program::Program(string vertexShaderPath, string fragmentShaderPath, string programName) : 
+		Program({ 
+			Shader::readFile(vertexShaderPath, GL_VERTEX_SHADER),
+			Shader::readFile(fragmentShaderPath, GL_FRAGMENT_SHADER) 
+		}, programName)
+	{
+		programPath = ShaderProgramPath(vertexShaderPath, fragmentShaderPath);
+	}
 
-	Program::Program(ShaderProgramPath shaderPath) : Program(shaderPath.vertexShaderPath, shaderPath.fragmentShaderPath) {};
+	//Given a ShaderProgramPath (vert & frag paths)
+	Program::Program(ShaderProgramPath shaderPath, string programName) :
+		Program(
+			shaderPath.vertexShaderPath, 
+			shaderPath.fragmentShaderPath,
+			programName
+		) 
+	{};
 
 	Program::~Program() {
 		if (objectId != 0) {
 			log(this, LogDebug, "Deleting shader program (ID: {})", objectId);
-			GL_CHECK(glDeleteProgram(objectId));
+			glDeleteProgram(objectId);
 		}
 	}
 

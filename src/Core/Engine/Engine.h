@@ -7,6 +7,7 @@
 #include "../ResourceCaches/FontCache.h"
 #include "../ResourceCaches/TextureCache.h"
 #include "SFML/Graphics.hpp"
+#include "../AssetManager/AssetManager.h"
 
 namespace CGEngine {
 	extern WindowParameters windowParameters;
@@ -24,6 +25,7 @@ namespace CGEngine {
 	extern function<Camera*()> getCamera;
 	extern vector<Behavior*> sceneList;
 	extern Logging log;
+	extern AssetManager assets;
 
 	extern const string onUpdateEvent;
 	extern const string onStartEvent;

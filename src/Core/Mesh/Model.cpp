@@ -93,7 +93,7 @@ namespace CGEngine {
 		// Ensure we have at least one material
 		if (materialsToUse.empty() && modelMaterials.empty()) {
 			log(this, LogWarn, "No materials to use during instantiation. Using fallback material.");
-			modelMaterials.push_back(renderer.getFallbackMaterial()->materialId);
+			modelMaterials.push_back(renderer.getFallbackMaterial()->materialId); //TODO: Ensure renderer fallback uses AssetManager
 		}
 
 		// Create null Mesh Body root
@@ -156,7 +156,7 @@ namespace CGEngine {
 		vector<Material*> nodeMaterials;
 		if (node->meshData) {
 			id_t materialId = materials.empty() ? node->materialIndex : materials[0];
-			Material* nodeMaterial = world->getMaterial(materialId);
+			Material* nodeMaterial = assets.get<Material>(materialId);
 			if (nodeMaterial) {
 				nodeMaterials.push_back(nodeMaterial);
 				log(this, LogDebug, "      - Created Mesh for '{}' with Material ID: {}", node->nodeName, materialId);
@@ -223,7 +223,7 @@ namespace CGEngine {
 		vector<Material*> materials;
 		for (id_t materialId : modelMaterials) {
 			if (materialId > -1) {
-				Material* material = world->getMaterial(materialId);
+				Material* material = assets.get<Material>(materialId);
 				if (material) {
 					materials.push_back(material);
 				}
