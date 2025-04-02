@@ -298,10 +298,14 @@ namespace CGEngine {
         renderer.initGlew();
         input->setWindow(window);
 
+        assets.initialize();
+
         //Create and assign the fallback material
-        renderer.fallbackMaterialId = createMaterial(SurfaceParameters(SurfaceDomain("checkered_tile.png", Color(255, 0, 255, 1),1,{5,5}),SurfaceDomain(0)));
+        //renderer.fallbackMaterialId = createMaterial(SurfaceParameters(SurfaceDomain("checkered_tile.png", Color(255, 0, 255, 1),1,{5,5}),SurfaceDomain(0)));
+        renderer.fallbackMaterialId = 0;
         //Set the fallback material to repeated
-        getMaterial(renderer.fallbackMaterialId)->getParameterPtr<Texture>("diffuseTexture")->setRepeated(true);
+        //Material* defaultMaterial = assets.get<Material>("default_material");
+        //defaultMaterial->getParameterPtr<Texture>("diffuseTexture")->setRepeated(true);
 
         running = true;
     }

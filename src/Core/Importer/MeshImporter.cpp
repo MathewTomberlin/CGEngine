@@ -75,7 +75,7 @@ namespace CGEngine {
 		if (scene->HasMaterials()) {
 			for (size_t modelMaterialId = 0; modelMaterialId < scene->mNumMaterials; ++modelMaterialId) {
 				aiMaterial* modelMaterial = scene->mMaterials[modelMaterialId];
-
+				
 				//Extract material textures from imported materials
 				vector<string> diffuseMaps = loadMaterialTextures(modelMaterial, aiTextureType_DIFFUSE);
 				string diffuseTexture = diffuseMaps.size() > 0 ? diffuseMaps[0] : "";
@@ -101,9 +101,13 @@ namespace CGEngine {
 				SurfaceDomain specularDomain = SurfaceDomain(specularTexture, fromAiColor4(specularColor), (*roughness) * (*shininess));
 				SurfaceDomain opacityDomain = SurfaceDomain(opacityTexture, Color::White, *opacity);
 				SurfaceParameters surfaceParams = SurfaceParameters(diffuseDomain, specularDomain);
-				id_t worldMaterialId = world->createMaterial(surfaceParams);
-				modelMaterials.push_back(worldMaterialId);
-				log(this, LogInfo, "  - {} Material: {}  (World ID: {}) Color: ({},{},{})", modelMaterialId, modelMaterial->GetName().C_Str(), worldMaterialId, diffuseColor->r, diffuseColor->g, diffuseColor->b);
+				optional<id_t> worldMaterialId = assets.create<Material>(modelMaterial->GetName().C_Str(), surfaceParams, assets.get<Program>(assets.defaultProgramName));
+				if (!worldMaterialId.has_value()) {
+					log(this, LogWarn, "  - {} Material: '{}' Failed to create world material!", modelMaterialId, modelMaterial->GetName().C_Str());
+				} else {
+					modelMaterials.push_back(worldMaterialId.value());
+					log(this, LogInfo, "  - {} Material: '{}'  (World ID: {}) Color: ({},{},{})", modelMaterialId, modelMaterial->GetName().C_Str(), worldMaterialId.value(), diffuseColor->r, diffuseColor->g, diffuseColor->b);
+				}
 
 				// Cleanup
 				delete diffuseColor;

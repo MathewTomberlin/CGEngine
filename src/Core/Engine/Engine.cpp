@@ -10,6 +10,7 @@ namespace CGEngine {
     Logging log;
     GlobalTime time;
     Renderer renderer;
+    AssetManager assets;
     TextureCache* textures = new TextureCache();
     FontCache* fonts = new FontCache();
     Font* defaultFont = fonts->getDefaultFont();

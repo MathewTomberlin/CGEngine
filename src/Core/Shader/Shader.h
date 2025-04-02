@@ -19,7 +19,7 @@ namespace CGEngine {
     };
     const string shaderTypes[6] = { "vertex","fragment","geometry","compute","tessellation control", "tesselation evaluation" };
 
-	class Shader : public EngineSystem {
+	class Shader : public EngineSystem, public IResource {
     public:
 		static Shader readFile(const string& filePath, GLenum shaderType);
         Shader(const string& shaderCode, GLenum shaderType);
