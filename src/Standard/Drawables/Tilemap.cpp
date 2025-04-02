@@ -2,7 +2,7 @@
 #include "../../Core/Engine/Engine.h"
 
 namespace CGEngine {
-	Tilemap::Tilemap(const filesystem::path& tilesetPath, Vector2u tileDimensions, Vector2u mapSizeByTiles, vector<int> data, string dataPath): tileSize(tileDimensions), dimensions(mapSizeByTiles), tileset(textures->get(tilesetPath)) {
+	Tilemap::Tilemap(const filesystem::path& tilesetPath, Vector2u tileDimensions, Vector2u mapSizeByTiles, vector<int> data, string dataPath): tileSize(tileDimensions), dimensions(mapSizeByTiles), tileset(assets.get<TextureResource>(tilesetPath.string())->getTexture()) {
 		//Set the tilemap data path and try to load the map data
 		mapDataPath = dataPath;
 		if (dataPath != "") {

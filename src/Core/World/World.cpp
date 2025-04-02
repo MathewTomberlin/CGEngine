@@ -9,6 +9,7 @@ namespace CGEngine {
 
     void World::initializeConsole() {
         if (!consoleInitialized && consoleFeatureEnabled) {
+            Font* defaultFont = assets.get<FontResource>(assets.getDefaultId<FontResource>().value())->getFont();
             consoleTextBox = new Body(new Text(*defaultFont), Transformation());
             consoleTextBox->moveToAlignment(Alignment::Bottom_Left);
             consoleTextBox->move({ 20,-35 });
@@ -534,27 +535,4 @@ namespace CGEngine {
     Angle World::getInverseGlobalRotation(Transform transform) const {
         return degrees(-getGlobalRotation(transform).asDegrees());
     }
-
-    id_t World::addMaterial(Material* material) {
-        return materials.add(material);
-    }
-
-    Material* World::getMaterial(id_t materialId) {
-        return materials.get(materialId);
-    }
-
-    id_t World::createMaterial(SurfaceParameters params, ShaderProgramPath shaderPath) {
-        Material* newMaterial = new Material(params, shaderPath);
-        return newMaterial->materialId;
-    }
-
-    id_t World::createMaterial(ShaderProgramPath shaderPath) {
-        Material* newMaterial = new Material(shaderPath);
-        return newMaterial->materialId;
-    }
-    id_t World::createMaterial(map<string, ParamData> materialParams, ShaderProgramPath shaderPath) {
-        Material* newMaterial = new Material(materialParams, shaderPath);
-        return newMaterial->materialId;
-    }
-
 }

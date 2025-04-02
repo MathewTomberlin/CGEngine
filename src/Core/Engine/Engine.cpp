@@ -11,9 +11,6 @@ namespace CGEngine {
     GlobalTime time;
     Renderer renderer;
     AssetManager assets;
-    TextureCache* textures = new TextureCache();
-    FontCache* fonts = new FontCache();
-    Font* defaultFont = fonts->getDefaultFont();
     InputMap* input = new InputMap();
     
     //Window Size & Window Title
