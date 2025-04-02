@@ -4,8 +4,6 @@
 #include "../World/World.h"
 #include "../Input/InputMap.h"
 #include "../Time/GlobalTime.h"
-#include "../ResourceCaches/FontCache.h"
-#include "../ResourceCaches/TextureCache.h"
 #include "SFML/Graphics.hpp"
 #include "../AssetManager/AssetManager.h"
 
@@ -17,9 +15,6 @@ namespace CGEngine {
 	extern GlobalTime time;
 	extern InputMap* input;
 	extern Screen* screen;
-	extern TextureCache* textures;
-	extern FontCache* fonts;
-	extern Font* defaultFont;
 	extern function<void()> updateWorld;
 	extern function<void()> beginWorld;
 	extern function<Camera*()> getCamera;

@@ -7,13 +7,9 @@ namespace CGEngine {
 		if (renderer.setGLWindowState(true)) {
 			shaderProgram = new Program(shaderPath);
 		}
-
-		materialId = world->addMaterial(this);
 	}
 
-	Material::Material() {
-
-	}
+	Material::Material() { }
 
 	Material::Material(SurfaceParameters params) :Material() {
 		optional<id_t> diffuseTextureId = assets.load<TextureResource>(params.diffuseTexturePath);
