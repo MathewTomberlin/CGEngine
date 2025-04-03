@@ -23,7 +23,7 @@ namespace CGEngine {
 			case GL_INVALID_FRAMEBUFFER_OPERATION: error = "INVALID_FRAMEBUFFER_OPERATION"; break;
 			default:                               error = "Unknown Error"; break;
 			}
-			log(this, LogError, "OpenGL Error: {} [{}] ({}) at {}:{}", error, errorCode, operation, file, line);
+			log(this, LogError, "OpenGL Error: {} [{}] ({}) at {}:{}", error, (int)errorCode, operation, file, line);
 		}
 		return errorCode;
 	}

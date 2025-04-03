@@ -1,6 +1,7 @@
 #pragma once
 #include "SFML/Graphics.hpp"
 #include <any>
+#include <optional>
 using namespace sf;
 using namespace std;
 
@@ -151,6 +152,10 @@ namespace CGEngine {
     public:
         virtual ~IResource() = default;
         virtual bool isValid() const = 0;
+		optional<id_t> getId() const { return id; }
+		void setId(optional<id_t> id) { this->id = id; }
+    private:
+		optional<id_t> id = nullopt;
     };
 
     class TextureResource : public IResource {

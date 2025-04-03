@@ -3,7 +3,12 @@
 #include "../../Standard/Models/CommonModels.h"
 
 namespace CGEngine {
-    World::World() : root(bodies.get(create())) {
+    World::World() : root(assets.get<Body>(assets.create<Body>("Root", true).value())) {
+		if (root == nullptr) {
+			log(this, LogError, "Failed to create root body");
+        } else {
+			log(this, LogInfo, "Created root body with ID: {}", root->getId());
+        }
         init();
     }
 
@@ -393,58 +398,12 @@ namespace CGEngine {
         root->addKeyReleaseScript([](ScArgs args) { world->endWorld(); }, Keyboard::Scan::Escape);
     }
 
-    id_t World::create(Transformable* entity, Transformation transform, Body* parent, Script* startScript) {
-        Body* newBody = (entity==nullptr) ? new Body("Root") : new Body(entity, transform, parent);
-        id_t bodyId = receiveBodyId(newBody);
-        if (startScript != nullptr) {
-            newBody->addStartScript(startScript);
-        }
-        return bodyId;
-    }
-
-    id_t World::create(Transformable* entity) {
-        return create(entity, Transformation());
-    }
-
-    id_t World::create(Transformable* entity, Body* parent, Script* startScript, Transformation transform) {
-        return create(entity, transform, parent, startScript);
-    }
-    
-    id_t World::create(Transformable* entity, Script* startScript, Transformation transform, Body* parent) {
-        return create(entity, transform, parent, startScript);
-    }
-
     void World::addDeletedBody(Body* body) {
         deleted.insert(body);
     }
 
     bool World::isDeleted(Body* body) {
         return deleted.find(body) != deleted.end();
-    }
-
-    /// <summary>
-    /// Delete a body and set the provided pointer null
-    /// </summary>
-    /// <param name="body"></param>
-    /// <param name="childTermination"></param>
-    void World::deleteBody(Body* body, ChildrenTermination childTermination) {
-        body->deleteBody(childTermination);
-        addDeletedBody(body);
-        refundBodyId(body);
-    }
-
-    id_t World::receiveBodyId(Body* body) {
-        id_t id = bodies.add(body);
-        body->bodyId = id;
-        return id;
-    }
-
-    void World::refundBodyId(Body* body) {
-        optional<id_t> bodyId = body->getId();
-        if (bodyId.has_value()) {
-            bodies.remove(bodyId.value());
-            body->bodyId = nullopt;
-        }
     }
 
     void World::setBoundsRenderingEnabled(bool enabled) {

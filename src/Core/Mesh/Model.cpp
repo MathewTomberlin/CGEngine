@@ -79,7 +79,7 @@ namespace CGEngine {
 		}
 	}
 	
-	id_t Model::instantiate(Transformation3D rootTransform, vector<id_t> overrideMaterials) {
+	optional<id_t> Model::instantiate(Transformation3D rootTransform, vector<id_t> overrideMaterials) {
 		log(this, LogInfo, "Instantiating Model: '{}'", sourcePath);
 
 		if (!rootNode) {
@@ -97,24 +97,28 @@ namespace CGEngine {
 		}
 
 		// Create null Mesh Body root
-		id_t rootId = world->create(new Mesh(nullptr));
-		Body* rootBody = world->bodies.get(rootId);
-		if (!rootBody) {
+		optional<id_t> rootId = assets.create<Body>(sourcePath.append(".Root"), new Mesh(nullptr));
+		if (rootId.has_value()) {
+			Body* rootBody = assets.get<Body>(rootId.value());
+
+			//Apply root body as the first Model body
+			bodyCount = 1;
+			log(this, LogDebug, "  {}) ROOT (ID: {})", bodyCount, rootId);
+
+			// Apply root transform to the root mesh
+			Mesh* rootMesh = rootBody->get<Mesh*>();
+			rootMesh->setPosition(rootTransform.position);
+			rootMesh->setRotation(rootTransform.rotation);
+			rootMesh->setScale(rootTransform.scale);
+
+			//Recursively build Model hierarchy
+			createChildBodies(rootNode, rootBody, materialsToUse);
+			log(this, LogInfo, "Successfully Instantiated Model '{}' with Body Count: {}", sourcePath, bodyCount);
+			return rootId;
+		} else {
 			log(this, LogError, " Failed to create root body");
-			return 0;
+			return nullopt;
 		}
-		bodyCount = 1;
-		log(this, LogDebug, "  {}) ROOT (ID: {})", bodyCount, rootId);
-
-		// Apply root transform to the root body
-		rootBody->get<Mesh*>()->setPosition(rootTransform.position);
-		rootBody->get<Mesh*>()->setRotation(rootTransform.rotation);
-		rootBody->get<Mesh*>()->setScale(rootTransform.scale);
-
-		// Create node hierarchy recursively
-		createChildBodies(rootNode, rootBody, materialsToUse);
-		log(this, LogInfo, "Successfully Instantiated Model '{}' with Body Count: {}", sourcePath, bodyCount);
-		return rootId;
 	}
 
 	ModelNode* Model::createNode(string name, MeshData* meshData, id_t materialIndex) {
@@ -168,23 +172,23 @@ namespace CGEngine {
 		mesh->setModel(this);
 
 		// Create and attach child body
-		id_t bodyId = world->create(mesh);
-		bodyCount++;
-		log(this, LogDebug, "  {}) {} (ID: {}) {}", bodyCount, node->nodeName, bodyId, node->meshData && !node->meshData->vertices.empty() ? " <Has Mesh>" : "");
-		Body* body = world->bodies.get(bodyId);
-		if (body) {
-			// Attach to parent
+		optional<id_t> bodyId = assets.create<Body>(sourcePath.append(node->nodeName), mesh);
+		if (bodyId.has_value()) {
+			Body* body = assets.get<Body>(bodyId.value());
+			bodyCount++;
+			log(this, LogDebug, "  {}) {} (ID: {}) {}", bodyCount, node->nodeName, bodyId, node->meshData && !node->meshData->vertices.empty() ? " <Has Mesh>" : "");
+			//Attach child body to parent
 			if (parentBody) {
 				parentBody->attachBody(body);
 			}
 
-			// Set animator if this is a skeletal mesh
+			//Set animator if this is a skeletal mesh
 			if (isSkeletal() && modelAnimator && node->meshData &&
 				!node->meshData->vertices.empty()) {
 				mesh->setAnimator(modelAnimator);
 			}
 
-			// Process children with this new body as parent
+			//Process children with this new body as parent
 			for (ModelNode* childNode : node->children) {
 				createChildBodies(childNode, body, materials);
 			}
