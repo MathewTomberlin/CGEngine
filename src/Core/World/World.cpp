@@ -3,10 +3,18 @@
 #include "../../Standard/Models/CommonModels.h"
 
 namespace CGEngine {
-    World::World() : root(bodies.get(create())) { }
+    World::World() : root(assets.get<Body>(assets.create<Body>("Root", true).value())) {
+		if (root == nullptr) {
+			log(this, LogError, "Failed to create root body");
+        } else {
+			log(this, LogInfo, "Created root body with ID: {}", root->getId());
+        }
+        init();
+    }
 
     void World::initializeConsole() {
         if (!consoleInitialized && consoleFeatureEnabled) {
+            Font* defaultFont = assets.get<FontResource>(assets.getDefaultId<FontResource>().value())->getFont();
             consoleTextBox = new Body(new Text(*defaultFont), Transformation());
             consoleTextBox->moveToAlignment(Alignment::Bottom_Left);
             consoleTextBox->move({ 20,-35 });
@@ -145,28 +153,6 @@ namespace CGEngine {
         return root;
     }
 
-    Body* World::findBodyByName(string name) {
-        //Starting with root
-        queue<Body*> bodies = queue<Body*>({ root });
-        //For each body in the stack
-        while (!bodies.empty()) {
-            //If the top body has the name, return it
-            Body* b = bodies.front();
-            if (b != nullptr && b->getName() == name) {
-                return b;
-            } else if (b != nullptr) {
-                //Otherwise add its children to the stack
-                for (Body* child : b->children) {
-                    bodies.push(child);
-                }
-            }
-            //And pop it
-            bodies.pop();
-        }
-        //Body with the name wasn't found
-        return nullptr;
-    }
-
     vector<Body*> World::zRayCast(Vector2f worldPos, optional<int> startZ, int distance, bool backward, bool linecast) {
         int zMax = renderer.zMax();
         int zMin = renderer.zMin();
@@ -290,16 +276,16 @@ namespace CGEngine {
         screen->setWindowParameters(windowParameters);
         window = screen->createWindow();
         if(!window->setActive(true)) {
-            logging(LogLevel::LogError, "World", "Failed to set window as active OpenGL context");
+            log(LogLevel::LogError, "World", "Failed to set window as active OpenGL context");
         }
         renderer.setWindow(window);
         renderer.initGlew();
         input->setWindow(window);
 
-        //Create and assign the fallback material
-        renderer.fallbackMaterialId = createMaterial(SurfaceParameters(SurfaceDomain("checkered_tile.png", Color(255, 0, 255, 1),1,{5,5}),SurfaceDomain(0)));
-        //Set the fallback material to repeated
-        getMaterial(renderer.fallbackMaterialId)->getParameterPtr<Texture>("diffuseTexture")->setRepeated(true);
+        assets.initialize();
+
+        //Assign the fallback material
+        renderer.fallbackMaterialId = 0;
 
         running = true;
     }
@@ -386,58 +372,12 @@ namespace CGEngine {
         root->addKeyReleaseScript([](ScArgs args) { world->endWorld(); }, Keyboard::Scan::Escape);
     }
 
-    id_t World::create(Transformable* entity, Transformation transform, Body* parent, Script* startScript) {
-        Body* newBody = (entity==nullptr) ? new Body("Root") : new Body(entity, transform, parent);
-        id_t bodyId = receiveBodyId(newBody);
-        if (startScript != nullptr) {
-            newBody->addStartScript(startScript);
-        }
-        return bodyId;
-    }
-
-    id_t World::create(Transformable* entity) {
-        return create(entity, Transformation());
-    }
-
-    id_t World::create(Transformable* entity, Body* parent, Script* startScript, Transformation transform) {
-        return create(entity, transform, parent, startScript);
-    }
-    
-    id_t World::create(Transformable* entity, Script* startScript, Transformation transform, Body* parent) {
-        return create(entity, transform, parent, startScript);
-    }
-
     void World::addDeletedBody(Body* body) {
         deleted.insert(body);
     }
 
     bool World::isDeleted(Body* body) {
         return deleted.find(body) != deleted.end();
-    }
-
-    /// <summary>
-    /// Delete a body and set the provided pointer null
-    /// </summary>
-    /// <param name="body"></param>
-    /// <param name="childTermination"></param>
-    void World::deleteBody(Body* body, ChildrenTermination childTermination) {
-        body->deleteBody(childTermination);
-        addDeletedBody(body);
-        refundBodyId(body);
-    }
-
-    id_t World::receiveBodyId(Body* body) {
-        id_t id = bodies.add(body);
-        body->bodyId = id;
-        return id;
-    }
-
-    void World::refundBodyId(Body* body) {
-        optional<id_t> bodyId = body->getId();
-        if (bodyId.has_value()) {
-            bodies.remove(bodyId.value());
-            body->bodyId = nullopt;
-        }
     }
 
     void World::setBoundsRenderingEnabled(bool enabled) {
@@ -528,27 +468,4 @@ namespace CGEngine {
     Angle World::getInverseGlobalRotation(Transform transform) const {
         return degrees(-getGlobalRotation(transform).asDegrees());
     }
-
-    id_t World::addMaterial(Material* material) {
-        return materials.add(material);
-    }
-
-    Material* World::getMaterial(id_t materialId) {
-        return materials.get(materialId);
-    }
-
-    id_t World::createMaterial(SurfaceParameters params, ShaderProgramPath shaderPath) {
-        Material* newMaterial = new Material(params, shaderPath);
-        return newMaterial->materialId;
-    }
-
-    id_t World::createMaterial(ShaderProgramPath shaderPath) {
-        Material* newMaterial = new Material(shaderPath);
-        return newMaterial->materialId;
-    }
-    id_t World::createMaterial(map<string, ParamData> materialParams, ShaderProgramPath shaderPath) {
-        Material* newMaterial = new Material(materialParams, shaderPath);
-        return newMaterial->materialId;
-    }
-
 }

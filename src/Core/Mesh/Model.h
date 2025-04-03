@@ -32,52 +32,32 @@ namespace CGEngine {
 
 	class Animation;
 
-	class Model {
+	class Model : public EngineSystem, public IResource {
 	public:
 		//Constructor to create a Model from an imported file via Assimp
 		Model(string sourcePath);
 		//Constructor to create a Model manually, likely from MeshData
 		Model(MeshData* meshData, string name = "");
 		~Model();
-
+		//Converts imported MeshNodeData to ModelNode
+		ModelNode* meshNodeToModelNode(MeshNodeData* meshNode, ModelNode* modelNode);
 		//Create a hierarchy of Bodies from imported MeshNodeData and return the root Body id
-		id_t instantiate(Transformation3D rootTransform = Transformation3D(), vector<id_t> overrideMaterials = {});
-
-		//Get Model info
+		optional<id_t> instantiate(Transformation3D rootTransform = Transformation3D(), vector<id_t> overrideMaterials = {});
+		//Return whether the model has bones
 		bool isSkeletal() const;
+		//Return the model import path
 		string getModelPath() const { return sourcePath; };
-		size_t getBoneCount() const { return modelBones.size(); };
+		//Return the model animator
 		Animator* getAnimator() const { return modelAnimator; }
-
-		// Material management
-		id_t getMaterialCount() const { return modelMaterials.size(); }
-		Material* getMaterial(id_t index);
-		vector<Material*> getMaterials();
-		void setMaterial(id_t index, id_t material);
-		id_t addMaterial(id_t material);
-		void setNodeMaterial(ModelNode* node, id_t materialIndex);
-
-		// Animation
-		Animation* getAnimation(string animationName);
-		vector<string> getAnimationNames() const;
+		//Create and return an animator if the model is skeletal
 		Animator* createAnimator() const;
-		void addAnimation(Animation* animation);
-
 		// Add methods for manually building hierarchy
 		ModelNode* createNode(string name, MeshData* meshData = nullptr, id_t materialIndex = 0);
-		void attachNode(ModelNode* parent, ModelNode* child);
-
-		// Helper method to convert NodeData to ModelNode for animations
-		ModelNode* convertAnimationNode(const NodeData& animNode, ModelNode* parent = nullptr);
-		void mapAnimationNodes(const Animation* anim);
-		bool setupAnimator();
-
+		//Return the model root node
 		ModelNode* getRootNode() const { return rootNode; }
-		void addNode(ModelNode* parent, ModelNode* child);
-		void setRootNode(ModelNode* node);
-		bool validate() const;
-
-		ModelNode* meshNodeToModelNode(MeshNodeData* meshNode, ModelNode* modelNode);
+		//Return a vector of the model materials
+		vector<Material*> getMaterials();
+		bool isValid() const; //TODO: Properly implement isValid in Model
 	private:
 		friend class MeshImporter;
 
@@ -93,11 +73,12 @@ namespace CGEngine {
 
 		// Helper to update modelBones when adding mesh data
 		void updateBoneData(const MeshData* meshData);
-		// Helper to deep copy a node hierarchy
-		ModelNode* copyNodeHierarchy(const ModelNode* source, ModelNode* newParent = nullptr);
-		void mapAnimationNodeRecursive(const NodeData& animNode, ModelNode* modelNode);
+		//During instantiation, recursively create Bodies for each child node
 		void createChildBodies(ModelNode* node, Body* parentBody, const vector<id_t>& materials);
+		//Delete unused pointers
 		void cleanupModelNodes(ModelNode* node);
+		//Setup the animator
+		bool setupAnimator();
 
 		// Prevent copying
 		Model(const Model&) = delete;

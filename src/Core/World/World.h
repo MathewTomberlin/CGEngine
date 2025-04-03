@@ -5,6 +5,7 @@
 #include "../Types/UniqueDomain.h"
 #include "../Mesh/Mesh.h"
 #include "../Light/Light.h"
+#include "../Engine/EngineSystem.h"
 #include <sstream>
 #include <memory>
 #include <queue>
@@ -12,10 +13,9 @@ using namespace sf;
 using namespace std;
 
 namespace CGEngine {
-    class World {
+    class World : public EngineSystem {
     public:
         World();
-        
         //World state
         void runWorld();
         void startWorld();
@@ -51,21 +51,12 @@ namespace CGEngine {
         optional<DataMap> getSceneProcess(string sceneName);
 
         //Bodies
-        UniqueDomain<id_t, Body*> bodies = UniqueDomain<id_t, Body*>(1000);
         vector<Body*> uninitialized;
-        void deleteBody(Body* body, ChildrenTermination childTermination = ChildrenTermination::Orphan);
         bool isDeleted(Body* bodyId);
         void addUninitialized(Body* body);
-        id_t receiveBodyId(Body* body);
-        void refundBodyId(Body* body);
-        id_t create(Transformable* entity = nullptr);
-        id_t create(Transformable* entity, Transformation, Body* parent = nullptr, Script* startScript = nullptr);
-        id_t create(Transformable* entity, Body* parent, Script* startScript = nullptr, Transformation transform = Transformation());
-        id_t create(Transformable* entity, Script* startScript, Transformation transform = Transformation(), Body* parent = nullptr);
 
         //Root Body
         Body* getRoot();
-        Body* findBodyByName(string name);
         void addWorldScript(string domain, Script* script);
 
         /// <summary>
@@ -103,12 +94,6 @@ namespace CGEngine {
         /// </summary>
         /// <returns>The Body's rotation in world space as a normalized direction vector</returns>
         V2f getRight(Transform transform) const;
-
-        id_t createMaterial(ShaderProgramPath shaderPath = ShaderProgramPath());
-        id_t createMaterial(SurfaceParameters params, ShaderProgramPath shaderPath = ShaderProgramPath());
-        id_t createMaterial(map<string,ParamData> materialParams, ShaderProgramPath shaderPath = ShaderProgramPath());
-        id_t addMaterial(Material* material);
-        Material* getMaterial(id_t materialId);
     private:
         RenderWindow* window = nullptr;
 
@@ -134,12 +119,6 @@ namespace CGEngine {
 
         //Scenes
         map<string, Behavior*> scenes;
-
-        //Lights
-        UniqueDomain<id_t, Light*> lights = UniqueDomain<id_t, Light*>(8);
-
-        //Materials
-        UniqueDomain<id_t, Material*> materials = UniqueDomain<id_t, Material*>(1000);
 
         //Console
         bool consoleFeatureEnabled = true;

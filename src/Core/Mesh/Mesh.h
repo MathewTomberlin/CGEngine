@@ -15,10 +15,10 @@ namespace CGEngine {
 		bool textureCoordinatesEnabled = true;
 	};
 
-	class Mesh : public Transformable{
+	class Mesh : public IResource, public Transformable{
 	public:
 		Mesh(MeshData* model, Transformation3D transformation = Transformation3D(), vector<Material*> materials = { new Material(SurfaceParameters()) }, RenderParameters renderParams = RenderParameters(), string importPath = "");
-		Mesh(string importPath, Transformation3D transformation = Transformation3D(), vector<Material*> materials = { new Material(SurfaceParameters()) }, RenderParameters renderParams = RenderParameters()) : Mesh(new MeshData(), transformation, materials, renderParams, importPath) {};
+		Mesh(string importPath, Transformation3D transformation = Transformation3D(), vector<Material*> materials = { new Material(SurfaceParameters()) }, RenderParameters renderParams = RenderParameters());
 
 		void render(Transform parentTransform);
 		void bindTexture(Texture* texture);
@@ -39,9 +39,10 @@ namespace CGEngine {
 		Animator* getAnimator();
 		string getMeshName() const;
 		string getSourcePath() const;
-		void import(string importPath);
 		Model* getModel() const { return model; }
 		void setModel(Model* m) { model = m; }
+		Body* getBody() const { return body; }
+		void setBody(Body* body) { this->body = body; }
 		// Add new method to get combined transform
 		glm::mat4 getModelMatrix() const {
 			glm::mat4 modelPos = glm::translate(glm::vec3(transformation.position.x, transformation.position.y, transformation.position.z));
@@ -52,15 +53,17 @@ namespace CGEngine {
 			glm::mat4 modelScale = glm::scale(glm::vec3(transformation.scale.x, transformation.scale.y, transformation.scale.z));
 			return modelPos * modelRotation * modelScale;
 		}
+		bool isValid() const override {
+			return meshData != nullptr && !meshData->vertices.empty();
+		}
 	private:
 		string importPath;
 		Model* model = nullptr;
+		Body* body = nullptr;
 		MeshData* meshData;
 		Transformation3D transformation;
 		RenderParameters renderParameters;
 		vector<Material*> materials;
 		Animator* animator = nullptr;
-
-		void deleteImportHeirarchy(MeshNodeData* node);
 	};
 }

@@ -9,13 +9,14 @@ namespace CGEngine {
 
     Body::Body(bool isWorldRoot) : ScriptController(this) {
         bodyParams.name = "Root";
-        if (!isWorldRoot) {
-            world->receiveBodyId(this);
-        }
         scripts.initialize();
     }
 
     Body::Body(Transformable* d, Transformation handle, Body* p, Vector2f uv) : Body() {
+        Mesh* meshEntity = dynamic_cast<Mesh*>(d);
+        if (meshEntity) {
+            meshEntity->setBody(this);
+        }
         //Cache the base transformable and cast it to a shape
         entity = d;
         //Create the bounds rect and set draw bounds to world's value
@@ -40,6 +41,7 @@ namespace CGEngine {
     Body::Body(Transformable* d, Body* p, Transformation handle) : Body(d, handle, p, { 0,0 }) {};
 
     Body::~Body() {
+        valid = false;
         //Remove input actions from their domains (without deleting domains) and delete the input actions
         input->eraseActuatorIds(listenerIds);
         //Delete any timers
@@ -52,21 +54,22 @@ namespace CGEngine {
             delete entity;
             entity = nullptr;
         }
-        //Remove reference to this Body in its parent, then clear parent
-        drop();
-        parent = nullptr;
-        //Detach any children, then clear the children
-        detachChildren();
-        children.clear();
         //Delete bounds rect and clear it
         if (boundsRect != nullptr) {
             delete boundsRect;
             boundsRect = nullptr;
         }
+        //Detach any children, then clear the children
+        detachChildren(false);
+        children.clear();
+        //Remove reference to this Body in its parent, then clear parent
+        drop();
+        parent = nullptr;
     }
 
-    optional<size_t> Body::getId() {
-        return bodyId;
+    //TODO: Properly implement isValid for this and other iResource classes
+    bool Body::isValid() const {
+        return valid;
     }
 
     string Body::getName() {
@@ -75,6 +78,7 @@ namespace CGEngine {
 
     void Body::setName(string name) {
         bodyParams.name = name;
+        scripts.initialize();
     }
 
     Transformable* Body::get() const {
@@ -377,21 +381,19 @@ namespace CGEngine {
 
     void Body::detachBody(Body* child, const bool keepWorldTranform) {
         //Do nothing on null input
-        if (child != nullptr) {
-            //Find the body to detach
-            auto iterator = find_if(children.begin(), children.end(), [child](Body* c) { return c == child; });
-            //If found among childen
-            if (iterator != children.end()) {
-                if (keepWorldTranform) {
-                    child->move(getPosition());
-                    child->rotate(getRotation());
-                    child->scale(getScale());
-                }
-                //Remove child from children
-                children.erase(iterator);
-                //parent the child to the world root
-                world->getRoot()->attachBody(child);
+        if (child == nullptr) return;
+        //Find the body to detach
+        auto iterator = find_if(children.begin(), children.end(), [child](Body* c) { return c == child; });
+        //If found among childen
+        if (iterator != children.end()) {
+            if (keepWorldTranform) {
+                child->move(getPosition());
+                child->rotate(getRotation());
+                child->scale(getScale());
             }
+            //Remove child from children
+            children.erase(iterator);
+            world->getRoot()->attachBody(child);
         }
     }
 
@@ -403,10 +405,16 @@ namespace CGEngine {
                 child->rotate(getRotation());
                 child->scale(getScale());
             }
+            // Check if world and world's root are still valid before attaching
+            //if (world && world->getRoot() && world->getRoot()->isValid()) {
+            //    world->getRoot()->attachBody(child);
+            //} else {
+            //    // If world root is not available, just set parent to nullptr
+            //    // This prevents trying to attach to an invalid body
+            //    child->parent = nullptr;
+            //}
             //Remove child from children
             children.erase(children.begin() + i);
-            //parent the child to the world root
-            world->getRoot()->attachBody(child);
         }
     }
 

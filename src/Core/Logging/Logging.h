@@ -1,24 +1,100 @@
 #pragma once
 
 #include <iostream>
+#include <queue>
+#include <fstream>
+#include <filesystem>
+#include <cmath>
+#include <sstream>
+#include <iomanip>
+#include "../Types/Types.h"
+#include "../Engine/EngineSystem.h"
 using std::string;
 using std::cout;
+using std::queue;
+using std::ofstream;
+using std::ios;
+using std::stringstream;
+namespace fs = std::filesystem;
 
 namespace CGEngine {
-	enum LogLevel { LogError, LogWarn, LogInfo, LogDebug, LogDebug1, LogDebug2 };
-	const string logLevels[6] = { "ERROR", "WARN", "INFO", "DEBUG", "DEBUG1", "DEBUG2" };
+	struct LogEvent {
+		LogEvent(sec_t timestamp, string msg) :timestamp(timestamp), msg(msg) {};
+		sec_t timestamp;
+		string msg;
+	};
 
 	class Logging {
 	public:
 		Logging(LogLevel level = LogLevel::LogWarn);
-		void operator()(LogLevel level, string caller, string msg, bool newLine = true);
+		~Logging();
+		string logFilename;
+
+		//Numeric to string
+		template <typename T>
+		enable_if_t<is_arithmetic_v<T>, string> argToString(T value) {
+			stringstream sstream;
+			sstream << fixed << setprecision(precision) << value;
+			return sstream.str();
+		}
+		//String to string
+		template <typename T>
+		enable_if_t<is_same_v<T, string>, string> argToString(const T& value) {
+			return value;
+		}
+		//String literal to string
+		template <size_t N>
+		string argToString(const char(&value)[N]) {
+			return string(value);
+		}
+		//Char* to string
+		string argToString(const char* value) {
+			return string(value);
+		}
+		//Char to string
+		string argToString(const char value) {
+			return string(1,value);
+		}
+
+		string argToString(const optional<id_t> value) {
+			if (value.has_value()) {
+				return to_string(value.value());
+			} else {
+				return string();
+			}
+		}
+
+		template <typename... Args>
+		void operator()(LogLevel level, string caller, string msg, Args... args) {
+			log(level, caller, msg, { argToString(forward<Args>(args))... });
+		}
+
+		template <typename... Args>
+		void operator()(EngineSystem* system, LogLevel level, string msg, Args... args) {
+			if(!system) return;
+			if (level <= system->getLogLevel()) {
+				log(level, system->getSystemName(), msg, { argToString(forward<Args>(args))...} );
+			}
+		}
+
 		bool willLog(LogLevel level);
 		void setActive(bool enabled);
 		bool getActive();
+		queue<LogEvent> logQueue;
+		void queueMsg(LogEvent msgEvt);
+		void writeQueue();
+		void setPrecision(size_t precision);
+		void setLogLevel(LogLevel level);
 	protected:
-		static LogLevel logLevel;
+		LogLevel logLevel;
 	private:
+		string filepath;
+		string logDirectory = "logs/";
 		bool active = true;
-		void log(LogLevel level, string caller, string msg, bool newLine = true);
+		size_t precision = 2;
+		void log(LogLevel level, string caller, string msg, vector<string> args, size_t precision = 2);
+		string format(string msg, vector<string> args);
+		void findUniqueFilepath();
+		string levelToString(LogLevel level);
 	};
 }

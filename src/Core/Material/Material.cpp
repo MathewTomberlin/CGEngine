@@ -7,27 +7,99 @@ namespace CGEngine {
 		if (renderer.setGLWindowState(true)) {
 			shaderProgram = new Program(shaderPath);
 		}
-
-		materialId = world->addMaterial(this);
 	}
-	Material::Material(SurfaceParameters params, ShaderProgramPath shaderPath) : Material(shaderPath) {
+
+	Material::Material() { }
+
+	Material::Material(SurfaceParameters params) :Material() {
+		optional<id_t> diffuseTextureId = assets.load<TextureResource>(params.diffuseTexturePath);
+		optional<id_t> specularTextureId = assets.load<TextureResource>(params.specularTexturePath);
+		optional<id_t> opacityTextureId = assets.load<TextureResource>(params.opacityTexturePath);
+		if (diffuseTextureId.has_value()) {
+			TextureResource* diffuseTexture = assets.get<TextureResource>(diffuseTextureId.value());
+			if (diffuseTexture) {
+				setParameter("diffuseTexture", diffuseTexture->getTexture(), ParamType::Texture2D);
+			}
+		}
+		if (specularTextureId.has_value()) {
+			TextureResource* specularTexture = assets.get<TextureResource>(specularTextureId.value());
+			if (specularTexture) {
+				setParameter("specularTexture", specularTexture->getTexture(), ParamType::Texture2D);
+			}
+		}
+		if (opacityTextureId.has_value()) {
+			TextureResource* opacityTexture = assets.get<TextureResource>(opacityTextureId.value());
+			if (opacityTexture) {
+				setParameter("opacityTexture", opacityTexture->getTexture(), ParamType::Texture2D);
+			}
+		}
+
 		setParameter("diffuseTexturePath", params.diffuseTexturePath, ParamType::String);
 		setParameter("diffuseTextureUVScale", params.diffuseTextureUVScale, ParamType::V2);
 		setParameter("diffuseTextureScrollSpeed", params.diffuseTextureScrollSpeed, ParamType::V2);
 		setParameter("diffuseTextureOffset", params.diffuseTextureOffset, ParamType::V2);
-		setParameter("diffuseTexture", textures->load(params.diffuseTexturePath), ParamType::Texture2D);
 		setParameter("diffuseColor", params.diffuseColor, ParamType::RGBA);
 		setParameter("specularTexturePath", params.specularTexturePath, ParamType::String);
 		setParameter("specularTextureUVScale", params.specularTextureUVScale, ParamType::V2);
 		setParameter("specularTextureScrollSpeed", params.specularTextureScrollSpeed, ParamType::V2);
 		setParameter("specularTextureOffset", params.specularTextureOffset, ParamType::V2);
-		setParameter("specularTexture", textures->load(params.specularTexturePath), ParamType::Texture2D);
 		setParameter("specularColor", params.specularColor, ParamType::RGBA);
 		setParameter("smoothnessFactor", params.smoothnessFactor, ParamType::Float);
 		setParameter("opacityTextureUVScale", params.opacityTextureUVScale, ParamType::V2);
 		setParameter("opacityTextureScrollSpeed", params.opacityTextureScrollSpeed, ParamType::V2);
 		setParameter("opacityTextureOffset", params.opacityTextureOffset, ParamType::V2);
-		setParameter("opacityTexture", textures->load(params.opacityTexturePath), ParamType::Texture2D);
+		setParameter("opacity", params.opacity, ParamType::Float);
+		setParameter("opacityMasked", params.opacityMasked, ParamType::Bool);
+		setParameter("alphaCutoff", params.alphaCutoff, ParamType::Float);
+		setParameter("gamma", params.gamma, ParamType::Float);
+		setParameter("useGammaCorrection", params.useGammaCorrection, ParamType::Bool);
+		setParameter("useDiffuseTexture", params.useDiffuseTexture, ParamType::Bool);
+		setParameter("useSpecularTexture", params.useSpecularTexture, ParamType::Bool);
+		setParameter("useOpacityTexture", params.useOpacityTexture, ParamType::Bool);
+		setParameter("useLighting", params.useLighting, ParamType::Bool);
+	}
+
+	Material::Material(map<string, ParamData> materialParameters):Material() {
+		this->materialParameters = materialParameters;
+	}
+
+	Material::Material(SurfaceParameters params, ShaderProgramPath shaderPath) : Material(shaderPath) {
+		optional<id_t> diffuseTextureId = assets.load<TextureResource>(params.diffuseTexturePath);
+		optional<id_t> specularTextureId = assets.load<TextureResource>(params.specularTexturePath);
+		optional<id_t> opacityTextureId = assets.load<TextureResource>(params.opacityTexturePath);
+		if (diffuseTextureId.has_value()) {
+			TextureResource* diffuseTexture = assets.get<TextureResource>(diffuseTextureId.value());
+			if (diffuseTexture) {
+				setParameter("diffuseTexture", diffuseTexture->getTexture(), ParamType::Texture2D);
+			}
+		}
+		if (specularTextureId.has_value()) {
+			TextureResource* specularTexture = assets.get<TextureResource>(specularTextureId.value());
+			if (specularTexture) {
+				setParameter("specularTexture", specularTexture->getTexture(), ParamType::Texture2D);
+			}
+		}
+		if (opacityTextureId.has_value()) {
+			TextureResource* opacityTexture = assets.get<TextureResource>(opacityTextureId.value());
+			if (opacityTexture) {
+				setParameter("opacityTexture", opacityTexture->getTexture(), ParamType::Texture2D);
+			}
+		}
+
+		setParameter("diffuseTexturePath", params.diffuseTexturePath, ParamType::String);
+		setParameter("diffuseTextureUVScale", params.diffuseTextureUVScale, ParamType::V2);
+		setParameter("diffuseTextureScrollSpeed", params.diffuseTextureScrollSpeed, ParamType::V2);
+		setParameter("diffuseTextureOffset", params.diffuseTextureOffset, ParamType::V2);
+		setParameter("diffuseColor", params.diffuseColor, ParamType::RGBA);
+		setParameter("specularTexturePath", params.specularTexturePath, ParamType::String);
+		setParameter("specularTextureUVScale", params.specularTextureUVScale, ParamType::V2);
+		setParameter("specularTextureScrollSpeed", params.specularTextureScrollSpeed, ParamType::V2);
+		setParameter("specularTextureOffset", params.specularTextureOffset, ParamType::V2);
+		setParameter("specularColor", params.specularColor, ParamType::RGBA);
+		setParameter("smoothnessFactor", params.smoothnessFactor, ParamType::Float);
+		setParameter("opacityTextureUVScale", params.opacityTextureUVScale, ParamType::V2);
+		setParameter("opacityTextureScrollSpeed", params.opacityTextureScrollSpeed, ParamType::V2);
+		setParameter("opacityTextureOffset", params.opacityTextureOffset, ParamType::V2);
 		setParameter("opacity", params.opacity, ParamType::Float);
 		setParameter("opacityMasked", params.opacityMasked, ParamType::Bool);
 		setParameter("alphaCutoff", params.alphaCutoff, ParamType::Float);
@@ -40,6 +112,56 @@ namespace CGEngine {
 	};
 
 	Material::Material(map<string, ParamData> materialParameters, ShaderProgramPath shaderPath) : Material(shaderPath) {
+		this->materialParameters = materialParameters;
+	}
+
+	Material::Material(SurfaceParameters params, Program* program) : shaderProgram(program) {
+		optional<id_t> diffuseTextureId = assets.load<TextureResource>(params.diffuseTexturePath);
+		optional<id_t> specularTextureId = assets.load<TextureResource>(params.specularTexturePath);
+		optional<id_t> opacityTextureId = assets.load<TextureResource>(params.opacityTexturePath);
+		if (diffuseTextureId.has_value()) {
+			TextureResource* diffuseTexture = assets.get<TextureResource>(diffuseTextureId.value());
+			if (diffuseTexture) {
+				setParameter("diffuseTexture", diffuseTexture->getTexture(), ParamType::Texture2D);
+			}
+		}
+		if (specularTextureId.has_value()) {
+			TextureResource* specularTexture = assets.get<TextureResource>(specularTextureId.value());
+			if (specularTexture) {
+				setParameter("specularTexture", specularTexture->getTexture(), ParamType::Texture2D);
+			}
+		}
+		if (opacityTextureId.has_value()) {
+			TextureResource* opacityTexture = assets.get<TextureResource>(opacityTextureId.value());
+			if (opacityTexture) {
+				setParameter("opacityTexture", opacityTexture->getTexture(), ParamType::Texture2D);
+			}
+		}
+		setParameter("diffuseTexturePath", params.diffuseTexturePath, ParamType::String);
+		setParameter("diffuseTextureUVScale", params.diffuseTextureUVScale, ParamType::V2);
+		setParameter("diffuseTextureScrollSpeed", params.diffuseTextureScrollSpeed, ParamType::V2);
+		setParameter("diffuseTextureOffset", params.diffuseTextureOffset, ParamType::V2);
+		setParameter("diffuseColor", params.diffuseColor, ParamType::RGBA);
+		setParameter("specularTexturePath", params.specularTexturePath, ParamType::String);
+		setParameter("specularTextureUVScale", params.specularTextureUVScale, ParamType::V2);
+		setParameter("specularTextureScrollSpeed", params.specularTextureScrollSpeed, ParamType::V2);
+		setParameter("specularTextureOffset", params.specularTextureOffset, ParamType::V2);
+		setParameter("specularColor", params.specularColor, ParamType::RGBA);
+		setParameter("smoothnessFactor", params.smoothnessFactor, ParamType::Float);
+		setParameter("opacityTextureUVScale", params.opacityTextureUVScale, ParamType::V2);
+		setParameter("opacityTextureScrollSpeed", params.opacityTextureScrollSpeed, ParamType::V2);
+		setParameter("opacityTextureOffset", params.opacityTextureOffset, ParamType::V2);
+		setParameter("opacity", params.opacity, ParamType::Float);
+		setParameter("opacityMasked", params.opacityMasked, ParamType::Bool);
+		setParameter("alphaCutoff", params.alphaCutoff, ParamType::Float);
+		setParameter("gamma", params.gamma, ParamType::Float);
+		setParameter("useGammaCorrection", params.useGammaCorrection, ParamType::Bool);
+		setParameter("useDiffuseTexture", params.useDiffuseTexture, ParamType::Bool);
+		setParameter("useSpecularTexture", params.useSpecularTexture, ParamType::Bool);
+		setParameter("useOpacityTexture", params.useOpacityTexture, ParamType::Bool);
+		setParameter("useLighting", params.useLighting, ParamType::Bool);
+	}
+	Material::Material(map<string, ParamData> materialParameters, Program* program) : shaderProgram(program) {
 		this->materialParameters = materialParameters;
 	}
 

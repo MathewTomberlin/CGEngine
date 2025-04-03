@@ -5,6 +5,7 @@
 #include "../Types/Types.h"
 #include "../Logging/Logging.h"
 #include "../Types/UniqueDomain.h"
+#include "../Engine/EngineSystem.h"
 using namespace std;
 
 namespace CGEngine {
@@ -13,8 +14,9 @@ namespace CGEngine {
 	class Body;
 	class Script;
 
-	class TimerMap {
+	class TimerMap : public EngineSystem {
 	public:
+		TimerMap();
 		/// <summary>
 		/// Set a timer on the indicated body for the duration, calling the onCompleteEvent when the duration expires and resetting
 		/// the timer up to loopCount timers when it is completed
@@ -47,23 +49,12 @@ namespace CGEngine {
 		/// Clear all timer entries (but doesn't delete them)
 		/// </summary>
 		void clear();
-		/// <summary>
-		/// The LogLevel of logs from this class
-		/// </summary>
-		LogLevel logLevel = LogLevel::LogInfo;
 	private:
 		/// <summary>
 		/// Delete the timer with the indicated id and erase it from the TimerMap
 		/// </summary>
 		/// <param name="timerId">The id of the timer to delete</param>
 		void deleteTimer(size_t timerId);
-		/// <summary>
-		/// Log the message with the Timer name and Id
-		/// </summary>
-		/// <param name="timerName">The timer display name</param>
-		/// <param name="timerId">The timer id</param>
-		/// <param name="msg">The log message</param>
-		void log(string timerName, size_t timerId, string msg);
 		/// <summary>
 		/// A unique id list of timers
 		/// </summary>

@@ -4,7 +4,7 @@
 #include "../Logging/Logging.h"
 
 namespace CGEngine {
-	class ScriptMap {
+	class ScriptMap : public EngineSystem{
 	public:
 		ScriptMap(Body* o);
 		size_t addScript(string domainName, Script* script);
@@ -19,9 +19,9 @@ namespace CGEngine {
 		void callDomainWithData(string domainName, Behavior* behavior = nullptr, DataMap input = DataMap(), bool logUpdate = false);
 		void callScriptWithData(string domainName, size_t scriptId, Behavior* behavior = nullptr, DataMap input = DataMap());
 		void deleteDomain(string domainName);
-		LogLevel logLevel = LogLevel::LogInfo;
 	private:
 		friend class Body;
+		friend class Behavior;
 		Body* owner = nullptr;
 		string ownerName = "";
 		map<string, ScriptDomain*> domains;
@@ -30,6 +30,5 @@ namespace CGEngine {
 		ScriptDomain* getDomain(string domainName);
 		void deleteDomains();
 		void deleteDomain(ScriptDomain* domain);
-		void log(string msg);
 	};
 }

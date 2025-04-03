@@ -1,35 +1,48 @@
+#include "../Engine/Engine.h"
 #include "Shader.h"
 #include <fstream>
 #include <sstream>
 #include <cassert>
 namespace CGEngine {
 	Shader::Shader(const string& shaderCode, GLenum shaderType) : objectId(0), refCount(NULL) {
-		objectId = glCreateShader(shaderType);
+		init();
+		// Get shader type name for logging
+		switch (shaderType) {
+		case GL_VERTEX_SHADER: shaderTypeName = "vertex"; break;
+		case GL_FRAGMENT_SHADER: shaderTypeName = "fragment"; break;
+		case GL_GEOMETRY_SHADER: shaderTypeName = "geometry"; break;
+		case GL_COMPUTE_SHADER: shaderTypeName = "compute"; break;
+		case GL_TESS_CONTROL_SHADER: shaderTypeName = "tessellation control"; break;
+		case GL_TESS_EVALUATION_SHADER: shaderTypeName = "tessellation evaluation"; break;
+		default: shaderTypeName = "unknown"; break;
+		}
+
+		objectId = GL_CHECK(glCreateShader(shaderType));
 		if (objectId == 0) {
-			cout << "glCreateShader failed" << "\n";
+			log(this, LogError, "Failed to create {} shader", shaderTypeName);
+			return;
 		}
 
 		const char* code = shaderCode.c_str();
-		glShaderSource(objectId, 1, (const GLchar**)&code, NULL);
+		GL_CHECK(glShaderSource(objectId, 1, (const GLchar**)&code, NULL));
 
 		//compile
-		glCompileShader(objectId);
+		GL_CHECK(glCompileShader(objectId));
 
 		GLint status;
-		glGetShaderiv(objectId, GL_COMPILE_STATUS, &status);
+		GL_CHECK(glGetShaderiv(objectId, GL_COMPILE_STATUS, &status));
 		if (status == GL_FALSE) {
-			string msg("Shader failed to compile:\n");
-
 			GLint infoLength;
-			glGetShaderiv(objectId, GL_INFO_LOG_LENGTH, &infoLength);
-			char* info = new char[infoLength + 1];
-			glGetShaderInfoLog(objectId, infoLength, NULL, info);
-			msg += info;
-			delete[] info;
+			GL_CHECK(glGetShaderiv(objectId, GL_INFO_LOG_LENGTH, &infoLength));
+			vector<char> infoLog(infoLength + 1);
+			GL_CHECK(glGetShaderInfoLog(objectId, infoLength, NULL, infoLog.data()));
+			log(this, LogError, "{} shader compilation failed: {}", shaderTypeName, infoLog.data());
 
-			glDeleteShader(objectId);
+			GL_CHECK(glDeleteShader(objectId));
 			objectId = 0;
-			cout << msg << "\n";
+		}
+		else {
+			log(this, LogInfo, "{} shader compiled successfully (ID: {})", shaderTypeName, (int)objectId);
 		}
 
 		refCount = new unsigned;
@@ -62,14 +75,20 @@ namespace CGEngine {
 		ifstream f;
 		f.open(filePath.c_str(), ios::in | ios::binary);
 		if (!f.is_open()) {
-			cout << "Failed to open shader file: " << filePath << "\n";
+			log(LogError, "Shader", "Failed to open shader file '{}'", filePath);
+			return Shader("", shaderType); // Return invalid shader
 		}
 
 		stringstream buffer;
 		buffer << f.rdbuf();
+		f.close();
 
 		Shader shader(buffer.str(), shaderType);
 		return shader;
+	}
+
+	bool Shader::isValid() const {
+		return objectId != 0;
 	}
 
 	void Shader::retain() {
@@ -81,10 +100,30 @@ namespace CGEngine {
 		assert(refCount && *refCount > 0);
 		*refCount -= 1;
 		if (*refCount == 0) {
-			glDeleteShader(objectId);
+			log(this, LogDebug, "Deleting shader (ID: {})", (unsigned int)objectId);
+			GL_CHECK(glDeleteShader(objectId));
 			objectId = 0;
 			delete refCount;
 			refCount = NULL;
 		}
+	}
+
+	GLenum Shader::checkGLError(const char* operation, const char* file, int line) {
+		GLenum errorCode;
+		while ((errorCode = glGetError()) != GL_NO_ERROR) {
+			std::string error;
+			switch (errorCode) {
+			case GL_INVALID_ENUM:                  error = "INVALID_ENUM"; break;
+			case GL_INVALID_VALUE:                 error = "INVALID_VALUE"; break;
+			case GL_INVALID_OPERATION:             error = "INVALID_OPERATION"; break;
+			case GL_STACK_OVERFLOW:                error = "STACK_OVERFLOW"; break;
+			case GL_STACK_UNDERFLOW:               error = "STACK_UNDERFLOW"; break;
+			case GL_OUT_OF_MEMORY:                 error = "OUT_OF_MEMORY"; break;
+			case GL_INVALID_FRAMEBUFFER_OPERATION: error = "INVALID_FRAMEBUFFER_OPERATION"; break;
+			default:                               error = "Unknown Error"; break;
+			}
+			log(this, LogError, "OpenGL Error: {} [{}] ({}) at {}:{}", error, (int)errorCode, operation, file, line);
+		}
+		return errorCode;
 	}
 }

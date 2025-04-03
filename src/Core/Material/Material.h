@@ -3,6 +3,7 @@
 #include <any>
 #include <optional>
 #include "SFML/Graphics.hpp"
+#include "../Shader/Program.h"
 using namespace sf;
 using namespace std;
 
@@ -77,11 +78,16 @@ namespace CGEngine {
 		bool useOpacityTexture = false;
 		bool useLighting = true;
 	};
-	class Material {
+	class Material : public IResource {
 	public:
-		Material(ShaderProgramPath shaderPath = ShaderProgramPath());
-		Material(SurfaceParameters params, ShaderProgramPath shaderPath = ShaderProgramPath());
-		Material(map<string, ParamData> materialParameters, ShaderProgramPath shaderPath = ShaderProgramPath());
+		Material();
+		Material(ShaderProgramPath shaderPath);
+		Material(SurfaceParameters params);
+		Material(map<string, ParamData> materialParameters);
+		Material(SurfaceParameters params, ShaderProgramPath shaderPath);
+		Material(map<string, ParamData> materialParameters, ShaderProgramPath shaderPath);
+		Material(SurfaceParameters params, Program* program);
+		Material(map<string, ParamData> materialParameters, Program* program);
 
 		template<typename T>
 		optional<T> getParameter(string paramName) {
@@ -108,6 +114,10 @@ namespace CGEngine {
 		void removeParameter(string paramName);
 		Program* getProgram();
 		id_t materialId;
+
+		bool isValid() const override {
+			return true;
+		}
 	private:
 		friend class Renderer;
 		map<string, ParamData> materialParameters;

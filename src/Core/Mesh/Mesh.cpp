@@ -2,70 +2,12 @@
 
 namespace CGEngine {
 	Mesh::Mesh(MeshData* meshData, Transformation3D transformation, vector<Material*> materials, RenderParameters renderParams, string importPath) : meshData(meshData), transformation(transformation), renderParameters(renderParams), materials(materials), importPath(importPath), animator(nullptr) {
-		if (!importPath.empty()) {
-			import(importPath);
-		}
 		renderer.getModelData(this);
 	};
 
-	//TODO: ImportResult meshes should be in a tree, not a vector
-	//TODO: ImportResult meshes should be SubMesh structs of MeshData and Material Id. Should Material Id be world id or id among materials on mesh?
-	//TODO: Assign imported submesh mesh its correct material. Only assign root mesh its correct material?
-	void Mesh::import(string importPath) {
-		clearMaterials();
-		ImportResult importResult = renderer.import(importPath);
-		if (importResult.rootNode && importResult.rootNode->meshData) {
-			cout << "Setting up mesh successfully imported from '" << importPath << "'\n";
-			this->meshData = importResult.rootNode->meshData;
-			this->meshData->sourcePath = importPath;
-			if (importResult.rootNode->hasMesh() && !importResult.rootNode->meshData->bones.empty()) {
-				cout << "Setting up Skeletal Mesh!\n";
-			}
-			// Set root transformation
-			glm::vec3 translation, scale, skew;
-			glm::quat rotation;
-			glm::vec4 perspective;
-			glm::decompose(importResult.rootNode->transformation, scale, rotation, translation, skew, perspective);
-
-			this->transformation = Transformation3D(
-				Vector3f(translation.x, translation.y, translation.z),
-				Vector3f(renderer.fromGlm(glm::degrees(glm::eulerAngles(rotation)))),
-				Vector3f(scale.x, scale.y, scale.z)
-			);
-
-			vector<MeshNodeData*> nodes = importResult.rootNode->children;
-			while (nodes.size() > 0) {
-				MeshNodeData* node = nodes.back();
-				nodes.pop_back();
-				if (node->meshData) {
-					glm::decompose(node->transformation, scale, rotation, translation, skew, perspective);
-
-					Vector3f pos(translation.x, translation.y, translation.z);
-					Vector3f rot = renderer.fromGlm(glm::degrees(glm::eulerAngles(rotation)));
-					Vector3f scl(scale.x, scale.y, scale.z);
-
-					Mesh* nodeMesh = new Mesh(node->meshData, Transformation3D(pos, rot, scl), { world->getMaterial(node->materialId) }, renderParameters);
-					nodeMesh->meshData->sourcePath = importPath;
-					id_t childMeshBodyId = world->create(nodeMesh);
-					Body* childBody = world->bodies.get(childMeshBodyId);
-					if (childBody) {
-						world->getRoot()->attachBody(childBody);
-					}
-				}
-				nodes.insert(nodes.end(), node->children.begin(), node->children.end());
-			}
-
-			deleteImportHeirarchy(importResult.rootNode);
-		}
-	}
-
-	void Mesh::deleteImportHeirarchy(MeshNodeData* node) {
-		if (!node) return;
-		for (MeshNodeData* child : node->children) {
-			deleteImportHeirarchy(child);
-		}
-		delete node;
-	}
+	Mesh::Mesh(string importPath, Transformation3D transformation, vector<Material*> materials, RenderParameters renderParams) : Mesh(assets.get<MeshData>(assets.create<MeshData>("").value()), transformation, materials, renderParams, importPath) {
+	
+	};
 
 	MeshData* Mesh::getMeshData() {
 		return meshData;
@@ -147,6 +89,7 @@ namespace CGEngine {
 	void Mesh::setImportPath(string path) {
 		importPath = path;
 	}
+
 	string Mesh::getImportPath() {
 		return importPath;
 	}
@@ -154,10 +97,16 @@ namespace CGEngine {
 	void Mesh::setAnimator(Animator* animator) {
 		this->animator = animator;
 	}
+
 	Animator* Mesh::getAnimator() {
 		return animator;
 	}
 
-	string Mesh::getMeshName() const { return meshData ? meshData->meshName : ""; }
-	string Mesh::getSourcePath() const { return meshData ? meshData->sourcePath : ""; }
+	string Mesh::getMeshName() const { 
+		return meshData ? meshData->meshName : ""; 
+	}
+
+	string Mesh::getSourcePath() const { 
+		return meshData ? meshData->sourcePath : ""; 
+	}
 }

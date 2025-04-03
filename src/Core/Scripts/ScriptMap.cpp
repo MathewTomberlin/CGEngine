@@ -3,17 +3,19 @@
 
 namespace CGEngine {
 	ScriptMap::ScriptMap(Body* o) {
+		init();
 		owner = o;
 	}
 
 	void ScriptMap::initialize() {
 		if (owner == nullptr) {
-			ownerName = "Behavior"; 
 			return;
 		}
+		//Owner name == null on load for now
 		string namePrompt = (owner->getName() != "") ? "(" + owner->getName() + ")" : "";
 		string idPrompt = owner->getId().has_value() ? "[" + to_string(owner->getId().value()) + "]" : "";
-		ownerName = "Body" + idPrompt + namePrompt;
+		ownerName = idPrompt != "" || namePrompt != "" ? "Body" + idPrompt + namePrompt : "";
+		setSystemName(ownerName.append(ownerName!=""?" ":"").append("ScriptMap"));
 	}
 
 	size_t ScriptMap::addScript(string domainName, Script* script) {
@@ -64,7 +66,7 @@ namespace CGEngine {
 	}
 
 	void ScriptMap::clearDomain(string domainName) {
-		log("Clearing Domain('" + domainName + "')");
+		log(this, LogInfo, "Clearing Domain '{}'", domainName);
 		if (ScriptDomain* domain = getDomain(domainName)) {
 			domain->clear();
 		}
@@ -79,7 +81,7 @@ namespace CGEngine {
 	void ScriptMap::callDomain(string domainName, Behavior* behavior, bool logUpdate) {
 		if (ScriptDomain* domain = getDomain(domainName)) {
 			if (domainName != onUpdateEvent || logUpdate) {
-				log("Calling Domain('" + domain->getName() + "')");
+				log(this, LogInfo, "Calling Domain '{}'", domain->getName());
 			}
 			domain->callDomain(owner, behavior);
 		}
@@ -87,7 +89,7 @@ namespace CGEngine {
 
 	void ScriptMap::callScript(string domainName, size_t scriptId, Behavior* behavior) {
 		if (ScriptDomain* domain = getDomain(domainName)) {
-			log("Calling Script[" + to_string(scriptId) + "]('" + domain->getName() + "')");
+			log(this, LogInfo, "Calling Script '{}'.'{}'", domain->getName(), to_string(scriptId));
 			domain->callScript(scriptId, owner, behavior);
 		}
 	}
@@ -95,7 +97,7 @@ namespace CGEngine {
 	void ScriptMap::callDomainWithData(string domainName, Behavior* behavior, DataMap input, bool logUpdate) {
 		if (ScriptDomain* domain = getDomain(domainName)) {
 			if (domainName != onUpdateEvent || logUpdate) {
-				log("Calling Domain('" + domain->getName() + "')");
+				log(this, LogInfo, "Calling Domain '{}'", domain->getName());
 			}
 			domain->callDomain(owner, behavior, input);
 		}
@@ -103,7 +105,7 @@ namespace CGEngine {
 
 	void ScriptMap::callScriptWithData(string domainName, size_t scriptId, Behavior* behavior, DataMap input) {
 		if (ScriptDomain* domain = getDomain(domainName)) {
-			log("Calling Script[" + to_string(scriptId) + "]('" + domain->getName() + "')");
+			log(this, LogInfo, "Calling Script '{}'.'{}'", domain->getName(), to_string(scriptId));
 			domain->callScript(scriptId, owner,  input, behavior);
 		}
 	}
@@ -116,7 +118,7 @@ namespace CGEngine {
 
 	ScriptDomain* ScriptMap::addDomain(string domainName) {
 		domains[domainName] = new ScriptDomain(domainName, ownerName);
-		log("Added Domain('" + domainName + "')");
+		log(this, LogInfo, "Added Domain '{}'", domainName);
 		return domains[domainName];
 	}
 
@@ -143,10 +145,5 @@ namespace CGEngine {
 			//Refunds script ids, erase them from the domain's scripts map & delete them, then clear the map. Prints a warning if scripts remain
 			domain->deleteDomain();
 		}
-	}
-
-	void ScriptMap::log(string msg) {
-		if (!logging.willLog(logLevel)) return;
-		logging(logLevel, ownerName, msg);
 	}
 }
