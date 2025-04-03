@@ -42,7 +42,7 @@ namespace CGEngine {
 		//Converts imported MeshNodeData to ModelNode
 		ModelNode* meshNodeToModelNode(MeshNodeData* meshNode, ModelNode* modelNode);
 		//Create a hierarchy of Bodies from imported MeshNodeData and return the root Body id
-		id_t instantiate(Transformation3D rootTransform = Transformation3D(), vector<id_t> overrideMaterials = {});
+		optional<id_t> instantiate(Transformation3D rootTransform = Transformation3D(), vector<id_t> overrideMaterials = {});
 		//Return whether the model has bones
 		bool isSkeletal() const;
 		//Return the model import path
