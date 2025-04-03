@@ -5,9 +5,10 @@
 
 namespace CGEngine {
 	class Bone;
-	class Animation : public EngineSystem{
+	class Animation : public EngineSystem, public IResource {
 	public:
 		Animation();
+		~Animation();
 		Bone* findBone(const string name);
 		inline float getTicksPerSecond() { return ticksPerSecond; }
 		inline float getDuration() { return duration; }
@@ -19,6 +20,7 @@ namespace CGEngine {
 		void setName(const string& name) { animationName = name; }
 		// Make root node accessible for hierarchy building
 		const NodeData& getRoot() const { return root; }
+		bool isValid() const;
 	
 		string animationName;
 		float duration;

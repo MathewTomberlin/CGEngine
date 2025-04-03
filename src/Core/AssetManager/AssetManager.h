@@ -62,6 +62,7 @@ namespace CGEngine {
 			registerResourceType<Material>("materials");
 			registerResourceType<Body>("bodies");
 			registerResourceType<Light>("lights");
+			registerResourceType<Animation>("animations");
 		}
 
 		// Add new initialization method
@@ -357,7 +358,7 @@ namespace CGEngine {
 			}
 
 			if (resource) {
-				id_t resourceId = addResource<T>(assetName, (T*)resource);
+				id_t resourceId = add<T>(assetName, (T*)resource);
 				resource->setId(resourceId);
 				string logMsg = string("Loaded '").append(resourceContainers[resourceTypeId].first).append("' Resource '").append(assetName).append("' from '").append(resourcePath.filename().string()).append("' ID:").append(to_string(resourceId));
 				logMessage(LogInfo, logMsg);
@@ -412,7 +413,7 @@ namespace CGEngine {
 				return nullopt;
 			}
 
-			id_t resourceId = addResource<T>(resourceName, resource);
+			id_t resourceId = add<T>(resourceName, resource);
 			resource->setId(resourceId);
 			string logMsg = string("Created '").append(resourceContainers[resourceTypeId].first).append("' Resource '").append(resourceName).append("' ID:").append(to_string(resourceId));
 			logMessage(LogInfo, logMsg);
@@ -435,6 +436,17 @@ namespace CGEngine {
 			return resourceDefaultIds.find(typeId) != resourceDefaultIds.end();
 		}
 
+		//Create a ResourceEntry with a shared pointer to the resource of T type and its name,
+		//then add that to the container.resources and container.nameToId
+		template<typename T>
+		id_t add(const string& name, T* resource) {
+			auto& container = getContainer<T>();
+			ResourceEntry entry{ shared_ptr<IResource>(resource),name };
+			id_t id = container.resources.add(entry);
+			container.nameToId[name] = id;
+			return id;
+		}
+
 		string defaultTextureName = "default_texture";
 		string defaultProgramName = "default_program";
 		string defaultMaterialName = "default_material";
@@ -454,17 +466,6 @@ namespace CGEngine {
 
 		bool hasResourceType(type_index typeId) {
 			return resourceContainers.find(typeId) != resourceContainers.end();
-		}
-
-		//Create a ResourceEntry with a shared pointer to the resource of T type and its name,
-		//then add that to the container.resources and container.nameToId
-		template<typename T>
-		id_t addResource(const string& name, T* resource) {
-			auto& container = getContainer<T>();
-			ResourceEntry entry{shared_ptr<IResource>(resource),name};
-			id_t id = container.resources.add(entry);
-			container.nameToId[name] = id;
-			return id;
 		}
 
 		//Get the ResourceContainer of the indicated T type
