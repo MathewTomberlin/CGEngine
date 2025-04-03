@@ -28,7 +28,7 @@ namespace CGEngine {
 		ImportResult(MeshNodeData* rootNode) : rootNode(rootNode) {};
 		MeshNodeData* rootNode = nullptr;
 		vector<id_t> materials;
-		map<string, Animation*> animations;
+		vector<string> animations;
 	};
 
 	// Add new helper struct to track skeletal data during import
@@ -78,7 +78,7 @@ namespace CGEngine {
         vector<string> loadMaterialTextures(aiMaterial* mat, aiTextureType type);
 		unsigned int getFormatOptions(string format);
 		string getFormat(string path);
-		void importAnimations(const aiScene* scene, map<string, BoneData> modelBones, map<string, Animation*>& modelAnimations);
+		void importAnimations(const aiScene* scene, map<string, BoneData> modelBones, vector<string>& modelAnimations);
         Assimp::Importer modelImporter;
 		const aiScene* currentScene = nullptr;
     };
