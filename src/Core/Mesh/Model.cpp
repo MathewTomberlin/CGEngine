@@ -73,10 +73,7 @@ namespace CGEngine {
 		// Clean up node hierarchy
 		cleanupModelNodes(rootNode);
 
-		// Clean up animations
-		for (auto& [name, anim] : modelAnimations) {
-			delete anim;
-		}
+		modelAnimations.clear();
 	}
 	
 	optional<id_t> Model::instantiate(Transformation3D rootTransform, vector<id_t> overrideMaterials) {
@@ -136,7 +133,11 @@ namespace CGEngine {
 		}
 
 		// Create animator with first available animation
-		return new Animator(modelAnimations.begin()->second);
+		if (!modelAnimations.empty()) {
+			string firstAnimationName = modelAnimations.begin()->first;
+			return new Animator(firstAnimationName);
+		}
+		return nullptr;
 	}
 
 	bool Model::isSkeletal() const {

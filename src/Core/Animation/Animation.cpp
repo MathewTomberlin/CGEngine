@@ -8,6 +8,10 @@ namespace CGEngine {
 		setLogLevel(LogInfo);
 	}
 
+	Animation::~Animation() {
+		
+	}
+
 	Bone* Animation::findBone(const string name) {
 		auto iter = std::find_if(bones.begin(), bones.end(), [&](const Bone& bone) { return bone.getBoneName() == name; });
 		if (iter == bones.end()) return nullptr;
@@ -62,5 +66,9 @@ namespace CGEngine {
 
 		//Update the animation's bone data
 		boneData = boneInfoMap;
+	}
+
+	bool Animation::isValid() const {
+		return true;
 	}
 }
