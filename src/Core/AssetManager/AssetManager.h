@@ -6,13 +6,28 @@
 #include <filesystem>
 #include "../Engine/EngineSystem.h"
 #include "../Shader/Program.h"
+#include "AssetLoader.h"
 
 namespace CGEngine {
-	class ShaderResource : public IResource {
+	class VertexShaderResource : public IResource {
 	private:
 		CGEngine::Shader shader;
 	public:
-		ShaderResource() = default;
+		VertexShaderResource() = default;
+
+		bool isValid() const override {
+			return shader.getObjectId() != 0;
+		}
+
+		CGEngine::Shader& getShader() { return shader; }
+		const CGEngine::Shader& getShader() const { return shader; }
+	};
+
+	class FragmentShaderResource : public IResource {
+	private:
+		CGEngine::Shader shader;
+	public:
+		FragmentShaderResource() = default;
 
 		bool isValid() const override {
 			return shader.getObjectId() != 0;
@@ -37,9 +52,10 @@ namespace CGEngine {
 	public:
 		AssetManager() {
 			// Register built-in resource types
-			registerResourceType<TextureResource>("textures");
-			registerResourceType<FontResource>("fonts");
-			registerResourceType<ShaderResource>("shaders");
+			registerResourceType<TextureResource>("textures", new TextureLoader());
+			registerResourceType<FontResource>("fonts", new FontLoader());
+			registerResourceType<VertexShaderResource>("vertexShaders", new VertexShaderLoader());
+			registerResourceType<FragmentShaderResource>("fragmentShaders", new FragmentShaderLoader());
 			registerResourceType<Program>("programs");
 			registerResourceType<Material>("materials");
 			registerResourceType<Body>("bodies");
@@ -91,10 +107,13 @@ namespace CGEngine {
 		* @param typeName Name of the collection for this resource type
 		*/
 		template<typename T>
-		void registerResourceType(const string& typeName) {
+		void registerResourceType(const string& typeName, AssetLoader* loader = nullptr) {
 			type_index typeId = type_index(typeid(T));
 			resourceContainers[typeId] = make_pair(typeName, ResourceContainer());
 			resourceDefaultIds[typeId] = nullopt;
+			if (loader) {
+				resourceLoaders[typeId] = loader;
+			}
 			string logMsg = string("Registered resource type: ").append(typeName);
 			logMessage(LogInfo, logMsg);
 		}
@@ -148,6 +167,23 @@ namespace CGEngine {
 			// Check if it's valid (we could check if the resource pointer is not null)
 			if (entry.resource) {
 				return static_cast<T*>(entry.resource.get());
+			}
+			return nullptr;
+		}
+
+		IResource* get(type_index typeId, id_t id) {
+			if (!hasResourceType(typeId)) {
+				string logMsg = string("Attempted to get unregistered resource type: ").append(typeId.name());
+				logMessage(LogInfo, logMsg);
+				return nullptr;
+			}
+
+			auto& container = resourceContainers[typeId].second;
+			// Get the ResourceEntry directly, not as a pointer
+			ResourceEntry entry = container.resources.get(id);
+			// Check if it's valid (we could check if the resource pointer is not null)
+			if (entry.resource) {
+				return static_cast<IResource*>(entry.resource.get());
 			}
 			return nullptr;
 		}
@@ -256,9 +292,8 @@ namespace CGEngine {
 		* @param args Arguments to decode for loading. Used to pass shaderType.
 		* @return Optional id of loaded resource. Nullopt if loading failed.
 		*/
-		//TODO: Implement AssetLoader classes to allow user-defined asset loading
-		template<typename T, typename ...Args>
-		optional<id_t> load(const filesystem::path& resourcePath, const string& resourceName = "", Args... args) {
+		template<typename T>
+		optional<id_t> load(const filesystem::path& resourcePath, const string& resourceName = "") {
 			//Require a resourcePath or resourceName
 			if (resourcePath.empty() && resourceName.empty()) return nullopt;
 			type_index resourceTypeId = type_index(typeid(T));
@@ -288,60 +323,28 @@ namespace CGEngine {
 				}
 			}
 
-			//TODO: Replace hard-coded resource loading with AssetLoader classes for each resource type to allow extensibility
-			T* resource = nullptr;
-			if constexpr (is_same_v<T, TextureResource>) {
-				//Ensure the resource loading path exists
-				if (filesystem::exists(resourcePath)) {
-					resource = new TextureResource();
-					Texture* texture = new Texture();
-					if (texture->loadFromFile(resourcePath.string())) {
-						resource->setTexture(texture);
-					} else {
-						string logMsg = string("Failed to load texture: ").append(resourcePath.string());
-						logMessage(LogError, logMsg);
-						delete resource;
-						delete texture;
-						return getDefaultId<TextureResource>();
-					}
-				}
-				else {
-					string logMsg = string("Texture file not found: ").append(resourcePath.string());
-					logMessage(LogError, logMsg);
-					return getDefaultId<TextureResource>();
-				}
-			}
-			else if constexpr (is_same_v<T, FontResource>) {
-				resource = new FontResource();
-				if (filesystem::exists(resourcePath)) {
-					try {
-						Font* font = new Font(resourcePath);
-						resource->setFont(font);
-					} catch (sf::Exception ex) {
-						string logMsg = string("Font failed to load: ").append(ex.what());
-						logMessage(LogInfo, logMsg);
-						delete resource;
-						return getDefaultId<FontResource>();
-					}
-				}
-				else {
-					return getDefaultId<FontResource>();
-				}
-			} else if constexpr (is_same_v<T, Shader>) {
-				auto args = { (forward<Args>(args))... };
-				GLenum shaderType = args[0];
-				Shader shader = Shader::readFile(resourcePath, shaderType);
-				if (!shader.isValid()) {
-					logMessage(LogWarn, string("Shader loaded from '").append(resourcePath.filename().string()).append("' is invalid!"));
-				}
-			} else {
-				string logMsg = string("No loader implemented for resource type ").append(typeid(T).name());
-				logMessage(LogInfo, logMsg);
+			IResource* resource = nullptr;
+			if (resourceLoaders.find(resourceTypeId) == resourceLoaders.end()) {
+				string logMsg = string("No loader implemented for resource type: ").append(typeid(T).name());
+				logMessage(LogError, logMsg);
 				return nullopt;
+			} else {
+				logMessage(LogInfo, string("Using loader for resource type: ").append(typeid(T).name()));
+				//Load the resource using the appropriate loader
+				AssetLoader* resourceLoader = resourceLoaders[resourceTypeId];
+				resource = resourceLoader->load(resourcePath);
+				//If resource was not loaded successfully and the resourceType has a defaultId
+				if (resource == nullptr && hasDefaultId(resourceTypeId)) {
+					//GGet the default id for the resource type and try to load it
+					optional<id_t> defaultResourceId = getDefaultId(resourceTypeId);
+					if (defaultResourceId.has_value()) {
+						resource = get(resourceTypeId, defaultResourceId.value());
+					}
+				}
 			}
 
 			if (resource) {
-				id_t resourceId = addResource<T>(assetName, resource);
+				id_t resourceId = addResource<T>(assetName, (T*)resource);
 				resource->setId(resourceId);
 				string logMsg = string("Loaded '").append(resourceContainers[resourceTypeId].first).append("' Resource '").append(assetName).append("' from '").append(resourcePath.filename().string()).append("' ID:").append(to_string(resourceId));
 				logMessage(LogInfo, logMsg);
@@ -410,6 +413,15 @@ namespace CGEngine {
 			type_index typeId = type_index(typeid(T));
 			return resourceDefaultIds[typeId];
 		}
+
+		optional<id_t> getDefaultId(type_index typeId) {
+			return resourceDefaultIds[typeId];
+		}
+
+		bool hasDefaultId(type_index typeId) {
+			return resourceDefaultIds.find(typeId) != resourceDefaultIds.end();
+		}
+
 		string defaultTextureName = "default_texture";
 		string defaultProgramName = "default_program";
 		string defaultMaterialName = "default_material";
@@ -418,11 +430,16 @@ namespace CGEngine {
 	private:
 		//ResourceTypeName string, ResourceContainer mapped to ResourceType type_index
 		unordered_map<type_index, pair<string, ResourceContainer>> resourceContainers;
+		unordered_map<type_index, AssetLoader*> resourceLoaders;
 
 		//Check if the resource type is registered
 		template<typename T>
 		bool hasResourceType() {
 			type_index typeId = type_index(typeid(T));
+			return resourceContainers.find(typeId) != resourceContainers.end();
+		}
+
+		bool hasResourceType(type_index typeId) {
 			return resourceContainers.find(typeId) != resourceContainers.end();
 		}
 

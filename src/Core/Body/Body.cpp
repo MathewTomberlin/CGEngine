@@ -60,7 +60,7 @@ namespace CGEngine {
             boundsRect = nullptr;
         }
         //Detach any children, then clear the children
-        detachChildren();
+        detachChildren(false);
         children.clear();
         //Remove reference to this Body in its parent, then clear parent
         drop();
@@ -405,16 +405,16 @@ namespace CGEngine {
                 child->rotate(getRotation());
                 child->scale(getScale());
             }
+            // Check if world and world's root are still valid before attaching
+            //if (world && world->getRoot() && world->getRoot()->isValid()) {
+            //    world->getRoot()->attachBody(child);
+            //} else {
+            //    // If world root is not available, just set parent to nullptr
+            //    // This prevents trying to attach to an invalid body
+            //    child->parent = nullptr;
+            //}
             //Remove child from children
             children.erase(children.begin() + i);
-            // Check if world and world's root are still valid before attaching
-            if (world && world->getRoot() && world->getRoot()->isValid()) {
-                world->getRoot()->attachBody(child);
-            } else {
-                // If world root is not available, just set parent to nullptr
-                // This prevents trying to attach to an invalid body
-                child->parent = nullptr;
-            }
         }
     }
 
