@@ -121,9 +121,6 @@ namespace CGEngine {
         //Scenes
         map<string, Behavior*> scenes;
 
-        //Lights
-        UniqueDomain<id_t, Light*> lights = UniqueDomain<id_t, Light*>(8);
-
         //Console
         bool consoleFeatureEnabled = true;
         bool consoleInitialized = false;

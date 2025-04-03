@@ -186,22 +186,6 @@ namespace CGEngine {
 		}
 	}
 
-	id_t Renderer::addLight(Light* light) {
-		return lights.add(light);
-	}
-
-	void Renderer::removeLight(id_t lightId) {
-		Light* light = lights.get(lightId);
-		lights.remove(lightId);
-		if (light != nullptr) {
-			delete light;
-		}
-	}
-
-	Light* Renderer::getLight(id_t lightId) {
-		return lights.get(lightId);
-	}
-
 	bool Renderer::setGLWindowState(bool state) {
 		// Make the window no longer the active window for OpenGL calls
 		bool success = window->setActive(state);
@@ -332,9 +316,9 @@ namespace CGEngine {
 					setMaterialUniforms(modelMaterials.at(i), program, i);
 				}
 
-				program->setUniform("lightCount", (int)lights.size());
-				for (size_t i = 0; i < lights.size(); ++i) {
-					setLightUniforms(lights.get(i), i, program);
+				program->setUniform("lightCount", (int)assets.getResourceCount<Light>());
+				for (size_t i = 0; i < assets.getResourceCount<Light>(); ++i) {
+					setLightUniforms(assets.get<Light>(i), i, program);
 				}
 
 				// Draw the cube

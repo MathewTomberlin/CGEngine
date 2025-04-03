@@ -71,9 +71,12 @@ namespace CGEngine {
 		glm::mat4 offset;
 	};
 
-	struct MeshData {
+	struct MeshData : public IResource {
 		MeshData(string meshName = "", vector<VertexData> vertices = {}, vector<unsigned int> indices = {}, map<string, BoneData> bones = {}) : meshName(meshName), vertices(vertices), indices(indices), vao(0U), vbo(0U), ebo(0U), bones(bones) {};
 		MeshData(vector<VertexData> vertices, vector<unsigned int> indices = {}, map<string, BoneData> bones = {}, string meshName = "") : meshName(meshName), vertices(vertices), indices(indices), vao(0U), vbo(0U), ebo(0U), bones(bones) {};
+		bool isValid() const {
+			return !vertices.empty() && !indices.empty();
+		}
 		string sourcePath = "";
 		string meshName = "";
 		vector<VertexData> vertices;
@@ -158,9 +161,6 @@ namespace CGEngine {
 		void renderMesh(Mesh* mesh, MeshData* meshData, Transformation3D transform);
 		void getModelData(Mesh* mesh);
 		void updateModelData(Mesh* mesh);
-		id_t addLight(Light* light);
-		void removeLight(id_t lightId);
-		Light* getLight(id_t lightId);
 		string getUniformArrayIndexName(string arrayName, int index);
 		string getUniformArrayPropertyName(string arrayName, int index, string propertyName);
 		string getUniformObjectPropertyName(string objectName, string propertyName);
@@ -201,7 +201,6 @@ namespace CGEngine {
 		std::set<Model*> updatedModels;
 		GLenum initGlew();
 		Program* program;
-		UniqueDomain<id_t, Light*> lights = UniqueDomain<id_t, Light*>(10);
 		int boundTextures = 0;
 
 		//Fallback Material

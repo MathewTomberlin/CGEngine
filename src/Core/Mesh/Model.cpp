@@ -235,4 +235,8 @@ namespace CGEngine {
 		}
 		return materials;
 	}
+
+	bool Model::isValid() const {
+		return true;
+	}
 }

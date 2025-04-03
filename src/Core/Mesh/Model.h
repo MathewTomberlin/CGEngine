@@ -32,7 +32,7 @@ namespace CGEngine {
 
 	class Animation;
 
-	class Model : public EngineSystem {
+	class Model : public EngineSystem, public IResource {
 	public:
 		//Constructor to create a Model from an imported file via Assimp
 		Model(string sourcePath);
@@ -57,6 +57,7 @@ namespace CGEngine {
 		ModelNode* getRootNode() const { return rootNode; }
 		//Return a vector of the model materials
 		vector<Material*> getMaterials();
+		bool isValid() const; //TODO: Properly implement isValid in Model
 	private:
 		friend class MeshImporter;
 

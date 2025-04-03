@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include "../Types/Types.h"
+#include "../Mesh/Model.h"
 using std::string;
 
 namespace CGEngine {
@@ -89,6 +90,19 @@ namespace CGEngine {
 				return nullptr;
 			}
 			return &shader;
+		}
+	};
+
+	class ModelLoader : public AssetLoader {
+	public:
+		Model* load(const filesystem::path& resourcePath) override {
+			Model* model = new Model(resourcePath.string());
+			if (!model || !model->isValid()) {
+				logMessage(LogError, string("Failed to load model from '").append(resourcePath.filename().string()).append("'"));
+				delete model;
+				return nullptr;
+			}
+			return model;
 		}
 	};
 }
