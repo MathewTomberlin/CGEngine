@@ -57,7 +57,6 @@ namespace CGEngine {
 
         //Root Body
         Body* getRoot();
-        Body* findBodyByName(string name);
         void addWorldScript(string domain, Script* script);
 
         /// <summary>

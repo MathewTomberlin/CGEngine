@@ -153,28 +153,6 @@ namespace CGEngine {
         return root;
     }
 
-    Body* World::findBodyByName(string name) {
-        //Starting with root
-        queue<Body*> bodies = queue<Body*>({ root });
-        //For each body in the stack
-        while (!bodies.empty()) {
-            //If the top body has the name, return it
-            Body* b = bodies.front();
-            if (b != nullptr && b->getName() == name) {
-                return b;
-            } else if (b != nullptr) {
-                //Otherwise add its children to the stack
-                for (Body* child : b->children) {
-                    bodies.push(child);
-                }
-            }
-            //And pop it
-            bodies.pop();
-        }
-        //Body with the name wasn't found
-        return nullptr;
-    }
-
     vector<Body*> World::zRayCast(Vector2f worldPos, optional<int> startZ, int distance, bool backward, bool linecast) {
         int zMax = renderer.zMax();
         int zMin = renderer.zMin();
@@ -306,12 +284,8 @@ namespace CGEngine {
 
         assets.initialize();
 
-        //Create and assign the fallback material
-        //renderer.fallbackMaterialId = createMaterial(SurfaceParameters(SurfaceDomain("checkered_tile.png", Color(255, 0, 255, 1),1,{5,5}),SurfaceDomain(0)));
+        //Assign the fallback material
         renderer.fallbackMaterialId = 0;
-        //Set the fallback material to repeated
-        //Material* defaultMaterial = assets.get<Material>("default_material");
-        //defaultMaterial->getParameterPtr<Texture>("diffuseTexture")->setRepeated(true);
 
         running = true;
     }
