@@ -66,7 +66,7 @@ namespace CGEngine {
 		ModelNode* rootNode = nullptr;
 		map<string, BoneData> modelBones;
 		vector<id_t> modelMaterials;
-		map<string, Animation*> modelAnimations;
+		vector<string> modelAnimations;
 		map<string, AnimationNodeMapping> animationNodeMap;
 		Animator* modelAnimator = nullptr;
 		size_t bodyCount = 0;
