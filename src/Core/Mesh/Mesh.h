@@ -18,7 +18,7 @@ namespace CGEngine {
 	class Mesh : public IResource, public Transformable{
 	public:
 		Mesh(MeshData* model, Transformation3D transformation = Transformation3D(), vector<Material*> materials = { new Material(SurfaceParameters()) }, RenderParameters renderParams = RenderParameters(), string importPath = "");
-		Mesh(string importPath, Transformation3D transformation = Transformation3D(), vector<Material*> materials = { new Material(SurfaceParameters()) }, RenderParameters renderParams = RenderParameters()) : Mesh(new MeshData(), transformation, materials, renderParams, importPath) {};
+		Mesh(string importPath, Transformation3D transformation = Transformation3D(), vector<Material*> materials = { new Material(SurfaceParameters()) }, RenderParameters renderParams = RenderParameters());
 
 		void render(Transform parentTransform);
 		void bindTexture(Texture* texture);

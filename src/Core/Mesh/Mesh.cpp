@@ -5,6 +5,10 @@ namespace CGEngine {
 		renderer.getModelData(this);
 	};
 
+	Mesh::Mesh(string importPath, Transformation3D transformation, vector<Material*> materials, RenderParameters renderParams) : Mesh(assets.get<MeshData>(assets.create<MeshData>("").value()), transformation, materials, renderParams, importPath) {
+	
+	};
+
 	MeshData* Mesh::getMeshData() {
 		return meshData;
 	}

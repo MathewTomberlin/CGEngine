@@ -56,9 +56,12 @@ namespace CGEngine {
 			registerResourceType<FontResource>("fonts", new FontLoader());
 			registerResourceType<VertexShaderResource>("vertexShaders", new VertexShaderLoader());
 			registerResourceType<FragmentShaderResource>("fragmentShaders", new FragmentShaderLoader());
+			registerResourceType<Model>("models", new ModelLoader());
+			registerResourceType<MeshData>("meshData");
 			registerResourceType<Program>("programs");
 			registerResourceType<Material>("materials");
 			registerResourceType<Body>("bodies");
+			registerResourceType<Light>("lights");
 		}
 
 		// Add new initialization method
@@ -254,6 +257,16 @@ namespace CGEngine {
 
 			auto& container = resourceContainers[typeId].second;
 			return container.nameToId.find(resourceName) != container.nameToId.end();
+		}
+
+		template<typename T>
+		size_t getResourceCount() {
+			type_index typeId = type_index(typeid(T));
+			if (!hasResourceType<T>()) {
+				return 0;
+			}
+			auto& container = resourceContainers[typeId].second;
+			return container.resources.size();
 		}
 
 		/**

@@ -17,12 +17,14 @@ namespace CGEngine {
 		Vector3f lightDirection;
 	};
 
-	class Light {
+	class Light : public IResource {
 	public:
 		Light(Vector3f position = Vector3f(), bool directional = false, LightParameters parameters = LightParameters()) ;
 
 		id_t lightId;
 		glm::vec4 position;
 		LightParameters parameters;
+
+		bool isValid() const;
 	};
 }

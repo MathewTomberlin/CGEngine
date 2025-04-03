@@ -1,12 +1,15 @@
+#include "../../Core/Engine/Engine.h"
 #include "CommonModels.h"
 
 namespace CGEngine {
     MeshData* getCubeModel(float scale) {
-        return new MeshData(getCubeVertices(scale),getCubeIndices());
+        optional<id_t> cubeId = assets.create<MeshData>("default_cube", getCubeVertices(scale), getCubeIndices());
+		return assets.get<MeshData>(cubeId.value());
     }
 
     MeshData* getPlaneModel(float scale, float textureId, Vector3f offset) {
-        return new MeshData(getPlaneVertices(scale, textureId, offset), getPlaneIndices());
+        optional<id_t> planeId = assets.create<MeshData>("default_plane", getPlaneVertices(scale, textureId, offset), getPlaneIndices());
+		return assets.get<MeshData>(planeId.value());
     }
 
     vector<VertexData> getCubeVertices(float scale) {
@@ -125,7 +128,8 @@ namespace CGEngine {
     }
 
     MeshData* getTilemapModel(float scale, Vector2i size, vector<vector<int>> textureMap) {
-        return new MeshData(getTilemapVertices(scale, size, textureMap), getTilemapIndices(size));
+		optional<id_t> tilemapId = assets.create<MeshData>("default_tilemap", getTilemapVertices(scale, size, textureMap), getTilemapIndices(size));
+		return assets.get<MeshData>(tilemapId.value());
     }
 
     vector<VertexData> getTilemapVertices(float scale, Vector2i size, vector<vector<int>> textureMap){
