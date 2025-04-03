@@ -46,8 +46,16 @@ namespace CGEngine {
 				// Create animation through factory method
 				Animation* animation = createAnimation(scene, modelBones, animName);
 				if (!animation) continue;
-				log(this, LogInfo, "  - Successfully Imported Animation '{}' with {} Channels and {} Bones", animation->getName(), anim->mNumChannels, animation->bones.size());
-				modelAnimations[animation->getName()] = animation;
+
+				// Cache the animation using AssetManager
+				optional<id_t> animationId = assets.add<Animation>(animName, animation);
+				if (animationId.has_value()) {
+					modelAnimations[animName] = assets.get<Animation>(animationId.value());
+					log(this, LogInfo, "  - Successfully Imported Animation '{}' with {} Channels and {} Bones", animation->getName(), anim->mNumChannels, animation->bones.size());
+				}
+				else {
+					log(this, LogError, "Failed to cache animation '{}'", animName);
+				}
 			}
 			log(this, LogInfo, "- Imported {} Animations", modelAnimations.size());
 		}

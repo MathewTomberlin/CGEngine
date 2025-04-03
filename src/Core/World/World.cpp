@@ -72,7 +72,7 @@ namespace CGEngine {
                             world->lastConsoleCommand = command;
                             world->lastConsoleInput = inputString;
                             if (target != "") {
-                                Body* targetBody = world->findBodyByName(target);
+                                Body* targetBody = assets.get<Body>(target);
                                 targetBody->callScriptsWithData(command, DataMap(map<string, any>({ { "args",inputStrings} })));
                             }
                         }
@@ -109,7 +109,7 @@ namespace CGEngine {
                 vector<string> inputStrings = args.script->getInput().getData<vector<string>>("args");
                 if (inputStrings.size() >= 1) {
                     string objName = inputStrings[0];
-                    foundBody = world->findBodyByName(objName);
+                    foundBody = assets.get<Body>(objName);
                 }
                 if (foundBody != nullptr) {
                     cout << "Drawing bounds for " << foundBody->getName() << "\n";

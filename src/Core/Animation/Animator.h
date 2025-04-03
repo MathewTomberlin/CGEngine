@@ -6,9 +6,9 @@
 namespace CGEngine {
 	class Animator : public EngineSystem {
 	public:
-		Animator(Animation* animation);
+		Animator(const string& animationName);
 		void updateAnimation(float dt);
-		void playAnimation(Animation* animation);
+		void playAnimation(const string& animationName);
 		void calculateBoneTransform(const NodeData* node, glm::mat4 parentTransform);
 		vector<glm::mat4> getBoneMatrices();
 	private:

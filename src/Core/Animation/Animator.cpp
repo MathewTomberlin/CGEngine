@@ -2,13 +2,19 @@
 #include "../Engine/Engine.h"
 
 namespace CGEngine {
-	Animator::Animator(Animation* animation) {
+	Animator::Animator(const string& animationName) {
 		init();
-		currentTime = 0.0;
-		currentAnimation = animation;
 		boneMatrices.reserve(100);
 		for (int i = 0; i < 100; i++) {
 			boneMatrices.push_back(glm::mat4(1.0f));
+		}
+		optional<id_t> animationId = assets.getId<Animation>(animationName);
+		if (animationId.has_value()) {
+			currentAnimation = assets.get<Animation>(animationId.value());
+			currentTime = 0.0f;
+		}
+		else {
+			log(this, LogError, "Animation '{}' not found in AssetManager", animationName);
 		}
 	}
 
@@ -32,9 +38,15 @@ namespace CGEngine {
 		calculateBoneTransform(&currentAnimation->getRoot(), glm::mat4(1.0f));
 	}
 
-	void Animator::playAnimation(Animation* animation) {
-		currentAnimation = animation;
-		currentTime = 0.0f;
+	void Animator::playAnimation(const string& animationName) {
+		optional<id_t> animationId = assets.getId<Animation>(animationName);
+		if (animationId.has_value()) {
+			currentAnimation = assets.get<Animation>(animationId.value());
+			currentTime = 0.0f;
+		}
+		else {
+			log(this, LogError, "Animation '{}' not found in AssetManager", animationName);
+		}
 	}
 
 	void Animator::calculateBoneTransform(const NodeData* node, glm::mat4 parentTransform) {
