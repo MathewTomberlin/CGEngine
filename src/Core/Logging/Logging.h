@@ -5,6 +5,8 @@
 #include <fstream>
 #include <filesystem>
 #include <cmath>
+#include <sstream>
+#include <iomanip>
 #include "../Types/Types.h"
 #include "../Engine/EngineSystem.h"
 using std::string;
@@ -12,6 +14,7 @@ using std::cout;
 using std::queue;
 using std::ofstream;
 using std::ios;
+using std::stringstream;
 namespace fs = std::filesystem;
 
 namespace CGEngine {
@@ -53,6 +56,14 @@ namespace CGEngine {
 			return string(1,value);
 		}
 
+		string argToString(const optional<id_t> value) {
+			if (value.has_value()) {
+				return to_string(value.value());
+			} else {
+				return string();
+			}
+		}
+
 		template <typename... Args>
 		void operator()(LogLevel level, string caller, string msg, Args... args) {
 			log(level, caller, msg, { argToString(forward<Args>(args))... });
@@ -62,7 +73,7 @@ namespace CGEngine {
 		void operator()(EngineSystem* system, LogLevel level, string msg, Args... args) {
 			if(!system) return;
 			if (level <= system->getLogLevel()) {
-				log(level, system->getSystemName(), msg, {argToString(forward<Args>(args))...});
+				log(level, system->getSystemName(), msg, { argToString(forward<Args>(args))...} );
 			}
 		}
 

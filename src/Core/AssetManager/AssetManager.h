@@ -42,6 +42,7 @@ namespace CGEngine {
 			registerResourceType<ShaderResource>("shaders");
 			registerResourceType<Program>("programs");
 			registerResourceType<Material>("materials");
+			registerResourceType<Body>("bodies");
 		}
 
 		// Add new initialization method
@@ -341,6 +342,7 @@ namespace CGEngine {
 
 			if (resource) {
 				id_t resourceId = addResource<T>(assetName, resource);
+				resource->setId(resourceId);
 				string logMsg = string("Loaded '").append(resourceContainers[resourceTypeId].first).append("' Resource '").append(assetName).append("' from '").append(resourcePath.filename().string()).append("' ID:").append(to_string(resourceId));
 				logMessage(LogInfo, logMsg);
 				logMessage(LogInfo, string("Resource '").append(resourceContainers[resourceTypeId].first).append("' Count:").append(to_string(resourceContainers[resourceTypeId].second.resources.size())));
@@ -395,6 +397,7 @@ namespace CGEngine {
 			}
 
 			id_t resourceId = addResource<T>(resourceName, resource);
+			resource->setId(resourceId);
 			string logMsg = string("Created '").append(resourceContainers[resourceTypeId].first).append("' Resource '").append(resourceName).append("' ID:").append(to_string(resourceId));
 			logMessage(LogInfo, logMsg);
 			logMessage(LogInfo, string("Resource '").append(resourceContainers[resourceTypeId].first).append("' Count: ").append(to_string(resourceContainers[resourceTypeId].second.resources.size())));

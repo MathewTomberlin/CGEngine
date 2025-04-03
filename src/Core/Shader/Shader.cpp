@@ -42,7 +42,7 @@ namespace CGEngine {
 			objectId = 0;
 		}
 		else {
-			log(this, LogInfo, "{} shader compiled successfully (ID: {})", shaderTypeName, objectId);
+			log(this, LogInfo, "{} shader compiled successfully (ID: {})", shaderTypeName, (int)objectId);
 		}
 
 		refCount = new unsigned;
@@ -100,7 +100,7 @@ namespace CGEngine {
 		assert(refCount && *refCount > 0);
 		*refCount -= 1;
 		if (*refCount == 0) {
-			log(this, LogDebug, "Deleting shader (ID: {})", objectId);
+			log(this, LogDebug, "Deleting shader (ID: {})", (unsigned int)objectId);
 			GL_CHECK(glDeleteShader(objectId));
 			objectId = 0;
 			delete refCount;
@@ -122,7 +122,7 @@ namespace CGEngine {
 			case GL_INVALID_FRAMEBUFFER_OPERATION: error = "INVALID_FRAMEBUFFER_OPERATION"; break;
 			default:                               error = "Unknown Error"; break;
 			}
-			log(this, LogError, "OpenGL Error: {} [{}] ({}) at {}:{}", error, errorCode, operation, file, line);
+			log(this, LogError, "OpenGL Error: {} [{}] ({}) at {}:{}", error, (int)errorCode, operation, file, line);
 		}
 		return errorCode;
 	}

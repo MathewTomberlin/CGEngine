@@ -51,17 +51,9 @@ namespace CGEngine {
         optional<DataMap> getSceneProcess(string sceneName);
 
         //Bodies
-        UniqueDomain<id_t, Body*> bodies = UniqueDomain<id_t, Body*>(1000);
         vector<Body*> uninitialized;
-        void deleteBody(Body* body, ChildrenTermination childTermination = ChildrenTermination::Orphan);
         bool isDeleted(Body* bodyId);
         void addUninitialized(Body* body);
-        id_t receiveBodyId(Body* body);
-        void refundBodyId(Body* body);
-        id_t create(Transformable* entity = nullptr);
-        id_t create(Transformable* entity, Transformation, Body* parent = nullptr, Script* startScript = nullptr);
-        id_t create(Transformable* entity, Body* parent, Script* startScript = nullptr, Transformation transform = Transformation());
-        id_t create(Transformable* entity, Script* startScript, Transformation transform = Transformation(), Body* parent = nullptr);
 
         //Root Body
         Body* getRoot();

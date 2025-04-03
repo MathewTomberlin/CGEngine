@@ -48,17 +48,12 @@ namespace CGEngine {
     /// 
     /// A Body creates a bounds RectangleShape and updates it with its entity. The bounds may be drawn by setting the correct setting in the World.
     /// </summary>
-    class Body : public Transformable, public Drawable, public ScriptController {
+    class Body : public Transformable, public Drawable, public ScriptController, public IResource {
     public:
         Body(Transformable* d, Transformation handle = Transformation(), Body* p = nullptr, Vector2f align = {0,0});
         Body(Transformable* d, Body* p, Transformation handle = Transformation());
 
         virtual ~Body();
-        /// <summary>
-        /// Get the Body's unique id
-        /// </summary>
-        /// <returns>The Body's unique id or nullopt</returns>
-        optional<size_t> getId();
         /// <summary>
         /// The Body's name
         /// </summary>
@@ -587,7 +582,8 @@ namespace CGEngine {
 		/// </summary>
 		/// <returns>Number of children attached</returns>
 		size_t getChildCount() const;
-    protected:
+
+        bool isValid() const;
         /// <summary>
         /// Base Body initialization with a display name, taking a unique ID from world's body IDs stack, and assigning itself to the ScriptMap's owner pointer.
         /// </summary>
@@ -598,10 +594,13 @@ namespace CGEngine {
         friend class World;
         friend class Renderer;
         friend class InputMap;
+		friend class AssetManager;
         /// <summary>
         /// The unique id of the Body provided by the world
         /// </summary>
         optional<size_t> bodyId = nullopt;
+
+        bool valid = true;
         /// <summary>
         /// This Body's parameters
         /// </summary>
