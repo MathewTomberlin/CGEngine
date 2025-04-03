@@ -11,7 +11,6 @@ namespace CGEngine {
 		void playAnimation(Animation* animation);
 		void calculateBoneTransform(const NodeData* node, glm::mat4 parentTransform);
 		vector<glm::mat4> getBoneMatrices();
-
 	private:
 		vector<glm::mat4> boneMatrices;
 		Animation* currentAnimation;

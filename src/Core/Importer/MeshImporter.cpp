@@ -217,7 +217,8 @@ namespace CGEngine {
 			}
 			
 			//Finally, create MeshData with node name, vertices, indices, and modelBones
-			targetNode->meshData = new MeshData(node->mName.C_Str(), vertices, indices, modelBones);
+			optional<id_t> meshDataId = assets.create<MeshData>(mesh->mName.C_Str(), node->mName.C_Str(), vertices, indices, modelBones);
+			targetNode->meshData = assets.get<MeshData>(meshDataId.value());
 			//Set the node materialId to the world material id for this node
 			targetNode->materialId = modelMaterials[mesh->mMaterialIndex];
 			log(this, LogDebug, "  - Created node with Material Id {}, {} vertices, {} indices, and {} bones", targetNode->materialId, targetNode->meshData->vertices.size(), targetNode->meshData->indices.size(), targetNode->meshData->bones.size());
