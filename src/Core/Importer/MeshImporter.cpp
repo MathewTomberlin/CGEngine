@@ -31,7 +31,7 @@ namespace CGEngine {
         return ImportResult();
     }
 
-	void MeshImporter::importAnimations(const aiScene* scene, map<string,BoneData> modelBones, map<string, Animation*>& modelAnimations) {
+	void MeshImporter::importAnimations(const aiScene* scene, map<string,BoneData> modelBones, vector<string>& modelAnimations) {
 		if (scene->HasAnimations()){
 			log(this, LogInfo, "- Importing {} Animations", scene->mNumAnimations);
 
@@ -50,7 +50,7 @@ namespace CGEngine {
 				// Cache the animation using AssetManager
 				optional<id_t> animationId = assets.add<Animation>(animName, animation);
 				if (animationId.has_value()) {
-					modelAnimations[animName] = assets.get<Animation>(animationId.value());
+					modelAnimations.push_back(animName);
 					log(this, LogInfo, "  - Successfully Imported Animation '{}' with {} Channels and {} Bones", animation->getName(), anim->mNumChannels, animation->bones.size());
 				}
 				else {
@@ -242,7 +242,7 @@ namespace CGEngine {
 		// Import animations if path available
 		if (!meshData->sourcePath.empty()) {
 			const aiScene* scene = modelImporter.ReadFile(meshData->sourcePath,0U);
-			map<string, Animation*> modelAnimations;
+			vector<string> modelAnimations;
 			importAnimations(scene, meshData->bones, modelAnimations);
 		}
 

@@ -2,7 +2,7 @@
 #include "../Engine/Engine.h"
 
 namespace CGEngine {
-	Animator::Animator(const string& animationName) {
+	Animator::Animator(const string& animationName):currentAnimation(nullptr) {
 		init();
 		boneMatrices.reserve(100);
 		for (int i = 0; i < 100; i++) {

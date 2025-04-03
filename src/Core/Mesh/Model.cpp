@@ -134,7 +134,7 @@ namespace CGEngine {
 
 		// Create animator with first available animation
 		if (!modelAnimations.empty()) {
-			string firstAnimationName = modelAnimations.begin()->first;
+			string firstAnimationName = *modelAnimations.begin();
 			return new Animator(firstAnimationName);
 		}
 		return nullptr;
