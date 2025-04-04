@@ -35,10 +35,10 @@ namespace CGEngine {
 		void clearMaterials();
 		string getMeshName() const;
 		string getSourcePath() const;
-		optional<id_t> getModel() const { return modelId; }
-		void setModel(optional<id_t> modelId) { this->modelId = modelId; }
-		Body* getBody() const { return body; }
-		void setBody(Body* body) { this->body = body; }
+		optional<id_t> getModelId() const { return modelId; }
+		void setModelId(optional<id_t> modelId) { this->modelId = modelId; }
+		optional<id_t> getBodyId() const { return bodyId; }
+		void setBodyId(optional<id_t> body) { this->bodyId = body; }
 		// Add new method to get combined transform
 		glm::mat4 getModelMatrix() const {
 			glm::mat4 modelPos = glm::translate(glm::vec3(transformation.position.x, transformation.position.y, transformation.position.z));
@@ -55,7 +55,7 @@ namespace CGEngine {
 	private:
 		string importPath;
 		optional<id_t> modelId;
-		Body* body = nullptr;
+		optional<id_t> bodyId;
 		MeshData* meshData;
 		Transformation3D transformation;
 		RenderParameters renderParameters;

@@ -257,14 +257,12 @@ namespace CGEngine {
 			log(this, LogError, "Mesh is invalid");
 			return;
 		}
-		
-		Body* meshBody = mesh->getBody();
-		if (!meshBody) {
-			log(this, LogError, "Mesh body is null in rendermesh");
+		if (!mesh->getBodyId().has_value()) {
+			log(this, LogError, "Mesh Body ID is empty in renderMesh");
 			return;
 		}
-		// Get combined transform from entire hierarchy
-		glm::mat4 combinedTransform = getCombinedModelMatrix(meshBody);
+		glm::mat4 combinedTransform = getBodyGlobalTransform(mesh->getBodyId());
+
 		if (renderer.setGLWindowState(true)) {
 			// Only proceed with mesh rendering if we have mesh data
 			if (meshData && meshData->vertices.size() > 0) {
@@ -281,7 +279,7 @@ namespace CGEngine {
 				Material* renderMaterial = modelMaterials.at(0);
 
 				Animator* animator = nullptr;
-				optional<id_t> meshModelId = mesh->getModel();
+				optional<id_t> meshModelId = mesh->getModelId();
 				if (meshModelId.has_value()) {
 					Model* meshModel = assets.get<Model>(meshModelId.value());
 					// Only update animation once per model per frame
@@ -342,6 +340,17 @@ namespace CGEngine {
 
 	void Renderer::endFrame() {
 		updatedModels.clear();
+	}
+
+	glm::mat4 Renderer::getBodyGlobalTransform(optional<id_t> bodyId) {
+		//Get the Mesh Body's transformation matrix
+		if (!bodyId.has_value()) return glm::mat4(1.0);
+		Body* meshBody = assets.get<Body>(bodyId.value());
+		if (!meshBody) {
+			log(this, LogError, "Mesh Body is null in renderMesh");
+			return glm::mat4(1.0);
+		}
+		return getCombinedModelMatrix(meshBody);
 	}
 
 	glm::mat4 Renderer::getCombinedModelMatrix(Body* body) {

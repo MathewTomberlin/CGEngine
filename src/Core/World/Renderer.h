@@ -224,6 +224,6 @@ namespace CGEngine {
 		GLenum checkGLError(const char* operation, const char* file, int line);
 		bool validateShader(Shader* shader);
 		bool validateProgram(Program* program);
-
+		glm::mat4 getBodyGlobalTransform(optional<id_t> bodyId);
 	};
 }
