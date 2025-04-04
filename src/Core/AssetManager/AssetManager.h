@@ -63,6 +63,7 @@ namespace CGEngine {
 			registerResourceType<Body>("bodies");
 			registerResourceType<Light>("lights");
 			registerResourceType<Animation>("animations");
+			registerResourceType<Skeleton>("skeletons");
 		}
 
 		// Add new initialization method

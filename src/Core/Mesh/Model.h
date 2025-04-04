@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../World/Renderer.h"
+#include "../Skeleton/Skeleton.h"
 
 using namespace std;
 
@@ -35,9 +36,9 @@ namespace CGEngine {
 	class Model : public EngineSystem, public IResource {
 	public:
 		//Constructor to create a Model from an imported file via Assimp
-		Model(string sourcePath);
+		Model(string sourcePath, const string& skeletonName = "");
 		//Constructor to create a Model manually, likely from MeshData
-		Model(MeshData* meshData, string name = "");
+		Model(MeshData* meshData, string name = "", string skeletonName = "");
 		~Model();
 		//Converts imported MeshNodeData to ModelNode
 		ModelNode* meshNodeToModelNode(MeshNodeData* meshNode, ModelNode* modelNode);
@@ -64,6 +65,7 @@ namespace CGEngine {
 		// Model data
 		string sourcePath;
 		ModelNode* rootNode = nullptr;
+		Skeleton* modelSkeleton = nullptr;
 		map<string, BoneData> modelBones;
 		vector<id_t> modelMaterials;
 		vector<string> modelAnimations;
@@ -73,12 +75,11 @@ namespace CGEngine {
 
 		// Helper to update modelBones when adding mesh data
 		void updateBoneData(const MeshData* meshData);
+		void setSkeleton(Skeleton* skeleton);
 		//During instantiation, recursively create Bodies for each child node
 		void createChildBodies(ModelNode* node, Body* parentBody, const vector<id_t>& materials);
 		//Delete unused pointers
 		void cleanupModelNodes(ModelNode* node);
-		//Setup the animator
-		bool setupAnimator();
 
 		// Prevent copying
 		Model(const Model&) = delete;

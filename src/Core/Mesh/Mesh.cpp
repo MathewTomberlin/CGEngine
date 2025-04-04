@@ -1,7 +1,7 @@
 #include "Mesh.h"
 
 namespace CGEngine {
-	Mesh::Mesh(MeshData* meshData, Transformation3D transformation, vector<Material*> materials, RenderParameters renderParams, string importPath) : meshData(meshData), transformation(transformation), renderParameters(renderParams), materials(materials), importPath(importPath), animator(nullptr) {
+	Mesh::Mesh(MeshData* meshData, Transformation3D transformation, vector<Material*> materials, RenderParameters renderParams, string importPath) : meshData(meshData), transformation(transformation), renderParameters(renderParams), materials(materials), importPath(importPath) {
 		renderer.getModelData(this);
 	};
 
@@ -92,14 +92,6 @@ namespace CGEngine {
 
 	string Mesh::getImportPath() {
 		return importPath;
-	}
-
-	void Mesh::setAnimator(Animator* animator) {
-		this->animator = animator;
-	}
-
-	Animator* Mesh::getAnimator() {
-		return animator;
 	}
 
 	string Mesh::getMeshName() const { 

@@ -146,8 +146,8 @@ namespace CGEngine {
 		}
 	}
 
-	ImportResult Renderer::import(string path) {
-		return importer->importModel(path);
+	ImportResult Renderer::import(string path, const string& skeletonName) {
+		return importer->importModel(path,skeletonName);
 	}
 
 	Material* Renderer::getFallbackMaterial() {
@@ -282,12 +282,15 @@ namespace CGEngine {
 				}
 				Material* renderMaterial = modelMaterials.at(0);
 
-				Animator* animator = mesh->getAnimator();
-				if (meshModel && animator) {
+				Animator* animator = nullptr;
+				if (meshModel) {
 					// Only update animation once per model per frame
 					if (updatedModels.find(meshModel) == updatedModels.end()) {
-						mesh->getAnimator()->updateAnimation(time.getDeltaSec());
-						updatedModels.insert(meshModel);
+						animator = meshModel->getAnimator();
+						if (animator) {
+							animator->updateAnimation(time.getDeltaSec());
+							updatedModels.insert(meshModel);
+						}
 					}
 				}
 
@@ -305,7 +308,7 @@ namespace CGEngine {
 				program->setUniform("camera", currentCamera->getMatrix());
 				program->setUniform("cameraPosition", { camPos.x,camPos.y,camPos.z });
 				program->setUniform("timeSec", time.getElapsedSec());
-				if (animator) {
+				if (meshModel && animator) {
 					vector<glm::mat4> transforms = animator->getBoneMatrices();
 					for (int i = 0; i < transforms.size(); ++i) {
 						program->setUniform(getUniformArrayIndexName("boneMatrices", i).c_str(), transforms[i]);
