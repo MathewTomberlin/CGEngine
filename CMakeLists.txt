@@ -12,6 +12,11 @@ set (CMAKE_FIND_FRAMEWORK "ONCE")
 
 option(BUILD_DOC "Build documentation" ON)
 
+# Set default build type to Debug if not specified
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Debug CACHE STRING "Choose the type of build (Debug/Release)" FORCE)
+endif()
+
 find_package (OpenGL REQUIRED)
 
 find_package(Doxygen)
@@ -45,3 +50,18 @@ add_custom_target(update_resources
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     COMMENT "Updating resource files in build directory"
 )
+
+# Add custom compile definitions based on build type
+target_compile_definitions(main PRIVATE
+    $<$<CONFIG:Debug>:DEBUG>
+    $<$<CONFIG:Release>:RELEASE>
+)
+
+# Set compiler flags for different build types
+if(MSVC)
+    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /Od /Zi")
+    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /O2")
+else()
+    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0 -g")
+    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3")
+endif()
