@@ -69,6 +69,9 @@ namespace CGEngine {
 		BoneData(unsigned int id, glm::mat4 offset) :id(id), offset(offset) {};
 		unsigned int id;
 		glm::mat4 offset;
+		bool operator==(const BoneData& other) const {
+			return (id == id && offset == other.offset);
+		}
 	};
 
 	struct MeshData : public IResource {
@@ -172,7 +175,7 @@ namespace CGEngine {
 		Vector2f fromGlm(glm::vec2 v);
 		Vector3f fromGlm(glm::vec3 v);
 		const aiScene* readFile(string path, unsigned int options);
-		ImportResult import(string path);
+		ImportResult import(string path, const string& skeletonName="");
 		Material* getFallbackMaterial();
 		glm::mat4 getCombinedModelMatrix(Body* body);
 		void endFrame();
