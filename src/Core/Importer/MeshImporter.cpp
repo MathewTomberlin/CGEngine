@@ -9,7 +9,7 @@ namespace CGEngine {
 	MeshImporter::MeshImporter() {
 		init();
 	}
-    ImportResult MeshImporter::importModel(string path, unsigned int options) {
+    ImportResult MeshImporter::importModel(string path, const string& skeletonName, unsigned int options) {
 		string format = getFormat(path);
 		options |= getFormatOptions(format);
 
@@ -20,10 +20,16 @@ namespace CGEngine {
 			//Tracks the model skeletal state and total bones during recursive node visits
 			map<string, BoneData> modelBones;
 			//Import all nodes from the scene recursively
-			ImportResult result = processNode(scene->mRootNode, scene, format, modelBones, modelMaterials);
+			ImportResult result = processNode(scene->mRootNode, scene, modelBones, modelMaterials);
 			result.materials = modelMaterials;
+			//If skeletonName is empty or if that skeleton exists but doesn't have matching bones, use a name that will create a new skeleton
+			string newSkeletonName = (skeletonName.empty() || (!skeletonName.empty() && !assets.get<Skeleton>(skeletonName)->equals(modelBones))) ? path.append("_Skeleton") : skeletonName;
+			optional<id_t> skeletonId = assets.create<Skeleton>(newSkeletonName, modelBones);
+			if (skeletonId.has_value()) {
+				result.skeleton = assets.get<Skeleton>(skeletonId.value());
+			}
 			//Import animations for the model bones
-			importAnimations(scene, modelBones, result.animations);
+			importAnimations(scene, result.skeleton, result.animations);
 			return result;
         } else {
 			log(this, LogError, "Failed to import from {}", path);
@@ -31,7 +37,7 @@ namespace CGEngine {
         return ImportResult();
     }
 
-	void MeshImporter::importAnimations(const aiScene* scene, map<string,BoneData> modelBones, vector<string>& modelAnimations) {
+	void MeshImporter::importAnimations(const aiScene* scene, Skeleton* skeleton, vector<string>& modelAnimations) {
 		if (scene->HasAnimations()){
 			log(this, LogInfo, "- Importing {} Animations", scene->mNumAnimations);
 
@@ -44,7 +50,7 @@ namespace CGEngine {
 				if (animName.empty()) animName = "Animation_" + to_string(i);
 
 				// Create animation through factory method
-				Animation* animation = createAnimation(scene, modelBones, animName);
+				Animation* animation = createAnimation(scene, skeleton, animName);
 				if (!animation) continue;
 
 				// Cache the animation using AssetManager
@@ -128,31 +134,31 @@ namespace CGEngine {
 		return modelMaterials;
 	}
 
-	ImportResult MeshImporter::processNode(aiNode* node, const aiScene* scene, string type, map<string, BoneData>& modelBones, vector<id_t> modelMaterials) {
+	ImportResult MeshImporter::processNode(aiNode* fromSceneNode, const aiScene* scene, map<string, BoneData>& modelBones, vector<id_t> modelMaterials) {
 		//Create a new MeshNodeData for this node and assign this node's name and transform to it
-		MeshNodeData* meshNode = new MeshNodeData(node->mName.C_Str(), fromAiMatrix4toGlm(node->mTransformation));
+		MeshNodeData* meshNode = new MeshNodeData(fromSceneNode->mName.C_Str(), fromAiMatrix4toGlm(fromSceneNode->mTransformation));
 
 		//Try to import mesh data from this node to the new mesh node
-		if (!importMesh(meshNode, node, scene, modelBones, modelMaterials)) {
+		if (!importMesh(meshNode, fromSceneNode, scene, modelBones, modelMaterials)) {
 			log(this, LogError, "Mesh node at id is out-of-bounds for scene meshes");
 			return ImportResult();
 		}
 
 		//Recursively visit all children, setting the child node's parent to this node and assigning the child node to this node's children
-		for (unsigned int i = 0; i < node->mNumChildren; i++) {
-			ImportResult childResult = processNode(node->mChildren[i], scene, type, modelBones, modelMaterials);
+		for (unsigned int i = 0; i < fromSceneNode->mNumChildren; i++) {
+			ImportResult childResult = processNode(fromSceneNode->mChildren[i], scene, modelBones, modelMaterials);
 			childResult.rootNode->parent = meshNode;
 			meshNode->children.push_back(childResult.rootNode);
 		}
 		return ImportResult(meshNode);
     }
 
-	bool MeshImporter::importMesh(MeshNodeData* targetNode, aiNode* node, const aiScene* scene, map<string, BoneData>& modelBones, vector<id_t> modelMaterials) {
+	bool MeshImporter::importMesh(MeshNodeData* toModelNode, aiNode* fromSceneNode, const aiScene* scene, map<string, BoneData>& modelBones, vector<id_t> modelMaterials) {
 		//Import MeshData only for nodes with meshes
-		if (node->mNumMeshes > 0) {
-			if (node->mMeshes[0] >= scene->mNumMeshes) return false;
-			aiMesh* mesh = scene->mMeshes[node->mMeshes[0]];
-			log(this, LogInfo, "- Importing MeshData for node '{}' [Meshes: {}, Children: {}]", node->mName.C_Str(), node->mNumMeshes, node->mNumChildren);
+		if (fromSceneNode->mNumMeshes > 0) {
+			if (fromSceneNode->mMeshes[0] >= scene->mNumMeshes) return false;
+			aiMesh* mesh = scene->mMeshes[fromSceneNode->mMeshes[0]];
+			log(this, LogInfo, "- Importing MeshData for node '{}' [Meshes: {}, Children: {}]", fromSceneNode->mName.C_Str(), fromSceneNode->mNumMeshes, fromSceneNode->mNumChildren);
 
 			//Get position, texture coordinates, and normal from the import mesh node or, if not available, the use the default value
 			vector<VertexData> vertices;
@@ -187,6 +193,10 @@ namespace CGEngine {
 						vertexWeights[vertexId].push_back({boneIndex, weight});
 					}
 
+					//TODO: Instead of storing BoneData on the Model, we should create a Skeleton with the bone data
+					//and assign it to the Model.
+					//TODO: When importing a Skeleton, we need a way to determine if the Skeleton being imported
+					//already exists.
 					//Create BoneData for this bone and add it to the modelBones map, if not already added
 					if (modelBones.find(boneName) == modelBones.end()) {
 						modelBones[boneName] = BoneData(boneIndex, fromAiMatrix4toGlm(bone->mOffsetMatrix));
@@ -225,13 +235,13 @@ namespace CGEngine {
 			}
 			
 			//Finally, create MeshData with node name, vertices, indices, and modelBones
-			optional<id_t> meshDataId = assets.create<MeshData>(mesh->mName.C_Str(), node->mName.C_Str(), vertices, indices, modelBones);
-			targetNode->meshData = assets.get<MeshData>(meshDataId.value());
+			optional<id_t> meshDataId = assets.create<MeshData>(mesh->mName.C_Str(), fromSceneNode->mName.C_Str(), vertices, indices, modelBones);
+			toModelNode->meshData = assets.get<MeshData>(meshDataId.value());
 			//Set the node materialId to the world material id for this node
-			targetNode->materialId = modelMaterials[mesh->mMaterialIndex];
-			log(this, LogDebug, "  - Created node with Material Id {}, {} vertices, {} indices, and {} bones", targetNode->materialId, targetNode->meshData->vertices.size(), targetNode->meshData->indices.size(), targetNode->meshData->bones.size());
+			toModelNode->materialId = modelMaterials[mesh->mMaterialIndex];
+			log(this, LogDebug, "  - Created node with Material Id {}, {} vertices, {} indices, and {} bones", toModelNode->materialId, toModelNode->meshData->vertices.size(), toModelNode->meshData->indices.size(), toModelNode->meshData->bones.size());
 		} else {
-			targetNode->meshData = nullptr;
+			toModelNode->meshData = nullptr;
 		}
 		return true;
 	}
@@ -243,7 +253,8 @@ namespace CGEngine {
 		if (!meshData->sourcePath.empty()) {
 			const aiScene* scene = modelImporter.ReadFile(meshData->sourcePath,0U);
 			vector<string> modelAnimations;
-			importAnimations(scene, meshData->bones, modelAnimations);
+			Skeleton* skeleton = new Skeleton(meshData->bones);
+			importAnimations(scene, skeleton, modelAnimations);
 		}
 
 		return model;
@@ -267,7 +278,7 @@ namespace CGEngine {
         return Color(c->r * 255.f, c->g * 255.f, c->b * 255.f, c->a * 255.f);
     }
 
-	Animation* MeshImporter::createAnimation(const aiScene* scene, map<string,BoneData> bones, const string& animationName) {
+	Animation* MeshImporter::createAnimation(const aiScene* scene, Skeleton* skeleton, const string& animationName) {
 		if (!scene) {
 			log(this, LogError, "Cannot create animation, mesh is invalid");
 			return nullptr;
@@ -282,10 +293,11 @@ namespace CGEngine {
 			animation->setName(!animationName.empty() ? animationName : (aiAnim->mName.length > 0 ? aiAnim->mName.C_Str() : "Animation"));
 			animation->duration = aiAnim->mDuration;
 			animation->ticksPerSecond = aiAnim->mTicksPerSecond != 0 ? aiAnim->mTicksPerSecond : 24.0f;
-			// Read hierarchy
-			animation->readHeirarchyData(animation->root, scene->mRootNode);
-			// Process bones
-			animation->readMissingBones(aiAnim, bones);
+			//Import animation heirarchy from scene heirarchy
+			animation->importAnimationHeirarchy(animation->root, scene->mRootNode);
+
+			//Create a Bone for each channel in the Animation with Skeleton bone id
+			animation->importAnimationBones(aiAnim, skeleton);
 
 			return animation;
 		}

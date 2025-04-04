@@ -72,24 +72,24 @@ namespace CGEngine {
 	class VertexShaderLoader : public AssetLoader {
 	public:
 		Shader* load(const filesystem::path& resourcePath) override {
-			Shader shader = Shader::readFile(resourcePath.string(), GL_VERTEX_SHADER);
-			if (!shader.isValid()) {
+			Shader* shader = new Shader(Shader::readFile(resourcePath.string(), GL_VERTEX_SHADER));
+			if (!shader->isValid()) {
 				logMessage(LogWarn, string("Vertex Shader loaded from '").append(resourcePath.filename().string()).append("' is invalid!"));
 				return nullptr;
 			}
-			return &shader;
+			return shader;
 		}
 	};
 
 	class FragmentShaderLoader : public AssetLoader{
 	public:
 		Shader* load(const filesystem::path& resourcePath) {
-			Shader shader = Shader::readFile(resourcePath.string(), GL_FRAGMENT_SHADER);
-			if (!shader.isValid()) {
+			Shader* shader = new Shader(Shader::readFile(resourcePath.string(), GL_FRAGMENT_SHADER));
+			if (!shader->isValid()) {
 				logMessage(LogWarn, string("Fragment Shader loaded from '").append(resourcePath.filename().string()).append("' is invalid!"));
 				return nullptr;
 			}
-			return &shader;
+			return shader;
 		}
 	};
 

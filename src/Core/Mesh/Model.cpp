@@ -3,11 +3,11 @@
 #include "../Engine/Engine.h"
 
 namespace CGEngine {
-	Model::Model(string sourcePath) : sourcePath(sourcePath) {
+	Model::Model(string sourcePath, const string& skeletonName) : sourcePath(sourcePath) {
 		init();
 		//Import the model using the MeshImporter
 		log(this, LogInfo, "Importing Model: {}", sourcePath);
-		ImportResult importResult = renderer.import(sourcePath);
+		ImportResult importResult = renderer.import(sourcePath, skeletonName);
 		if (!importResult.rootNode) {
 			log(this, LogError, "Failed to import model from '{}'", sourcePath);
 			return;
@@ -16,18 +16,44 @@ namespace CGEngine {
 		//Extract model materials from import result
 		modelMaterials = importResult.materials;
 		modelAnimations = importResult.animations;
-		// Convert ImportResult node tree to ModelNode tree
+		// Convert ImportResult node tree to ModelNode tree and collect modelBones from node bones
 		rootNode = meshNodeToModelNode(importResult.rootNode, nullptr);
-		// Create animator if skeletal
-		if (!modelBones.empty()) setupAnimator();
+		//If the model has a skeleton, get it and try to create an animator
+		if (importResult.skeleton) {
+			modelSkeleton = importResult.skeleton;
+			// Create animator if skeletal
+			if (modelSkeleton && modelSkeleton->isValid()) {
+				modelAnimator = createAnimator();
+				if (!modelAnimator) {
+					log(this, LogError, "Failed to create animator");
+				}
+			}
+		}
 		log(this, LogInfo, "Successfully Imported '{}'", sourcePath);
 	}
 
 	// Method for manually creating the Model from MeshData
-	Model::Model(MeshData* meshData, string name) : sourcePath(name) {
+	Model::Model(MeshData* meshData, string name, string skeletonName) : sourcePath(name) {
 		init();
 		rootNode = createNode(name, meshData);
 		updateBoneData(meshData);
+		//If the model has bones, create a skeleton and animator
+		if (modelBones.size() > 0) {
+			//If skeletonName is empty or if that skeleton exists but doesn't have matching bones, use a name that will create a new skeleton
+			string newSkeletonName = (skeletonName.empty() || (!skeletonName.empty() && !assets.get<Skeleton>(skeletonName)->equals(modelBones))) ? name.append("_Skeleton") : skeletonName;
+			//Get the Skeleton with newSkeletonName, if it exists, or create a Skeleton from model bones
+			optional<id_t> skeletonId = assets.create<Skeleton>(newSkeletonName, modelBones);
+			if (skeletonId.has_value()) {
+				modelSkeleton = assets.get<Skeleton>(skeletonId.value());
+				//Create animator if skeletal
+				if (modelSkeleton && modelSkeleton->isValid()) {
+					modelAnimator = createAnimator();
+					if (!modelAnimator) {
+						log(this, LogError, "Failed to create animator");
+					}
+				}
+			}
+		}
 	}
 
 	ModelNode* Model::meshNodeToModelNode(MeshNodeData * meshNode, ModelNode * modelNode) {
@@ -65,6 +91,10 @@ namespace CGEngine {
 		for (const auto& [boneName, boneData] : meshData->bones) {
 			modelBones[boneName] = boneData;
 		}
+	}
+
+	void Model::setSkeleton(Skeleton* skeleton) { 
+		this->modelSkeleton = skeleton; 
 	}
 
 	Model::~Model() {
@@ -128,16 +158,14 @@ namespace CGEngine {
 	}
 
 	Animator* Model::createAnimator() const {
-		if(!isSkeletal() || modelAnimations.empty()) {
-			return nullptr;
-		}
+		if(!modelSkeleton || modelAnimations.empty()) return nullptr;
 
-		// Create animator with first available animation
-		if (!modelAnimations.empty()) {
-			string firstAnimationName = *modelAnimations.begin();
-			return new Animator(firstAnimationName);
-		}
-		return nullptr;
+		//Animator is created with the first animation imported
+		string firstAnimationName = *modelAnimations.begin();
+		Animator* animator = new Animator(firstAnimationName);
+		//Animator's skeleton is set to the Model's skeleton
+		animator->setSkeleton(modelSkeleton);
+		return animator;
 	}
 
 	bool Model::isSkeletal() const {
@@ -183,12 +211,6 @@ namespace CGEngine {
 				parentBody->attachBody(body);
 			}
 
-			//Set animator if this is a skeletal mesh
-			if (isSkeletal() && modelAnimator && node->meshData &&
-				!node->meshData->vertices.empty()) {
-				mesh->setAnimator(modelAnimator);
-			}
-
 			//Process children with this new body as parent
 			for (ModelNode* childNode : node->children) {
 				createChildBodies(childNode, body, materials);
@@ -196,20 +218,6 @@ namespace CGEngine {
 		} else {
 			log(this, LogError, "Failed to create body for node '{}'", node->nodeName);
 		}
-	}
-
-	// Add new method to handle animation import and setup
-	bool Model::setupAnimator() {
-		log(this, LogInfo, "- Creating Default Animator ===");
-
-		// Create single animator instance for the model
-		modelAnimator = createAnimator();
-		if (!modelAnimator) {
-			log(this, LogError, "Failed to create animator");
-			return false;
-		}
-
-		return true;
 	}
 
 	//Recursively clean up ModelNode hierarchy

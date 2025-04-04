@@ -13,9 +13,14 @@ namespace CGEngine {
 		inline float getTicksPerSecond() { return ticksPerSecond; }
 		inline float getDuration() { return duration; }
 		inline const NodeData& getRoot() { return root; }
-		inline const std::map<std::string, BoneData>& getBoneData() { return boneData; }
-		void readHeirarchyData(NodeData& dest, const aiNode* src);
-		void readMissingBones(const aiAnimation* animation, map<string, BoneData> modelBones);
+		/// <summary>
+		/// Recursively iterate through the scene heirarchy and apply scene node data to
+		/// animation nodes. This is used to build the animation heirarchy from the scene heirarchy.
+		/// </summary>
+		/// <param name="toAnimationNode">The Animation node to be built</param>
+		/// <param name="fromSceneNode">The scene node to parse</param>
+		void importAnimationHeirarchy(NodeData& toAnimationNode, const aiNode* fromSceneNode);
+		void importAnimationBones(const aiAnimation* animation, Skeleton* skeleton);
 		string getName() const { return animationName; }
 		void setName(const string& name) { animationName = name; }
 		// Make root node accessible for hierarchy building
@@ -25,8 +30,13 @@ namespace CGEngine {
 		string animationName;
 		float duration;
 		int ticksPerSecond;
-		std::vector<Bone> bones;
+		/// <summary>
+		/// Animation keyframed bones, updated per frame by the Animator by combining Bone transforms with parent transforms
+		/// </summary>
+		vector<Bone> bones;
+		/// <summary>
+		/// Animation node heirarchy is used to navigate heirarchy when calculating transforms in Animator
+		/// </summary>
 		NodeData root;
-		std::map<std::string, BoneData> boneData;
 	};
 }

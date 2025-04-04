@@ -35,8 +35,6 @@ namespace CGEngine {
 		vector<Material*> getMaterials();
 		id_t addMaterial(Material* material);
 		void clearMaterials();
-		void setAnimator(Animator* animator);
-		Animator* getAnimator();
 		string getMeshName() const;
 		string getSourcePath() const;
 		Model* getModel() const { return model; }
@@ -64,6 +62,5 @@ namespace CGEngine {
 		Transformation3D transformation;
 		RenderParameters renderParameters;
 		vector<Material*> materials;
-		Animator* animator = nullptr;
 	};
 }
