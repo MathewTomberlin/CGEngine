@@ -330,33 +330,43 @@ namespace CGEngine {
 				}
 			}
 
-			IResource* resource = nullptr;
+			unique_ptr<IResource> resource = nullptr;
 			if (resourceLoaders.find(resourceTypeId) == resourceLoaders.end()) {
 				string logMsg = string("No loader implemented for resource type: ").append(typeid(T).name());
 				logMessage(LogError, logMsg);
 				return nullopt;
-			} else {
+			}
+			else {
 				logMessage(LogInfo, string("Using loader for resource type: ").append(typeid(T).name()));
 				//Load the resource using the appropriate loader
 				resource = resourceLoaders[resourceTypeId]->load(resourcePath);
 				//If resource was not loaded successfully and the resourceType has a defaultId
-				if (resource == nullptr && hasDefaultId(resourceTypeId)) {
-					//GGet the default id for the resource type and try to load it
+				if (!resource && hasDefaultId(resourceTypeId)) {
+					//Get the default id for the resource type and try to load it
 					optional<id_t> defaultResourceId = getDefaultId(resourceTypeId);
 					if (defaultResourceId.has_value()) {
-						resource = get(resourceTypeId, defaultResourceId.value());
+						if (auto defaultResource = get(resourceTypeId, defaultResourceId.value())) {
+							// Create a new instance of the default resource
+							resource = unique_ptr<IResource>(defaultResource);
+						}
 					}
 				}
 			}
 
-				if (resource) {
-					id_t resourceId = add<T>(assetName, (T*)resource);
-					resource->setId(resourceId);
-					string logMsg = string("Loaded '").append(resourceContainers[resourceTypeId].first).append("' Resource '").append(assetName).append("' from '").append(resourcePath.filename().string()).append("' ID:").append(to_string(resourceId));
-					logMessage(LogInfo, logMsg);
-					logMessage(LogInfo, string("Resource '").append(resourceContainers[resourceTypeId].first).append("' Count:").append(to_string(resourceContainers[resourceTypeId].second.resources.size())));
-					return resourceId;
+			if (resource) {
+				// Get raw pointer before transferring ownership
+				T* rawPtr = dynamic_cast<T*>(resource.get());
+				if (!rawPtr) {
+					logMessage(LogError, string("Resource type mismatch when loading: ").append(assetName));
+					return nullopt;
 				}
+				id_t resourceId = add<T>(assetName, std::move(resource));
+				rawPtr->setId(resourceId);
+				string logMsg = string("Loaded '").append(resourceContainers[resourceTypeId].first).append("' Resource '").append(assetName).append("' from '").append(resourcePath.filename().string()).append("' ID:").append(to_string(resourceId));
+				logMessage(LogInfo, logMsg);
+				logMessage(LogInfo, string("Resource '").append(resourceContainers[resourceTypeId].first).append("' Count:").append(to_string(resourceContainers[resourceTypeId].second.resources.size())));
+				return resourceId;
+			}
 
 			return nullopt;
 		}
@@ -384,7 +394,8 @@ namespace CGEngine {
 				if (existingResource && existingResource->isValid()) {
 					logMessage(LogInfo, string("Found '").append(resourceContainers[resourceTypeId].first).append("' Resource: ").append(resourceName));
 					return existingResourceId.value();
-				} else {
+				}
+				else {
 					//Remove container mapping for invalid resource
 					auto& container = resourceContainers[resourceTypeId].second;
 					container.nameToId.erase(resourceName);
@@ -394,19 +405,23 @@ namespace CGEngine {
 			}
 
 			//Create the resource with unpacked Args...
-			T* resource = new T(forward<Args>(args)...);
-			if (!resource){
+			unique_ptr<T> resource = make_unique<T>(forward<Args>(args)...);
+			if (!resource) {
 				logMessage(LogInfo, string("Failed to create resource: ").append(resourceName));
-				delete resource;
 				return nullopt;
-			} else if (!static_cast<IResource*>(resource)->isValid()) {
+			}
+			else if (!static_cast<IResource*>(resource.get())->isValid()) {
 				logMessage(LogInfo, string("Invalid resource was created: ").append(resourceName));
-				delete resource;
 				return nullopt;
 			}
 
-			id_t resourceId = add<T>(resourceName, resource);
-			resource->setId(resourceId);
+			// Store raw pointer for setting ID after ownership transfer
+			T* rawPtr = resource.get();
+
+			// Transfer ownership to add method
+			id_t resourceId = add<T>(resourceName, std::move(resource));
+			rawPtr->setId(resourceId);
+
 			string logMsg = string("Created '").append(resourceContainers[resourceTypeId].first).append("' Resource '").append(resourceName).append("' ID:").append(to_string(resourceId));
 			logMessage(LogInfo, logMsg);
 			logMessage(LogInfo, string("Resource '").append(resourceContainers[resourceTypeId].first).append("' Count: ").append(to_string(resourceContainers[resourceTypeId].second.resources.size())));
@@ -431,9 +446,10 @@ namespace CGEngine {
 		//Create a ResourceEntry with a shared pointer to the resource of T type and its name,
 		//then add that to the container.resources and container.nameToId
 		template<typename T>
-		id_t add(const string& name, T* resource) {
+		id_t add(const string& name, unique_ptr<IResource> resource) {
 			auto& container = getContainer<T>();
-			ResourceEntry entry{ shared_ptr<IResource>(resource),name };
+			// Create the ResourceEntry with a shared_ptr that takes ownership from the unique_ptr
+			ResourceEntry entry{ std::shared_ptr<IResource>(resource.release()), name };
 			id_t id = container.resources.add(entry);
 			container.nameToId[name] = id;
 			return id;
