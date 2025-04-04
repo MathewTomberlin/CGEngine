@@ -120,7 +120,7 @@ namespace CGEngine {
 		/// </summary>
 		/// <param name="body">The Body to add to the Renderer</param>
 		/// <param name="transform">The transform of the Body</param>
-		void add(Body* body, Transform transform);
+		void add(id_t body, Transform transform);
 		/// <summary>
 		/// Calculate the greatest Z-Order of Bodies
 		/// </summary>
@@ -136,19 +136,19 @@ namespace CGEngine {
 		/// </summary>
 		/// <param name="zIndex">The Z index to get Bodies at</param>
 		/// <returns>A vector of Body pointers at the indicated Z index</returns>
-		vector<Body*> getZBodies(int zIndex);
+		vector<id_t> getZBodies(int zIndex);
 		/// <summary>
 		/// Get a vector of all bodies below the indicated Z-Order
 		/// </summary>
 		/// <param name="zIndex">The Z index to get Bodies below</param>
 		/// <returns>A vector of Body pointers below the indicated Z index</returns>
-		vector<Body*> getLowerZBodies(int zIndex);
+		vector<id_t> getLowerZBodies(int zIndex);
 		/// <summary>
 		/// Get a vector of all bodies above the indicated Z-Order
 		/// </summary>
 		/// <param name="zIndex">The Z index to get Bodies above</param>
 		/// <returns>A vector of Body pointers above the indicated Z index</returns>
-		vector<Body*> getHigherZBodies(int zIndex);
+		vector<id_t> getHigherZBodies(int zIndex);
 
 		void initializeOpenGL();
 		bool setGLWindowState(bool state);
@@ -199,16 +199,19 @@ namespace CGEngine {
 		/// <param name="window">The RenderTarget to draw the Body in</param>
 		void render(RenderTarget* window);
 
+		/// <summary>
+		/// The current render camera. This is set during OpenGL initialization and used to set the view matrix for the shader program.
+		/// </summary>
 		unique_ptr<Camera> currentCamera = nullptr;
 		/// <summary>
 		/// The order in which to draw bodies, with Bodies further back in the vector drawn on top of other Bodies. This is cleared and re-calculated each frame
 		/// </summary>
-		vector<Body*> renderOrder;
+		vector<id_t> renderOrder;
 		/// <summary>
 		/// If enabled, Bodies are sorted by their zOrder before rendering each frame.
 		/// </summary>
 		bool zSortingEnabled = true;
-		std::set<Model*> updatedModels;
+		set<id_t> updatedModels;
 		GLenum initGlew();
 		Program* program;
 		int boundTextures = 0;

@@ -35,8 +35,8 @@ namespace CGEngine {
 		void clearMaterials();
 		string getMeshName() const;
 		string getSourcePath() const;
-		Model* getModel() const { return model; }
-		void setModel(Model* m) { model = m; }
+		optional<id_t> getModel() const { return modelId; }
+		void setModel(optional<id_t> modelId) { this->modelId = modelId; }
 		Body* getBody() const { return body; }
 		void setBody(Body* body) { this->body = body; }
 		// Add new method to get combined transform
@@ -54,7 +54,7 @@ namespace CGEngine {
 		}
 	private:
 		string importPath;
-		Model* model = nullptr;
+		optional<id_t> modelId;
 		Body* body = nullptr;
 		MeshData* meshData;
 		Transformation3D transformation;
