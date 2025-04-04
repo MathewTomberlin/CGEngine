@@ -17,8 +17,8 @@ namespace CGEngine {
 
 	class Mesh : public IResource, public Transformable{
 	public:
-		Mesh(MeshData* model, Transformation3D transformation = Transformation3D(), vector<Material*> materials = { new Material(SurfaceParameters()) }, RenderParameters renderParams = RenderParameters(), string importPath = "");
-		Mesh(string importPath, Transformation3D transformation = Transformation3D(), vector<Material*> materials = { new Material(SurfaceParameters()) }, RenderParameters renderParams = RenderParameters());
+		Mesh(MeshData* model, Transformation3D transformation = Transformation3D(), vector<id_t> materials = { 0 }, RenderParameters renderParams = RenderParameters(), string importPath = "");
+		Mesh(string importPath, Transformation3D transformation = Transformation3D(), vector<id_t> materials = { 0 }, RenderParameters renderParams = RenderParameters());
 
 		void render(Transform parentTransform);
 		void bindTexture(Texture* texture);
@@ -30,8 +30,8 @@ namespace CGEngine {
 		void scale(Vector3f delta);
 		MeshData* getMeshData();
 		void setMeshData(MeshData* model);
-		vector<Material*> getMaterials();
-		id_t addMaterial(Material* material);
+		vector<id_t> getMaterials();
+		id_t addMaterial(id_t materialId);
 		void clearMaterials();
 		string getMeshName() const;
 		string getSourcePath() const;
@@ -59,6 +59,6 @@ namespace CGEngine {
 		MeshData* meshData;
 		Transformation3D transformation;
 		RenderParameters renderParameters;
-		vector<Material*> materials;
+		vector<id_t> materials;
 	};
 }
