@@ -35,31 +35,34 @@ namespace CGEngine {
                 if (spriteTexId.has_value()) {
                     Texture* spriteTex = assets.get<TextureResource>(spriteTexId.value())->getTexture();
                     IntRect spriteRect = IntRect({ 0,0 }, { 32,32 });
-                    Body* player = new Body(new Sprite(*spriteTex, spriteRect)/*, gridBody*/);
-                    player->setName("player");
-                    player->zOrder = 10;
-                    player->setPosition({ screen->getCurrentView()->getSize().x / 2, screen->getCurrentView()->getSize().y / 2 });
-                    //Add the instances of the Move and Rotate Controllers
-                    player->addStartScript(keyboardMoveController);
-                    player->addStartScript(keyboardRotateController);
-                    //Add an AnimationBehavior to the player and get the new Behavior's ID
-                    AnimationParameters playerAnimParams = AnimationParameters();
-                    playerAnimParams.startRunning = false;
-                    id_t animBehaviorId = (new AnimationBehavior(player, playerAnimParams))->getId();
+                    optional<id_t> playerId = assets.create<Body>("Player",new Sprite(*spriteTex, spriteRect)/*, gridBody*/);
+					Body* player = assets.get<Body>(playerId.value());
+                    if (player) {
+                        player->setName("player");
+                        player->zOrder = 10;
+                        player->setPosition({ screen->getCurrentView()->getSize().x / 2, screen->getCurrentView()->getSize().y / 2 });
+                        //Add the instances of the Move and Rotate Controllers
+                        player->addStartScript(keyboardMoveController);
+                        player->addStartScript(keyboardRotateController);
+                        //Add an AnimationBehavior to the player and get the new Behavior's ID
+                        AnimationParameters playerAnimParams = AnimationParameters();
+                        playerAnimParams.startRunning = false;
+                        id_t animBehaviorId = (new AnimationBehavior(player, playerAnimParams))->getId();
 
-                    //Add KeyRelease scripts that call the "endAnimation" domain on the animationBehavior via its id
-                    player->addKeyReleaseScript([](ScArgs args) {
-                        args.behavior->callDomain("endAnimation");
-                        }, Keyboard::Scan::W, animBehaviorId);
-                    player->addKeyReleaseScript([](ScArgs args) {
-                        args.behavior->callDomain("endAnimation");
-                        }, Keyboard::Scan::S, animBehaviorId);
-                    player->addKeyReleaseScript([](ScArgs args) {
-                        args.behavior->callDomain("endAnimation");
-                        }, Keyboard::Scan::A, animBehaviorId);
-                    player->addKeyReleaseScript([](ScArgs args) {
-                        args.behavior->callDomain("endAnimation");
-                        }, Keyboard::Scan::D, animBehaviorId);
+                        //Add KeyRelease scripts that call the "endAnimation" domain on the animationBehavior via its id
+                        player->addKeyReleaseScript([](ScArgs args) {
+                            args.behavior->callDomain("endAnimation");
+                            }, Keyboard::Scan::W, animBehaviorId);
+                        player->addKeyReleaseScript([](ScArgs args) {
+                            args.behavior->callDomain("endAnimation");
+                            }, Keyboard::Scan::S, animBehaviorId);
+                        player->addKeyReleaseScript([](ScArgs args) {
+                            args.behavior->callDomain("endAnimation");
+                            }, Keyboard::Scan::A, animBehaviorId);
+                        player->addKeyReleaseScript([](ScArgs args) {
+                            args.behavior->callDomain("endAnimation");
+                            }, Keyboard::Scan::D, animBehaviorId);
+                    }
                 }
             };
 
