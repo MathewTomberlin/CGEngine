@@ -85,10 +85,13 @@ namespace CGEngine {
 			//Don't throw an error because null Mesh Bodies are valid (but not rendered)
 			if (!meshData) return;
 
-			vector<Material*> material = mesh->getMaterials();
-			Material* renderMaterial = assets.get<Material>(fallbackMaterialId); //TODO: Ensure Renderer.fallbackMaterial is using AssetManager
-			if (material.size() > 0 && material[0] && material[0]->getProgram()) {
-				renderMaterial = material[0];
+			vector<id_t> meshMaterialIds = mesh->getMaterials();
+			Material* renderMaterial = assets.get<Material>(fallbackMaterialId);
+			if (meshMaterialIds.size() > 0) {
+				Material* meshMaterial = assets.get<Material>(meshMaterialIds[0]);
+				if (meshMaterial && meshMaterial->getProgram()) {
+					renderMaterial = meshMaterial;
+				}
 			}
 
 			Program* program = renderMaterial->getProgram();
@@ -141,7 +144,6 @@ namespace CGEngine {
 			}
 			glBindVertexArray(0);
 
-			mesh->setMeshData(meshData);
 			setGLWindowState(false);
 		}
 	}
@@ -160,10 +162,13 @@ namespace CGEngine {
 			//Don't throw an error because null Mesh Bodies are valid (but not rendered)
 			if (!meshData) return;
 
-			vector<Material*> material = mesh->getMaterials();
-			Material* renderMaterial = assets.get<Material>(fallbackMaterialId); //TODO: Ensure Renderer.fallbackMaterial is using AssetManager
-			if (material.size() > 0 && material[0] && material[0]->getProgram()) {
-				renderMaterial = material[0];
+			vector<id_t> meshMaterialIds = mesh->getMaterials();
+			Material* renderMaterial = assets.get<Material>(fallbackMaterialId);
+			if (meshMaterialIds.size() > 0) {
+				Material* meshMaterial = assets.get<Material>(meshMaterialIds[0]);
+				if (meshMaterial && meshMaterial->getProgram()) {
+					renderMaterial = meshMaterial;
+				}
 			}
 
 			GL_CHECK(glBindVertexArray(meshData->vao));
@@ -181,7 +186,6 @@ namespace CGEngine {
 			}
 			glBindVertexArray(0);
 
-			mesh->setMeshData(meshData);
 			setGLWindowState(false);
 		}
 	}
@@ -270,13 +274,13 @@ namespace CGEngine {
 				boundTextures = 0;
 				
 				// Get materials from Model instead of Mesh
-				vector<Material*> modelMaterials = mesh->getMaterials();
+				vector<id_t> modelMaterials = mesh->getMaterials();
 				// Ensure at least one material (fallback)
 				if (modelMaterials.empty()) {
 					log(this, LogWarn, "No model materials in renderer. Using fallback.");
-					modelMaterials.push_back(assets.get<Material>(fallbackMaterialId)); //TODO: Ensure Renderer.fallbackMaterial is using AssetManager
+					modelMaterials.push_back(assets.getDefaultId<Material>().value());
 				}
-				Material* renderMaterial = modelMaterials.at(0);
+				Material* renderMaterial = assets.get<Material>(modelMaterials.at(0));
 
 				Animator* animator = nullptr;
 				optional<id_t> meshModelId = mesh->getModelId();
@@ -370,7 +374,9 @@ namespace CGEngine {
 		return localTransform;
 	};
 
-	void Renderer::setMaterialUniforms(Material* material, Program* program, int materialId) {
+	void Renderer::setMaterialUniforms(id_t materialAssetId, Program* program, int materialId) {
+		Material* material = assets.get<Material>(materialAssetId);
+		if (!material) return;
 		for (auto iterator = material->materialParameters.begin(); iterator != material->materialParameters.end(); ++iterator) {
 			string paramName = (*iterator).first;
 			optional<ParamData> paramData = material->getParameter(paramName);
