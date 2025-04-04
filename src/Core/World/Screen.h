@@ -38,7 +38,7 @@ namespace CGEngine {
     protected:
         friend class World;
         //Window
-        RenderWindow* window;
+        unique_ptr<RenderWindow> window;
         RenderWindow* createWindow();
         string windowTitle;
         //Size

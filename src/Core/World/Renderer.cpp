@@ -66,7 +66,7 @@ namespace CGEngine {
 
 		// Setup a camera with perspective projection
 		GLfloat aspectRatio = static_cast<float>(window->getSize().x) / window->getSize().y;
-		currentCamera = new Camera(aspectRatio);
+		currentCamera = make_unique<Camera>(aspectRatio);
 
 		// Enable Z-buffer read and write
 		GL_CHECK(glEnable(GL_DEPTH_TEST));
@@ -550,11 +550,11 @@ namespace CGEngine {
 	}
 
 	Camera* Renderer::getCurrentCamera() {
-		return currentCamera;
+		return currentCamera.get();
 	}
 
-	void Renderer::setCurrentCamera(Camera* camera) {
-		currentCamera = camera;
+	void Renderer::setCurrentCamera(unique_ptr<Camera> camera) {
+		currentCamera = move(camera);
 	}
 
 	GLenum Renderer::initGlew() {
