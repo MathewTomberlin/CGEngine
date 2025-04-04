@@ -65,6 +65,9 @@ namespace CGEngine {
 		// Model data
 		string sourcePath;
 		ModelNode* rootNode = nullptr;
+		/// <summary>
+		/// Oberservation pointer of the Skeleton owned by AssetManager
+		/// </summary>
 		Skeleton* modelSkeleton = nullptr;
 		map<string, BoneData> modelBones;
 		vector<id_t> modelMaterials;

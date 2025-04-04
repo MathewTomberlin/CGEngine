@@ -10,21 +10,22 @@ namespace CGEngine {
 	}
 
 	GLenum Renderer::checkGLError(const char* operation, const char* file, int line) {
-		GLenum errorCode;
-		while ((errorCode = glGetError()) != GL_NO_ERROR) {
-			std::string error;
-			switch (errorCode) {
-			case GL_INVALID_ENUM:                  error = "INVALID_ENUM"; break;
-			case GL_INVALID_VALUE:                 error = "INVALID_VALUE"; break;
-			case GL_INVALID_OPERATION:             error = "INVALID_OPERATION"; break;
-			case GL_STACK_OVERFLOW:                error = "STACK_OVERFLOW"; break;
-			case GL_STACK_UNDERFLOW:               error = "STACK_UNDERFLOW"; break;
-			case GL_OUT_OF_MEMORY:                 error = "OUT_OF_MEMORY"; break;
-			case GL_INVALID_FRAMEBUFFER_OPERATION: error = "INVALID_FRAMEBUFFER_OPERATION"; break;
-			default:                               error = "Unknown Error"; break;
-			}
-			log(this, LogError, "OpenGL Error: {} [{}] ({}) at {}:{}", error, (int)errorCode, operation, file, line);
-		}
+		GLenum errorCode = GL_NO_ERROR;
+		//TODO: Re-enable in DEBUG only
+		//while ((errorCode = glGetError()) != GL_NO_ERROR) {
+		//	std::string error;
+		//	switch (errorCode) {
+		//	case GL_INVALID_ENUM:                  error = "INVALID_ENUM"; break;
+		//	case GL_INVALID_VALUE:                 error = "INVALID_VALUE"; break;
+		//	case GL_INVALID_OPERATION:             error = "INVALID_OPERATION"; break;
+		//	case GL_STACK_OVERFLOW:                error = "STACK_OVERFLOW"; break;
+		//	case GL_STACK_UNDERFLOW:               error = "STACK_UNDERFLOW"; break;
+		//	case GL_OUT_OF_MEMORY:                 error = "OUT_OF_MEMORY"; break;
+		//	case GL_INVALID_FRAMEBUFFER_OPERATION: error = "INVALID_FRAMEBUFFER_OPERATION"; break;
+		//	default:                               error = "Unknown Error"; break;
+		//	}
+		//	log(this, LogError, "OpenGL Error: {} [{}] ({}) at {}:{}", error, (int)errorCode, operation, file, line);
+		//}
 		return errorCode;
 	}
 
@@ -156,40 +157,6 @@ namespace CGEngine {
 		return assets.get<Material>(fallbackMaterialId);
 	}
 
-	void Renderer::updateModelData(Mesh* mesh) {
-		if (setGLWindowState(true)) {
-			MeshData* meshData = mesh->getMeshData();
-			//Don't throw an error because null Mesh Bodies are valid (but not rendered)
-			if (!meshData) return;
-
-			vector<id_t> meshMaterialIds = mesh->getMaterials();
-			Material* renderMaterial = assets.get<Material>(fallbackMaterialId);
-			if (meshMaterialIds.size() > 0) {
-				Material* meshMaterial = assets.get<Material>(meshMaterialIds[0]);
-				if (meshMaterial && meshMaterial->getProgram()) {
-					renderMaterial = meshMaterial;
-				}
-			}
-
-			GL_CHECK(glBindVertexArray(meshData->vao));
-
-			//Bind the vertex buffer and pass in the vertex data
-			GL_CHECK(glBindBuffer(GL_ARRAY_BUFFER, meshData->vbo));
-			GL_CHECK(glBufferData(GL_ARRAY_BUFFER, meshData->vertices.size() 
-				* sizeof(VertexData), meshData->vertices.data(), GL_STATIC_DRAW));
-
-			//Bind and buffert the element buffer, if the model has indices
-			if (meshData->indices.size() > 0) {
-				GL_CHECK(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, meshData->ebo));
-				GL_CHECK(glBufferData(GL_ELEMENT_ARRAY_BUFFER, meshData->indices.size() 
-					* sizeof(unsigned int), meshData->indices.data(), GL_STATIC_DRAW));
-			}
-			glBindVertexArray(0);
-
-			setGLWindowState(false);
-		}
-	}
-
 	bool Renderer::setGLWindowState(bool state) {
 		// Make the window no longer the active window for OpenGL calls
 		bool success = window->setActive(state);
@@ -200,7 +167,6 @@ namespace CGEngine {
 	}
 
 	bool Renderer::clearGL(GLbitfield mask) {
-		if (!setGLWindowState(true)) return false;
 		GL_CHECK(glClear(mask));
 		return true;
 	}
@@ -215,12 +181,15 @@ namespace CGEngine {
 
 	bool Renderer::processRender() {
 		try {
+			// Activate OpenGL context once for the entire render pass
+			if (!setGLWindowState(true)) return false;
 			//Clear render order
 			clear();
 			//Collect Bodies to render
 			Body* root = world->getRoot();
 			if (!root) {
 				log(this, LogError, "Root is null");
+				setGLWindowState(false);
 				return false;
 			}
 			root->render(*window, root->getTransform());
@@ -228,6 +197,7 @@ namespace CGEngine {
 			render(window);
 			endFrame();
 
+#ifdef DEBUG
 			// Check for errors before display
 			GLenum err = glGetError();
 			if (err != GL_NO_ERROR) {
@@ -243,14 +213,18 @@ namespace CGEngine {
 					glBindTexture(GL_TEXTURE_2D, 0);
 				}
 			}
+#endif
 
 			window->display();
+			setGLWindowState(false);
 			return true;
 		} catch (const exception& ex) {
 			log(this, LogError, "Exception in processRender: {}", ex.what());
+			setGLWindowState(false);
 			return false;
 		} catch (...) {
 			log(this, LogError, "Unknown exception in processRender");
+			setGLWindowState(false);
 			return false;
 		}
 	}
@@ -267,79 +241,76 @@ namespace CGEngine {
 		}
 		glm::mat4 combinedTransform = getBodyGlobalTransform(mesh->getBodyId());
 
-		if (renderer.setGLWindowState(true)) {
-			// Only proceed with mesh rendering if we have mesh data
-			if (meshData && meshData->vertices.size() > 0) {
-				GL_CHECK(glBindVertexArray(meshData->vao));
-				boundTextures = 0;
-				
-				// Get materials from Model instead of Mesh
-				vector<id_t> modelMaterials = mesh->getMaterials();
-				// Ensure at least one material (fallback)
-				if (modelMaterials.empty()) {
-					log(this, LogWarn, "No model materials in renderer. Using fallback.");
-					modelMaterials.push_back(assets.getDefaultId<Material>().value());
-				}
-				Material* renderMaterial = assets.get<Material>(modelMaterials.at(0));
-
-				Animator* animator = nullptr;
-				optional<id_t> meshModelId = mesh->getModelId();
-				if (meshModelId.has_value()) {
-					Model* meshModel = assets.get<Model>(meshModelId.value());
-					// Only update animation once per model per frame
-					if (meshModel && updatedModels.find(meshModelId.value()) == updatedModels.end()) {
-						animator = meshModel->getAnimator();
-						if (animator) {
-							animator->updateAnimation(time.getDeltaSec());
-							updatedModels.insert(meshModelId.value());
-						}
-					}
-				}
-
-				Program* program = renderMaterial->getProgram();
-				if (!program) {
-					log(this, LogError, "Shader program is invalid");
-					return;
-				}
-				//Bind the shaders.
-				program->use();
-
-				//Set the uniforms for the shader to use
-				Vector3f camPos = currentCamera->getPosition();
-				program->setUniform("model", combinedTransform);
-				program->setUniform("camera", currentCamera->getMatrix());
-				program->setUniform("cameraPosition", { camPos.x,camPos.y,camPos.z });
-				program->setUniform("timeSec", time.getElapsedSec());
-				if (meshModelId.has_value() && animator) {
-					vector<glm::mat4> transforms = animator->getBoneMatrices();
-					for (int i = 0; i < transforms.size(); ++i) {
-						program->setUniform(getUniformArrayIndexName("boneMatrices", i).c_str(), transforms[i]);
-					}
-				}
-
-				for (int i = 0; i < modelMaterials.size(); ++i) {
-					setMaterialUniforms(modelMaterials.at(i), program, i);
-				}
-
-				program->setUniform("lightCount", (int)assets.getResourceCount<Light>());
-				for (size_t i = 0; i < assets.getResourceCount<Light>(); ++i) {
-					setLightUniforms(assets.get<Light>(i), i, program);
-				}
-
-				// Draw the cube
-				if (meshData->indices.size()) {
-					GL_CHECK(glDrawElements(GL_TRIANGLES, meshData->indices.size(), GL_UNSIGNED_INT, 0));
-				} else {
-					GL_CHECK(glDrawArrays(GL_TRIANGLES, 0, meshData->vertices.size() / 5));
-				}
-
-				// Unbind varray, shaders, and texture
-				glBindVertexArray(0);
-				glActiveTexture(GL_TEXTURE0);
-				program->stop();
+		// Only proceed with mesh rendering if we have mesh data
+		if (meshData && meshData->vertices.size() > 0) {
+			GL_CHECK(glBindVertexArray(meshData->vao));
+			boundTextures = 0;
+			
+			// Get materials from Model instead of Mesh
+			vector<id_t> modelMaterials = mesh->getMaterials();
+			// Ensure at least one material (fallback)
+			if (modelMaterials.empty()) {
+				log(this, LogWarn, "No model materials in renderer. Using fallback.");
+				modelMaterials.push_back(assets.getDefaultId<Material>().value());
 			}
+			Material* renderMaterial = assets.get<Material>(modelMaterials.at(0));
+
+			Animator* animator = nullptr;
+			optional<id_t> meshModelId = mesh->getModelId();
+			if (meshModelId.has_value()) {
+				Model* meshModel = assets.get<Model>(meshModelId.value());
+				// Only update animation once per model per frame
+				if (meshModel && updatedModels.find(meshModelId.value()) == updatedModels.end()) {
+					animator = meshModel->getAnimator();
+					if (animator) {
+						animator->updateAnimation(time.getDeltaSec());
+						updatedModels.insert(meshModelId.value());
+					}
+				}
+			}
+
+			Program* program = renderMaterial->getProgram();
+			if (!program) {
+				log(this, LogError, "Shader program is invalid");
+				return;
+			}
+			//Bind the shaders.
+			program->use();
+
+			//Set the uniforms for the shader to use
+			Vector3f camPos = currentCamera->getPosition();
+			program->setUniform("model", combinedTransform);
+			program->setUniform("camera", currentCamera->getMatrix());
+			program->setUniform("cameraPosition", { camPos.x,camPos.y,camPos.z });
+			program->setUniform("timeSec", time.getElapsedSec());
+			if (meshModelId.has_value() && animator) {
+				vector<glm::mat4> transforms = animator->getBoneMatrices();
+				for (int i = 0; i < transforms.size(); ++i) {
+					program->setUniform(getUniformArrayIndexName("boneMatrices", i).c_str(), transforms[i]);
+				}
+			}
+
+			for (int i = 0; i < modelMaterials.size(); ++i) {
+				setMaterialUniforms(modelMaterials.at(i), program, i);
+			}
+
+			program->setUniform("lightCount", (int)assets.getResourceCount<Light>());
+			for (size_t i = 0; i < assets.getResourceCount<Light>(); ++i) {
+				setLightUniforms(assets.get<Light>(i), i, program);
+			}
+
+			// Draw the cube
+			if (meshData->indices.size()) {
+				GL_CHECK(glDrawElements(GL_TRIANGLES, meshData->indices.size(), GL_UNSIGNED_INT, 0));
+			} else {
+				GL_CHECK(glDrawArrays(GL_TRIANGLES, 0, meshData->vertices.size() / 5));
+			}
+
+			// Unbind varray, shaders, and texture
+			glBindVertexArray(0);
+			glActiveTexture(GL_TEXTURE0);
+			program->stop();
 		}
-		if (renderer.setGLWindowState(false));
 	}
 
 	void Renderer::endFrame() {
