@@ -40,7 +40,7 @@ namespace CGEngine {
 		const aiScene* readFile(string path, unsigned int options);
 		// Add direct model creation to support importing animations
 		Model* createModel(MeshData* meshData, string name = "");
-		Animation* createAnimation(const aiScene* scene, Skeleton* skeleton, const string& animationName = "");
+		unique_ptr<IResource> createAnimation(const aiScene* scene, Skeleton* skeleton, const string& animationName = "");
 
 		static inline glm::mat4 fromAiMatrix4toGlm(const aiMatrix4x4& from) {
 			return glm::mat4(

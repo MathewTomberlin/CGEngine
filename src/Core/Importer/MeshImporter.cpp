@@ -50,14 +50,14 @@ namespace CGEngine {
 				if (animName.empty()) animName = "Animation_" + to_string(i);
 
 				// Create animation through factory method
-				Animation* animation = createAnimation(scene, skeleton, animName);
+				unique_ptr<IResource> animation = createAnimation(scene, skeleton, animName);
 				if (!animation) continue;
 
 				// Cache the animation using AssetManager
-				optional<id_t> animationId = assets.add<Animation>(animName, animation);
+				optional<id_t> animationId = assets.add<Animation>(animName, move(animation));
 				if (animationId.has_value()) {
 					modelAnimations.push_back(animName);
-					log(this, LogInfo, "  - Successfully Imported Animation '{}' with {} Channels and {} Bones", animation->getName(), anim->mNumChannels, animation->bones.size());
+					//log(this, LogInfo, "  - Successfully Imported Animation '{}' with {} Channels and {} Bones", animation->getName(), anim->mNumChannels, animation->bones.size());
 				}
 				else {
 					log(this, LogError, "Failed to cache animation '{}'", animName);
@@ -278,7 +278,7 @@ namespace CGEngine {
         return Color(c->r * 255.f, c->g * 255.f, c->b * 255.f, c->a * 255.f);
     }
 
-	Animation* MeshImporter::createAnimation(const aiScene* scene, Skeleton* skeleton, const string& animationName) {
+	unique_ptr<IResource> MeshImporter::createAnimation(const aiScene* scene, Skeleton* skeleton, const string& animationName) {
 		if (!scene) {
 			log(this, LogError, "Cannot create animation, mesh is invalid");
 			return nullptr;
@@ -286,7 +286,7 @@ namespace CGEngine {
 
 		try {
 			// Create animation with scene data
-			Animation* animation = new Animation();
+			unique_ptr<Animation> animation = make_unique<Animation>();
 			aiAnimation* aiAnim = scene->mAnimations[0];
 
 			// Setup animation data
