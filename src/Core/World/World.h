@@ -52,7 +52,6 @@ namespace CGEngine {
 
         //Bodies
         vector<Body*> uninitialized;
-        bool isDeleted(Body* bodyId);
         void addUninitialized(Body* body);
 
         //Root Body
@@ -95,9 +94,13 @@ namespace CGEngine {
         /// <returns>The Body's rotation in world space as a normalized direction vector</returns>
         V2f getRight(Transform transform) const;
     private:
+        /// <summary>
+        /// Observation pointer of the RenderWindow owned by Screen
+        /// </summary>
         RenderWindow* window = nullptr;
-
-        //World Root
+        /// <summary>
+        /// Observation pointer of the world root Body owned by AssetManager
+        /// </summary>
         Body* root = nullptr;
 
         bool running = false;
@@ -110,10 +113,6 @@ namespace CGEngine {
         void startUninitializedBodies();
         //End World
         void endWorld(Body* body);
-
-        //Bodies
-        set<Body*> deleted;
-        void addDeletedBody(Body* bodyId);
 
         //Scenes
         map<string, Behavior*> scenes;

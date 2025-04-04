@@ -181,6 +181,9 @@ namespace CGEngine {
 		void endFrame();
 	private:
 		friend class World;
+		/// <summary>
+		/// Observation pointer of the RenderWindow owned by Screen
+		/// </summary>
 		RenderWindow* window = nullptr;
 		/// <summary>
 		/// Clear the renderOrder and bodyTransform map
@@ -201,6 +204,10 @@ namespace CGEngine {
 		/// The order in which to draw bodies, with Bodies further back in the vector drawn on top of other Bodies. This is cleared and re-calculated each frame
 		/// </summary>
 		vector<Body*> renderOrder;
+		/// <summary>
+		/// If enabled, Bodies are sorted by their zOrder before rendering each frame.
+		/// </summary>
+		bool zSortingEnabled = true;
 		std::set<Model*> updatedModels;
 		GLenum initGlew();
 		Program* program;

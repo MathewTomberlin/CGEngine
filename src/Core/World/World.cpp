@@ -323,7 +323,6 @@ namespace CGEngine {
             initSceneList();
 
             while (window->isOpen()) {
-                deleted.clear();
                 updateTime();
                 startUninitializedBodies();
                 callScripts(onUpdateEvent);
@@ -345,27 +344,18 @@ namespace CGEngine {
         if (body == nullptr) {
             body = root;
         }
-        if (!isDeleted(body)) {
-            if (scriptDomain != "delete" || body != root){
-                body->callScripts(scriptDomain);
-            }
 
-            for (int i = body->children.size() - 1; i >= 0; i--) {
-                callScripts(scriptDomain, body->children[i]);
-            }
+        if (scriptDomain != "delete" || body != root){
+            body->callScripts(scriptDomain);
+        }
+
+        for (int i = body->children.size() - 1; i >= 0; i--) {
+            callScripts(scriptDomain, body->children[i]);
         }
     }
 
     void World::addDefaultExitActuator() {
         root->addKeyReleaseScript([](ScArgs args) { world->endWorld(); }, Keyboard::Scan::Escape);
-    }
-
-    void World::addDeletedBody(Body* body) {
-        deleted.insert(body);
-    }
-
-    bool World::isDeleted(Body* body) {
-        return deleted.find(body) != deleted.end();
     }
 
     void World::setBoundsRenderingEnabled(bool enabled) {
