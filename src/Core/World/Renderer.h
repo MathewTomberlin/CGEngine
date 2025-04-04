@@ -159,7 +159,7 @@ namespace CGEngine {
 		bool processRender();
 		void setWindow(RenderWindow* window);
 		Camera* getCurrentCamera();
-		void setCurrentCamera(Camera* camera);
+		void setCurrentCamera(unique_ptr<Camera> camera);
 
 		void renderMesh(Mesh* mesh, MeshData* meshData, Transformation3D transform);
 		void getModelData(Mesh* mesh);
@@ -196,7 +196,7 @@ namespace CGEngine {
 		/// <param name="window">The RenderTarget to draw the Body in</param>
 		void render(RenderTarget* window);
 
-		Camera* currentCamera = nullptr;
+		unique_ptr<Camera> currentCamera = nullptr;
 		/// <summary>
 		/// The order in which to draw bodies, with Bodies further back in the vector drawn on top of other Bodies. This is cleared and re-calculated each frame
 		/// </summary>

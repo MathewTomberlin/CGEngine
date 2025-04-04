@@ -86,14 +86,6 @@ namespace CGEngine {
 		materials.clear();
 	}
 
-	void Mesh::setImportPath(string path) {
-		importPath = path;
-	}
-
-	string Mesh::getImportPath() {
-		return importPath;
-	}
-
 	string Mesh::getMeshName() const { 
 		return meshData ? meshData->meshName : ""; 
 	}

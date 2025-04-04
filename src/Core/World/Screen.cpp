@@ -76,13 +76,13 @@ namespace CGEngine {
     }
 
     RenderWindow* Screen::getWindow() const {
-        return window;
+        return window.get();
     }
 
     RenderWindow* Screen::createWindow() {
-        window = new RenderWindow(VideoMode(size), windowTitle);
+        window = make_unique<RenderWindow>(VideoMode(size), windowTitle);
         initView();
-        return window;
+        return window.get();
     }
 
     void Screen::initView() {
