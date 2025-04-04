@@ -540,11 +540,13 @@ namespace CGEngine {
 	}
 
 	void Renderer::render(RenderTarget* window) {
-		//Sort the render order by Body Z order
-		sortZ();
+		//Sort the renderOrder by zOrder if zSorting is enabled
+		if (zSortingEnabled) {
+			sortZ();
+		}
+
 		//Draw each body with its calculated transform
 		for (auto iterator = renderOrder.begin(); iterator != renderOrder.end(); ++iterator) {
-			if (world->isDeleted(*iterator)) continue;
 			(*iterator)->onDraw(*window, (*iterator)->getGlobalTransform());
 		}
 	}

@@ -107,7 +107,6 @@ namespace CGEngine {
             if (iterator != scripts.end()) {
                 Script* script = (*iterator).second;
                 script->call(caller, behavior);
-                if (world->isDeleted(caller)) return;
             }
         }
     }
@@ -123,7 +122,6 @@ namespace CGEngine {
                     script->setInput(input.value());
                 }
                 script->call(caller, behavior);
-                if (world->isDeleted(caller)) return;
             }
         }
     }
