@@ -590,6 +590,11 @@ namespace CGEngine {
         /// <param name="name">Optional body display name</param>
         /// <param name="isWorldRoot">Whether this is the world root body or not</param>
         Body(string displayName = "");
+        /// <summary>
+        /// Private constructor meant for the world to create the world root Body (if isWorldRoot is true).
+        /// </summary>
+        /// <param name="isWorldRoot">If true, the Body (the world root) will have a nullopt id</param>
+        Body(bool isWorldRoot);
     private:
         friend class World;
         friend class Renderer;
@@ -625,11 +630,6 @@ namespace CGEngine {
         /// The RectangleShape of this body's bounds
         /// </summary>
         RectangleShape* boundsRect = nullptr;
-        /// <summary>
-        /// Private constructor meant for the world to create the world root Body (if isWorldRoot is true).
-        /// </summary>
-        /// <param name="isWorldRoot">If true, the Body (the world root) will have a nullopt id</param>
-        Body(bool isWorldRoot);
         /// <summary>
         /// Base Body start function which calls assigned OnStartEvent ("start") domain scripts
         /// </summary>
