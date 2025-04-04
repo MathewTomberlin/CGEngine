@@ -265,8 +265,6 @@ namespace CGEngine {
 		}
 		// Get combined transform from entire hierarchy
 		glm::mat4 combinedTransform = getCombinedModelMatrix(meshBody);
-
-		Model* meshModel = mesh->getModel();
 		if (renderer.setGLWindowState(true)) {
 			// Only proceed with mesh rendering if we have mesh data
 			if (meshData && meshData->vertices.size() > 0) {
@@ -283,13 +281,15 @@ namespace CGEngine {
 				Material* renderMaterial = modelMaterials.at(0);
 
 				Animator* animator = nullptr;
-				if (meshModel) {
+				optional<id_t> meshModelId = mesh->getModel();
+				if (meshModelId.has_value()) {
+					Model* meshModel = assets.get<Model>(meshModelId.value());
 					// Only update animation once per model per frame
-					if (updatedModels.find(meshModel) == updatedModels.end()) {
+					if (meshModel && updatedModels.find(meshModelId.value()) == updatedModels.end()) {
 						animator = meshModel->getAnimator();
 						if (animator) {
 							animator->updateAnimation(time.getDeltaSec());
-							updatedModels.insert(meshModel);
+							updatedModels.insert(meshModelId.value());
 						}
 					}
 				}
@@ -308,7 +308,7 @@ namespace CGEngine {
 				program->setUniform("camera", currentCamera->getMatrix());
 				program->setUniform("cameraPosition", { camPos.x,camPos.y,camPos.z });
 				program->setUniform("timeSec", time.getElapsedSec());
-				if (meshModel && animator) {
+				if (meshModelId.has_value() && animator) {
 					vector<glm::mat4> transforms = animator->getBoneMatrices();
 					for (int i = 0; i < transforms.size(); ++i) {
 						program->setUniform(getUniformArrayIndexName("boneMatrices", i).c_str(), transforms[i]);
@@ -476,23 +476,26 @@ namespace CGEngine {
 		return ss.str();
 	}
 
-	void Renderer::add(Body* body, Transform transform) {
-		renderOrder.push_back(body);
+	void Renderer::add(id_t bodyId, Transform transform) {
+		renderOrder.push_back(bodyId);
 	}
 
 	int Renderer::zMax() {
-		return renderOrder.back()->zOrder;
+		Body* body = assets.get<Body>(renderOrder.back());
+		return body->zOrder;
 	}
 
 	int Renderer::zMin() {
-		return (*renderOrder.begin())->zOrder;
+		Body* body = assets.get<Body>(renderOrder.back());
+		return body->zOrder;
 	}
 
-	vector<Body*> Renderer::getZBodies(int zIndex) {
-		vector<Body*> bodies;
+	vector<id_t> Renderer::getZBodies(int zIndex) {
+		vector<id_t> bodies;
 		bool found = false;
 		for (int i = 0; i < renderOrder.size(); ++i) {
-			if (renderOrder.at(i)->zOrder == zIndex) {
+			Body* body = assets.get<Body>(renderOrder.at(i));
+			if (body->zOrder == zIndex) {
 				found = true;
 				bodies.push_back(renderOrder.at(i));
 			}
@@ -503,11 +506,12 @@ namespace CGEngine {
 		return bodies;
 	}
 
-	vector<Body*> Renderer::getLowerZBodies(int zIndex) {
-		vector<Body*> bodies;
+	vector<id_t> Renderer::getLowerZBodies(int zIndex) {
+		vector<id_t> bodies;
 		bool found = false;
 		for (int i = 0; i < renderOrder.size(); ++i) {
-			if (renderOrder.at(i)->zOrder < zIndex) {
+			Body* body = assets.get<Body>(renderOrder.at(i));
+			if (body->zOrder < zIndex) {
 				bodies.push_back(renderOrder.at(i));
 			}
 			else {
@@ -517,11 +521,12 @@ namespace CGEngine {
 		return bodies;
 	}
 
-	vector<Body*> Renderer::getHigherZBodies(int zIndex) {
-		vector<Body*> bodies;
+	vector<id_t> Renderer::getHigherZBodies(int zIndex) {
+		vector<id_t> bodies;
 		bool found = false;
 		for (int i = renderOrder.size() - 1; i >= 0; --i) {
-			if (renderOrder.at(i)->zOrder > zIndex) {
+			Body* body = assets.get<Body>(renderOrder.at(i));
+			if (body->zOrder > zIndex) {
 				bodies.push_back(renderOrder.at(i));
 			}
 			else {
@@ -536,7 +541,7 @@ namespace CGEngine {
 	}
 	
 	void Renderer::sortZ() {
-		sort(renderOrder.begin(), renderOrder.end(), [](Body* a, Body* b) { return (a->zOrder < b->zOrder); });
+		sort(renderOrder.begin(), renderOrder.end(), [](id_t a, id_t b) { return (assets.get<Body>(a)->zOrder < assets.get<Body>(b)->zOrder); });
 	}
 
 	void Renderer::render(RenderTarget* window) {
@@ -547,7 +552,8 @@ namespace CGEngine {
 
 		//Draw each body with its calculated transform
 		for (auto iterator = renderOrder.begin(); iterator != renderOrder.end(); ++iterator) {
-			(*iterator)->onDraw(*window, (*iterator)->getGlobalTransform());
+			Body* body = assets.get<Body>(*iterator);
+			body->onDraw(*window, body->getGlobalTransform());
 		}
 	}
 

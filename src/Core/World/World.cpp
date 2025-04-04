@@ -153,7 +153,7 @@ namespace CGEngine {
         return root;
     }
 
-    vector<Body*> World::zRayCast(Vector2f worldPos, optional<int> startZ, int distance, bool backward, bool linecast) {
+    vector<id_t> World::zRayCast(Vector2f worldPos, optional<int> startZ, int distance, bool backward, bool linecast) {
         int zMax = renderer.zMax();
         int zMin = renderer.zMin();
 
@@ -180,13 +180,14 @@ namespace CGEngine {
 
         //Traverse the renderOrder by z index, getting the ordered stack of bodies and returning if it's contained
         int d = (backward) ? 1 : -1;
-        vector<Body*> hits;
+        vector<id_t> hits;
         for (int i = 0; i <= zDist; ++i) {
             int index = currentZ + (i * d);
-            vector<Body*> bodies = renderer.getZBodies(index);
+            vector<id_t> bodies = renderer.getZBodies(index);
             if (!backward) {
                 for (int x = bodies.size() - 1; x >= 0; x--) {
-                    if (bodies[x]->contains(worldPos)) {
+					Body* body = assets.get<Body>(bodies[x]);
+                    if (body->contains(worldPos)) {
                         if (!linecast) {
                             return { bodies[x] };
                         } else {
@@ -197,7 +198,8 @@ namespace CGEngine {
             }
             else {
                 for (int x = 0; x < bodies.size(); x++) {
-                    if (bodies[x]->contains(worldPos)) {
+					Body* body = assets.get<Body>(bodies[x]);
+                    if (body->contains(worldPos)) {
                         if (!linecast) {
                             return { bodies[x] };
                         } else {
@@ -210,12 +212,13 @@ namespace CGEngine {
         return hits;
     }
 
-    vector<Body*> World::raycast(Vector2f worldPos, Vector2f castDir, int zIndex, float distance, bool linecast) {
-        vector<Body*> hits;
-        vector<Body*> bodies = renderer.getZBodies(zIndex);
+    vector<id_t> World::raycast(Vector2f worldPos, Vector2f castDir, int zIndex, float distance, bool linecast) {
+        vector<id_t> hits;
+        vector<id_t> bodies = renderer.getZBodies(zIndex);
         Vector2f targetPos = worldPos + (castDir * distance);
         for (int x = bodies.size() - 1; x >= 0; x--) {
-            if (bodies.at(x)->lineIntersects(worldPos, targetPos)) {
+			Body* body = assets.get<Body>(bodies[x]);
+            if (body->lineIntersects(worldPos, targetPos)) {
                 hits.push_back(bodies.at(x));
                 if (!linecast) {
                     break;

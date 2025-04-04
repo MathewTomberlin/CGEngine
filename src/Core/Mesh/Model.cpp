@@ -198,7 +198,7 @@ namespace CGEngine {
 
 		// Create a mesh for this node (even if empty)
 		Mesh* mesh = new Mesh(node->meshData, nodeTransform, nodeMaterials);
-		mesh->setModel(this);
+		mesh->setModel(getId());
 
 		// Create and attach child body
 		optional<id_t> bodyId = assets.create<Body>(sourcePath.append(node->nodeName), mesh);
