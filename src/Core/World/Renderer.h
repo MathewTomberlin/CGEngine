@@ -163,7 +163,6 @@ namespace CGEngine {
 
 		void renderMesh(Mesh* mesh, MeshData* meshData, Transformation3D transform);
 		void getModelData(Mesh* mesh);
-		void updateModelData(Mesh* mesh);
 		string getUniformArrayIndexName(string arrayName, int index);
 		string getUniformArrayPropertyName(string arrayName, int index, string propertyName);
 		string getUniformObjectPropertyName(string objectName, string propertyName);

@@ -23,6 +23,9 @@ namespace CGEngine {
 		vector<glm::mat4> pose;
 		Animation* currentAnimation;
 		float currentTime = 0.0;
+		/// <summary>
+		/// Oberservation pointer of the Skeleton owned by AssetManager
+		/// </summary>
 		Skeleton* skeleton = nullptr;
 	};
 }
