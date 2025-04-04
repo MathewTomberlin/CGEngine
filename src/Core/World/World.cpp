@@ -301,12 +301,6 @@ namespace CGEngine {
         }
     }
 
-    void World::renderWorld() {
-        window->clear();
-        render();
-        window->display();
-    }
-
     void World::addUninitialized(Body* body) {
         uninitialized.push_back(body);
     }
@@ -345,12 +339,6 @@ namespace CGEngine {
 
     void World::updateTime() {
         time.updateDeltaTime();
-    }
-
-    void World::render() {
-        renderer.clear();
-        root->render(*window, root->getTransform());
-        renderer.render(window);
     }
 
     void World::callScripts(string scriptDomain, Body* body) {

@@ -108,8 +108,6 @@ namespace CGEngine {
         //Update World
         void updateTime();
         void startUninitializedBodies();
-        void renderWorld();
-        void render();
         //End World
         void endWorld(Body* body);
 

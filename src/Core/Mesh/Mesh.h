@@ -28,8 +28,6 @@ namespace CGEngine {
 		void rotate(Vector3f delta);
 		void setScale(Vector3f scale);
 		void scale(Vector3f delta);
-		void setImportPath(string path);
-		string getImportPath();
 		MeshData* getMeshData();
 		void setMeshData(MeshData* model);
 		vector<Material*> getMaterials();
