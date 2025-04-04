@@ -167,7 +167,7 @@ namespace CGEngine {
 		string getUniformArrayIndexName(string arrayName, int index);
 		string getUniformArrayPropertyName(string arrayName, int index, string propertyName);
 		string getUniformObjectPropertyName(string objectName, string propertyName);
-		void setMaterialUniforms(Material* material, Program* program, int materialId = 0);
+		void setMaterialUniforms(id_t materialAssetId, Program* program, int materialId = 0);
 		void setLightUniforms(Light* light, size_t lightIndex, Program* program);
 		glm::vec2 toGlm(Vector2f v);
 		glm::vec3 toGlm(Vector3f v);

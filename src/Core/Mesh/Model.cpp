@@ -186,14 +186,11 @@ namespace CGEngine {
 		);
 
 		// Create material vector for this node
-		vector<Material*> nodeMaterials;
+		vector<id_t> nodeMaterials;
 		if (node->meshData) {
 			id_t materialId = materials.empty() ? node->materialIndex : materials[0];
-			Material* nodeMaterial = assets.get<Material>(materialId);
-			if (nodeMaterial) {
-				nodeMaterials.push_back(nodeMaterial);
-				log(this, LogDebug, "      - Created Mesh for '{}' with Material ID: {}", node->nodeName, materialId);
-			}
+			nodeMaterials.push_back(materialId);
+			log(this, LogDebug, "      - Created Mesh for '{}' with Material ID: {}", node->nodeName, materialId);
 		}
 
 		// Create a mesh for this node (even if empty)
