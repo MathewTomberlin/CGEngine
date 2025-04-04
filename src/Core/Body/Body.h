@@ -595,6 +595,11 @@ namespace CGEngine {
         /// </summary>
         /// <param name="isWorldRoot">If true, the Body (the world root) will have a nullopt id</param>
         Body(bool isWorldRoot);
+        /// <summary>
+		/// Override IResource setId to set the Body's Mesh entity's bodyId to the provided id
+        /// </summary>
+        /// <param name="id"></param>
+        void setId(optional<id_t> id) override;
     private:
         friend class World;
         friend class Renderer;
