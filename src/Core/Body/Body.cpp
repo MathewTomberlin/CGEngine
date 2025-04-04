@@ -719,13 +719,15 @@ namespace CGEngine {
     }
 
     void Body::render(RenderTarget& target, const Transform& parentTransform) {
+        if (!getId().has_value()) return;
+
         //Combine parent transform and local transform
-        Transform combinedTransform = getGlobalTransform();
-        renderer.add(this, combinedTransform);
+        Transform globalTransform = getGlobalTransform();
+        renderer.add(getId().value(), globalTransform);
 
         //Draw children recursively
         for (id_t i = 0; i < children.size(); ++i) {
-            children[i]->render(target, combinedTransform);
+            children[i]->render(target, globalTransform);
         }
     }
 

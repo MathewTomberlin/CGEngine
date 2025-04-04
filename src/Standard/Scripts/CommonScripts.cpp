@@ -21,7 +21,7 @@ namespace CGEngine {
         //Re-readable input
         TranslateArgs evtArgs = args.script->getInput().getData<TranslateArgs>("args");
 
-        vector<Body*> hits = world->raycast(args.caller->getGlobalPosition() + (args.caller->getGlobalBounds().size / 2.f), evtArgs.direction, 1, (args.caller->getGlobalBounds().size / 2.f).x + evtArgs.speed * time.getDeltaSec());
+        vector<id_t> hits = world->raycast(args.caller->getGlobalPosition() + (args.caller->getGlobalBounds().size / 2.f), evtArgs.direction, 1, (args.caller->getGlobalBounds().size / 2.f).x + evtArgs.speed * time.getDeltaSec());
         if (hits.size() <= 0) {
             V2f delta = evtArgs.direction * evtArgs.speed * time.getDeltaSec();
             args.caller->translate(delta, true);
