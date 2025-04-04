@@ -52,11 +52,11 @@ namespace CGEngine {
 	public:
 		AssetManager() {
 			// Register built-in resource types
-			registerResourceType<TextureResource>("textures", new TextureLoader());
-			registerResourceType<FontResource>("fonts", new FontLoader());
-			registerResourceType<VertexShaderResource>("vertexShaders", new VertexShaderLoader());
-			registerResourceType<FragmentShaderResource>("fragmentShaders", new FragmentShaderLoader());
-			registerResourceType<Model>("models", new ModelLoader());
+			registerResourceType<TextureResource>("textures", make_unique<TextureLoader>());
+			registerResourceType<FontResource>("fonts", make_unique<FontLoader>());
+			registerResourceType<VertexShaderResource>("vertexShaders", make_unique<VertexShaderLoader>());
+			registerResourceType<FragmentShaderResource>("fragmentShaders", make_unique<FragmentShaderLoader>());
+			registerResourceType<Model>("models", make_unique<ModelLoader>());
 			registerResourceType<MeshData>("meshData");
 			registerResourceType<Program>("programs");
 			registerResourceType<Material>("materials");
@@ -68,29 +68,21 @@ namespace CGEngine {
 
 		// Add new initialization method
 		void initialize() {
-			//Valid default texture and program required for default material creation
-			Program* defaultProgram = nullptr;
-			TextureResource* defaultTexture = nullptr;
-
 			//Load default texture
 			optional<id_t> defaultTextureId = setDefaultId<TextureResource>(load<TextureResource>("checkered_tile.png", defaultTextureName));
-			if(defaultTextureId.has_value()){
-				defaultTexture = get<TextureResource>(defaultTextureId.value());
-			} else {
+			if(!defaultTextureId.has_value()){
 				logMessage(LogError, "Failed to load default texture!");
 			}
 
 			//Create default program
 			optional<id_t> defaultProgramId = setDefaultId<Program>(create<Program>(defaultProgramName, "shaders/StdVertexShader.vert", "shaders/StdFragShader.frag", defaultProgramName));
-			if (defaultProgramId.has_value()) {
-				defaultProgram = get<Program>(defaultProgramId.value());
-			} else {
+			if (!defaultProgramId.has_value()) {
 				logMessage(LogError, "Failed to create default program!");
 			}
 
 			//If default texture was loaded and default program was created, create default material
-			if (defaultTexture && defaultProgram) {
-				optional<id_t> defaultMaterialId = setDefaultId<Material>(create<Material>(defaultMaterialName, SurfaceParameters(SurfaceDomain("default_texture")), defaultProgram));
+			if (defaultTextureId.has_value() && defaultProgramId.has_value()) {
+				optional<id_t> defaultMaterialId = setDefaultId<Material>(create<Material>(defaultMaterialName, SurfaceParameters(SurfaceDomain("default_texture")), get<Program>(defaultProgramId.value())));
 				if (!defaultMaterialId.has_value()) {
 					logMessage(LogError, "Failed to create default material!");
 				}
@@ -112,12 +104,12 @@ namespace CGEngine {
 		* @param typeName Name of the collection for this resource type
 		*/
 		template<typename T>
-		void registerResourceType(const string& typeName, AssetLoader* loader = nullptr) {
+		void registerResourceType(const string& typeName, unique_ptr<AssetLoader> loader = nullptr) {
 			type_index typeId = type_index(typeid(T));
 			resourceContainers[typeId] = make_pair(typeName, ResourceContainer());
 			resourceDefaultIds[typeId] = nullopt;
 			if (loader) {
-				resourceLoaders[typeId] = loader;
+				resourceLoaders[typeId] = move(loader);
 			}
 			string logMsg = string("Registered resource type: ").append(typeName);
 			logMessage(LogInfo, logMsg);
@@ -346,8 +338,7 @@ namespace CGEngine {
 			} else {
 				logMessage(LogInfo, string("Using loader for resource type: ").append(typeid(T).name()));
 				//Load the resource using the appropriate loader
-				AssetLoader* resourceLoader = resourceLoaders[resourceTypeId];
-				resource = resourceLoader->load(resourcePath);
+				resource = resourceLoaders[resourceTypeId]->load(resourcePath);
 				//If resource was not loaded successfully and the resourceType has a defaultId
 				if (resource == nullptr && hasDefaultId(resourceTypeId)) {
 					//GGet the default id for the resource type and try to load it
@@ -358,14 +349,14 @@ namespace CGEngine {
 				}
 			}
 
-			if (resource) {
-				id_t resourceId = add<T>(assetName, (T*)resource);
-				resource->setId(resourceId);
-				string logMsg = string("Loaded '").append(resourceContainers[resourceTypeId].first).append("' Resource '").append(assetName).append("' from '").append(resourcePath.filename().string()).append("' ID:").append(to_string(resourceId));
-				logMessage(LogInfo, logMsg);
-				logMessage(LogInfo, string("Resource '").append(resourceContainers[resourceTypeId].first).append("' Count:").append(to_string(resourceContainers[resourceTypeId].second.resources.size())));
-				return resourceId;
-			}
+				if (resource) {
+					id_t resourceId = add<T>(assetName, (T*)resource);
+					resource->setId(resourceId);
+					string logMsg = string("Loaded '").append(resourceContainers[resourceTypeId].first).append("' Resource '").append(assetName).append("' from '").append(resourcePath.filename().string()).append("' ID:").append(to_string(resourceId));
+					logMessage(LogInfo, logMsg);
+					logMessage(LogInfo, string("Resource '").append(resourceContainers[resourceTypeId].first).append("' Count:").append(to_string(resourceContainers[resourceTypeId].second.resources.size())));
+					return resourceId;
+				}
 
 			return nullopt;
 		}
@@ -403,7 +394,7 @@ namespace CGEngine {
 			}
 
 			//Create the resource with unpacked Args...
-			T* resource = new T(std::forward<Args>(args)...);
+			T* resource = new T(forward<Args>(args)...);
 			if (!resource){
 				logMessage(LogInfo, string("Failed to create resource: ").append(resourceName));
 				delete resource;
@@ -456,7 +447,7 @@ namespace CGEngine {
 	private:
 		//ResourceTypeName string, ResourceContainer mapped to ResourceType type_index
 		unordered_map<type_index, pair<string, ResourceContainer>> resourceContainers;
-		unordered_map<type_index, AssetLoader*> resourceLoaders;
+		unordered_map<type_index, unique_ptr<AssetLoader>> resourceLoaders;
 
 		//Check if the resource type is registered
 		template<typename T>
