@@ -51,6 +51,22 @@ add_custom_target(update_resources
     COMMENT "Updating resource files in build directory"
 )
 
+# Optional: Set the DLL path as a variable
+set(ASSIMP_DLL "${CMAKE_SOURCE_DIR}/external/assimp/lib/assimp-vc143-mt.dll")
+
+# Verify DLL exists and add copy command
+if(EXISTS ${ASSIMP_DLL})
+    add_custom_command(
+        TARGET main POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy
+            "${ASSIMP_DLL}"
+            "$<TARGET_FILE_DIR:main>"
+        COMMAND ${CMAKE_COMMAND} -E echo "Copied Assimp DLL to output directory"
+    )
+else()
+    message(WARNING "Assimp DLL not found at: ${ASSIMP_DLL}")
+endif()
+
 # Add custom compile definitions based on build type
 target_compile_definitions(main PRIVATE
     $<$<CONFIG:Debug>:DEBUG>
