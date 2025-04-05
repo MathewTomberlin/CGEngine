@@ -174,7 +174,6 @@ namespace CGEngine {
 		if (iterator != materialParameters.end()) {
 			return (*iterator).second;
 		}
-		cout << "Material parameter " << paramName << " with not found";
 		return nullopt;
 	}
 

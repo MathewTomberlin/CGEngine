@@ -74,6 +74,28 @@ namespace CGEngine {
 		GL_CHECK(glEnable(GL_DEPTH_TEST));
 		GL_CHECK(glEnable(GL_BLEND));
 		GL_CHECK(glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA));
+
+		// Initialize UBOs
+		glGenBuffers(1, &materialUBO);
+		glBindBuffer(GL_UNIFORM_BUFFER, materialUBO);
+		glBufferData(GL_UNIFORM_BUFFER, sizeof(MaterialUBO), nullptr, GL_STATIC_DRAW);
+		glBindBufferBase(GL_UNIFORM_BUFFER, 3, materialUBO);
+
+		glGenBuffers(1, &lightUBO);
+		glBindBuffer(GL_UNIFORM_BUFFER, lightUBO);
+		glBufferData(GL_UNIFORM_BUFFER, sizeof(LightUBO), nullptr, GL_STATIC_DRAW);
+		glBindBufferBase(GL_UNIFORM_BUFFER, 4, lightUBO);
+
+		glGenBuffers(1, &boneUBO);
+		glBindBuffer(GL_UNIFORM_BUFFER, boneUBO);
+		glBufferData(GL_UNIFORM_BUFFER, sizeof(BoneUBO), nullptr, GL_STATIC_DRAW);
+		glBindBufferBase(GL_UNIFORM_BUFFER, 1, boneUBO);
+
+		glGenBuffers(1, &transformUBO);
+		glBindBuffer(GL_UNIFORM_BUFFER, transformUBO);
+		glBufferData(GL_UNIFORM_BUFFER, sizeof(TransformUBO), nullptr, GL_STATIC_DRAW);
+		glBindBufferBase(GL_UNIFORM_BUFFER, 2, transformUBO);
+
 		// Check for any OpenGL errors that may have occurred during initialization
 		checkGLError("initializeOpenGL", __FILE__, __LINE__);
 
@@ -99,6 +121,7 @@ namespace CGEngine {
 			Program* program = renderMaterial->getProgram();
 			if (!program) {
 				log(this, LogError, "Shader program is invalid in getModelData");
+				return;
 			}
 
 			GL_CHECK(glGenBuffers(1, & meshData->vbo));
@@ -148,6 +171,30 @@ namespace CGEngine {
 
 			setGLWindowState(false);
 		}
+	}
+
+	void Renderer::updateMaterialUBO(const MaterialUBO& materialData) {
+		glBindBuffer(GL_UNIFORM_BUFFER, materialUBO);
+		glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(MaterialUBO), &materialData);
+		glBindBuffer(GL_UNIFORM_BUFFER, 0);
+	}
+
+	void Renderer::updateLightUBO(const LightUBO& lightData) {
+		glBindBuffer(GL_UNIFORM_BUFFER, lightUBO);
+		glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(LightUBO), &lightData);
+		glBindBuffer(GL_UNIFORM_BUFFER, 0);
+	}
+
+	void Renderer::updateBoneUBO(const BoneUBO& boneData) {
+		glBindBuffer(GL_UNIFORM_BUFFER, boneUBO);
+		glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(BoneUBO), &boneData);
+		glBindBuffer(GL_UNIFORM_BUFFER, 0);
+	}
+
+	void Renderer::updateTransformUBO(const TransformUBO& transformData) {
+		glBindBuffer(GL_UNIFORM_BUFFER, transformUBO);
+		glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(TransformUBO), &transformData);
+		glBindBuffer(GL_UNIFORM_BUFFER, 0);
 	}
 
 	ImportResult Renderer::import(string path, const string& skeletonName) {
@@ -231,7 +278,7 @@ namespace CGEngine {
 	}
 
 	void Renderer::renderMesh(Mesh* mesh, MeshData* meshData, Transformation3D transform) {
-		if (!meshData || meshData->vertices.empty()) return;
+		if (!meshData || meshData->vertices.empty()) return;	//Don;t log, null MeshData Meshes are empty Bodies
 		if (!mesh) {
 			log(this, LogError, "Mesh is invalid");
 			return;
@@ -240,67 +287,43 @@ namespace CGEngine {
 			log(this, LogError, "Mesh Body ID is empty in renderMesh");
 			return;
 		}
-		glm::mat4 combinedTransform = getBodyGlobalTransform(mesh->getBodyId());
 
 		// Only proceed with mesh rendering if we have mesh data
 		if (meshData && meshData->vertices.size() > 0) {
 			GL_CHECK(glBindVertexArray(meshData->vao));
 			boundTextures = 0;
 			
-			// Get materials from Model instead of Mesh
+			// Get materials Mesh, ensuring at least one material is present
 			vector<id_t> modelMaterials = mesh->getMaterials();
-			// Ensure at least one material (fallback)
 			if (modelMaterials.empty()) {
 				log(this, LogWarn, "No model materials in renderer. Using fallback.");
 				modelMaterials.push_back(assets.getDefaultId<Material>().value());
 			}
 			Material* renderMaterial = assets.get<Material>(modelMaterials.at(0));
 
-			Animator* animator = nullptr;
-			optional<id_t> meshModelId = mesh->getModelId();
-			if (meshModelId.has_value()) {
-				Model* meshModel = assets.get<Model>(meshModelId.value());
-				// Only update animation once per model per frame
-				if (meshModel && updatedModels.find(meshModelId.value()) == updatedModels.end()) {
-					animator = meshModel->getAnimator();
-					if (animator) {
-						animator->updateAnimation(time.getDeltaSec());
-						updatedModels.insert(meshModelId.value());
-					}
-				}
-			}
+			//Update each model's animator, if present, once per frame (instead of once per mesh per model per frame)
+			Animator* animator = updateAnimator(mesh);
 
-			Program* program = renderMaterial->getProgram();
-			if (!program) {
-				log(this, LogError, "Shader program is invalid");
-				return;
-			}
-			//Bind the shaders.
-			program->use();
+			//Get the renderMaterial's program and bind it
+			Program* program = useRenderProgram(renderMaterial);
+			if (!program) return;
 
-			//Set the uniforms for the shader to use
-			Vector3f camPos = currentCamera->getPosition();
-			program->setUniform("model", combinedTransform);
-			program->setUniform("camera", currentCamera->getMatrix());
-			program->setUniform("cameraPosition", { camPos.x,camPos.y,camPos.z });
+			//Set the standard material uniform values
+			MaterialUBO materialUBOData = MaterialUBO();
+			setMaterialUBOData(materialUBOData, modelMaterials, program);
+			LightUBO lightUBOData = LightUBO();
+			setLightUBOData(lightUBOData);
+			TransformUBO transformUBOData = TransformUBO();
+			setTransformUBOData(transformUBOData, getBodyGlobalTransform(mesh->getBodyId()));
+			//If the mesh has bones, set the bone uniform values
+			if (animator) {
+				BoneUBO boneUBOData = BoneUBO();
+				setBoneUBOData(boneUBOData, animator);
+			}
+			program->setUniform("cameraPosition", toGlm(currentCamera->getPosition()));
 			program->setUniform("timeSec", time.getElapsedSec());
-			if (meshModelId.has_value() && animator) {
-				vector<glm::mat4> transforms = animator->getBoneMatrices();
-				for (int i = 0; i < transforms.size(); ++i) {
-					program->setUniform(getUniformArrayIndexName("boneMatrices", i).c_str(), transforms[i]);
-				}
-			}
 
-			for (int i = 0; i < modelMaterials.size(); ++i) {
-				setMaterialUniforms(modelMaterials.at(i), program, i);
-			}
-
-			program->setUniform("lightCount", (int)assets.getResourceCount<Light>());
-			for (size_t i = 0; i < assets.getResourceCount<Light>(); ++i) {
-				setLightUniforms(assets.get<Light>(i), i, program);
-			}
-
-			// Draw the cube
+			//Draw the MeshData by index, if available, or by vertices
 			if (meshData->indices.size()) {
 				GL_CHECK(glDrawElements(GL_TRIANGLES, meshData->indices.size(), GL_UNSIGNED_INT, 0));
 			} else {
@@ -345,6 +368,160 @@ namespace CGEngine {
 
 		return localTransform;
 	};
+
+	Animator* Renderer::updateAnimator(Mesh* mesh) {
+		//Update each model's animator, if present, once per frame (instead of once per mesh per model per frame)
+		Animator* animator = nullptr;
+		optional<id_t> meshModelId = mesh->getModelId();
+		if (meshModelId.has_value()) {
+			Model* meshModel = assets.get<Model>(meshModelId.value());
+			// Only update animation once per model per frame
+			if (meshModel && updatedModels.find(meshModelId.value()) == updatedModels.end()) {
+				animator = meshModel->getAnimator();
+				if (animator) {
+					animator->updateAnimation(time.getDeltaSec());
+					updatedModels.insert(meshModelId.value());
+				}
+			}
+		}
+		return animator;
+	}
+
+	Program* Renderer::useRenderProgram(Material* renderMaterial) {
+		Program* program = renderMaterial->getProgram();
+		if (!program) {
+			log(this, LogError, "Shader program is invalid");
+			return nullptr;
+		}
+		program->use();
+		return program;
+	}
+
+	void Renderer::bindTextureAndSetUniform(Material* material, const string& paramName, Program* program, int materialIndex, int& boundTextures) {
+		optional<ParamData> paramData = material->getParameter(paramName);
+		if (paramData.has_value()) {
+			Texture* textureData = any_cast<Texture*>(paramData.value().data);
+			if (textureData != nullptr) {
+				GL_CHECK(glActiveTexture(GL_TEXTURE0 + boundTextures));
+				GL_CHECK(glBindTexture(GL_TEXTURE_2D, textureData->getNativeHandle()));
+				program->setUniform(getUniformArrayPropertyName("materialTextures", materialIndex, paramName).c_str(), boundTextures);
+				boundTextures++;
+			}
+		}
+	}
+
+	void Renderer::setMaterialUBOData(MaterialUBO materialUBOData, vector<id_t> modelMaterials, Program* program) {
+		static MaterialUBO previousMaterialUBOData;
+		bool materialChanged = false;
+		
+		for (int i = 0; i < modelMaterials.size(); ++i) {
+			//Get the material
+			Material* material = assets.get<Material>(modelMaterials.at(i));
+			if (!material) continue;
+			optional<ParamData> paramData = nullopt;
+			//For diffuse, specular and opacity textures: Get the texture data, if available, and bind it to the shader, then set the materialTextures[i].diff/spec/opacityTexture uniform
+			bindTextureAndSetUniform(material, "diffuseTexture", program, i, boundTextures);
+			bindTextureAndSetUniform(material, "specularTexture", program, i, boundTextures);
+			bindTextureAndSetUniform(material, "opacityTexture", program, i, boundTextures);
+
+			paramData = material->getParameter("diffuseColor");
+			if (paramData.has_value()) materialUBOData.materials[i].diffuseColor = glm::vec4(toGlm(any_cast<Color>(paramData.value().data)), 1);
+			paramData = material->getParameter("diffuseTextureUVScale");
+			if (paramData.has_value()) materialUBOData.materials[i].diffuseTextureUVScale = toGlm(any_cast<Vector2f>(paramData.value().data));
+			paramData = material->getParameter("diffuseTextureOffset");
+			if (paramData.has_value()) materialUBOData.materials[i].diffuseTextureOffset = toGlm(any_cast<Vector2f>(paramData.value().data));
+			paramData = material->getParameter("diffuseTextureScrollSpeed");
+			if (paramData.has_value()) materialUBOData.materials[i].diffuseTextureScrollSpeed = toGlm(any_cast<Vector2f>(paramData.value().data));
+			paramData = material->getParameter("specularColor");
+			if (paramData.has_value()) materialUBOData.materials[i].specularColor = glm::vec4(toGlm(any_cast<Color>(paramData.value().data)), 1);
+			paramData = material->getParameter("specularTextureUVScale");
+			if (paramData.has_value()) materialUBOData.materials[i].specularTextureUVScale = toGlm(any_cast<Vector2f>(paramData.value().data));
+			paramData = material->getParameter("specularTextureOffset");
+			if (paramData.has_value()) materialUBOData.materials[i].specularTextureOffset = toGlm(any_cast<Vector2f>(paramData.value().data));
+			paramData = material->getParameter("specularTextureScrollSpeed");
+			if (paramData.has_value()) materialUBOData.materials[i].specularTextureScrollSpeed = toGlm(any_cast<Vector2f>(paramData.value().data));
+			paramData = material->getParameter("opacityTextureUVScale");
+			if (paramData.has_value()) materialUBOData.materials[i].opacityTextureUVScale = toGlm(any_cast<Vector2f>(paramData.value().data));
+			paramData = material->getParameter("opacityTextureOffset");
+			if (paramData.has_value()) materialUBOData.materials[i].opacityTextureOffset = toGlm(any_cast<Vector2f>(paramData.value().data));
+			paramData = material->getParameter("opacityTextureScrollSpeed");
+			if (paramData.has_value()) materialUBOData.materials[i].opacityTextureScrollSpeed = toGlm(any_cast<Vector2f>(paramData.value().data));
+			paramData = material->getParameter("smoothnessFactor");
+			if (paramData.has_value()) materialUBOData.materials[i].smoothnessFactor = any_cast<float>(paramData.value().data);
+			paramData = material->getParameter("opacity");
+			if (paramData.has_value()) materialUBOData.materials[i].opacity = any_cast<float>(paramData.value().data);
+			paramData = material->getParameter("alphaCutoff");
+			if (paramData.has_value()) materialUBOData.materials[i].alphaCutoff = any_cast<float>(paramData.value().data);
+			paramData = material->getParameter("gamma");
+			if (paramData.has_value()) materialUBOData.materials[i].gamma = any_cast<float>(paramData.value().data);
+			paramData = material->getParameter("opacityMasked");
+			if (paramData.has_value()) materialUBOData.materials[i].opacityMasked = any_cast<bool>(paramData.value().data);
+			paramData = material->getParameter("useGammaCorrection");
+			if (paramData.has_value()) materialUBOData.materials[i].useGammaCorrection = any_cast<bool>(paramData.value().data);
+			paramData = material->getParameter("useDiffuseTexture");
+			if (paramData.has_value()) materialUBOData.materials[i].useDiffuseTexture = any_cast<bool>(paramData.value().data);
+			paramData = material->getParameter("useSpecularTexture");
+			if (paramData.has_value()) materialUBOData.materials[i].useSpecularTexture = any_cast<bool>(paramData.value().data);
+			paramData = material->getParameter("useOpacityTexture");
+			if (paramData.has_value()) materialUBOData.materials[i].useOpacityTexture = any_cast<bool>(paramData.value().data);
+			paramData = material->getParameter("useLighting");
+			if (paramData.has_value()) materialUBOData.materials[i].useLighting = any_cast<bool>(paramData.value().data);
+		}
+		//TODO: Add support for dynamic materials
+		// Check if material UBO data has changed
+		if (memcmp(&materialUBOData, &previousMaterialUBOData, sizeof(MaterialUBO)) != 0) {
+			materialChanged = true;
+			previousMaterialUBOData = materialUBOData;
+		}
+
+		//Only update the UBO if the data has changed
+		if (materialChanged) {
+			updateMaterialUBO(materialUBOData);
+		}
+	}
+
+	void Renderer::setLightUBOData(LightUBO lightUBOData) {
+		static LightUBO previousLightUBOData;
+		bool lightChanged = false;
+
+		lightUBOData.lightCount = assets.getResourceCount<Light>();
+		for (size_t i = 0; i < assets.getResourceCount<Light>(); ++i) {
+			Light* light = assets.get<Light>(i);
+			lightUBOData.lights[i].position = light->position;
+			lightUBOData.lights[i].brightness = light->parameters.brightness;
+			lightUBOData.lights[i].intensities = glm::vec4(toGlm(light->parameters.colorIntensities), 1);
+			lightUBOData.lights[i].attenuation = light->parameters.attenuation;
+			lightUBOData.lights[i].ambiance = light->parameters.ambiance;
+			lightUBOData.lights[i].coneAngle = light->parameters.coneAngle;
+			lightUBOData.lights[i].lightDirection = glm::vec4(toGlm(light->parameters.lightDirection), 1);
+		}
+		//TODO: Add support for dynamic lights
+		// Check if light UBO data has changed
+		if (memcmp(&lightUBOData, &previousLightUBOData, sizeof(LightUBO)) != 0) {
+			lightChanged = true;
+			previousLightUBOData = lightUBOData;
+		}
+
+		//Only update the UBO if the data has changed
+		if (lightChanged) {
+			updateLightUBO(lightUBOData);
+		}
+	}
+
+	void Renderer::setBoneUBOData(BoneUBO boneUBOData, Animator* animator) {
+		vector<glm::mat4> transforms = animator->getBoneMatrices();
+		for (int i = 0; i < transforms.size(); ++i) {
+			boneUBOData.boneMatrices[i] = transforms[i];
+		}
+		boneUBOData.boneCount = transforms.size();
+		updateBoneUBO(boneUBOData);
+	}
+
+	void Renderer::setTransformUBOData(TransformUBO transformUBOData, glm::mat4 combinedTransform) {
+		transformUBOData.model = combinedTransform;
+		transformUBOData.camera = currentCamera->getMatrix();
+		updateTransformUBO(transformUBOData);
+	}
 
 	void Renderer::setMaterialUniforms(id_t materialAssetId, Program* program, int materialId) {
 		Material* material = assets.get<Material>(materialAssetId);

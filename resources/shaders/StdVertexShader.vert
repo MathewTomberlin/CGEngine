@@ -1,11 +1,63 @@
-#version 330
+#version 420
 
 const int MAX_BONES = 100;
 const int MAX_BONE_INFLUENCE = 4;
 
-uniform mat4 camera;
-uniform mat4 model;
-uniform mat4 boneMatrices[MAX_BONES];
+struct Material {
+    vec4 diffuseColor;
+    vec4 specularColor;
+    vec2 diffuseTextureUVScale;
+    vec2 diffuseTextureScrollSpeed;
+    vec2 diffuseTextureOffset;
+    vec2 specularTextureUVScale;
+    vec2 specularTextureScrollSpeed;
+    vec2 specularTextureOffset;
+    vec2 opacityTextureUVScale;
+    vec2 opacityTextureScrollSpeed;
+    vec2 opacityTextureOffset;
+    float smoothnessFactor;
+    float opacity;
+    float alphaCutoff;
+    float gamma;
+    int useDiffuseTexture;
+    int useSpecularTexture;
+    int useOpacityTexture;
+    int useLighting;
+    int useGammaCorrection;
+    int opacityMasked;
+};
+layout(std140, binding = 3) uniform MaterialBlock {
+    Material materials[8];
+};
+struct Light {
+    vec4 position;
+    vec4 intensities;
+    vec4 lightDirection;
+    float brightness;
+    float attenuation;
+    float ambiance;
+    float coneAngle;
+};
+layout(std140, binding = 4) uniform LightBlock {
+    Light lights[10];
+    int lightCount;
+    int lightPadding1;
+    int lightPadding2;
+    int lightPadding3;
+};
+
+
+layout(std140, binding = 2) uniform TransformBlock {
+    mat4 camera;
+    mat4 model;
+};
+layout(std140, binding = 1) uniform BoneBlock {
+    mat4 boneMatrices[MAX_BONES];
+    int boneCount;
+    int padding1;
+	int padding2;
+	int padding3;
+};
 
 in vec3 position;
 in vec2 texCoord;
