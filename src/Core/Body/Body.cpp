@@ -13,10 +13,6 @@ namespace CGEngine {
     }
 
     Body::Body(Transformable* d, Transformation handle, Body* p, Vector2f uv) : Body() {
-        Mesh* meshEntity = dynamic_cast<Mesh*>(d);
-        if (meshEntity) {
-            meshEntity->setBody(this);
-        }
         //Cache the base transformable and cast it to a shape
         entity = d;
         //Create the bounds rect and set draw bounds to world's value
@@ -65,6 +61,13 @@ namespace CGEngine {
         //Remove reference to this Body in its parent, then clear parent
         drop();
         parent = nullptr;
+    }
+
+    void Body::setId(optional<id_t> id) {
+		IResource::setId(id);
+
+        Mesh* meshEntity = dynamic_cast<Mesh*>(entity);
+        if (meshEntity) meshEntity->setBodyId(getId());
     }
 
     //TODO: Properly implement isValid for this and other iResource classes
@@ -719,13 +722,15 @@ namespace CGEngine {
     }
 
     void Body::render(RenderTarget& target, const Transform& parentTransform) {
+        if (!getId().has_value()) return;
+
         //Combine parent transform and local transform
-        Transform combinedTransform = getGlobalTransform();
-        renderer.add(this, combinedTransform);
+        Transform globalTransform = getGlobalTransform();
+        renderer.add(getId().value(), globalTransform);
 
         //Draw children recursively
         for (id_t i = 0; i < children.size(); ++i) {
-            children[i]->render(target, combinedTransform);
+            children[i]->render(target, globalTransform);
         }
     }
 

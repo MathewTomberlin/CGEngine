@@ -73,11 +73,15 @@ namespace CGEngine {
 			msgBuffer.insert(msgBuffer.end(),logEvt.msg.begin(), logEvt.msg.end());
 		}
 		ofstream logFile(filepath, ios::binary);
-		if (logFile.is_open() && msgBuffer.size() > 0) {
-			logFile.write(msgBuffer.data(), msgBuffer.size());
+		if (logFile.is_open()) {
+			if (msgBuffer.size() > 0) {
+				logFile.write(msgBuffer.data(), msgBuffer.size());
+			} else {
+				cout << "[WARN] Logging: No messages to write to log file.\n";
+			}
 			logFile.close();
 		} else {
-			cout << "[ERROR] Can't open log file for writing.\n";
+			cout << "[ERROR] Logging: Can't open log file for writing.\n";
 		}
 	}
 

@@ -17,8 +17,8 @@ namespace CGEngine {
 
 	class Mesh : public IResource, public Transformable{
 	public:
-		Mesh(MeshData* model, Transformation3D transformation = Transformation3D(), vector<Material*> materials = { new Material(SurfaceParameters()) }, RenderParameters renderParams = RenderParameters(), string importPath = "");
-		Mesh(string importPath, Transformation3D transformation = Transformation3D(), vector<Material*> materials = { new Material(SurfaceParameters()) }, RenderParameters renderParams = RenderParameters());
+		Mesh(MeshData* model, Transformation3D transformation = Transformation3D(), vector<id_t> materials = { 0 }, RenderParameters renderParams = RenderParameters(), string importPath = "");
+		Mesh(string importPath, Transformation3D transformation = Transformation3D(), vector<id_t> materials = { 0 }, RenderParameters renderParams = RenderParameters());
 
 		void render(Transform parentTransform);
 		void bindTexture(Texture* texture);
@@ -28,21 +28,17 @@ namespace CGEngine {
 		void rotate(Vector3f delta);
 		void setScale(Vector3f scale);
 		void scale(Vector3f delta);
-		void setImportPath(string path);
-		string getImportPath();
 		MeshData* getMeshData();
 		void setMeshData(MeshData* model);
-		vector<Material*> getMaterials();
-		id_t addMaterial(Material* material);
+		vector<id_t> getMaterials();
+		id_t addMaterial(id_t materialId);
 		void clearMaterials();
-		void setAnimator(Animator* animator);
-		Animator* getAnimator();
 		string getMeshName() const;
 		string getSourcePath() const;
-		Model* getModel() const { return model; }
-		void setModel(Model* m) { model = m; }
-		Body* getBody() const { return body; }
-		void setBody(Body* body) { this->body = body; }
+		optional<id_t> getModelId() const { return modelId; }
+		void setModelId(optional<id_t> modelId) { this->modelId = modelId; }
+		optional<id_t> getBodyId() const { return bodyId; }
+		void setBodyId(optional<id_t> body) { this->bodyId = body; }
 		// Add new method to get combined transform
 		glm::mat4 getModelMatrix() const {
 			glm::mat4 modelPos = glm::translate(glm::vec3(transformation.position.x, transformation.position.y, transformation.position.z));
@@ -58,12 +54,11 @@ namespace CGEngine {
 		}
 	private:
 		string importPath;
-		Model* model = nullptr;
-		Body* body = nullptr;
+		optional<id_t> modelId;
+		optional<id_t> bodyId;
 		MeshData* meshData;
 		Transformation3D transformation;
 		RenderParameters renderParameters;
-		vector<Material*> materials;
-		Animator* animator = nullptr;
+		vector<id_t> materials;
 	};
 }

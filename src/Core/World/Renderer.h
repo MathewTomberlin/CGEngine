@@ -17,6 +17,7 @@
 #include "../Light/Light.h"
 #include "../Material/Material.h"
 #include "../Importer/MeshImporter.h"
+#include "../Shader/UniformBuffers.h"
 using namespace Assimp;
 using namespace std;
 using namespace sf;
@@ -69,6 +70,9 @@ namespace CGEngine {
 		BoneData(unsigned int id, glm::mat4 offset) :id(id), offset(offset) {};
 		unsigned int id;
 		glm::mat4 offset;
+		bool operator==(const BoneData& other) const {
+			return (id == id && offset == other.offset);
+		}
 	};
 
 	struct MeshData : public IResource {
@@ -112,12 +116,19 @@ namespace CGEngine {
 			init();
 			importer = new MeshImporter();
 		}
+
+		~Renderer() {
+			glDeleteBuffers(1, &materialUBO);
+			glDeleteBuffers(1, &lightUBO);
+			glDeleteBuffers(1, &boneUBO);
+			glDeleteBuffers(1, &transformUBO);
+		}
 		/// <summary>
 		/// Add the Body to the renderOrder and and it and its transform to the bodyTransform map for this frame
 		/// </summary>
 		/// <param name="body">The Body to add to the Renderer</param>
 		/// <param name="transform">The transform of the Body</param>
-		void add(Body* body, Transform transform);
+		void add(id_t body, Transform transform);
 		/// <summary>
 		/// Calculate the greatest Z-Order of Bodies
 		/// </summary>
@@ -133,19 +144,19 @@ namespace CGEngine {
 		/// </summary>
 		/// <param name="zIndex">The Z index to get Bodies at</param>
 		/// <returns>A vector of Body pointers at the indicated Z index</returns>
-		vector<Body*> getZBodies(int zIndex);
+		vector<id_t> getZBodies(int zIndex);
 		/// <summary>
 		/// Get a vector of all bodies below the indicated Z-Order
 		/// </summary>
 		/// <param name="zIndex">The Z index to get Bodies below</param>
 		/// <returns>A vector of Body pointers below the indicated Z index</returns>
-		vector<Body*> getLowerZBodies(int zIndex);
+		vector<id_t> getLowerZBodies(int zIndex);
 		/// <summary>
 		/// Get a vector of all bodies above the indicated Z-Order
 		/// </summary>
 		/// <param name="zIndex">The Z index to get Bodies above</param>
 		/// <returns>A vector of Body pointers above the indicated Z index</returns>
-		vector<Body*> getHigherZBodies(int zIndex);
+		vector<id_t> getHigherZBodies(int zIndex);
 
 		void initializeOpenGL();
 		bool setGLWindowState(bool state);
@@ -156,15 +167,14 @@ namespace CGEngine {
 		bool processRender();
 		void setWindow(RenderWindow* window);
 		Camera* getCurrentCamera();
-		void setCurrentCamera(Camera* camera);
+		void setCurrentCamera(unique_ptr<Camera> camera);
 
 		void renderMesh(Mesh* mesh, MeshData* meshData, Transformation3D transform);
 		void getModelData(Mesh* mesh);
-		void updateModelData(Mesh* mesh);
 		string getUniformArrayIndexName(string arrayName, int index);
 		string getUniformArrayPropertyName(string arrayName, int index, string propertyName);
 		string getUniformObjectPropertyName(string objectName, string propertyName);
-		void setMaterialUniforms(Material* material, Program* program, int materialId = 0);
+		void setMaterialUniforms(id_t materialAssetId, Program* program, int materialId = 0);
 		void setLightUniforms(Light* light, size_t lightIndex, Program* program);
 		glm::vec2 toGlm(Vector2f v);
 		glm::vec3 toGlm(Vector3f v);
@@ -172,12 +182,15 @@ namespace CGEngine {
 		Vector2f fromGlm(glm::vec2 v);
 		Vector3f fromGlm(glm::vec3 v);
 		const aiScene* readFile(string path, unsigned int options);
-		ImportResult import(string path);
+		ImportResult import(string path, const string& skeletonName="");
 		Material* getFallbackMaterial();
 		glm::mat4 getCombinedModelMatrix(Body* body);
 		void endFrame();
 	private:
 		friend class World;
+		/// <summary>
+		/// Observation pointer of the RenderWindow owned by Screen
+		/// </summary>
 		RenderWindow* window = nullptr;
 		/// <summary>
 		/// Clear the renderOrder and bodyTransform map
@@ -193,12 +206,19 @@ namespace CGEngine {
 		/// <param name="window">The RenderTarget to draw the Body in</param>
 		void render(RenderTarget* window);
 
-		Camera* currentCamera = nullptr;
+		/// <summary>
+		/// The current render camera. This is set during OpenGL initialization and used to set the view matrix for the shader program.
+		/// </summary>
+		unique_ptr<Camera> currentCamera = nullptr;
 		/// <summary>
 		/// The order in which to draw bodies, with Bodies further back in the vector drawn on top of other Bodies. This is cleared and re-calculated each frame
 		/// </summary>
-		vector<Body*> renderOrder;
-		std::set<Model*> updatedModels;
+		vector<id_t> renderOrder;
+		/// <summary>
+		/// If enabled, Bodies are sorted by their zOrder before rendering each frame.
+		/// </summary>
+		bool zSortingEnabled = true;
+		set<id_t> updatedModels;
 		GLenum initGlew();
 		Program* program;
 		int boundTextures = 0;
@@ -211,6 +231,24 @@ namespace CGEngine {
 		GLenum checkGLError(const char* operation, const char* file, int line);
 		bool validateShader(Shader* shader);
 		bool validateProgram(Program* program);
+		glm::mat4 getBodyGlobalTransform(optional<id_t> bodyId);
 
+		// UBOs
+		GLuint materialUBO;
+		GLuint lightUBO;
+		GLuint boneUBO;
+		GLuint transformUBO;
+
+		void updateMaterialUBO(const MaterialUBO& materialData);
+		void updateLightUBO(const LightUBO& lightData);
+		void updateBoneUBO(const BoneUBO& boneData);
+		void updateTransformUBO(const TransformUBO& transformData);
+		void bindTextureAndSetUniform(Material* material, const string& paramName, Program* program, int materialIndex, int& boundTextures);
+		void setMaterialUBOData(MaterialUBO materialUBOData, vector<id_t> modelMaterials, Program* program);
+		void setLightUBOData(LightUBO lightUBOData);
+		void setBoneUBOData(BoneUBO boneUBOData, Animator* animator);
+		void setTransformUBOData(TransformUBO transformUBOData, glm::mat4 combinedTransform);
+		Animator* updateAnimator(Mesh* mesh);
+		Program* useRenderProgram(Material* renderMaterial);
 	};
 }

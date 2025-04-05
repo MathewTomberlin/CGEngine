@@ -197,7 +197,8 @@ namespace CGEngine {
 	}
 
 	GLenum Program::checkGLError(const char* operation, const char* file, int line) {
-		GLenum errorCode;
+		GLenum errorCode = GL_NO_ERROR;
+#ifdef DEBUG
 		while ((errorCode = glGetError()) != GL_NO_ERROR) {
 			std::string error;
 			switch (errorCode) {
@@ -212,6 +213,7 @@ namespace CGEngine {
 			}
 			log(this, LogError, "OpenGL Error: {} [{}] ({}) at {}:{}", error, errorCode, operation, file, line);
 		}
+#endif
 		return errorCode;
 	}
 }

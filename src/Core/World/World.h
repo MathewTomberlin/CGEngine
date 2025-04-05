@@ -26,8 +26,8 @@ namespace CGEngine {
         void addDefaultExitActuator();
 
         //Utility
-        vector<Body*> zRayCast(Vector2f worldPos, optional<int> startZ = nullopt, int distance = -1, bool backward = false, bool linecast = false);
-        vector<Body*> raycast(Vector2f worldPos, Vector2f castDir, int zIndex = 0, float distance = -1.f, bool linecast = false);
+        vector<id_t> zRayCast(Vector2f worldPos, optional<int> startZ = nullopt, int distance = -1, bool backward = false, bool linecast = false);
+        vector<id_t> raycast(Vector2f worldPos, Vector2f castDir, int zIndex = 0, float distance = -1.f, bool linecast = false);
 
         //Console
         void initializeConsole();
@@ -52,7 +52,6 @@ namespace CGEngine {
 
         //Bodies
         vector<Body*> uninitialized;
-        bool isDeleted(Body* bodyId);
         void addUninitialized(Body* body);
 
         //Root Body
@@ -95,9 +94,13 @@ namespace CGEngine {
         /// <returns>The Body's rotation in world space as a normalized direction vector</returns>
         V2f getRight(Transform transform) const;
     private:
+        /// <summary>
+        /// Observation pointer of the RenderWindow owned by Screen
+        /// </summary>
         RenderWindow* window = nullptr;
-
-        //World Root
+        /// <summary>
+        /// Observation pointer of the world root Body owned by AssetManager
+        /// </summary>
         Body* root = nullptr;
 
         bool running = false;
@@ -108,14 +111,8 @@ namespace CGEngine {
         //Update World
         void updateTime();
         void startUninitializedBodies();
-        void renderWorld();
-        void render();
         //End World
         void endWorld(Body* body);
-
-        //Bodies
-        set<Body*> deleted;
-        void addDeletedBody(Body* bodyId);
 
         //Scenes
         map<string, Behavior*> scenes;

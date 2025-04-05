@@ -37,28 +37,23 @@ namespace CGEngine {
                 string timerName = timers.get(id)->name;
                 //Call all the scripts with this timer's domain by its id
                 args.caller->callScripts(timerDomainById);
-                //Check if the caller was deleted by the timer domain scripts
-                bool deleted = world->isDeleted(args.caller);
-                //If it was not deleted
-                if (!deleted) {
-                    if ((loopCount == 0 || loopCount == 1) || loopDuration <= 0) {
-                        //If not looping, delete the domain and its scripts
-                        args.caller->deleteDomain(timerDomainById);
-                    }
-                    else {
-                        //If looping, clear the domain without deleting the scripts
-                        args.caller->clearDomain(timerDomainById);
-                    }
-                    //Delete the timer
-                    size_t updateEventId = timers.get(id)->eventId;
-                    deleteTimer(id);
-                    //Start the next loop, if looping
-                    if ((loopCount < 0 || loopCount > 1) && loopDuration > 0) {
-                        setTimer(args.caller, loopDuration, onCompleteEvent, loopCount > 0 ? loopCount - 1 : loopCount, timerName);
-                    }
-                    //Delete this timer's update script
-                    args.caller->eraseUpdateScript(updateEventId, false);
+                if ((loopCount == 0 || loopCount == 1) || loopDuration <= 0) {
+                    //If not looping, delete the domain and its scripts
+                    args.caller->deleteDomain(timerDomainById);
                 }
+                else {
+                    //If looping, clear the domain without deleting the scripts
+                    args.caller->clearDomain(timerDomainById);
+                }
+                //Delete the timer
+                size_t updateEventId = timers.get(id)->eventId;
+                deleteTimer(id);
+                //Start the next loop, if looping
+                if ((loopCount < 0 || loopCount > 1) && loopDuration > 0) {
+                    setTimer(args.caller, loopDuration, onCompleteEvent, loopCount > 0 ? loopCount - 1 : loopCount, timerName);
+                }
+                //Delete this timer's update script
+                args.caller->eraseUpdateScript(updateEventId, false);
             }
         }));
         log(this, LogInfo, "'{}'[{}] START({} sec)", timer->name, id, duration);

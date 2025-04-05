@@ -1,11 +1,11 @@
 #include "Mesh.h"
 
 namespace CGEngine {
-	Mesh::Mesh(MeshData* meshData, Transformation3D transformation, vector<Material*> materials, RenderParameters renderParams, string importPath) : meshData(meshData), transformation(transformation), renderParameters(renderParams), materials(materials), importPath(importPath), animator(nullptr) {
+	Mesh::Mesh(MeshData* meshData, Transformation3D transformation, vector<id_t> materials, RenderParameters renderParams, string importPath) : meshData(meshData), transformation(transformation), renderParameters(renderParams), materials(materials), importPath(importPath) {
 		renderer.getModelData(this);
 	};
 
-	Mesh::Mesh(string importPath, Transformation3D transformation, vector<Material*> materials, RenderParameters renderParams) : Mesh(assets.get<MeshData>(assets.create<MeshData>("").value()), transformation, materials, renderParams, importPath) {
+	Mesh::Mesh(string importPath, Transformation3D transformation, vector<id_t> materials, RenderParameters renderParams) : Mesh(assets.get<MeshData>(assets.create<MeshData>("").value()), transformation, materials, renderParams, importPath) {
 	
 	};
 
@@ -72,13 +72,13 @@ namespace CGEngine {
 		transformation.scale += delta;
 	}
 
-	vector<Material*> Mesh::getMaterials() {
+	vector<id_t> Mesh::getMaterials() {
 		return materials;
 	}
 
-	id_t Mesh::addMaterial(Material* material) {
+	id_t Mesh::addMaterial(id_t materialId) {
 		id_t id = materials.size();
-		materials.push_back(material);
+		materials.push_back(materialId);
 		return id;
 	}
 
@@ -86,27 +86,11 @@ namespace CGEngine {
 		materials.clear();
 	}
 
-	void Mesh::setImportPath(string path) {
-		importPath = path;
+	string Mesh::getMeshName() const {
+		return meshData ? meshData->meshName : "";
 	}
 
-	string Mesh::getImportPath() {
-		return importPath;
-	}
-
-	void Mesh::setAnimator(Animator* animator) {
-		this->animator = animator;
-	}
-
-	Animator* Mesh::getAnimator() {
-		return animator;
-	}
-
-	string Mesh::getMeshName() const { 
-		return meshData ? meshData->meshName : ""; 
-	}
-
-	string Mesh::getSourcePath() const { 
-		return meshData ? meshData->sourcePath : ""; 
+	string Mesh::getSourcePath() const {
+		return meshData ? meshData->sourcePath : "";
 	}
 }

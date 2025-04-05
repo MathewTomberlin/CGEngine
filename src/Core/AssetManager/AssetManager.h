@@ -52,43 +52,37 @@ namespace CGEngine {
 	public:
 		AssetManager() {
 			// Register built-in resource types
-			registerResourceType<TextureResource>("textures", new TextureLoader());
-			registerResourceType<FontResource>("fonts", new FontLoader());
-			registerResourceType<VertexShaderResource>("vertexShaders", new VertexShaderLoader());
-			registerResourceType<FragmentShaderResource>("fragmentShaders", new FragmentShaderLoader());
-			registerResourceType<Model>("models", new ModelLoader());
+			registerResourceType<TextureResource>("textures", make_unique<TextureLoader>());
+			registerResourceType<FontResource>("fonts", make_unique<FontLoader>());
+			registerResourceType<VertexShaderResource>("vertexShaders", make_unique<VertexShaderLoader>());
+			registerResourceType<FragmentShaderResource>("fragmentShaders", make_unique<FragmentShaderLoader>());
+			registerResourceType<Model>("models", make_unique<ModelLoader>());
 			registerResourceType<MeshData>("meshData");
 			registerResourceType<Program>("programs");
 			registerResourceType<Material>("materials");
 			registerResourceType<Body>("bodies");
 			registerResourceType<Light>("lights");
+			registerResourceType<Animation>("animations");
+			registerResourceType<Skeleton>("skeletons");
 		}
 
 		// Add new initialization method
 		void initialize() {
-			//Valid default texture and program required for default material creation
-			Program* defaultProgram = nullptr;
-			TextureResource* defaultTexture = nullptr;
-
 			//Load default texture
 			optional<id_t> defaultTextureId = setDefaultId<TextureResource>(load<TextureResource>("checkered_tile.png", defaultTextureName));
-			if(defaultTextureId.has_value()){
-				defaultTexture = get<TextureResource>(defaultTextureId.value());
-			} else {
+			if(!defaultTextureId.has_value()){
 				logMessage(LogError, "Failed to load default texture!");
 			}
 
 			//Create default program
 			optional<id_t> defaultProgramId = setDefaultId<Program>(create<Program>(defaultProgramName, "shaders/StdVertexShader.vert", "shaders/StdFragShader.frag", defaultProgramName));
-			if (defaultProgramId.has_value()) {
-				defaultProgram = get<Program>(defaultProgramId.value());
-			} else {
+			if (!defaultProgramId.has_value()) {
 				logMessage(LogError, "Failed to create default program!");
 			}
 
 			//If default texture was loaded and default program was created, create default material
-			if (defaultTexture && defaultProgram) {
-				optional<id_t> defaultMaterialId = setDefaultId<Material>(create<Material>(defaultMaterialName, SurfaceParameters(SurfaceDomain("default_texture")), defaultProgram));
+			if (defaultTextureId.has_value() && defaultProgramId.has_value()) {
+				optional<id_t> defaultMaterialId = setDefaultId<Material>(create<Material>(defaultMaterialName, SurfaceParameters(SurfaceDomain("default_texture")), get<Program>(defaultProgramId.value())));
 				if (!defaultMaterialId.has_value()) {
 					logMessage(LogError, "Failed to create default material!");
 				}
@@ -110,12 +104,12 @@ namespace CGEngine {
 		* @param typeName Name of the collection for this resource type
 		*/
 		template<typename T>
-		void registerResourceType(const string& typeName, AssetLoader* loader = nullptr) {
+		void registerResourceType(const string& typeName, unique_ptr<AssetLoader> loader = nullptr) {
 			type_index typeId = type_index(typeid(T));
 			resourceContainers[typeId] = make_pair(typeName, ResourceContainer());
 			resourceDefaultIds[typeId] = nullopt;
 			if (loader) {
-				resourceLoaders[typeId] = loader;
+				resourceLoaders[typeId] = move(loader);
 			}
 			string logMsg = string("Registered resource type: ").append(typeName);
 			logMessage(LogInfo, logMsg);
@@ -336,29 +330,38 @@ namespace CGEngine {
 				}
 			}
 
-			IResource* resource = nullptr;
+			unique_ptr<IResource> resource = nullptr;
 			if (resourceLoaders.find(resourceTypeId) == resourceLoaders.end()) {
 				string logMsg = string("No loader implemented for resource type: ").append(typeid(T).name());
 				logMessage(LogError, logMsg);
 				return nullopt;
-			} else {
+			}
+			else {
 				logMessage(LogInfo, string("Using loader for resource type: ").append(typeid(T).name()));
 				//Load the resource using the appropriate loader
-				AssetLoader* resourceLoader = resourceLoaders[resourceTypeId];
-				resource = resourceLoader->load(resourcePath);
+				resource = resourceLoaders[resourceTypeId]->load(resourcePath);
 				//If resource was not loaded successfully and the resourceType has a defaultId
-				if (resource == nullptr && hasDefaultId(resourceTypeId)) {
-					//GGet the default id for the resource type and try to load it
+				if (!resource && hasDefaultId(resourceTypeId)) {
+					//Get the default id for the resource type and try to load it
 					optional<id_t> defaultResourceId = getDefaultId(resourceTypeId);
 					if (defaultResourceId.has_value()) {
-						resource = get(resourceTypeId, defaultResourceId.value());
+						if (auto defaultResource = get(resourceTypeId, defaultResourceId.value())) {
+							// Create a new instance of the default resource
+							resource = unique_ptr<IResource>(defaultResource);
+						}
 					}
 				}
 			}
 
 			if (resource) {
-				id_t resourceId = addResource<T>(assetName, (T*)resource);
-				resource->setId(resourceId);
+				// Get raw pointer before transferring ownership
+				T* rawPtr = dynamic_cast<T*>(resource.get());
+				if (!rawPtr) {
+					logMessage(LogError, string("Resource type mismatch when loading: ").append(assetName));
+					return nullopt;
+				}
+				id_t resourceId = add<T>(assetName, std::move(resource));
+				rawPtr->setId(resourceId);
 				string logMsg = string("Loaded '").append(resourceContainers[resourceTypeId].first).append("' Resource '").append(assetName).append("' from '").append(resourcePath.filename().string()).append("' ID:").append(to_string(resourceId));
 				logMessage(LogInfo, logMsg);
 				logMessage(LogInfo, string("Resource '").append(resourceContainers[resourceTypeId].first).append("' Count:").append(to_string(resourceContainers[resourceTypeId].second.resources.size())));
@@ -391,7 +394,8 @@ namespace CGEngine {
 				if (existingResource && existingResource->isValid()) {
 					logMessage(LogInfo, string("Found '").append(resourceContainers[resourceTypeId].first).append("' Resource: ").append(resourceName));
 					return existingResourceId.value();
-				} else {
+				}
+				else {
 					//Remove container mapping for invalid resource
 					auto& container = resourceContainers[resourceTypeId].second;
 					container.nameToId.erase(resourceName);
@@ -401,19 +405,23 @@ namespace CGEngine {
 			}
 
 			//Create the resource with unpacked Args...
-			T* resource = new T(std::forward<Args>(args)...);
-			if (!resource){
+			unique_ptr<T> resource = make_unique<T>(forward<Args>(args)...);
+			if (!resource) {
 				logMessage(LogInfo, string("Failed to create resource: ").append(resourceName));
-				delete resource;
 				return nullopt;
-			} else if (!static_cast<IResource*>(resource)->isValid()) {
+			}
+			else if (!static_cast<IResource*>(resource.get())->isValid()) {
 				logMessage(LogInfo, string("Invalid resource was created: ").append(resourceName));
-				delete resource;
 				return nullopt;
 			}
 
-			id_t resourceId = addResource<T>(resourceName, resource);
-			resource->setId(resourceId);
+			// Store raw pointer for setting ID after ownership transfer
+			T* rawPtr = resource.get();
+
+			// Transfer ownership to add method
+			id_t resourceId = add<T>(resourceName, std::move(resource));
+			rawPtr->setId(resourceId);
+
 			string logMsg = string("Created '").append(resourceContainers[resourceTypeId].first).append("' Resource '").append(resourceName).append("' ID:").append(to_string(resourceId));
 			logMessage(LogInfo, logMsg);
 			logMessage(LogInfo, string("Resource '").append(resourceContainers[resourceTypeId].first).append("' Count: ").append(to_string(resourceContainers[resourceTypeId].second.resources.size())));
@@ -435,6 +443,18 @@ namespace CGEngine {
 			return resourceDefaultIds.find(typeId) != resourceDefaultIds.end();
 		}
 
+		//Create a ResourceEntry with a shared pointer to the resource of T type and its name,
+		//then add that to the container.resources and container.nameToId
+		template<typename T>
+		id_t add(const string& name, unique_ptr<IResource> resource) {
+			auto& container = getContainer<T>();
+			// Create the ResourceEntry with a shared_ptr that takes ownership from the unique_ptr
+			ResourceEntry entry{ std::shared_ptr<IResource>(resource.release()), name };
+			id_t id = container.resources.add(entry);
+			container.nameToId[name] = id;
+			return id;
+		}
+
 		string defaultTextureName = "default_texture";
 		string defaultProgramName = "default_program";
 		string defaultMaterialName = "default_material";
@@ -443,7 +463,7 @@ namespace CGEngine {
 	private:
 		//ResourceTypeName string, ResourceContainer mapped to ResourceType type_index
 		unordered_map<type_index, pair<string, ResourceContainer>> resourceContainers;
-		unordered_map<type_index, AssetLoader*> resourceLoaders;
+		unordered_map<type_index, unique_ptr<AssetLoader>> resourceLoaders;
 
 		//Check if the resource type is registered
 		template<typename T>
@@ -454,17 +474,6 @@ namespace CGEngine {
 
 		bool hasResourceType(type_index typeId) {
 			return resourceContainers.find(typeId) != resourceContainers.end();
-		}
-
-		//Create a ResourceEntry with a shared pointer to the resource of T type and its name,
-		//then add that to the container.resources and container.nameToId
-		template<typename T>
-		id_t addResource(const string& name, T* resource) {
-			auto& container = getContainer<T>();
-			ResourceEntry entry{shared_ptr<IResource>(resource),name};
-			id_t id = container.resources.add(entry);
-			container.nameToId[name] = id;
-			return id;
 		}
 
 		//Get the ResourceContainer of the indicated T type

@@ -153,7 +153,7 @@ namespace CGEngine {
         virtual ~IResource() = default;
         virtual bool isValid() const = 0;
 		optional<id_t> getId() const { return id; }
-		void setId(optional<id_t> id) { this->id = id; }
+		virtual void setId(optional<id_t> id) { this->id = id; }
     private:
 		optional<id_t> id = nullopt;
     };
