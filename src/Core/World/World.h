@@ -35,7 +35,6 @@ namespace CGEngine {
 
         //Bounds Renderings
         void setBoundsRenderingEnabled(bool enabled);
-        void setBoundsRenderingEnabled(bool enabled, Body* body);
         bool getBoundsRenderingEnabled() const;
         void setBoundsColor(Color color);
         void setBoundsColor(Color color, Body* body);
@@ -75,8 +74,6 @@ namespace CGEngine {
         //Update World
         void updateTime();
         void startUninitializedBodies();
-        //End World
-        void endWorld(Body* body);
 
         //Scenes
         map<string, Behavior*> scenes;

@@ -134,19 +134,9 @@ namespace CGEngine {
         if (input != nullptr) {
             input->clear();
         }
-        endWorld(root);
+        root->apply([](Body* b) { b->callScripts(onDeleteEvent); });
         running = false;
         window->close();
-    }
-
-    void World::endWorld(Body* body) {
-        if (auto bd = body) {
-            bd->callScripts(onDeleteEvent);
-            for (auto iterator = bd->children.begin(); iterator != bd->children.end(); iterator++) {
-                Body* b = *iterator;
-                endWorld(b);
-            }
-        }
     }
 
     Body* World::getRoot() {
@@ -351,13 +341,7 @@ namespace CGEngine {
             body = root;
         }
 
-        if (scriptDomain != "delete" || body != root){
-            body->callScripts(scriptDomain);
-        }
-
-        for (int i = body->children.size() - 1; i >= 0; i--) {
-            callScripts(scriptDomain, body->children[i]);
-        }
+        body->apply([&scriptDomain](Body* b) { if (scriptDomain != "delete" || b != world->root) { b->callScripts(scriptDomain); } });
     }
 
     void World::addDefaultExitActuator() {
@@ -366,15 +350,7 @@ namespace CGEngine {
 
     void World::setBoundsRenderingEnabled(bool enabled) {
         boundsRendering = enabled;
-        setBoundsRenderingEnabled(enabled, root);
-    };
-
-    void World::setBoundsRenderingEnabled(bool enabled, Body* body) {
-        body->setBoundsRenderingEnabled(enabled);
-
-        for (int i = body->children.size() - 1; i >= 0; i--) {
-            setBoundsRenderingEnabled(enabled, body->children[i]);
-        }
+		root->apply([&enabled](Body* b) { b->setBoundsRenderingEnabled(enabled); });
     };
 
     bool World:: getBoundsRenderingEnabled() const {
@@ -383,31 +359,11 @@ namespace CGEngine {
 
     void World::setBoundsColor(Color color) {
         boundsColor = color;
-        setBoundsColor(boundsColor, root);
-    };
-
-    void World::setBoundsColor(Color color, Body* body) {
-        if (body->boundsRect != nullptr) {
-            body->boundsRect->setOutlineColor(color);
-        }
-
-        for (int i = body->children.size() - 1; i >= 0; i--) {
-            setBoundsColor(color, body->children[i]);
-        }
+		root->apply([&color](Body* b) { if (b->boundsRect) { b->boundsRect->setOutlineColor(color); } });
     };
 
     void World::setBoundsThickness(float thickness) {
         boundsThickness = thickness;
-        setBoundsThickness(boundsThickness, root);
+		root->apply([&thickness](Body* b) { if (b->boundsRect) { b->boundsRect->setOutlineThickness(thickness); } });
     };
-
-    void World::setBoundsThickness(float thickness, Body* body) {
-        if (body->boundsRect != nullptr) {
-            body->boundsRect->setOutlineThickness(thickness);
-        }
-
-        for (int i = body->children.size() - 1; i >= 0; i--) {
-            setBoundsThickness(thickness, body->children[i]);
-        }
-    }
 }
