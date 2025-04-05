@@ -1,4 +1,5 @@
 #include "Mesh.h"
+#include "../World/Global.h"
 
 namespace CGEngine {
 	Mesh::Mesh(MeshData* meshData, Transformation3D transformation, vector<id_t> materials, RenderParameters renderParams, string importPath) : meshData(meshData), transformation(transformation), renderParameters(renderParams), materials(materials), importPath(importPath) {
@@ -21,13 +22,13 @@ namespace CGEngine {
 		renderer.pullGL();
 
 		//Combine SFML entity transform components with 3D transformation components
-		Vector2f position2d = world->getGlobalPosition(transform);
+		Vector2f position2d = Global::getGlobalPosition(transform);
 		Vector3f position = { position2d.x + transformation.position.x,position2d.y + transformation.position.y,transformation.position.z };
 
-		Angle rotation2d = world->getGlobalRotation(transform);
+		Angle rotation2d = Global::getGlobalRotation(transform);
 		Vector3f rotation = { transformation.rotation.x,transformation.rotation.y, rotation2d.asDegrees()+transformation.rotation.z, };
 
-		Vector2f scale2d = world->getGlobalScale(transform);
+		Vector2f scale2d = Global::getGlobalScale(transform);
 		Vector3f scale = { scale2d.x * transformation.scale.x,scale2d.y * transformation.scale.y, transformation.scale.z };
 		Transformation3D combinedTransformation = Transformation3D(position, rotation, scale);
 
