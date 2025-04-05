@@ -56,7 +56,6 @@ namespace CGEngine {
             boundsRect = nullptr;
         }
         //Detach any children, then clear the children
-        detachChildren(false);
         children.clear();
         //Remove reference to this Body in its parent, then clear parent
         drop();
@@ -98,6 +97,14 @@ namespace CGEngine {
 
     void Body::update(function<void(Sprite*)> script, bool updateChildren) {
         update<Sprite*>(script, updateChildren);
+    }
+
+    void Body::apply(function<void(Body*)> script) {
+        script(this);
+
+        for (int child = children.size() - 1; child >= 0; child--) {
+            children[child]->apply(script);
+        }
     }
 
     void Body::createBoundsRect() {
@@ -400,25 +407,12 @@ namespace CGEngine {
         }
     }
 
-    void Body::detachChildren(const bool keepWorldTranform) {
-        for (int i = children.size() - 1; i >= 0; i--) {
-            Body* child = children[i];
-            if (keepWorldTranform) {
-                child->move(getPosition());
-                child->rotate(getRotation());
-                child->scale(getScale());
+    void Body::detachChildren(const bool keepWorldTransform) {
+        apply([keepWorldTransform, this](Body* b) {
+            if (b != this) { // Skip the root calling body
+                b->detach();
             }
-            // Check if world and world's root are still valid before attaching
-            //if (world && world->getRoot() && world->getRoot()->isValid()) {
-            //    world->getRoot()->attachBody(child);
-            //} else {
-            //    // If world root is not available, just set parent to nullptr
-            //    // This prevents trying to attach to an invalid body
-            //    child->parent = nullptr;
-            //}
-            //Remove child from children
-            children.erase(children.begin() + i);
-        }
+        });
     }
 
     void Body::dropBody(Body* child) {

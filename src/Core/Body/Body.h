@@ -95,6 +95,9 @@ namespace CGEngine {
                 }
             }
         }
+
+        void apply(function<void(Body*)> script);
+
         /// <summary>
         /// Call the script on the entity, assuming it is a Shape, and on each child recursively (if updateChildren is true)
         /// </summary>
@@ -323,7 +326,7 @@ namespace CGEngine {
         /// keepWorldTransform is true
         /// </summary>
         /// <param name="keepWorldTranform">Whether to keep its global transform as its new transform</param>
-        void detachChildren(const bool keepWorldTranform = true);
+        void detachChildren(const bool keepWorldTransform = true);
         /// <summary>
         /// Detach the Body (and don't attach to the world root)
         /// </summary>
@@ -345,7 +348,7 @@ namespace CGEngine {
         /// <param name="target">The Body to attach to</param>
         void exchange(Body* target);
         /// <summary>
-        /// Draw the shape hierarchy using their global transforms
+        /// Currently unused, but required by Body being Drawable. Draw the shape hierarchy using their global transforms
         /// </summary>
         /// <param name="target">The RenderTarget</param>
         /// <param name="states">The RenderStates</param>
