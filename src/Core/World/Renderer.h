@@ -17,6 +17,7 @@
 #include "../Light/Light.h"
 #include "../Material/Material.h"
 #include "../Importer/MeshImporter.h"
+#include "../Shader/UniformBuffers.h"
 using namespace Assimp;
 using namespace std;
 using namespace sf;
@@ -114,6 +115,13 @@ namespace CGEngine {
 		Renderer::Renderer() {
 			init();
 			importer = new MeshImporter();
+		}
+
+		~Renderer() {
+			glDeleteBuffers(1, &materialUBO);
+			glDeleteBuffers(1, &lightUBO);
+			glDeleteBuffers(1, &boneUBO);
+			glDeleteBuffers(1, &transformUBO);
 		}
 		/// <summary>
 		/// Add the Body to the renderOrder and and it and its transform to the bodyTransform map for this frame
@@ -224,5 +232,23 @@ namespace CGEngine {
 		bool validateShader(Shader* shader);
 		bool validateProgram(Program* program);
 		glm::mat4 getBodyGlobalTransform(optional<id_t> bodyId);
+
+		// UBOs
+		GLuint materialUBO;
+		GLuint lightUBO;
+		GLuint boneUBO;
+		GLuint transformUBO;
+
+		void updateMaterialUBO(const MaterialUBO& materialData);
+		void updateLightUBO(const LightUBO& lightData);
+		void updateBoneUBO(const BoneUBO& boneData);
+		void updateTransformUBO(const TransformUBO& transformData);
+		void bindTextureAndSetUniform(Material* material, const string& paramName, Program* program, int materialIndex, int& boundTextures);
+		void setMaterialUBOData(MaterialUBO materialUBOData, vector<id_t> modelMaterials, Program* program);
+		void setLightUBOData(LightUBO lightUBOData);
+		void setBoneUBOData(BoneUBO boneUBOData, Animator* animator);
+		void setTransformUBOData(TransformUBO transformUBOData, glm::mat4 combinedTransform);
+		Animator* updateAnimator(Mesh* mesh);
+		Program* useRenderProgram(Material* renderMaterial);
 	};
 }
