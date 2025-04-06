@@ -2,7 +2,7 @@
 #include "../Engine/Engine.h"
 
 namespace CGEngine {
-    InputMap::InputMap() { }
+    InputMap::InputMap() : window(nullptr) { }
 
     void InputMap::clear() {
         domains.clear();
