@@ -126,7 +126,7 @@ namespace CGEngine {
 
     void Body::start() {
         if (!initialized) {
-            callScripts(onStartEvent);
+            callStaticScripts(StartDomain);
             initialized = true;
         }
     }
@@ -661,6 +661,11 @@ namespace CGEngine {
 
         behaviors.forEach([&domain](Behavior* behavior) { behavior->callDomain(domain); });
         scripts.callDomain(domain);
+    }
+
+    void Body::callStaticScripts(StaticScriptDomain domainId) {
+		if (domainId < 0 || domainId > 2) return;
+		scripts.callStaticDomain(domainId);
     }
 
     void Body::callScriptsWithData(string domain, DataMap data) {
