@@ -17,11 +17,12 @@ namespace CGEngine {
         entity = d;
         //Create the bounds rect and set draw bounds to world's value
         createBoundsRect();
-        
+
         parent = p;
         if (p != nullptr) {
             attach(p);
-        } else {
+        }
+        else {
             parent = world->getRoot();
             attach(world->getRoot());
         }
@@ -63,7 +64,7 @@ namespace CGEngine {
     }
 
     void Body::setId(optional<id_t> id) {
-		IResource::setId(id);
+        IResource::setId(id);
 
         Mesh* meshEntity = dynamic_cast<Mesh*>(entity);
         if (meshEntity) meshEntity->setBodyId(getId());
@@ -132,6 +133,9 @@ namespace CGEngine {
     }
 
     Transform Body::getGlobalTransform() const {
+		if (globalTransform.has_value()) {
+			return globalTransform.value();
+		}
         Transform wTransform = getTransform();
         Body* p = parent;
         while (p != nullptr && p != world->getRoot()) {
@@ -716,20 +720,17 @@ namespace CGEngine {
 
         // draw its children
         for (id_t i = 0; i < children.size(); ++i) {
-            children[i]->render(target, tr);
+            children[i]->onDraw(target, tr);
         }
     }
 
-    void Body::render(RenderTarget& target, const Transform& parentTransform) {
+    void Body::queueRendering() {
         if (!getId().has_value()) return;
-
-        //Combine parent transform and local transform
-        Transform globalTransform = getGlobalTransform();
-        renderer.add(getId().value(), globalTransform);
+        renderer.add(getId().value());
 
         //Draw children recursively
         for (id_t i = 0; i < children.size(); ++i) {
-            children[i]->render(target, globalTransform);
+            children[i]->queueRendering();
         }
     }
 

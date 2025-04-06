@@ -322,7 +322,6 @@ namespace CGEngine {
 				}
                 callStaticScripts(UpdateDomain);
                 input->gather();
-                
                 if (window->isOpen()) {
                     if (renderer.setGLWindowState(true)) {
                         renderer.clearGL(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
