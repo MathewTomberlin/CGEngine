@@ -3,8 +3,6 @@
 #include "../World/Renderer.h"
 #include "../Skeleton/Skeleton.h"
 
-using namespace std;
-
 namespace CGEngine {
 	// This class is a container for meshes associated with an entity. Its exact purpose is
 	// to facilitate mesh importing. When a mesh is imported via Assimp, its daa is stored in

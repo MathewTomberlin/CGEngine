@@ -1,10 +1,10 @@
 #pragma once
 
 #include "../Engine/Engine.h"
-#include "../Material/Material.h"
-#include "../Animation/Animator.h"
 
 namespace CGEngine {
+	class Animator;
+	class Material;
 	struct RenderParameters {
 		RenderParameters(bool lighting = true, bool textures = true, bool screenSpace = false, bool normals = true, bool textureCoords = true) :lightingEnabled(lighting),texture2dEnabled(textures),screenSpaceRendering(screenSpace),normalsEnabled(normals), textureCoordinatesEnabled(textureCoords){};
 

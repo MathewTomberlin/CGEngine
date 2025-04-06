@@ -10,17 +10,14 @@
 #include <vector>
 #include <map>
 #include <string>
-#include "../Body/Body.h"
-#include "../Camera/Camera.h"
-#include "../Shader/Shader.h"
-#include "../Shader/Program.h"
-#include "../Light/Light.h"
-#include "../Material/Material.h"
-#include "../Importer/MeshImporter.h"
+#include <set>
+#include <iostream>
 #include "../Shader/UniformBuffers.h"
-using namespace Assimp;
-using namespace std;
-using namespace sf;
+#include "../Importer/MeshImporter.h"
+#include "../Types/Types.h"
+#include "../Camera/Camera.h"
+using sf::Transform;
+using sf::RenderTarget;
 #define MAX_BONE_INFLUENCE 4
 #define GL_CHECK(x) x; checkGLError(#x, __FILE__, __LINE__)
 
@@ -30,6 +27,11 @@ namespace CGEngine {
 	class Animation;
 	class Animator;
 	class Model;
+	class Material;
+	class Program;
+	class Shader;
+	class Body;
+	class Light;
 
 	struct VertexData {
 		VertexData() {
@@ -112,10 +114,7 @@ namespace CGEngine {
 	/// </summary>
 	class Renderer : public EngineSystem {
 	public:
-		Renderer::Renderer() {
-			init();
-			importer = new MeshImporter();
-		}
+		Renderer::Renderer();
 
 		~Renderer() {
 			glDeleteBuffers(1, &materialUBO);

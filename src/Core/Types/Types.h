@@ -2,8 +2,28 @@
 #include "SFML/Graphics.hpp"
 #include <any>
 #include <optional>
-using namespace sf;
-using namespace std;
+#include <set>
+#include <map>
+using sf::Event;
+using sf::Vector2f;
+using sf::Angle;
+using sf::FloatRect;
+using sf::Font;
+using sf::Color;
+using sf::Vector2i;
+using sf::Vector3f;
+using sf::Vector3i;
+using sf::Texture;
+using sf::RenderWindow;
+using sf::View;
+using std::string;
+using std::vector;
+using std::any;
+using std::optional;
+using std::nullopt;
+using std::set;
+using std::map;
+using std::max;
 
 namespace CGEngine {
     class Body;

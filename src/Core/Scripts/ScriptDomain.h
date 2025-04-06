@@ -1,13 +1,14 @@
 #pragma once
 
-#include <iostream>
-#include "Script.h"
 #include "../Types/UniqueIntegerStack.h"
 #include "../Types/Types.h"
 #include "../Logging/Logging.h"
-using namespace std;
 
 namespace CGEngine {
+    class Script;
+    class DataMap;
+    class Behavior;
+
     class ScriptDomain : public EngineSystem {
     public:
         ScriptDomain(string name, string bodyName = "");

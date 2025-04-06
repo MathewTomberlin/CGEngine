@@ -7,7 +7,8 @@
 #include "../Engine/EngineSystem.h"
 #include "../Shader/Program.h"
 #include "AssetLoader.h"
-
+#include "../Material/Material.h"
+#include "../Animation/Animation.h"
 namespace CGEngine {
 	class VertexShaderResource : public IResource {
 	private:

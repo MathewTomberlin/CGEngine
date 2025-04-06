@@ -3,8 +3,6 @@
 #include "glm.hpp" 
 #include "SFML/Graphics.hpp"
 #include "../Types/Types.h"
-using namespace sf;
-using namespace std;
 
 namespace CGEngine {
 	struct LightParameters {

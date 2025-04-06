@@ -1,7 +1,6 @@
 #pragma once
 
 #include <optional>
-using namespace std;
 
 namespace CGEngine {
 	class Timer {

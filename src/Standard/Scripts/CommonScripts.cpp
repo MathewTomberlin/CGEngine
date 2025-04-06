@@ -1,6 +1,7 @@
 #include "CommonScripts.h"
 #include "../../Core/Types/DataMap.h"
 #include "../../Core/Engine/Engine.h"
+#include "../../Core/Camera/Camera.h"
 
 namespace CGEngine {
     struct TranslateArgs {

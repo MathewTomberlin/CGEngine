@@ -6,7 +6,6 @@
 #include "../Logging/Logging.h"
 #include "../Types/UniqueDomain.h"
 #include "../Engine/EngineSystem.h"
-using namespace std;
 
 namespace CGEngine {
 	typedef optional<size_t> timerId_t;

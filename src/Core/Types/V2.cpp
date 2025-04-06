@@ -12,7 +12,7 @@ namespace CGEngine {
     }
 
     void V2f::clampTo(Vector2f min, Vector2f max) {
-        x = clamp(x, min.x, max.x);
-        y = clamp(y, min.y, max.y);
+        x = std::clamp(x, min.x, max.x);
+        y = std::clamp(y, min.y, max.y);
     }
 }

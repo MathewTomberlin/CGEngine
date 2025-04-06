@@ -1,11 +1,7 @@
 #pragma once
 
 #include <GL/glew.h>
-#include <string>
-#include <iostream>
 #include "../Engine/EngineSystem.h"
-
-using namespace std;
 #define GL_CHECK(x) x; checkGLError(#x, __FILE__, __LINE__)
 
 namespace CGEngine {
