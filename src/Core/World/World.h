@@ -9,8 +9,6 @@
 #include <sstream>
 #include <memory>
 #include <queue>
-using namespace sf;
-using namespace std;
 
 namespace CGEngine {
     class World : public EngineSystem {

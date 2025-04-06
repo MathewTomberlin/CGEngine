@@ -9,8 +9,6 @@
 #include "../Types/DataControllers/OutputDataController.h"
 #include "../Types/DataControllers/ProcessDataController.h"
 
-using namespace std;
-
 namespace CGEngine {
 	/// <summary>
 	/// Behavior contains a ScriptMap, like a Body, but does not hold a reference to a Drawable entity and

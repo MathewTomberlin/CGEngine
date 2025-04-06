@@ -5,7 +5,8 @@
 #include "glm.hpp"
 #include "gtx/transform.hpp"
 #include "SFML/Graphics.hpp"
-using namespace sf;
+using sf::Vector2f;
+using sf::Vector3f;
 
 namespace CGEngine {
 	class Camera {

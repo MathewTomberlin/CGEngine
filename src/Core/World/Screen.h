@@ -4,8 +4,6 @@
 #include "../Types/V2.h"
 #include "../Types/Types.h"
 #include "../Engine/EngineSystem.h"
-using namespace std;
-using namespace sf;
 
 namespace CGEngine {
     class Screen : public EngineSystem {

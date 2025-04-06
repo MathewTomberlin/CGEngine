@@ -1,5 +1,7 @@
 #include "ScriptController.h"
 #include "../../Engine/Engine.h"
+#include "../../Scripts/Script.h"
+
 namespace CGEngine {
 	id_t ScriptController::addScript(string domain, Script* script) {
 		return scripts.addScript(domain, script);

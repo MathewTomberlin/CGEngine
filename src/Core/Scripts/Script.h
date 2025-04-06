@@ -1,17 +1,16 @@
 #pragma once
 
 #include <functional>
-#include <optional>
 #include "../Types/Types.h"
-#include "../Types/DataMap.h"
 #include "../Types/DataControllers/InputDataController.h"
 #include "../Types/DataControllers/OutputDataController.h"
-using namespace std;
+using std::function;
 
 namespace CGEngine {
 	class Body;
 	class Script;
 	class Behavior;
+	class DataMap;
 
 	struct ScArgs {
 	public:

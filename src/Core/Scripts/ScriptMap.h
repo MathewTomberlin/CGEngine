@@ -2,6 +2,7 @@
 
 #include "ScriptDomain.h"
 #include "../Logging/Logging.h"
+#include "../Types/DataMap.h"
 
 namespace CGEngine {
 	enum StaticScriptDomain {

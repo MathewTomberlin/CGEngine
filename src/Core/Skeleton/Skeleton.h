@@ -1,12 +1,8 @@
 #pragma once
 
 #include "../Engine/EngineSystem.h"
-#include <string>
 #include <map>
-#include <vector>
 #include <optional>
-
-using namespace std;
 
 namespace CGEngine {
     struct BoneData;

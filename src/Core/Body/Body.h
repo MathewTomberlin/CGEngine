@@ -11,8 +11,6 @@
 #include "../Types/UniqueDomain.h"
 #include "../Types/DataMap.h"
 #include "../Types/ScriptController/ScriptController.h"
-using namespace std;
-using namespace sf;
 
 namespace CGEngine {
     enum ChildrenTermination { Inherit, Orphan, Terminate };

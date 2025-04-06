@@ -1,8 +1,8 @@
 #pragma once
 
 #include "SFML/Graphics.hpp"
-using namespace std;
-using namespace sf;
+using sf::Vector2;
+using sf::Vector2f;
 
 namespace CGEngine {
     class V2f : public Vector2<float> {

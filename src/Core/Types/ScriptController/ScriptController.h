@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../../Scripts/Script.h"
 #include "../../Scripts/ScriptMap.h"
 
 namespace CGEngine {
