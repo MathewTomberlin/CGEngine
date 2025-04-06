@@ -127,8 +127,7 @@ namespace CGEngine {
 		/// Add the Body to the renderOrder and and it and its transform to the bodyTransform map for this frame
 		/// </summary>
 		/// <param name="body">The Body to add to the Renderer</param>
-		/// <param name="transform">The transform of the Body</param>
-		void add(id_t body, Transform transform);
+		void add(id_t body);
 		/// <summary>
 		/// Calculate the greatest Z-Order of Bodies
 		/// </summary>
@@ -181,6 +180,13 @@ namespace CGEngine {
 		glm::vec3 toGlm(Color c);
 		Vector2f fromGlm(glm::vec2 v);
 		Vector3f fromGlm(glm::vec3 v);
+		Transform glmToTransform(const glm::mat4& mat) {
+			return Transform(
+				mat[0][0], mat[1][0], mat[3][0],
+				mat[0][1], mat[1][1], mat[3][1],
+				mat[0][3], mat[1][3], mat[3][3]
+			);
+		}
 		const aiScene* readFile(string path, unsigned int options);
 		ImportResult import(string path, const string& skeletonName="");
 		Material* getFallbackMaterial();

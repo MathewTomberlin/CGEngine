@@ -116,7 +116,6 @@ namespace CGEngine {
         /// <param name="script">The script to call for the Sprite</param>
         /// <param name="updateChildren">Whether to recursively call the script on children</param>
         void update(function<void(Sprite*)> script, bool updateChildren = false);
-
         /// <summary>
         /// Returns the Transform of the Body in world space
         /// </summary>
@@ -358,7 +357,7 @@ namespace CGEngine {
         /// </summary>
         /// <param name="target">The RenderTarget</param>
         /// <param name="parentTransform">This Body's parent transform</param>
-        void render(RenderTarget& target, const Transform& parentTransform);
+        void queueRendering();
         /// <summary>
         /// Add the script to the "intersect" ScriptDomain to be called when the Body's GlobalBounds intersects another Body's GlobalBounds (if that Body has intersecting enabled)
         /// </summary>
@@ -643,6 +642,8 @@ namespace CGEngine {
         /// The RectangleShape of this body's bounds
         /// </summary>
         RectangleShape* boundsRect = nullptr;
+
+        mutable optional<Transform> globalTransform;
         /// <summary>
         /// Base Body start function which calls assigned OnStartEvent ("start") domain scripts
         /// </summary>

@@ -240,7 +240,7 @@ namespace CGEngine {
 				setGLWindowState(false);
 				return false;
 			}
-			root->render(*window, root->getTransform());
+			root->queueRendering();
 			//Sort and render Meshes and SFML entities
 			render(window);
 			endFrame();
@@ -363,7 +363,9 @@ namespace CGEngine {
 
 		// Combine with parent transform
 		if (body->parent && body->parent != world->getRoot()) {
-			return getCombinedModelMatrix(body->parent) * localTransform;
+			glm::mat4 modelMatrix = getCombinedModelMatrix(body->parent) * localTransform;
+			body->globalTransform = glmToTransform(modelMatrix);
+			return modelMatrix;
 		}
 
 		return localTransform;
@@ -640,7 +642,7 @@ namespace CGEngine {
 		return ss.str();
 	}
 
-	void Renderer::add(id_t bodyId, Transform transform) {
+	void Renderer::add(id_t bodyId) {
 		renderOrder.push_back(bodyId);
 	}
 
