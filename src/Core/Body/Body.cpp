@@ -668,6 +668,7 @@ namespace CGEngine {
 
     void Body::callStaticScripts(StaticScriptDomain domainId) {
 		if (domainId < 0 || domainId > 2) return;
+        behaviors.forEach([&domainId](Behavior* behavior) { behavior->callStaticDomain(domainId); });
 		scripts.callStaticDomain(domainId);
     }
 
