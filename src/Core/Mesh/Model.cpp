@@ -1,7 +1,7 @@
 #include "Model.h"
 #include "../World/Renderer.h"
 #include "../Engine/Engine.h"
-
+#include "../Animation/Animator.h"
 namespace CGEngine {
 	Model::Model(string sourcePath, const string& skeletonName) : sourcePath(sourcePath) {
 		init();

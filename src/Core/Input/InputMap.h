@@ -4,7 +4,7 @@
 #include "../Scripts/ScriptDomain.h"
 #include "../Scripts/Actuator.h"
 using namespace sf;
-using namespace std;
+
 
 namespace CGEngine {
     /// <summary>

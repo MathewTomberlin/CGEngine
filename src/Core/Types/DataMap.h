@@ -3,7 +3,6 @@
 #include <any>
 #include <optional>
 #include <map>
-using namespace std;
 
 namespace CGEngine {
 	/// <summary>

@@ -21,8 +21,7 @@ namespace CGEngine {
         parent = p;
         if (p != nullptr) {
             attach(p);
-        }
-        else {
+        } else {
             parent = world->getRoot();
             attach(world->getRoot());
         }

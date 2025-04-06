@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Shader.h"
-#include <vector>
 #include <glm.hpp>
 #include <gtc/type_ptr.hpp>
 

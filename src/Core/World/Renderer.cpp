@@ -4,7 +4,18 @@
 #include "../Animation/Animator.h"
 #include "../Mesh/Model.h"
 
+#include "../Body/Body.h"
+#include "../Shader/Shader.h"
+#include "../Shader/Program.h"
+#include "../Light/Light.h"
+#include "../Material/Material.h"
+
 namespace CGEngine {
+	Renderer::Renderer() {
+		init();
+		importer = new MeshImporter();
+	}
+
 	void Renderer::setWindow(RenderWindow* window) {
 		this->window = window;
 	}

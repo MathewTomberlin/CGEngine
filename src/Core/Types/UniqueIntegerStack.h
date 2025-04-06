@@ -5,7 +5,6 @@
 #include <optional>
 #include <iostream>
 #include "../Types/Types.h"
-using namespace std;
 
 namespace CGEngine {
     template <typename IntType = id_t>

@@ -4,7 +4,7 @@
 #include "../Types/Types.h"
 #include <chrono>
 namespace chron = std::chrono;
-using namespace sf;
+using sf::Clock;
 
 namespace CGEngine {
 	class GlobalTime {

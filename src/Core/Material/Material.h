@@ -4,8 +4,6 @@
 #include <optional>
 #include "SFML/Graphics.hpp"
 #include "../Shader/Program.h"
-using namespace sf;
-using namespace std;
 
 namespace CGEngine {
 	struct SurfaceDomain {

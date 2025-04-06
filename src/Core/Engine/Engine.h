@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../World/Renderer.h"
+#include "../Camera/Camera.h"
 #include "../World/World.h"
 #include "../Input/InputMap.h"
 #include "../Time/GlobalTime.h"
