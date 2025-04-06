@@ -87,6 +87,17 @@ namespace CGEngine {
 		}
 	}
 
+	void ScriptMap::callStaticDomain(StaticScriptDomain domainId, Behavior* behavior, bool logUpdate) {
+		if (domainId < 0 || domainId > 2) return;
+		ScriptDomain* domain = staticDomains[domainId];
+		if (domain) {
+			if (domain->getName() != onUpdateEvent || logUpdate) {
+				log(this, LogInfo, "Calling Domain '{}'", domain->getName());
+			}
+			domain->callDomain(owner, behavior);
+		}
+	}
+
 	void ScriptMap::callScript(string domainName, size_t scriptId, Behavior* behavior) {
 		if (ScriptDomain* domain = getDomain(domainName)) {
 			log(this, LogInfo, "Calling Script '{}'.'{}'", domain->getName(), to_string(scriptId));
@@ -119,6 +130,15 @@ namespace CGEngine {
 	ScriptDomain* ScriptMap::addDomain(string domainName) {
 		domains[domainName] = new ScriptDomain(domainName, ownerName);
 		log(this, LogInfo, "Added Domain '{}'", domainName);
+		// Cache update domain reference
+		if (domainName == onStartEvent) {
+			staticDomains[0] = domains[domainName];
+		} else if (domainName == onUpdateEvent) {
+			staticDomains[1] = domains[domainName];
+		} else if (domainName == onDeleteEvent) {
+			staticDomains[2] = domains[domainName];
+		}
+
 		return domains[domainName];
 	}
 

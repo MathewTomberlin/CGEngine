@@ -371,6 +371,11 @@ namespace CGEngine {
         /// <param name="domain">The domain of the scripts to call</param>
         void callScripts(string domain);
         /// <summary>
+		/// Call each script within the domain at domainId (0="start", 1="update", 2="delete")
+        /// </summary>
+        /// <param name="domainId">The domain id of the scripts to call (0="start", 1="update", 2="delete")</param>
+        void callStaticScripts(StaticScriptDomain domainId);
+        /// <summary>
         /// Call each script within the domain, providing the indicated input data
         /// </summary>
         /// <param name="domain">The domain of the scripts to call</param>

@@ -4,6 +4,12 @@
 #include "../Logging/Logging.h"
 
 namespace CGEngine {
+	enum StaticScriptDomain {
+		StartDomain = 0,
+		UpdateDomain = 1,
+		DeleteDomain = 2
+	};
+
 	class ScriptMap : public EngineSystem{
 	public:
 		ScriptMap(Body* o);
@@ -15,6 +21,7 @@ namespace CGEngine {
 		void clearDomain(string domainName);
 		void clear();
 		void callDomain(string domainName, Behavior* behavior = nullptr, bool logUpdate = false);
+		void callStaticDomain(StaticScriptDomain domainId, Behavior* behavior = nullptr, bool logUpdate = false);
 		void callScript(string domainName, size_t scriptId, Behavior* behavior = nullptr);
 		void callDomainWithData(string domainName, Behavior* behavior = nullptr, DataMap input = DataMap(), bool logUpdate = false);
 		void callScriptWithData(string domainName, size_t scriptId, Behavior* behavior = nullptr, DataMap input = DataMap());
@@ -30,5 +37,6 @@ namespace CGEngine {
 		ScriptDomain* getDomain(string domainName);
 		void deleteDomains();
 		void deleteDomain(ScriptDomain* domain);
+		ScriptDomain* staticDomains[3] = { nullptr, nullptr, nullptr };
 	};
 }
