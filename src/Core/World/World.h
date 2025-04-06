@@ -73,7 +73,7 @@ namespace CGEngine {
         void initSceneList();
         //Update World
         void updateTime();
-        void startUninitializedBodies();
+        void callUninitializedStart();
 
         //Scenes
         map<string, Behavior*> scenes;

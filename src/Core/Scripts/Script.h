@@ -27,6 +27,14 @@ namespace CGEngine {
 
 	typedef function<void(ScArgs)> ScriptEvent;
 
+	/// <summary>
+	/// A Script is a stateless or stateful callable object. A Script holds a ScriptEvent function pointer that
+	/// is called when the Script's call method is invoked. The ScriptEvent is passed ScArgs, which contains the
+	/// SciptEvent's calling Script (which can be used to access the Script's input and output DataMaps), the
+	/// Script's calling Body, and/or the Script's calling Behavior. Scripts are typically contained within a ScriptDomain
+	/// and identified by unique id within that domain. Scripts may be called individually by script id within their domain
+	/// or as a group whenever the domain itself is called.
+	/// </summary>
 	class Script : public InputDataController, public OutputDataController {
 	public:
 		Script(ScriptEvent evt);
