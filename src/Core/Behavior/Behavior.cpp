@@ -1,9 +1,7 @@
 #include "Behavior.h"
 
 namespace CGEngine {
-	Behavior::Behavior(Body* owning, string name) : scripts(owning) {
-		displayName = name;
-		owner = owning;
+	Behavior::Behavior(Body* owning, string displayName) : scripts(owning), displayName(displayName), owner(owning) {
 		if (owner != nullptr) {
 			behaviorId = owner->addBehavior(this);
 		}
@@ -18,8 +16,8 @@ namespace CGEngine {
 		scripts.removeScript(domain, scriptId, shouldDelete);
 	}
 
-	void Behavior::addScriptEventsByDomain(map<string, ScriptEvent> sc) {
-		for (auto iterator = sc.begin(); iterator != sc.end(); ++iterator) {
+	void Behavior::addScriptEventsByDomain(map<string, ScriptEvent> scripts) {
+		for (auto iterator = scripts.begin(); iterator != scripts.end(); ++iterator) {
 			string domain = (*iterator).first;
 			addScript((*iterator).first, new Script((*iterator).second));
 		}
@@ -34,8 +32,8 @@ namespace CGEngine {
 	}
 
 	
-	id_t Behavior::getId() {
-		return behaviorId.value_or(0U);
+	optional<id_t> Behavior::getId() {
+		return behaviorId.value();
 	}
 
 	Body* Behavior::getOwner() {

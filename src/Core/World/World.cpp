@@ -298,7 +298,7 @@ namespace CGEngine {
         uninitialized.push_back(body);
     }
 
-    void World::startUninitializedBodies() {
+    void World::callUninitializedStart() {
         while (uninitialized.size() > 0) {
             if (auto uninit = uninitialized.back()) {
                 uninit->start();
@@ -317,7 +317,9 @@ namespace CGEngine {
 
             while (window->isOpen()) {
                 updateTime();
-                startUninitializedBodies();
+				if (uninitialized.size() > 0) {
+					callUninitializedStart();
+				}
                 callScripts(onUpdateEvent);
                 input->gather();
                 
@@ -341,7 +343,7 @@ namespace CGEngine {
             body = root;
         }
 
-        body->apply([&scriptDomain](Body* b) { if (scriptDomain != "delete" || b != world->root) { b->callScripts(scriptDomain); } });
+        body->apply([&scriptDomain](Body* b) { if (scriptDomain != onDeleteEvent || b != world->root) { b->callScripts(scriptDomain); } });
     }
 
     void World::addDefaultExitActuator() {
