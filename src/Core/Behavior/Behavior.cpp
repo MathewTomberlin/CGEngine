@@ -27,6 +27,11 @@ namespace CGEngine {
 		scripts.callDomain(domain, this);
 	}
 
+	void Behavior::callStaticDomain(StaticScriptDomain domainId) {
+		if (domainId < 0 || domainId > 2) return;
+		scripts.callStaticDomain(domainId, this);
+	}
+
 	void Behavior::callDomainWithData(string domain, DataMap data) {
 		scripts.callDomainWithData(domain, this, data);
 	}

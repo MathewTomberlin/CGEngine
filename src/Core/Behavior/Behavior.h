@@ -54,6 +54,11 @@ namespace CGEngine {
 		/// <param name="domain">The string key of the ScriptDomain to call</param>
 		void callDomain(string domain);
 		/// <summary>
+		/// Call each Script in the ScriptDomain with the indicated string key
+		/// </summary>
+		/// <param name="domain">The string key of the ScriptDomain to call</param>
+		void callStaticDomain(StaticScriptDomain domainId);
+		/// <summary>
 		/// Call each Script iin the ScriptDomain with the indicated string key, passing the DataMap as input to each Script
 		/// </summary>
 		/// <param name="domain">The string key of the ScriptDomain to call</param>

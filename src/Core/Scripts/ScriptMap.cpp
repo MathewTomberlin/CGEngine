@@ -164,6 +164,17 @@ namespace CGEngine {
 			if (domains.find(domainName) != domains.end()) domains.erase(domainName);
 			//Refunds script ids, erase them from the domain's scripts map & delete them, then clear the map. Prints a warning if scripts remain
 			domain->deleteDomain();
+
+			// Nullify the corresponding staticDomains entry
+			if (domainName == onStartEvent) {
+				staticDomains[0] = nullptr;
+			}
+			else if (domainName == onUpdateEvent) {
+				staticDomains[1] = nullptr;
+			}
+			else if (domainName == onDeleteEvent) {
+				staticDomains[2] = nullptr;
+			}
 		}
 	}
 }

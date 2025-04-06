@@ -14,7 +14,7 @@ namespace CGEngine {
             {"endAnimation", endAnimEvt},
             {"calculateAnimLength", calculateFrameLengthEvt},
             {"animate", animateEvt},
-            {onUpdateEvent, animBehaviorStartEvt},
+            {onStartEvent, animBehaviorStartEvt},
             {"OnTranslate", onTranslateEvt},
         }));
     }
