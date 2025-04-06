@@ -23,6 +23,7 @@ namespace CGEngine {
 
         //Scripts
         void callScripts(string scriptDomain, Body* body = nullptr);
+        void callStaticScripts(StaticScriptDomain scriptDomainId, Body* body = nullptr);
         void addDefaultExitActuator();
 
         //Utility
@@ -37,9 +38,7 @@ namespace CGEngine {
         void setBoundsRenderingEnabled(bool enabled);
         bool getBoundsRenderingEnabled() const;
         void setBoundsColor(Color color);
-        void setBoundsColor(Color color, Body* body);
         void setBoundsThickness(float thickness);
-        void setBoundsThickness(float thickness, Body* body);
 
         //Scenes
         void addScene(string sceneName, Behavior* scene);

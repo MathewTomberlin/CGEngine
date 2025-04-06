@@ -134,7 +134,7 @@ namespace CGEngine {
         if (input != nullptr) {
             input->clear();
         }
-        root->apply([](Body* b) { b->callScripts(onDeleteEvent); });
+        root->apply([](Body* b) { b->callStaticScripts(DeleteDomain); });
         running = false;
         window->close();
     }
@@ -320,7 +320,7 @@ namespace CGEngine {
 				if (uninitialized.size() > 0) {
 					callUninitializedStart();
 				}
-                callScripts(onUpdateEvent);
+                callStaticScripts(UpdateDomain);
                 input->gather();
                 
                 if (window->isOpen()) {
@@ -344,6 +344,16 @@ namespace CGEngine {
         }
 
         body->apply([&scriptDomain](Body* b) { if (scriptDomain != onDeleteEvent || b != world->root) { b->callScripts(scriptDomain); } });
+    }
+
+    void World::callStaticScripts(StaticScriptDomain scriptDomainId, Body* body) {
+		if (scriptDomainId < 0 || scriptDomainId > 2) return;
+
+        if (body == nullptr) {
+            body = root;
+        }
+
+        body->apply([&scriptDomainId](Body* b) { if (scriptDomainId != 0 || b != world->root) { b->callStaticScripts(scriptDomainId); } });
     }
 
     void World::addDefaultExitActuator() {
