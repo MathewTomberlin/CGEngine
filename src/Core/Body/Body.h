@@ -11,8 +11,10 @@
 #include "../Types/UniqueDomain.h"
 #include "../Types/DataMap.h"
 #include "../Types/ScriptController/ScriptController.h"
+using std::make_unique; 
 
 namespace CGEngine {
+    class Mesh;
     enum ChildrenTermination { Inherit, Orphan, Terminate };
     enum Alignment { Center, Top_Center, Bottom_Center, Center_Right, Center_Left, Top_Right, Top_Left, Bottom_Right, Bottom_Left };
 
@@ -48,8 +50,34 @@ namespace CGEngine {
     /// </summary>
     class Body : public Transformable, public Drawable, public ScriptController, public IResource {
     public:
-        Body(Transformable* d, Transformation handle = Transformation(), Body* p = nullptr, Vector2f align = {0,0});
-        Body(Transformable* d, Body* p, Transformation handle = Transformation());
+        // Primary value-based constructor with perfect forwarding
+        template<typename T, typename = std::enable_if_t<std::is_base_of_v<Transformable, std::decay_t<T>>>>
+        Body(T&& entity,
+            Transformation handle = Transformation(),
+            Body* parent = nullptr,
+            Vector2f align = { 0,0 })
+            : Body() // Call default constructor first
+        {
+            // Properly forward the entity to unique_ptr
+            this->entity = std::make_unique<std::decay_t<T>>(std::forward<T>(entity));
+
+            createBoundsRect();
+
+            this->parent = parent;
+            if (parent != nullptr) {
+                attach(parent);
+            }
+            else {
+                this->parent = world->getRoot();
+                attach(world->getRoot());
+            }
+
+            world->addUninitialized(this);
+            moveToAlignment(align);
+            setPosition(handle.position);
+            setRotation(handle.angle);
+            setScale(handle.scale);
+        }
 
         virtual ~Body();
         /// <summary>
@@ -69,10 +97,8 @@ namespace CGEngine {
         /// <returns>The drawn Shape as the indicated type</returns>
         template <typename T = Shape*>
         T get() {
-            return dynamic_cast<T>(entity);
+            return dynamic_cast<T>(entity.get());
         }
-
-        Transformable* get() const;
 
         /// <summary>
         /// Call the script on the entity, cast to the supplied type, and on each child recursively (if updateChildren is true)
@@ -623,7 +649,7 @@ namespace CGEngine {
         /// <summary>
         /// The assigned Transformable entity
         /// </summary>
-        Transformable* entity = nullptr;
+        unique_ptr<Transformable> entity = nullptr;
         /// <summary>
         /// The Behaviors assigned to this Body
         /// </summary>

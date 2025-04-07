@@ -11,31 +11,7 @@ namespace CGEngine {
         bodyParams.name = "Root";
         scripts.initialize();
     }
-
-    Body::Body(Transformable* d, Transformation handle, Body* p, Vector2f uv) : Body() {
-        //Cache the base transformable and cast it to a shape
-        entity = d;
-        //Create the bounds rect and set draw bounds to world's value
-        createBoundsRect();
-
-        parent = p;
-        if (p != nullptr) {
-            attach(p);
-        } else {
-            parent = world->getRoot();
-            attach(world->getRoot());
-        }
-        //Add to be initialized (started)
-        world->addUninitialized(this);
-        //First move to uv alignment
-        moveToAlignment(uv);
-        //Then offset by handle, if supplied
-        setPosition(handle.position);
-        setRotation(handle.angle);
-        setScale(handle.scale);
-    }
-    Body::Body(Transformable* d, Body* p, Transformation handle) : Body(d, handle, p, { 0,0 }) {};
-
+    
     Body::~Body() {
         valid = false;
         //Remove input actions from their domains (without deleting domains) and delete the input actions
@@ -46,10 +22,6 @@ namespace CGEngine {
         callScripts(onDeleteEvent);
         //Delete scripts and domains (AFTER calling OnDeleteEvent scripts)
         scripts.clear();
-        if (entity != nullptr) {
-            delete entity;
-            entity = nullptr;
-        }
         //Delete bounds rect and clear it
         if (boundsRect != nullptr) {
             delete boundsRect;
@@ -65,8 +37,10 @@ namespace CGEngine {
     void Body::setId(optional<id_t> id) {
         IResource::setId(id);
 
-        Mesh* meshEntity = dynamic_cast<Mesh*>(entity);
-        if (meshEntity) meshEntity->setBodyId(getId());
+        if (entity) {
+            Mesh* meshEntity = dynamic_cast<Mesh*>(entity.get());
+            if (meshEntity) meshEntity->setBodyId(getId());
+        }
     }
 
     //TODO: Properly implement isValid for this and other iResource classes
@@ -81,10 +55,6 @@ namespace CGEngine {
     void Body::setName(string name) {
         bodyParams.name = name;
         scripts.initialize();
-    }
-
-    Transformable* Body::get() const {
-        return entity;
     }
 
     void Body::update(function<void(Shape*)> script, bool updateChildren) {
@@ -146,13 +116,13 @@ namespace CGEngine {
 
     FloatRect Body::getGlobalBounds() const{
         if (entity != nullptr) {
-            if (Shape* t = dynamic_cast<Shape*>(entity)) {
+            if (Shape* t = dynamic_cast<Shape*>(entity.get())) {
                 return (getGlobalTransform()).transformRect(t->getLocalBounds());
             }
-            else if (Text* t = dynamic_cast<Text*>(entity)) {
+            else if (Text* t = dynamic_cast<Text*>(entity.get())) {
                 return (getGlobalTransform()).transformRect(t->getLocalBounds());
             }
-            else if (Sprite* t = dynamic_cast<Sprite*>(entity)) {
+            else if (Sprite* t = dynamic_cast<Sprite*>(entity.get())) {
                 return (getGlobalTransform()).transformRect(t->getLocalBounds());
             }
         } else {
@@ -165,13 +135,13 @@ namespace CGEngine {
 
     FloatRect Body::getLocalBounds() const {
         if (entity != nullptr) {
-            if (Shape* t = dynamic_cast<Shape*>(entity)) {
+            if (Shape* t = dynamic_cast<Shape*>(entity.get())) {
                 return t->getLocalBounds();
             }
-            else if (Text* t = dynamic_cast<Text*>(entity)) {
+            else if (Text* t = dynamic_cast<Text*>(entity.get())) {
                 return t->getLocalBounds();
             }
-            else if (Sprite* t = dynamic_cast<Sprite*>(entity)) {
+            else if (Sprite* t = dynamic_cast<Sprite*>(entity.get())) {
                 return t->getLocalBounds();
             }
         } else {
@@ -183,11 +153,11 @@ namespace CGEngine {
     }
 
     V2f Body::getLocalCenter()  const {
-        return ((Shape*)entity)->getGeometricCenter();
+        return ((Shape*)entity.get())->getGeometricCenter();
     }
 
     V2f Body::getGlobalCenter()  const {
-        return getGlobalTransform().transformPoint(((Shape*)entity)->getGeometricCenter());
+        return getGlobalTransform().transformPoint(((Shape*)entity.get())->getGeometricCenter());
     }
 
     V2f Body::getGlobalPosition() const {
@@ -739,11 +709,11 @@ namespace CGEngine {
             target.draw(*boundsRect, transform);
         }
         if (bodyParams.rendering && entity != nullptr) {
-            if (Mesh* mesh = dynamic_cast<Mesh*>(entity)) {
+            if (Mesh* mesh = dynamic_cast<Mesh*>(entity.get())) {
                 // Pull OpenGL State
                 mesh->render(transform);
             } else {
-                target.draw(*(Shape*)entity, transform);
+                target.draw(*(Shape*)entity.get(), transform);
             }
         }
     }
