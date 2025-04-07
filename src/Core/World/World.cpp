@@ -1,6 +1,7 @@
 #include "World.h"
 #include "../Engine/Engine.h"
 #include "../../Standard/Models/CommonModels.h"
+using std::make_unique;
 
 namespace CGEngine {
     World::World() : root(assets.get<Body>(assets.create<Body>("Root", true).value())) {
@@ -15,7 +16,13 @@ namespace CGEngine {
     void World::initializeConsole() {
         if (!consoleInitialized && consoleFeatureEnabled) {
             Font* defaultFont = assets.get<FontResource>(assets.getDefaultId<FontResource>().value())->getFont();
-            consoleTextBox = new Body(new Text(*defaultFont), Transformation());
+            optional<id_t> consoleId = assets.create<Body>("Console", Text(*defaultFont), Transformation());
+			if (!consoleId.has_value()) {
+				log(this, LogError, "Failed to create console body");
+				return;
+			}
+
+            consoleTextBox = assets.get<Body>(consoleId.value());
             consoleTextBox->moveToAlignment(Alignment::Bottom_Left);
             consoleTextBox->move({ 20,-35 });
             consoleTextBox->zOrder = 100;

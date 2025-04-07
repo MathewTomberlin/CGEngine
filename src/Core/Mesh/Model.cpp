@@ -124,7 +124,7 @@ namespace CGEngine {
 		}
 
 		// Create null Mesh Body root
-		optional<id_t> rootId = assets.create<Body>(sourcePath.append(".Root"), new Mesh(nullptr));
+		optional<id_t> rootId = assets.create<Body>(sourcePath.append(".Root"), Mesh(nullptr));
 		if (rootId.has_value()) {
 			Body* rootBody = assets.get<Body>(rootId.value());
 
@@ -194,8 +194,8 @@ namespace CGEngine {
 		}
 
 		// Create a mesh for this node (even if empty)
-		Mesh* mesh = new Mesh(node->meshData, nodeTransform, nodeMaterials);
-		mesh->setModelId(getId());
+		Mesh mesh = Mesh(node->meshData, nodeTransform, nodeMaterials);
+		mesh.setModelId(getId());
 
 		// Create and attach child body
 		optional<id_t> bodyId = assets.create<Body>(sourcePath.append(node->nodeName), mesh);
