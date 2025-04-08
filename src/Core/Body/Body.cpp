@@ -31,7 +31,6 @@ namespace CGEngine {
         children.clear();
         //Remove reference to this Body in its parent, then clear parent
         drop();
-        parent = nullptr;
     }
 
     void Body::setId(optional<id_t> id) {
@@ -95,22 +94,85 @@ namespace CGEngine {
     }
 
     void Body::start() {
+        if (needsParentingAndTransformInit) {
+            Body* targetParentPtr = nullptr;
+            if (parentId.has_value()) {
+                targetParentPtr = assets.get<Body>(parentId.value());
+                if (!targetParentPtr) {
+                    log(LogWarn, "Body", "Initial parent ID {} not found in AssetManager!", parentId.value());
+                    // Fallback to root or handle error as appropriate
+                    targetParentPtr = world->getRoot();
+                }
+            }
+            else {
+                targetParentPtr = world->getRoot(); // Default to root if no initial ID was given
+            }
+
+            if (targetParentPtr) { // Ensure we have a valid pointer before attaching
+                attach(targetParentPtr);
+            }
+            else {
+                log(LogError, "Body", "Could not determine a valid parent pointer during start()!");
+                // Handle critical error?
+            }
+
+            moveToAlignment(initialAlignment);
+            setPosition(initialHandle.position);
+            setRotation(initialHandle.angle);
+            setScale(initialHandle.scale);
+
+            if (boundsRect == nullptr) { // Only create if not already existing
+                createBoundsRect(); //
+            } else {
+                updateBoundsRect(); // Or just update if it somehow existed
+            }
+
+            needsParentingAndTransformInit = false;
+        }
+
         if (!initialized) {
             callStaticScripts(StartDomain);
             initialized = true;
         }
     }
 
+    Body* Body::getParent() const {
+        if (parentId.has_value()) {
+            // Assumes 'assets' is accessible globally or via a member/context
+            return assets.get<Body>(parentId.value());
+        }
+        return nullptr;
+    }
+
     Transform Body::getGlobalTransform() const {
 		if (globalTransform.has_value()) {
 			return globalTransform.value();
 		}
-        Transform wTransform = getTransform();
-        Body* p = parent;
-        while (p != nullptr && p != world->getRoot()) {
+        Transform wTransform = getTransform(); // Start with local transform
+        std::optional<id_t> currentParentId = parentId;
+        int safetyBreak = 0; // Avoid infinite loops in case of cycles (shouldn't happen with IDs?)
+        const int MAX_DEPTH = 100; // Or some reasonable limit
+
+        while (currentParentId.has_value() && safetyBreak < MAX_DEPTH) {
+            Body* p = assets.get<Body>(currentParentId.value());
+
+            // Stop if lookup fails or we reach the root (which shouldn't have a parentId set)
+            if (!p || p == world->getRoot() || !p->parentId.has_value()) {
+                break;
+            }
+
+            // Combine parent's transform
             wTransform.combine(p->getTransform());
-            p = p->parent;
+
+            // Move to the next parent ID
+            currentParentId = p->parentId;
+            safetyBreak++;
         }
+        if (safetyBreak >= MAX_DEPTH) {
+            log(LogError, "Body", "Reached max depth in getGlobalTransform - possible cyclical hierarchy with ID {}!", getId());
+        }
+
+        globalTransform = wTransform;
         return wTransform;
     }
 
@@ -302,13 +364,15 @@ namespace CGEngine {
     void Body::moveToAlignment(V2f uvAlignment, bool updateAlignment) {
         FloatRect parentBounds = FloatRect({ 0,0 }, screen->getSize());
         //No alignment without a parent
-        if (parent == nullptr) return;
-
-        parentBounds = parent->getGlobalBounds();
-        //Update the alignment if desired
-        if (updateAlignment) alignment = uvAlignment;
-        Vector2f crnOffset = (parentBounds.position - getGlobalBounds().position);
-        setPosition(parent->getLocalBounds().size.componentWiseMul(uvAlignment) - getLocalBounds().size.rotatedBy(getRotation()).componentWiseMul(getScale()).componentWiseMul(uvAlignment) + getOrigin());
+        if (!parentId.has_value()) return;
+        Body* parent = assets.get<Body>(parentId.value());
+        if (parent) {
+            parentBounds = parent->getGlobalBounds();
+            //Update the alignment if desired
+            if (updateAlignment) alignment = uvAlignment;
+            Vector2f crnOffset = (parentBounds.position - getGlobalBounds().position);
+            setPosition(parent->getLocalBounds().size.componentWiseMul(uvAlignment) - getLocalBounds().size.rotatedBy(getRotation()).componentWiseMul(getScale()).componentWiseMul(uvAlignment) + getOrigin());
+        }
     }
 
     void Body::moveToAlignment(Alignment targetAlignment, bool updateAlignment) {
@@ -350,16 +414,15 @@ namespace CGEngine {
 
     void Body::attachBody(Body* child) {
         //Do nothing on null input
-        if (child != nullptr) {
-            //If child is already attached, detach
-            if (child->parent!=nullptr && child->parent != world->getRoot()) {
-                child->detach();
-            }
-            //Add the child to children
-            children.push_back(child);
-            //Set the child's parent to this
-            child->parent = this;
+        if (!child) return;
+        //If child is already attached, detach
+        if (child->parentId.has_value() && child->parentId != world->getRoot()->getId()) {
+            child->detach();
         }
+        //Add the child to children
+        children.push_back(child);
+        //Set the child's parent to this
+        child->parentId = this->getId();
     }
 
     void Body::detachBody(Body* child, const bool keepWorldTranform) {
@@ -397,14 +460,17 @@ namespace CGEngine {
             if (iterator != children.end()) {
                 //Remove child from children
                 children.erase(iterator);
-                child->parent = nullptr;
+                child->parentId = nullopt;
             }
         }
     }
 
     void Body::drop() {
-        if (parent != nullptr) {
-            parent->dropBody(this);
+        if (parentId.has_value()) {
+			Body* parent = assets.get<Body>(parentId.value());
+            if (parent) {
+                parent->dropBody(this);
+            }
         }
     }
 
@@ -429,13 +495,18 @@ namespace CGEngine {
     }
 
     void Body::detach() {
-        parent->detachBody(this);
+        Body* parent = assets.get<Body>(parentId.value());
+        if (parent) {
+            parent->detachBody(this);
+        }
     }
 
     void Body::exchange(Body* target) {
         if (target == nullptr) return;
-
-        parent->exchangeBody(this, target);
+        Body* parent = assets.get<Body>(parentId.value());
+        if (parent) {
+            parent->exchangeBody(this, target);
+        }
     }
 
     optional<id_t> Body::addOverlapMousePressScript(Script* script, Mouse::Button button, optional<id_t> behaviorId, bool alwaysAddListener) {
@@ -723,9 +794,12 @@ namespace CGEngine {
         for (int i = children.size() - 1; i >= 0; --i) {
             switch (termination) {
             case ChildrenTermination::Inherit:
-                if (parent != nullptr) {
-                    children[i]->exchange(parent);
-                    break;
+                if (parentId.has_value()) {
+                    Body* parent = assets.get<Body>(parentId.value());
+                    if (parent) {
+                        children[i]->exchange(parent);
+                        break;
+                    }
                 }
                 [[fallthrough]];
             case ChildrenTermination::Orphan:

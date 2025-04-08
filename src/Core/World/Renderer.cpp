@@ -373,8 +373,10 @@ namespace CGEngine {
 		}
 
 		// Combine with parent transform
-		if (body->parent && body->parent != world->getRoot()) {
-			glm::mat4 modelMatrix = getCombinedModelMatrix(body->parent) * localTransform;
+		if (body->parentId.has_value() && body->parentId != world->getRoot()->getId()) {
+			Body* parent = assets.get<Body>(body->parentId.value());
+			if (!parent) return localTransform;
+			glm::mat4 modelMatrix = getCombinedModelMatrix(parent) * localTransform;
 			body->globalTransform = glmToTransform(modelMatrix);
 			return modelMatrix;
 		}
