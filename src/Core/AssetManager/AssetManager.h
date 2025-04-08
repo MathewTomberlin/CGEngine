@@ -160,13 +160,20 @@ namespace CGEngine {
 			}
 
 			auto& container = resourceContainers[typeId].second;
+			if (!container.resources.has(id)) {
+				// Log potentially? A request for a non-existent ID might be noteworthy.
+				logMessage(LogDebug, string("Attempted to get resource with non-existent ID: ").append(to_string(id)));
+				return nullptr; // ID doesn't exist, return nullptr immediately.
+			}
 			// Get the ResourceEntry directly, not as a pointer
-			ResourceEntry entry = container.resources.get(id);
-			// Check if it's valid (we could check if the resource pointer is not null)
+			const ResourceEntry& entry = container.resources.get(id);
 			if (entry.resource) {
 				return static_cast<T*>(entry.resource.get());
+			} else {
+				// Log potentially? An existing entry with a null resource might indicate an issue.
+				logMessage(LogWarn, string("ResourceEntry found for ID but resource ptr is null: ").append(to_string(id)));
+				return nullptr; // Entry exists, but the resource pointer is null.
 			}
-			return nullptr;
 		}
 
 		IResource* get(type_index typeId, id_t id) {

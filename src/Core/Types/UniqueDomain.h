@@ -24,12 +24,14 @@ namespace CGEngine {
 			}
 		}
 
-		DomainValue get(DomainKey key) {
-			if (domain.find(key) != domain.end()) {
-				return domain[key];
+		const DomainValue& get(DomainKey key) {
+			auto it = domain.find(key);
+			if (it != domain.end()) {
+				return it->second;
+			} else {
+				static DomainValue def;
+				return def;
 			}
-			static DomainValue def;
-			return def;
 		}
 
 		bool has(DomainKey key) {
