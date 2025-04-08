@@ -54,7 +54,7 @@ namespace CGEngine {
         template<typename T, typename = std::enable_if_t<std::is_base_of_v<Transformable, std::decay_t<T>>>>
         Body(T&& entity,
             Transformation handle = Transformation(),
-            Body* parent = nullptr,
+            std::optional<id_t> parentId = std::nullopt,
             Vector2f align = { 0,0 })
             : Body() // Call default constructor first
         {
@@ -63,20 +63,12 @@ namespace CGEngine {
 
             createBoundsRect();
 
-            this->parent = parent;
-            if (parent != nullptr) {
-                attach(parent);
-            }
-            else {
-                this->parent = world->getRoot();
-                attach(world->getRoot());
-            }
+            this->parentId = parentId;
+            this->initialHandle = handle;
+            this->initialAlignment = align;
+            this->needsParentingAndTransformInit = true;
 
             world->addUninitialized(this);
-            moveToAlignment(align);
-            setPosition(handle.position);
-            setRotation(handle.angle);
-            setScale(handle.scale);
         }
 
         virtual ~Body();
@@ -90,6 +82,9 @@ namespace CGEngine {
         /// </summary>
         /// <param name="name">The new name</param>
         void setName(string name);
+
+        std::optional<id_t> getParentId() const { return parentId; }
+        Body* getParent() const;
         /// <summary>
         /// Return the drawn Shape as an object of the indicated type
         /// </summary>
@@ -657,7 +652,10 @@ namespace CGEngine {
         /// <summary>
         /// The Body whose transform is the parent of this Body's transform
         /// </summary>
-        Body* parent = nullptr;
+        std::optional<id_t> parentId;
+        Transformation initialHandle;
+        Vector2f initialAlignment;
+        bool needsParentingAndTransformInit = true;
         /// <summary>
         /// The Bodies that are attached to (and inherit the Transform of) this Body
         /// </summary>

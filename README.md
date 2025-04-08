@@ -1,10 +1,42 @@
-#CGEngine v0.1
+#CG Engine
 
 THIS SOFTWARE IS IN ALPHA DEVELOPMENT AND IS RELEASED AS-IS. FEATURES ARE LIKELY TO CHANGE WITHOUT NOTICE.
 
 This C++ interaction library allows you to create real-time, scriptable visual interfaces and games using composable Bodies, Behaviors, Scripts, and Timers.
 
 This project template is built on the SFML CMake GitHub template. Instructions for using that template are below and many should be the same for this project template, but they have not been reviewed or confirmed.
+
+#CG Engine Details
+CG Engine
+- C++ 2D/3D scene graph scripting engine
+- Libraries: SFML, OpenGL, CMake, Assimp
+
+Engine Systems
+- Engine defines global extern objects (World, Renderer, AssetManager, etc)
+- AssetManager has a Type-to-UniqueDomain map of asset pointer (IResource) to unique id within that domain
+- Assets managed by AssetManager should be referenced by id wherever possible
+- Renderer handles OpenGL to render Meshes and/or SFML draw functions to draw SFML entities
+- World holds the root Body of the scene graph and other world state
+- InputMap has a InputCondition-to-UniqueDomain map of Script to unique id.
+- InputMap gathers input and calls domains when input matches InputCondition for the domain
+
+Engine Classes
+- Body holds entities, like Mesh or SFML's Shape, Sprite, and Text
+- Body holds ScriptMap and can call scripts by domain string. Start, Update, and Delete domains called by engine.
+- Body holds vector of Behaviors. Behavior Start, Update, and Delete called with Body.
+- ScriptMap has a string-to-UniqueDomain map of Script to unique id.
+- Script holds ScriptEvent function pointer that takes ScArgs (script Script*, caller Body*, behave Behavior*)
+- Script holds input & output DataMaps for state and input/output
+- Actuators are Scripts with caller and behavior reference that can be called from anywhere (as InputMap does)
+- Behavior holds a ScriptMap and input, output, & process DataMaps for state and input/output
+- Behavior does not have entity, like Body
+- Mesh entities are Drawable and Transformable OpenGL 3D entities
+- Models are compositions of Bodies with Meshes and may be imported via Assimp
+- Shaders are loaded from file, to allow developers to define custom shaders
+- Programs are loaded from shaders
+- Materials use a string-to-any value map of parameters to allow developers to define custom materials
+
+Keep these implementation details in mind when analyzing classes and providing suggestions. If you notice code that does not support the above implementation details, raise a warning. Always use logic and reasoning when suggesting new code and be clear where code has changed.
 
 # CMake SFML Project Template
 
