@@ -71,8 +71,16 @@ namespace CGEngine {
     void Body::apply(function<void(Body*)> script) {
         script(this);
 
-        for (int child = children.size() - 1; child >= 0; child--) {
-            children[child]->apply(script);
+        for (int childId = children.size() - 1; childId >= 0; childId--) {
+            Body* child = assets.get<Body>(children[childId]);
+            if (child) {
+                child->apply(script);
+            } else {
+                // CRITICAL: Log an error here. An ID in the children list
+                // MUST correspond to a valid Body in the AssetManager.
+                log(LogError, "Body::Apply", "Child Body with ID {} not found in AssetManager!", childId);
+
+            }
         }
     }
 
@@ -414,22 +422,23 @@ namespace CGEngine {
 
     void Body::attachBody(Body* child) {
         //Do nothing on null input
-        if (!child) return;
+        if (!child || !child->getId().has_value()) return;
         //If child is already attached, detach
         if (child->parentId.has_value() && child->parentId != world->getRoot()->getId()) {
             child->detach();
         }
         //Add the child to children
-        children.push_back(child);
+        children.push_back(child->getId().value());
         //Set the child's parent to this
         child->parentId = this->getId();
     }
 
     void Body::detachBody(Body* child, const bool keepWorldTranform) {
         //Do nothing on null input
-        if (child == nullptr) return;
+        if (!child || !child->getId().has_value()) return;
         //Find the body to detach
-        auto iterator = find_if(children.begin(), children.end(), [child](Body* c) { return c == child; });
+		auto childId = child->getId().value();
+        auto iterator = std::find_if(children.begin(), children.end(), [childId](id_t id) { return id == childId; });
         //If found among childen
         if (iterator != children.end()) {
             if (keepWorldTranform) {
@@ -455,7 +464,8 @@ namespace CGEngine {
         //Do nothing on null input
         if (child != nullptr) {
             //Find the body to detach
-            auto iterator = find_if(children.begin(), children.end(), [child](Body* c) { return c == child; });
+            auto childId = child->getId().value();
+            auto iterator = std::find_if(children.begin(), children.end(), [childId](id_t id) { return id == childId; });
             //If found among childen
             if (iterator != children.end()) {
                 //Remove child from children
@@ -477,7 +487,8 @@ namespace CGEngine {
     void Body::exchangeBody(Body* child, Body* target) {
         if (child != nullptr) {
             //Find the body to detach
-            auto iterator = find_if(children.begin(), children.end(), [child](Body* c) { return c == child; });
+            auto childId = child->getId().value();
+            auto iterator = std::find_if(children.begin(), children.end(), [childId](id_t id) { return id == childId; });
             //If found among childen
             if (iterator != children.end()) {
                 //Remove child from children
@@ -738,7 +749,19 @@ namespace CGEngine {
                     }
                 }
                 //Check the search Body's children
-                search.insert(search.begin(), other->children.begin(), other->children.end());
+                vector<Body*> childPointers;
+                childPointers.reserve(other->children.size()); // Optional optimization
+                for (id_t childId : other->children) {
+                    Body* childPtr = assets.get<Body>(other->children[childId]);
+                    if (childPtr) {
+                        childPointers.push_back(childPtr);
+                    }
+                    else {
+                        log(LogWarn, "Body::onIntersectScript", "Intersect check: Child Body ID {} not found for parent '{}'.", childId, other->getName());
+                    }
+                }
+                // Now insert the collected pointers
+                search.insert(search.begin(), childPointers.begin(), childPointers.end());
             }
 
             //Pop from the search list
@@ -760,8 +783,11 @@ namespace CGEngine {
         onDraw(target, tr);
 
         // draw its children
-        for (id_t i = 0; i < children.size(); ++i) {
-            children[i]->onDraw(target, tr);
+        for (id_t childId = 0; childId < children.size(); ++childId) {
+            Body* child = assets.get<Body>(children[childId]); // Assuming 'assets' is accessible
+            if (child) {
+                child->onDraw(target, tr);
+            }
         }
     }
 
@@ -770,8 +796,16 @@ namespace CGEngine {
         renderer.add(getId().value());
 
         //Draw children recursively
-        for (id_t i = 0; i < children.size(); ++i) {
-            children[i]->queueRendering();
+        for (id_t childId = 0; childId < children.size(); ++childId) {
+            Body* child = assets.get<Body>(children[childId]); // Assuming 'assets' is accessible
+            if (child) {
+                child->queueRendering();
+            } else {
+                // CRITICAL: Log an error here. An ID in the children list
+                // MUST correspond to a valid Body in the AssetManager.
+                log(LogError, "Body::[MethodName]", "Child Body with ID {} not found in AssetManager!", childId);
+
+            }
         }
     }
 
@@ -791,23 +825,31 @@ namespace CGEngine {
 
     Body* Body::deleteBody(ChildrenTermination termination) {
         //Default behavior is that children detach (and therefor attach to world root)
-        for (int i = children.size() - 1; i >= 0; --i) {
-            switch (termination) {
-            case ChildrenTermination::Inherit:
-                if (parentId.has_value()) {
-                    Body* parent = assets.get<Body>(parentId.value());
-                    if (parent) {
-                        children[i]->exchange(parent);
-                        break;
+        for (int childId = children.size() - 1; childId >= 0; --childId) {
+            Body* child = assets.get<Body>(children[childId]); // Assuming 'assets' is accessible
+            if (child) {
+                switch (termination) {
+                case ChildrenTermination::Inherit:
+                    if (parentId.has_value()) {
+                        Body* parent = assets.get<Body>(parentId.value());
+                        if (parent) {
+                            child->exchange(parent);
+                            break;
+                        }
                     }
+                    [[fallthrough]];
+                case ChildrenTermination::Orphan:
+                    child->detach();
+                    break;
+                case ChildrenTermination::Terminate:
+                    child->deleteBody();
+                    break;
                 }
-                [[fallthrough]];
-            case ChildrenTermination::Orphan:
-                children[i]->detach();
-                break;
-            case ChildrenTermination::Terminate:
-                children[i]->deleteBody();
-                break;
+            } else {
+                // CRITICAL: Log an error here. An ID in the children list
+                // MUST correspond to a valid Body in the AssetManager.
+                log(LogError, "Body::[MethodName]", "Child Body with ID {} not found in AssetManager!", childId);
+
             }
         }
 

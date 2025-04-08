@@ -109,8 +109,15 @@ namespace CGEngine {
             }
 
             if (updateChildren) {
-                for (int i = children.size() - 1; i >= 0; i--) {
-                    children[i]->update(script, true);
+                for (int childId = children.size() - 1; childId >= 0; childId--) {
+                    Body* child = assets.get<Body>(children[childId]);
+                    if (child) {
+                        child->update(script, true);
+                    } else {
+                        // CRITICAL: Log an error here. An ID in the children list
+                        // MUST correspond to a valid Body in the AssetManager.
+                        log(LogError, "Body::update", "Child Body with ID {} not found in AssetManager!", childId);
+                    }
                 }
             }
         }
@@ -659,7 +666,7 @@ namespace CGEngine {
         /// <summary>
         /// The Bodies that are attached to (and inherit the Transform of) this Body
         /// </summary>
-        vector<Body*> children;
+        vector<id_t> children;
         /// <summary>
         /// The RectangleShape of this body's bounds
         /// </summary>
