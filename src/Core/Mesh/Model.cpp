@@ -40,11 +40,11 @@ namespace CGEngine {
 		//If the model has bones, create a skeleton and animator
 		if (modelBones.size() > 0) {
 			//If skeletonName is empty or if that skeleton exists but doesn't have matching bones, use a name that will create a new skeleton
-			string newSkeletonName = (skeletonName.empty() || (!skeletonName.empty() && !assets.get<Skeleton>(skeletonName)->equals(modelBones))) ? name.append("_Skeleton") : skeletonName;
+			string newSkeletonName = (skeletonName.empty() || (!skeletonName.empty() && assets.get<Skeleton>(skeletonName) && !assets.get<Skeleton>(skeletonName)->equals(modelBones))) ? name.append("_Skeleton") : skeletonName;
 			//Get the Skeleton with newSkeletonName, if it exists, or create a Skeleton from model bones
-			optional<id_t> skeletonId = assets.create<Skeleton>(newSkeletonName, modelBones);
-			if (skeletonId.has_value()) {
-				modelSkeleton = assets.get<Skeleton>(skeletonId.value());
+			auto skeletonAsset = assets.create<Skeleton>(newSkeletonName, modelBones);
+			if (skeletonAsset.has_value()) {
+				modelSkeleton = skeletonAsset.value().second;
 				//Create animator if skeletal
 				if (modelSkeleton && modelSkeleton->isValid()) {
 					modelAnimator = createAnimator();
@@ -124,13 +124,13 @@ namespace CGEngine {
 		}
 
 		// Create null Mesh Body root
-		optional<id_t> rootId = assets.create<Body>(sourcePath.append(".Root"), Mesh(nullptr));
-		if (rootId.has_value()) {
-			Body* rootBody = assets.get<Body>(rootId.value());
+		auto rootAsset = assets.create<Body>(sourcePath.append(".Root"), Mesh(nullptr));
+		if (rootAsset.has_value()) {
+			Body* rootBody = rootAsset.value().second;
 
 			//Apply root body as the first Model body
 			bodyCount = 1;
-			log(this, LogDebug, "  {}) ROOT (ID: {})", bodyCount, rootId);
+			log(this, LogDebug, "  {}) ROOT (ID: {})", bodyCount, rootAsset.value().first);
 
 			// Apply root transform to the root mesh
 			Mesh* rootMesh = rootBody->get<Mesh*>();
@@ -141,7 +141,7 @@ namespace CGEngine {
 			//Recursively build Model hierarchy
 			createChildBodies(rootNode, rootBody, materialsToUse);
 			log(this, LogInfo, "Successfully Instantiated Model '{}' with Body Count: {}", sourcePath, bodyCount);
-			return rootId;
+			return rootAsset.value().first;
 		} else {
 			log(this, LogError, " Failed to create root body");
 			return nullopt;
@@ -198,11 +198,11 @@ namespace CGEngine {
 		mesh.setModelId(getId());
 
 		// Create and attach child body
-		optional<id_t> bodyId = assets.create<Body>(sourcePath.append(node->nodeName), mesh);
-		if (bodyId.has_value()) {
-			Body* body = assets.get<Body>(bodyId.value());
+		auto bodyAsset = assets.create<Body>(sourcePath.append(node->nodeName), mesh);
+		if (bodyAsset.has_value()) {
+			Body* body = bodyAsset.value().second;
 			bodyCount++;
-			log(this, LogDebug, "  {}) {} (ID: {}) {}", bodyCount, node->nodeName, bodyId, node->meshData && !node->meshData->vertices.empty() ? " <Has Mesh>" : "");
+			log(this, LogDebug, "  {}) {} (ID: {}) {}", bodyCount, node->nodeName, bodyAsset.value().first, node->meshData && !node->meshData->vertices.empty() ? " <Has Mesh>" : "");
 			//Attach child body to parent
 			if (parentBody) {
 				parentBody->attachBody(body);

@@ -3,12 +3,16 @@
 
 namespace CGEngine {
     MeshData* getCubeModel(float scale) {
-        optional<id_t> cubeId = assets.create<MeshData>("default_cube", getCubeVertices(scale), getCubeIndices());
+        auto cubeAsset = assets.create<MeshData>("default_cube", getCubeVertices(scale), getCubeIndices());
+        if (!cubeAsset.has_value()) return nullptr;
+        optional<id_t> cubeId = cubeAsset.value().first;
 		return assets.get<MeshData>(cubeId.value());
     }
 
     MeshData* getPlaneModel(float scale, float textureId, Vector3f offset) {
-        optional<id_t> planeId = assets.create<MeshData>("default_plane", getPlaneVertices(scale, textureId, offset), getPlaneIndices());
+        auto planeAsset = assets.create<MeshData>("default_plane", getPlaneVertices(scale, textureId, offset), getPlaneIndices());
+		if (!planeAsset.has_value()) return nullptr;
+        optional<id_t> planeId = planeAsset.value().first;
 		return assets.get<MeshData>(planeId.value());
     }
 
@@ -128,7 +132,9 @@ namespace CGEngine {
     }
 
     MeshData* getTilemapModel(float scale, Vector2i size, vector<vector<int>> textureMap) {
-		optional<id_t> tilemapId = assets.create<MeshData>("default_tilemap", getTilemapVertices(scale, size, textureMap), getTilemapIndices(size));
+        auto tilemapAsset = assets.create<MeshData>("default_tilemap", getTilemapVertices(scale, size, textureMap), getTilemapIndices(size));
+		if (!tilemapAsset.has_value()) return nullptr;
+		optional<id_t> tilemapId = tilemapAsset.value().first;
 		return assets.get<MeshData>(tilemapId.value());
     }
 

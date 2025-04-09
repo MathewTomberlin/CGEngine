@@ -12,9 +12,22 @@ namespace CGEngine {
 	Material::Material() { }
 
 	Material::Material(SurfaceParameters params) :Material() {
-		optional<id_t> diffuseTextureId = assets.load<TextureResource>(params.diffuseTexturePath);
-		optional<id_t> specularTextureId = assets.load<TextureResource>(params.specularTexturePath);
-		optional<id_t> opacityTextureId = assets.load<TextureResource>(params.opacityTexturePath);
+		auto diffuseAsset = assets.load<TextureResource>(params.diffuseTexturePath);
+		optional<id_t> diffuseTextureId = nullopt;
+		if (diffuseAsset.has_value()) {
+			diffuseTextureId = diffuseAsset.value().first;
+		}
+		auto specularAsset = assets.load<TextureResource>(params.specularTexturePath);
+		optional<id_t> specularTextureId = nullopt;
+		if(specularAsset.has_value()){
+			specularTextureId = specularAsset.value().first;
+		}
+		auto opacityAsset = assets.load<TextureResource>(params.opacityTexturePath);
+		optional<id_t> opacityTextureId = nullopt;
+		if (opacityAsset.has_value()) {
+			opacityTextureId = opacityAsset.value().first;
+		}
+
 		if (diffuseTextureId.has_value()) {
 			TextureResource* diffuseTexture = assets.get<TextureResource>(diffuseTextureId.value());
 			if (diffuseTexture) {
@@ -64,9 +77,21 @@ namespace CGEngine {
 	}
 
 	Material::Material(SurfaceParameters params, ShaderProgramPath shaderPath) : Material(shaderPath) {
-		optional<id_t> diffuseTextureId = assets.load<TextureResource>(params.diffuseTexturePath);
-		optional<id_t> specularTextureId = assets.load<TextureResource>(params.specularTexturePath);
-		optional<id_t> opacityTextureId = assets.load<TextureResource>(params.opacityTexturePath);
+		auto diffuseAsset = assets.load<TextureResource>(params.diffuseTexturePath);
+		optional<id_t> diffuseTextureId = nullopt;
+		if (diffuseAsset.has_value()) {
+			diffuseTextureId = diffuseAsset.value().first;
+		}
+		auto specularAsset = assets.load<TextureResource>(params.specularTexturePath);
+		optional<id_t> specularTextureId = nullopt;
+		if (specularAsset.has_value()) {
+			specularTextureId = specularAsset.value().first;
+		}
+		auto opacityAsset = assets.load<TextureResource>(params.opacityTexturePath);
+		optional<id_t> opacityTextureId = nullopt;
+		if (opacityAsset.has_value()) {
+			opacityTextureId = opacityAsset.value().first;
+		}
 		if (diffuseTextureId.has_value()) {
 			TextureResource* diffuseTexture = assets.get<TextureResource>(diffuseTextureId.value());
 			if (diffuseTexture) {
@@ -116,9 +141,21 @@ namespace CGEngine {
 	}
 
 	Material::Material(SurfaceParameters params, Program* program) : shaderProgram(program) {
-		optional<id_t> diffuseTextureId = assets.load<TextureResource>(params.diffuseTexturePath);
-		optional<id_t> specularTextureId = assets.load<TextureResource>(params.specularTexturePath);
-		optional<id_t> opacityTextureId = assets.load<TextureResource>(params.opacityTexturePath);
+		auto diffuseAsset = assets.load<TextureResource>(params.diffuseTexturePath);
+		optional<id_t> diffuseTextureId = nullopt;
+		if (diffuseAsset.has_value()) {
+			diffuseTextureId = diffuseAsset.value().first;
+		}
+		auto specularAsset = assets.load<TextureResource>(params.specularTexturePath);
+		optional<id_t> specularTextureId = nullopt;
+		if (specularAsset.has_value()) {
+			specularTextureId = specularAsset.value().first;
+		}
+		auto opacityAsset = assets.load<TextureResource>(params.opacityTexturePath);
+		optional<id_t> opacityTextureId = nullopt;
+		if (opacityAsset.has_value()) {
+			opacityTextureId = opacityAsset.value().first;
+		}
 		if (diffuseTextureId.has_value()) {
 			TextureResource* diffuseTexture = assets.get<TextureResource>(diffuseTextureId.value());
 			if (diffuseTexture) {

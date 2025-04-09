@@ -4,11 +4,15 @@
 #include <memory>
 #include <typeindex>
 #include <filesystem>
+#include <utility>
+#include <limits>
+#include <optional>
 #include "../Engine/EngineSystem.h"
 #include "../Shader/Program.h"
 #include "AssetLoader.h"
 #include "../Material/Material.h"
 #include "../Animation/Animation.h"
+#include "../Types/Types.h"
 namespace CGEngine {
 	class VertexShaderResource : public IResource {
 	private:
@@ -70,27 +74,31 @@ namespace CGEngine {
 		// Add new initialization method
 		void initialize() {
 			//Load default texture
-			optional<id_t> defaultTextureId = setDefaultId<TextureResource>(load<TextureResource>("checkered_tile.png", defaultTextureName));
+			auto defaultTextureAsset = load<TextureResource>("checkered_tile.png", defaultTextureName);
+			optional<id_t> defaultTextureId = setDefaultId<TextureResource>(defaultTextureAsset.has_value() ? std::optional<id_t>{defaultTextureAsset.value().first} : std::nullopt);
 			if(!defaultTextureId.has_value()){
 				logMessage(LogError, "Failed to load default texture!");
 			}
 
 			//Create default program
-			optional<id_t> defaultProgramId = setDefaultId<Program>(create<Program>(defaultProgramName, "shaders/StdVertexShader.vert", "shaders/StdFragShader.frag", defaultProgramName));
+			auto defaultProgramAsset = create<Program>(defaultProgramName, "shaders/StdVertexShader.vert", "shaders/StdFragShader.frag", defaultProgramName);
+			optional<id_t> defaultProgramId = setDefaultId<Program>(defaultProgramAsset.has_value() ? std::optional<id_t>{defaultProgramAsset.value().first} : std::nullopt);
 			if (!defaultProgramId.has_value()) {
 				logMessage(LogError, "Failed to create default program!");
 			}
 
 			//If default texture was loaded and default program was created, create default material
 			if (defaultTextureId.has_value() && defaultProgramId.has_value()) {
-				optional<id_t> defaultMaterialId = setDefaultId<Material>(create<Material>(defaultMaterialName, SurfaceParameters(SurfaceDomain("default_texture")), get<Program>(defaultProgramId.value())));
+				auto defaultMaterialAsset = create<Material>(defaultMaterialName, SurfaceParameters(SurfaceDomain("default_texture")), get<Program>(defaultProgramId.value()));
+				optional<id_t> defaultMaterialId = setDefaultId<Material>(defaultMaterialAsset.has_value() ? std::optional<id_t>{defaultMaterialAsset.value().first} : std::nullopt);
 				if (!defaultMaterialId.has_value()) {
 					logMessage(LogError, "Failed to create default material!");
 				}
 			}
 
 			//Load default font
-			optional<id_t> defaultFontId = setDefaultId<FontResource>(load<FontResource>("fonts/defaultFont.ttf", defaultFontName));
+			auto defaultFontAsset = load<FontResource>("fonts/defaultFont.ttf", defaultFontName);
+			optional<id_t> defaultFontId = setDefaultId<FontResource>(defaultFontAsset.has_value()?std::optional<id_t>{defaultFontAsset.value().first}:std::nullopt);
 			if (!defaultFontId.has_value()) {
 				logMessage(LogError, "Failed to load default font!");
 			}
@@ -308,7 +316,7 @@ namespace CGEngine {
 		* @return Optional id of loaded resource. Nullopt if loading failed.
 		*/
 		template<typename T>
-		optional<id_t> load(const filesystem::path& resourcePath, const string& resourceName = "") {
+		std::optional<std::pair<id_t, T*>> load(const filesystem::path& resourcePath, const string& resourceName = "") {
 			//Require a resourcePath or resourceName
 			if (resourcePath.empty() && resourceName.empty()) return nullopt;
 			type_index resourceTypeId = type_index(typeid(T));
@@ -328,7 +336,7 @@ namespace CGEngine {
 				//Return if existingResource is valid or remove the container mapping if not
 				if (existingResource && existingResource->isValid()) {
 					logMessage(LogInfo, string("Found '").append(resourceContainers[resourceTypeId].first).append("' Resource '").append(resourceName).append("' with path '").append(resourcePath.filename().string()).append("'"));
-					return existingResourceId.value();
+					return std::optional<std::pair<id_t, T*>>(std::in_place, existingResourceId.value(), existingResource);
 				} else {
 					//Remove container mapping for invalid resource
 					auto& container = resourceContainers[resourceTypeId].second;
@@ -373,7 +381,7 @@ namespace CGEngine {
 				string logMsg = string("Loaded '").append(resourceContainers[resourceTypeId].first).append("' Resource '").append(assetName).append("' from '").append(resourcePath.filename().string()).append("' ID:").append(to_string(resourceId));
 				logMessage(LogInfo, logMsg);
 				logMessage(LogInfo, string("Resource '").append(resourceContainers[resourceTypeId].first).append("' Count:").append(to_string(resourceContainers[resourceTypeId].second.resources.size())));
-				return resourceId;
+				return std::optional<std::pair<id_t, T*>>(std::in_place, resourceId, rawPtr);
 			}
 
 			return nullopt;
@@ -386,7 +394,7 @@ namespace CGEngine {
 		* @return Optional id of created resource. Nullopt if creation failed.
 		*/
 		template<typename T, typename... Args>
-		optional<id_t> create(const std::string& resourceName, Args&&... args) {
+		std::optional<std::pair<id_t, T*>> create(const std::string& resourceName, Args&&... args) {
 			std::type_index resourceTypeId = std::type_index(typeid(T));
 			if (!hasResourceType<T>()) {
 				string logMsg = string("Attempted to create unregistered resource type: ").append(typeid(T).name());
@@ -401,7 +409,7 @@ namespace CGEngine {
 				T* existingResource = get<T>(existingResourceId.value());
 				if (existingResource && existingResource->isValid()) {
 					logMessage(LogInfo, string("Found '").append(resourceContainers[resourceTypeId].first).append("' Resource: ").append(resourceName));
-					return existingResourceId.value();
+					return std::optional<std::pair<id_t, T*>>(std::in_place, existingResourceId.value(), existingResource);
 				}
 				else {
 					//Remove container mapping for invalid resource
@@ -433,7 +441,7 @@ namespace CGEngine {
 			string logMsg = string("Created '").append(resourceContainers[resourceTypeId].first).append("' Resource '").append(resourceName).append("' ID:").append(to_string(resourceId));
 			logMessage(LogInfo, logMsg);
 			logMessage(LogInfo, string("Resource '").append(resourceContainers[resourceTypeId].first).append("' Count: ").append(to_string(resourceContainers[resourceTypeId].second.resources.size())));
-			return resourceId;
+			return std::optional<std::pair<id_t, T*>>(std::in_place, resourceId, rawPtr);
 		}
 
 		//Get the default id for T type
