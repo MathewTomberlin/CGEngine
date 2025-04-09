@@ -2,9 +2,6 @@
 
 namespace CGEngine {
 	Behavior::Behavior(Body* owning, string displayName) : scripts(owning), displayName(displayName), owner(owning) {
-		if (owner != nullptr) {
-			behaviorId = owner->addBehavior(this);
-		}
 		scripts.initialize();
 	};
 
