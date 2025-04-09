@@ -18,9 +18,7 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 find_package (OpenGL REQUIRED)
-
 find_package(Doxygen)
-
 include(FetchContent)
 FetchContent_Declare(SFML
     GIT_REPOSITORY https://github.com/SFML/SFML.git
@@ -30,18 +28,35 @@ FetchContent_Declare(SFML
     SYSTEM)
 FetchContent_MakeAvailable(SFML)
 
+add_subdirectory(external/pybind11)
 file(GLOB_RECURSE source "${CMAKE_CURRENT_SOURCE_DIR}/src/*.*")
 
-set (PROJECT_INCLUDES ${GLEW_INCLUDE_DIR} ${GLM_INCLUDE_DIR} ${SFML_INCLUDE_DIRS} ${OPENGL_INCLUDE_DIRS} ${ASSIMP_INCLUDE_DIR})
-add_executable(main ${source})
-include_directories(${PROJECT_INCLUDES})
+#Linking library ---
+add_library(CGEngineCore STATIC ${source}) # Or SHARED if preferred
+add_subdirectory(src/Bindings)
+target_include_directories(CGEngineCore PUBLIC
+    ${GLEW_INCLUDE_DIR}      # Manually set path - should be fine
+    ${GLM_INCLUDE_DIR}       # Manually set path - should be fine
+    # Use generator expression to get include dirs from the SFML target:
+    $<TARGET_PROPERTY:SFML::Graphics,INTERFACE_INCLUDE_DIRECTORIES>
+    ${OPENGL_INCLUDE_DIRS}  # Keep using the variable for OpenGL for now
+    ${ASSIMP_INCLUDE_DIR}     # Manually set path - should be fine
+)
+target_link_libraries(CGEngineCore PUBLIC
+    SFML::Graphics
+    # Add other direct dependencies IF CGEngineCore code uses them directly:
+    ${OPENGL_LIBRARIES}
+    ${GLEW_LIBRARY}
+    ${ASSIMP_LIBRARY}
+)
+get_target_property(CGECORE_INCLUDES CGEngineCore INCLUDE_DIRECTORIES)
+target_compile_features(CGEngineCore PRIVATE cxx_std_17)
+
+add_executable(main src/main.cpp) # Assuming main.cpp is the entry point
+target_link_libraries(main PRIVATE CGEngineCore SFML::Graphics ${OPENGL_LIBRARIES} ${GLEW_LIBRARY} ${ASSIMP_LIBRARY})
+
 add_custom_command(TARGET main POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/resources/ $<TARGET_FILE_DIR:main> COMMAND ${CMAKE_COMMAND} -E echo "Installed resources")
 add_custom_command(TARGET main POST_BUILD COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile COMMAND ${CMAKE_COMMAND} -E echo "Built Doxygen documentation")
-target_compile_features(main PRIVATE cxx_std_17)
-target_link_libraries(main PRIVATE SFML::Graphics)
-target_link_libraries (main PRIVATE ${OPENGL_LIBRARIES})
-target_link_libraries(main PRIVATE ${GLEW_LIBRARY})
-target_link_libraries(main PRIVATE ${ASSIMP_LIBRARY})
 
 add_custom_target(update_resources
     COMMAND ${CMAKE_COMMAND} -E copy_directory
