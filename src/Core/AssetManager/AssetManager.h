@@ -359,12 +359,27 @@ namespace CGEngine {
 				//If resource was not loaded successfully and the resourceType has a defaultId
 				if (!resource && hasDefaultId(resourceTypeId)) {
 					//Get the default id for the resource type and try to load it
-					optional<id_t> defaultResourceId = getDefaultId(resourceTypeId);
-					if (defaultResourceId.has_value()) {
-						if (auto defaultResource = get(resourceTypeId, defaultResourceId.value())) {
-							// Create a new instance of the default resource
-							resource = unique_ptr<IResource>(defaultResource);
+					optional<id_t> defaultResourceIdOpt = getDefaultId(resourceTypeId);
+					if (defaultResourceIdOpt.has_value()) {
+						id_t defaultResourceId = defaultResourceIdOpt.value();
+						auto& container = resourceContainers[resourceTypeId].second;
+						if (container.resources.has(defaultResourceId)) {
+							// FOUND IT! Return the existing entry.
+							// No need to create a new unique_ptr or shared_ptr.
+							const ResourceEntry& defaultEntry = container.resources.get(defaultResourceId);
+							T* defaultPtr = static_cast<T*>(defaultEntry.resource.get()); // Get the raw pointer to return
+							logMessage(LogWarn, "Resource loading failed, returning default resource: " + assetName);
+							// Return the ID and pointer of the *existing* default resource.
+							return std::optional<std::pair<id_t, T*>>(std::in_place, defaultResourceId, defaultPtr);
 						}
+						else {
+							logMessage(LogError, "Default resource ID found but resource missing for type: " + string(typeid(T).name()));
+							// Fall through to return nullopt
+						}
+					}
+					else {
+						// No default ID registered for this type.
+						// Fall through to return nullopt
 					}
 				}
 			}
@@ -384,7 +399,9 @@ namespace CGEngine {
 				return std::optional<std::pair<id_t, T*>>(std::in_place, resourceId, rawPtr);
 			}
 
-			return nullopt;
+			// If we reach here, loading failed and no default was returned.
+			logMessage(LogWarn, "Failed to load resource and no default available: " + assetName);
+			return nullopt; // Explicitly return nullopt if everything failed
 		}
 
 		/**
