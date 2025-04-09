@@ -41,6 +41,7 @@ target_include_directories(CGEngineCore PUBLIC
     $<TARGET_PROPERTY:SFML::Graphics,INTERFACE_INCLUDE_DIRECTORIES>
     ${OPENGL_INCLUDE_DIRS}  # Keep using the variable for OpenGL for now
     ${ASSIMP_INCLUDE_DIR}     # Manually set path - should be fine
+    ${CMAKE_SOURCE_DIR}/external/pybind11/include
 )
 target_link_libraries(CGEngineCore PUBLIC
     SFML::Graphics
@@ -48,6 +49,7 @@ target_link_libraries(CGEngineCore PUBLIC
     ${OPENGL_LIBRARIES}
     ${GLEW_LIBRARY}
     ${ASSIMP_LIBRARY}
+    pybind11::pybind11
 )
 get_target_property(CGECORE_INCLUDES CGEngineCore INCLUDE_DIRECTORIES)
 target_compile_features(CGEngineCore PRIVATE cxx_std_17)
