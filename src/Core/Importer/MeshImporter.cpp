@@ -23,10 +23,10 @@ namespace CGEngine {
 			ImportResult result = processNode(scene->mRootNode, scene, modelBones, modelMaterials);
 			result.materials = modelMaterials;
 			//If skeletonName is empty or if that skeleton exists but doesn't have matching bones, use a name that will create a new skeleton
-			string newSkeletonName = (skeletonName.empty() || (!skeletonName.empty() && !assets.get<Skeleton>(skeletonName)->equals(modelBones))) ? path.append("_Skeleton") : skeletonName;
-			optional<id_t> skeletonId = assets.create<Skeleton>(newSkeletonName, modelBones);
-			if (skeletonId.has_value()) {
-				result.skeleton = assets.get<Skeleton>(skeletonId.value());
+			string newSkeletonName = (skeletonName.empty() || (!skeletonName.empty() && assets.get<Skeleton>(skeletonName) && !assets.get<Skeleton>(skeletonName)->equals(modelBones))) ? path.append("_Skeleton") : skeletonName;
+			auto skeletonAsset = assets.create<Skeleton>(newSkeletonName, modelBones);
+			if (skeletonAsset.has_value()) {
+				result.skeleton = assets.get<Skeleton>(skeletonAsset.value().first);
 			}
 			//Import animations for the model bones
 			importAnimations(scene, result.skeleton, result.animations);
@@ -115,12 +115,12 @@ namespace CGEngine {
 				SurfaceDomain specularDomain = SurfaceDomain(specularTexture, fromAiColor4(specularColor), (*roughness) * (*shininess));
 				SurfaceDomain opacityDomain = SurfaceDomain(opacityTexture, Color::White, *opacity);
 				SurfaceParameters surfaceParams = SurfaceParameters(diffuseDomain, specularDomain);
-				optional<id_t> worldMaterialId = assets.create<Material>(modelMaterial->GetName().C_Str(), surfaceParams, assets.get<Program>(assets.defaultProgramName));
-				if (!worldMaterialId.has_value()) {
-					log(this, LogWarn, "  - {} Material: '{}' Failed to create world material!", modelMaterialId, modelMaterial->GetName().C_Str());
+				auto worldMaterialAsset = assets.create<Material>(modelMaterial->GetName().C_Str(), surfaceParams, assets.get<Program>(assets.defaultProgramName));
+				if (!worldMaterialAsset.has_value()) {
+					log(this, LogWarn, "  - {} Material: '{}' Failed to create world material!", worldMaterialAsset.value().first, modelMaterial->GetName().C_Str());
 				} else {
-					modelMaterials.push_back(worldMaterialId.value());
-					log(this, LogInfo, "  - {} Material: '{}'  (World ID: {}) Color: ({},{},{})", modelMaterialId, modelMaterial->GetName().C_Str(), worldMaterialId.value(), diffuseColor->r, diffuseColor->g, diffuseColor->b);
+					modelMaterials.push_back(worldMaterialAsset.value().first);
+					log(this, LogInfo, "  - {} Material: '{}'  (World ID: {}) Color: ({},{},{})", worldMaterialAsset.value().first, modelMaterial->GetName().C_Str(), worldMaterialAsset.value().first, diffuseColor->r, diffuseColor->g, diffuseColor->b);
 				}
 
 				// Cleanup
@@ -235,11 +235,14 @@ namespace CGEngine {
 			}
 			
 			//Finally, create MeshData with node name, vertices, indices, and modelBones
-			optional<id_t> meshDataId = assets.create<MeshData>(mesh->mName.C_Str(), fromSceneNode->mName.C_Str(), vertices, indices, modelBones);
-			toModelNode->meshData = assets.get<MeshData>(meshDataId.value());
-			//Set the node materialId to the world material id for this node
-			toModelNode->materialId = modelMaterials[mesh->mMaterialIndex];
-			log(this, LogDebug, "  - Created node with Material Id {}, {} vertices, {} indices, and {} bones", toModelNode->materialId, toModelNode->meshData->vertices.size(), toModelNode->meshData->indices.size(), toModelNode->meshData->bones.size());
+			auto meshDataAsset = assets.create<MeshData>(mesh->mName.C_Str(), fromSceneNode->mName.C_Str(), vertices, indices, modelBones);
+			if (meshDataAsset.has_value()) {
+				optional<id_t> meshDataId = meshDataAsset.value().first;
+				toModelNode->meshData = assets.get<MeshData>(meshDataId.value());
+				//Set the node materialId to the world material id for this node
+				toModelNode->materialId = modelMaterials[mesh->mMaterialIndex];
+				log(this, LogDebug, "  - Created node with Material Id {}, {} vertices, {} indices, and {} bones", toModelNode->materialId, toModelNode->meshData->vertices.size(), toModelNode->meshData->indices.size(), toModelNode->meshData->bones.size());
+			}
 		} else {
 			toModelNode->meshData = nullptr;
 		}

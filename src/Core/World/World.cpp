@@ -4,19 +4,47 @@
 using std::make_unique;
 
 namespace CGEngine {
-    World::World() : root(assets.get<Body>(assets.create<Body>("Root", true).value())) {
-		if (root == nullptr) {
-			log(this, LogError, "Failed to create root body");
-        } else {
-			log(this, LogInfo, "Created root body with ID: {}", root->getId());
+    World::World() : root(nullptr) {
+        auto rootAssetResult = assets.create<Body>("Root", true);
+
+        // 2. Check if the optional has a value
+        if (rootAssetResult.has_value()) {
+            // 3. Get the pair (using .value() is safe now)
+            auto [rootId, rootPtr] = rootAssetResult.value();
+
+            // 4. Assign the pointer to the member
+            root = rootPtr;
+
+            // 5. Perform null check on the pointer itself (belt and braces)
+            if (root == nullptr) {
+                log(this, LogError, "Failed to create root body (create succeeded but pointer is null)");
+                // This indicates a deeper issue, likely fatal.
+                throw std::runtime_error("Failed to initialize World: Root Body pointer is null after creation.");
+            }
+            else {
+                log(this, LogInfo, "Created root body with ID: {}", root->getId());
+            }
+        }
+        else {
+            // 6. Handle the critical failure where the root body couldn't be created
+            log(this, LogError, "Failed to create root body (assets.create returned nullopt)");
+            // Throw an exception, assert, or exit, as the World cannot function without a root.
+            throw std::runtime_error("Failed to initialize World: Cannot create Root Body.");
         }
         init();
+
     }
 
     void World::initializeConsole() {
         if (!consoleInitialized && consoleFeatureEnabled) {
-            Font* defaultFont = assets.get<FontResource>(assets.getDefaultId<FontResource>().value())->getFont();
-            optional<id_t> consoleId = assets.create<Body>("Console", Text(*defaultFont), Transformation());
+            optional<id_t> fontDefaultId = assets.getDefaultId<FontResource>();
+            if (!fontDefaultId.has_value()) return;
+            auto fontAsset = assets.get<FontResource>(fontDefaultId.value());
+
+            Font* defaultFont = fontAsset->getFont();
+            auto consoleAsset = assets.create<Body>("Console", Text(*defaultFont), Transformation());
+            if (!consoleAsset.has_value()) return;
+            optional<id_t> consoleId = consoleAsset.value().first;
 			if (!consoleId.has_value()) {
 				log(this, LogError, "Failed to create console body");
 				return;
