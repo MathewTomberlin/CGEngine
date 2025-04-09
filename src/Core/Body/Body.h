@@ -11,6 +11,8 @@
 #include "../Types/UniqueDomain.h"
 #include "../Types/DataMap.h"
 #include "../Types/ScriptController/ScriptController.h"
+#include <utility>
+#include <type_traits> 
 using std::make_unique; 
 
 namespace CGEngine {
@@ -594,12 +596,6 @@ namespace CGEngine {
         /// </summary>
         sec_t scriptUpdateInterval = -1;
         /// <summary>
-        /// Add the Behavior to this Body and return its id
-        /// </summary>
-        /// <param name="behavior">The Behavior to add for this Body</param>
-        /// <returns>The new id of the added Behavior</returns>
-        id_t addBehavior(Behavior* behavior);
-        /// <summary>
         /// Remove the Behavior from this Body
         /// </summary>
         /// <param name="behaviorId">The id of the Behavior to remove from this body</param>
@@ -610,6 +606,26 @@ namespace CGEngine {
         /// <param name="behaviorId">The id of the Behavior</param>
         /// <returns>The Behavior, if it was found</returns>
         Behavior* getBehavior(id_t behaviorId);
+        /// <summary>
+		/// Create a Behavior of the indicated type and add it to this Body. The Behavior will be assigned a unique id
+		/// and the Behavior will be assigned to this Body.
+        /// </summary>
+        /// <typeparam name="TBehavior">The Behavior type to create</typeparam>
+        /// <typeparam name="...Args">The Behavior constructor argument types</typeparam>
+        /// <param name="...args">The Behavior constructor argument values forwarded to the constructor</param>
+        /// <returns>The pair of constructed Behavior and its id</returns>
+        template <typename TBehavior, typename... Args, typename = std::enable_if_t<std::is_base_of_v<Behavior, TBehavior>>>
+        std::optional<std::pair<id_t, TBehavior*>> createBehavior(Args&&... args) {
+            auto behavior = std::make_unique<TBehavior>(this, std::forward<Args>(args)...);
+            TBehavior* rawBehavior = new_behavior_ptr.get();
+            if (!rawBehavior) {
+                log(LogError, "Body::createBehavior", "make_unique failed to return a valid pointer!");
+                return nullopt;
+            }
+            id_t behaviorId = behaviors.add(std::move(behavior));
+            rawBehavior->setId(behaviorId);
+            return { behaviorId, rawBehavior };
+        }
 		/// <summary>
 		/// Return the number of children attached to this Body
 		/// </summary>
@@ -655,7 +671,7 @@ namespace CGEngine {
         /// <summary>
         /// The Behaviors assigned to this Body
         /// </summary>
-        UniqueDomain<id_t, Behavior*> behaviors = UniqueDomain<id_t, Behavior*>(1000);
+        UniqueDomain<id_t, std::unique_ptr<Behavior>> behaviors = UniqueDomain<id_t, std::unique_ptr<Behavior>>(1000);
         /// <summary>
         /// The Body whose transform is the parent of this Body's transform
         /// </summary>

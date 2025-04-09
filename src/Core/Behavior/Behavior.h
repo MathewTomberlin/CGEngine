@@ -27,6 +27,8 @@ namespace CGEngine {
 		/// <param name="displayName">The display name of the Behavior</param>
 		Behavior(Body* owning, string displayName = "");
 
+		void setId(id_t id) { behaviorId = id; }
+
 		/// <summary>
 		/// Add a Script to the Behavior's ScriptMap at the given domain.
 		/// </summary>

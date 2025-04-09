@@ -526,7 +526,7 @@ namespace CGEngine {
         if (alwaysAddListener || listenerIds.find(inputCondition) == listenerIds.end()) {
             Behavior* behavior = nullptr;
             if (behaviorId.has_value()) {
-                behavior = behaviors.get(behaviorId.value());
+                behavior = behaviors.get(behaviorId.value()).get();
             }
             input->addActuator(inputCondition, new Actuator(MouseOverlapPressEvent, this, behavior));
         }
@@ -543,7 +543,7 @@ namespace CGEngine {
         if (alwaysAddListener || listenerIds.find(inputCondition) == listenerIds.end()) {
             Behavior* behavior = nullptr;
             if (behaviorId.has_value()) {
-                behavior = behaviors.get(behaviorId.value());
+                behavior = behaviors.get(behaviorId.value()).get();
             }
             input->addActuator(inputCondition, new Actuator(MouseOverlapReleaseEvent, this, behavior));
         }
@@ -581,7 +581,7 @@ namespace CGEngine {
         InputCondition inputCondition = InputCondition(0, InputType::Cursor, InputState::Atomic);
         Behavior* behavior = nullptr;
         if (behaviorId.has_value()) {
-            behavior = behaviors.get(behaviorId.value());
+            behavior = behaviors.get(behaviorId.value()).get();
         }
         return input->addActuator(inputCondition, new Actuator(scriptEvt, this, behavior));
     }
@@ -591,7 +591,7 @@ namespace CGEngine {
         InputCondition inputConditionGlobal = InputCondition((int)button, InputType::Button, InputState::Pressed);
         Behavior* behavior = nullptr;
         if (behaviorId.has_value()) {
-            behavior = behaviors.get(behaviorId.value());
+            behavior = behaviors.get(behaviorId.value()).get();
         }
         return input->addActuator(inputConditionGlobal, new Actuator(scriptEvt, this, behavior));
     }
@@ -601,7 +601,7 @@ namespace CGEngine {
         InputCondition inputConditionGlobal = InputCondition((int)button, InputType::Button, InputState::Released);
         Behavior* behavior = nullptr;
         if (behaviorId.has_value()) {
-            behavior = behaviors.get(behaviorId.value());
+            behavior = behaviors.get(behaviorId.value()).get();
         }
         return input->addActuator(inputConditionGlobal, new Actuator(scriptEvt, this, behavior));
     }
@@ -610,7 +610,7 @@ namespace CGEngine {
         InputCondition inputConditionGlobal = InputCondition((int)key, InputType::Key, InputState::Pressed);
         Behavior* behavior = nullptr;
         if (behaviorId.has_value()) {
-            behavior = behaviors.get(behaviorId.value());
+            behavior = behaviors.get(behaviorId.value()).get();
         }
         return input->addActuator(inputConditionGlobal, new Actuator(scriptEvt, this, behavior));
     }
@@ -619,7 +619,7 @@ namespace CGEngine {
         InputCondition inputConditionGlobal = InputCondition((int)key, InputType::Key, InputState::Released);
         Behavior* behavior = nullptr;
         if (behaviorId.has_value()) {
-            behavior = behaviors.get(behaviorId.value());
+            behavior = behaviors.get(behaviorId.value()).get();
         }
         return input->addActuator(inputConditionGlobal, new Actuator(scriptEvt, this, behavior));
     }
@@ -628,7 +628,7 @@ namespace CGEngine {
         InputCondition inputConditionGlobal = InputCondition(0, InputType::Character, InputState::Atomic);
         Behavior* behavior = nullptr;
         if (behaviorId.has_value()) {
-            behavior = behaviors.get(behaviorId.value());
+            behavior = behaviors.get(behaviorId.value()).get();
         }
         return input->addActuator(inputConditionGlobal, new Actuator(scriptEvt, this, behavior));
     }
@@ -714,18 +714,18 @@ namespace CGEngine {
             }
         }
 
-        behaviors.forEach([&domain](Behavior* behavior) { behavior->callDomain(domain); });
+        behaviors.forEach([&domain](const std::unique_ptr<Behavior>& behavior) { behavior.get()->callDomain(domain); });
         scripts.callDomain(domain);
     }
 
     void Body::callStaticScripts(StaticScriptDomain domainId) {
 		if (domainId < 0 || domainId > 2) return;
-        behaviors.forEach([&domainId](Behavior* behavior) { behavior->callStaticDomain(domainId); });
+        behaviors.forEach([&domainId](const std::unique_ptr<Behavior>& behavior) { behavior.get()->callStaticDomain(domainId); });
 		scripts.callStaticDomain(domainId);
     }
 
     void Body::callScriptsWithData(string domain, DataMap data) {
-        behaviors.forEach([&domain, &data](Behavior* behavior) { behavior->callDomainWithData(domain, data); });
+        behaviors.forEach([&domain, &data](const std::unique_ptr<Behavior>& behavior) { behavior.get()->callDomainWithData(domain, data); });
         scripts.callDomainWithData(domain, nullptr, data);
     }
 
@@ -857,15 +857,11 @@ namespace CGEngine {
         return nullptr;
     }
 
-    id_t Body::addBehavior(Behavior* behavior) {
-        return behaviors.add(behavior);
-    }
-
     void Body::removeBehavior(id_t behaviorId) {
         behaviors.remove(behaviorId);
     }
 
     Behavior* Body::getBehavior(id_t behaviorId) {
-        return behaviors.get(behaviorId);
+        return behaviors.get(behaviorId).get();
     }
 }

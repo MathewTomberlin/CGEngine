@@ -13,7 +13,7 @@ namespace CGEngine {
 
 		DomainKey add(DomainValue value) {
 			DomainKey key = ids.take();
-			domain[key] = value;
+			domain[key] = std::move(value);
 			return key;
 		}
 
@@ -38,9 +38,9 @@ namespace CGEngine {
 			return (domain.find(key) != domain.end());
 		}
 
-		void forEach(function<void(DomainValue)> function) {
+		void forEach(function<void(const DomainValue&)> function) {
 			for (auto iterator = domain.begin(); iterator != domain.end(); ++iterator) {
-				function((*iterator).second);
+				function(iterator->second);
 			}
 		}
 
