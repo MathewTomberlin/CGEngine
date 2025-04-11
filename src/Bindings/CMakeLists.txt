@@ -1,7 +1,7 @@
 # Python module build
 pybind11_add_module(cg_engine_bindings MODULE # <--- Corrected Name
     CoreBindings.cpp
-    # Add other binding source files here
+    MathBindings.cpp
 )
 
 target_compile_features(cg_engine_bindings PRIVATE cxx_std_17) # <-- Added consistency

@@ -55,7 +55,7 @@ get_target_property(CGECORE_INCLUDES CGEngineCore INCLUDE_DIRECTORIES)
 target_compile_features(CGEngineCore PRIVATE cxx_std_17)
 
 add_executable(main src/main.cpp) # Assuming main.cpp is the entry point
-target_link_libraries(main PRIVATE CGEngineCore SFML::Graphics ${OPENGL_LIBRARIES} ${GLEW_LIBRARY} ${ASSIMP_LIBRARY})
+target_link_libraries(main PRIVATE CGEngineCore SFML::Graphics ${OPENGL_LIBRARIES} ${GLEW_LIBRARY} ${ASSIMP_LIBRARY} pybind11::embed)
 
 add_custom_command(TARGET main POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/resources/ $<TARGET_FILE_DIR:main> COMMAND ${CMAKE_COMMAND} -E echo "Installed resources")
 add_custom_command(TARGET main POST_BUILD COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile COMMAND ${CMAKE_COMMAND} -E echo "Built Doxygen documentation")
