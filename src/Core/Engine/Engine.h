@@ -7,10 +7,12 @@
 #include "../Time/GlobalTime.h"
 #include "SFML/Graphics.hpp"
 #include "../AssetManager/AssetManager.h"
+#include "../Interpreter/InterpreterManager.h"
 
 namespace CGEngine {
 	extern WindowParameters windowParameters;
 	extern OpenGLSettings openGLSettings;
+	extern InterpreterManager interpreter;
 	extern Renderer renderer;
 	extern World* world;
 	extern GlobalTime time;
