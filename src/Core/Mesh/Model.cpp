@@ -7,7 +7,7 @@ namespace CGEngine {
 		init();
 		//Import the model using the MeshImporter
 		log(this, LogInfo, "Importing Model: {}", sourcePath);
-		ImportResult importResult = renderer.import(sourcePath, skeletonName);
+		ImportResult importResult = renderer->import(sourcePath, skeletonName);
 		if (!importResult.rootNode) {
 			log(this, LogError, "Failed to import model from '{}'", sourcePath);
 			return;
@@ -120,7 +120,7 @@ namespace CGEngine {
 		// Ensure we have at least one material
 		if (materialsToUse.empty() && modelMaterials.empty()) {
 			log(this, LogWarn, "No materials to use during instantiation. Using fallback material.");
-			modelMaterials.push_back(renderer.getFallbackMaterial()->materialId); //TODO: Ensure renderer fallback uses AssetManager
+			modelMaterials.push_back(renderer->getFallbackMaterial()->materialId); //TODO: Ensure renderer fallback uses AssetManager
 		}
 
 		// Create null Mesh Body root
@@ -181,7 +181,7 @@ namespace CGEngine {
 		glm::decompose(node->localTransform, scale, rotation, translation, skew, perspective);
 		Transformation3D nodeTransform(
 			Vector3f(translation.x, translation.y, translation.z),
-			Vector3f(renderer.fromGlm(glm::degrees(glm::eulerAngles(rotation)))),
+			Vector3f(renderer->fromGlm(glm::degrees(glm::eulerAngles(rotation)))),
 			Vector3f(scale.x, scale.y, scale.z)
 		);
 

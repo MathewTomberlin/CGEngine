@@ -84,6 +84,19 @@ else()
     message(WARNING "Assimp DLL not found at: ${ASSIMP_DLL}")
 endif()
 
+#Copy Engine Pythin class to output
+file(COPY ${CMAKE_SOURCE_DIR}/src/Core/Interpreter/Scripts
+     DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/cg_engine_python # Target subdirectory in /bin
+     FILES_MATCHING PATTERN "*.py")
+
+# Copy scripts directory
+add_custom_command(TARGET main POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/resources/scripts"   # Source scripts dir (contains PyScript.py, DevPyScript.py)
+        "$<TARGET_FILE_DIR:main>"       # Destination (bin/ dir)
+    COMMAND ${CMAKE_COMMAND} -E echo "Copied Python scripts"
+)
+
 # Add custom compile definitions based on build type
 target_compile_definitions(main PRIVATE
     $<$<CONFIG:Debug>:DEBUG>

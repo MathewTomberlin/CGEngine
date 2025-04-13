@@ -54,6 +54,10 @@ namespace CGEngine {
 		void setInputData(string key, any value) {
 			input.setData(key, value);
 		}
+
+		void clearData() {
+			input.clear();
+		}
 	protected:
 		DataMap input;
 	};

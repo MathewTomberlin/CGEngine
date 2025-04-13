@@ -108,6 +108,10 @@ namespace CGEngine {
 			}
 			return test;
 		}
+
+		void clear() {
+			data.clear();
+		}
 	private:
 		/// <summary>
 		/// Map of string key to any type value

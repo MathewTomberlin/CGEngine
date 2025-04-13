@@ -7,10 +7,10 @@ namespace CGEngine {
     OpenGLSettings openGLSettings = OpenGLSettings(true, true);
     //List of Scenes to create, add to World and load sceneList[0]
     vector<Behavior*> sceneList = { };
-    InterpreterManager interpreter;
+    PyInterpreter* interpreter = nullptr;
     Logging log;
     GlobalTime time;
-    Renderer renderer;
+    Renderer* renderer = nullptr;
     AssetManager assets;
     InputMap* input = new InputMap();
     
@@ -18,7 +18,7 @@ namespace CGEngine {
     Screen* screen = new Screen(windowParameters.windowSize, windowParameters.windowTitle);
     World* world = new World();
     function<void()> beginWorld = []() { world->startWorld(); world->runWorld(); };
-    function<Camera* ()> getCamera = []() { return renderer.getCurrentCamera(); };
+    function<Camera* ()> getCamera = []() { return renderer->getCurrentCamera(); };
 
     const string onUpdateEvent = "update";
     const string onStartEvent = "start";

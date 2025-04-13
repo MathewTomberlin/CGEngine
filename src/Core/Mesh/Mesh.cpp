@@ -3,7 +3,7 @@
 
 namespace CGEngine {
 	Mesh::Mesh(MeshData* meshData, Transformation3D transformation, vector<id_t> materials, RenderParameters renderParams, string importPath) : meshData(meshData), transformation(transformation), renderParameters(renderParams), materials(materials), importPath(importPath) {
-		renderer.getModelData(this);
+		renderer->getModelData(this);
 	};
 
 	Mesh::Mesh(string importPath, Transformation3D transformation, vector<id_t> materials, RenderParameters renderParams) : Mesh(nullptr, transformation, materials, renderParams, importPath) {
@@ -19,7 +19,7 @@ namespace CGEngine {
 	}
 
 	void Mesh::render(Transform transform) {
-		renderer.pullGL();
+		renderer->pullGL();
 
 		//Combine SFML entity transform components with 3D transformation components
 		Vector2f position2d = Global::getGlobalPosition(transform);
@@ -32,12 +32,12 @@ namespace CGEngine {
 		Vector3f scale = { scale2d.x * transformation.scale.x,scale2d.y * transformation.scale.y, transformation.scale.z };
 		Transformation3D combinedTransformation = Transformation3D(position, rotation, scale);
 
-		renderer.renderMesh(this, meshData, combinedTransformation);
-		renderer.commitGL();
+		renderer->renderMesh(this, meshData, combinedTransformation);
+		renderer->commitGL();
 	}
 
 	void Mesh::bindTexture(Texture* texture) {
-		if (renderer.setGLWindowState(true)) {
+		if (renderer->setGLWindowState(true)) {
 			//Generate texture mipmaps and bind or clear
 			if (texture != nullptr) {
 				(void)texture->generateMipmap();
@@ -46,7 +46,7 @@ namespace CGEngine {
 			else {
 				Texture::bind(nullptr);
 			}
-			renderer.setGLWindowState(false);
+			renderer->setGLWindowState(false);
 		}
 	}
 
