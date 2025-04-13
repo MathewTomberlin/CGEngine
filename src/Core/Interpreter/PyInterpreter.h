@@ -103,22 +103,14 @@ namespace CGEngine {
         /// Where script path is expected to equal scriptDirectory/moduleName.py, try to import the module at the script path, and
         /// if successful, construct a new Script using the imported PyScript
         /// </summary>
-        /// <param name="target"></param>
-        /// <param name="domainName"></param>
-        /// <param name="moduleName"></param>
-        /// <returns></returns>
-        Script* createScript(ScriptController* target, const std::string& domainName, const std::string& moduleName) {
-            if (!target) {
-                std::cerr << "[PyInterpreter] PyScript attach target is invalid" << std::endl;
-                return nullptr;
-            }
-
+        /// <param name="moduleName">The name of the imported Python script module. Should match the filename without extension</param>
+        /// <returns>The constructed Script</returns>
+        Script* createScript(const std::string& moduleName) {
             // Acquire the Python Global Interpreter Lock
             py::gil_scoped_acquire acquire;
             
             //The Script assigned with the PyScript
             Script* script = nullptr;
-
             try {
                 py::module_ py_module;
                 try {
@@ -164,15 +156,8 @@ namespace CGEngine {
                     return nullptr; //Invalid instance from factory method
                 }
 
-                script = new Script(py_instance); // Pass the Python instance
-
-                try {
-                    id_t script_id = target->addScript(domainName, script);
-                } catch (const std::exception& e) {
-                    std::cerr << "[PyInterpreter::AttachPyScript] C++ error adding PyScript-based Script to target ScriptMap at '"<< domainName << "'. Error: " << e.what() << std::endl;
-                    delete script;
-                    return nullptr; //C++ error while adding constructed Script
-                }
+                // GIL released automatically when 'acquire' goes out of scope
+                return new Script(py_instance); //Return the constructed Script
             } catch (const std::exception& e) {
                 std::cerr << "[PyInterpreter::AttachPyScript] C++ exception while importing PyScript. Error: " << e.what() << std::endl;
                 if (script && !script->getId().has_value()) { // Check if it wasn't successfully added
@@ -182,7 +167,7 @@ namespace CGEngine {
             }
 
             // GIL released automatically when 'acquire' goes out of scope
-            return script; // Return pointer to the C++ script object
+            return nullptr;
         }
         
         //This is name of the PyScript factory method to be called
