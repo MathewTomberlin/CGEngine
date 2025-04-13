@@ -793,7 +793,7 @@ namespace CGEngine {
 
     void Body::queueRendering() {
         if (!getId().has_value()) return;
-        renderer.add(getId().value());
+        renderer->add(getId().value());
 
         //Draw children recursively
         for (id_t childId = 0; childId < children.size(); ++childId) {

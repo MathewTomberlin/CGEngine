@@ -54,6 +54,10 @@ namespace CGEngine {
 		void setOutputData(string key, any value) {
 			output.setData(key, value);
 		}
+
+		void clearData() {
+			output.clear();
+		}
 	protected:
 		DataMap output;
 	};

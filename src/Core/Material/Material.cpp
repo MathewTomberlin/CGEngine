@@ -4,7 +4,7 @@
 namespace CGEngine {
 	Material::Material(ShaderProgramPath shaderPath) {
 		//TODO: Should materials using the same two shaders also use the same shader ref?
-		if (renderer.setGLWindowState(true)) {
+		if (renderer->setGLWindowState(true)) {
 			shaderProgram = new Program(shaderPath);
 		}
 	}

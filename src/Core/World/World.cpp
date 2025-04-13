@@ -179,8 +179,8 @@ namespace CGEngine {
     }
 
     vector<id_t> World::zRayCast(Vector2f worldPos, optional<int> startZ, int distance, bool backward, bool linecast) {
-        int zMax = renderer.zMax();
-        int zMin = renderer.zMin();
+        int zMax = renderer->zMax();
+        int zMin = renderer->zMin();
 
         //Start at the max or min Z if startZ is nullopt
         int currentZ = 0;
@@ -208,7 +208,7 @@ namespace CGEngine {
         vector<id_t> hits;
         for (int i = 0; i <= zDist; ++i) {
             int index = currentZ + (i * d);
-            vector<id_t> bodies = renderer.getZBodies(index);
+            vector<id_t> bodies = renderer->getZBodies(index);
             if (!backward) {
                 for (int x = bodies.size() - 1; x >= 0; x--) {
 					Body* body = assets.get<Body>(bodies[x]);
@@ -239,7 +239,7 @@ namespace CGEngine {
 
     vector<id_t> World::raycast(Vector2f worldPos, Vector2f castDir, int zIndex, float distance, bool linecast) {
         vector<id_t> hits;
-        vector<id_t> bodies = renderer.getZBodies(zIndex);
+        vector<id_t> bodies = renderer->getZBodies(zIndex);
         Vector2f targetPos = worldPos + (castDir * distance);
         for (int x = bodies.size() - 1; x >= 0; x--) {
 			Body* body = assets.get<Body>(bodies[x]);
@@ -300,21 +300,24 @@ namespace CGEngine {
     }
 
     void World::startWorld() {
+        //Initialize world singletons
+        interpreter = new PyInterpreter();
+        renderer = new Renderer();
+
         //Create window (via Screen and using the static WindowParameters) and set InputMap's window
         screen->setWindowParameters(windowParameters);
         window = screen->createWindow();
         if(!window->setActive(true)) {
             log(LogLevel::LogError, "World", "Failed to set window as active OpenGL context");
         }
-        renderer.setWindow(window);
-        renderer.initGlew();
+        renderer->setWindow(window);
+        renderer->initGlew();
         input->setWindow(window);
 
         assets.initialize();
 
         //Assign the fallback material
-        renderer.fallbackMaterialId = 0;
-
+        renderer->fallbackMaterialId = 0;
         running = true;
     }
 
@@ -347,7 +350,7 @@ namespace CGEngine {
 
     void World::runWorld() {
         while (running) {
-            renderer.initializeOpenGL();
+            renderer->initializeOpenGL();
             initSceneList();
 
             while (window->isOpen()) {
@@ -358,10 +361,10 @@ namespace CGEngine {
                 callStaticScripts(UpdateDomain);
                 input->gather();
                 if (window->isOpen()) {
-                    if (renderer.setGLWindowState(true)) {
-                        renderer.clearGL(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-                        if (!renderer.processRender()) return;
-                        renderer.setGLWindowState(false);
+                    if (renderer->setGLWindowState(true)) {
+                        renderer->clearGL(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+                        if (!renderer->processRender()) return;
+                        renderer->setGLWindowState(false);
                     }
                 }
             }
