@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Script.h"
+#include <pybind11/pybind11.h>
 
 namespace CGEngine {
 	/// <summary>
@@ -23,6 +24,8 @@ namespace CGEngine {
 		/// <param name="behavior">The Behavior to pass to the SciptEvent when called</param>
 		Actuator(ScriptEvent script, Body* calling = nullptr, Behavior* behavior = nullptr) : caller(calling), behavior(behavior), Script(script) { }
 
+		Actuator(ScriptEventHandler handler, Body* calling = nullptr, Behavior* behavior = nullptr) : caller(calling), behavior(behavior), Script(handler) { }
+
 		/// <summary>
 		/// Call the ScriptEvent assigned to the Actuator, but pass the Actuator's assigned caller Body and/or Behavior to it instead of the Body or Behavior
 		/// passed to the call method itself. Passing a caller Body or Behavior to this method has no effect.
@@ -30,7 +33,24 @@ namespace CGEngine {
 		/// <param name="caller">Unused</param>
 		/// <param name="behavior">Unused</param>
 		void call(Body* caller = nullptr, Behavior* behavior = nullptr) override {
-			scriptEvent(ScArgs(this, this->caller, this->behavior)); 
+			ScArgs args(this, this->caller, this->behavior); // Construct ScArgs first
+			if (std::holds_alternative<ScriptEvent>(handler)) {
+				std::get<ScriptEvent>(handler)(args);
+			}
+			else if (std::holds_alternative<pybind11::object>(handler)) {
+				try {
+					pybind11::gil_scoped_acquire acquire;
+					std::get<pybind11::object>(handler)(args);
+				}
+				catch (const pybind11::error_already_set& e) {
+					std::cerr << "Python error in script execution: " << e.what() << std::endl;
+				}
+				catch (const std::exception& e) {
+					std::cerr << "[Script::call] C++ Error during Python execution (ID: "
+						<< (id.has_value() ? std::to_string(id.value()) : "N/A")
+						<< "): " << e.what() << std::endl;
+				}
+			}
 		}
 	protected:
 		Body* caller = nullptr;

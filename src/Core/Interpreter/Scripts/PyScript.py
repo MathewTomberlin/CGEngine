@@ -1,5 +1,5 @@
 import cg_engine_bindings as cge
-from cg_engine_bindings import ScArgs, Script, Body, Behavior, Vector2f
+from cg_engine_bindings import ScArgs
 
 class PyScript:
     """

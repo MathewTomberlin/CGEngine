@@ -52,6 +52,7 @@ namespace CGEngine {
     /// </summary>
     class Body : public Transformable, public Drawable, public ScriptController, public IResource {
     public:
+        using ScriptEventHandler = std::variant<ScriptEvent, pybind11::object>;
         // Primary value-based constructor with perfect forwarding
         template<typename T, typename = std::enable_if_t<std::is_base_of_v<Transformable, std::decay_t<T>>>>
         Body(T&& entity,
@@ -469,7 +470,7 @@ namespace CGEngine {
         /// <param name="behaviorId">The Behavior to pass to the domain when called</param>
         /// <param name="alwaysAddListener">If true, an Actuator will be added even if one already exists</param>
         /// <returns>The id of the Script that was added to the "mousePress_"+buttonId domain</returns>
-        optional<id_t> addMousePressScript(ScriptEvent scriptEvt, Mouse::Button button = Mouse::Button::Left, optional<id_t> behaviorId = nullopt);
+        optional<id_t> addMousePressScript(ScriptEventHandler scriptEvt, Mouse::Button button = Mouse::Button::Left, optional<id_t> behaviorId = nullopt);
         /// <summary>
         /// Add the script to the "mouseRelease_"+buttonId ScriptMap domain. Also, if not added (or if 
         /// alwaysAddListener is true), add an Actuator for the indicated Mouse Button that calls the 
@@ -480,7 +481,7 @@ namespace CGEngine {
         /// <param name="behaviorId">The Behavior to pass to the domain when called</param>
         /// <param name="alwaysAddListener">If true, an Actuator will be added even if one already exists</param>
         /// <returns>The id of the Script that was added to the "mouseRelease_"+buttonId domain</returns>
-        optional<id_t> addMouseReleaseScript(ScriptEvent scriptEvt, Mouse::Button button = Mouse::Button::Left, optional<id_t> behaviorId = nullopt);
+        optional<id_t> addMouseReleaseScript(ScriptEventHandler scriptEvt, Mouse::Button button = Mouse::Button::Left, optional<id_t> behaviorId = nullopt);
         /// <summary>
         /// Add the script to the "keyPress_"+keyId ScriptMap domain. Add an Actuator for the indicated 
         /// Key that calls the  "keyPress_"+keyId ScriptMap domain when the Key is pressed.
@@ -489,7 +490,7 @@ namespace CGEngine {
         /// <param name="key">The Key to respond to</param>
         /// <param name="behaviorId">The Behavior to pass to the domain when called</param>
         /// <returns>The id of the Script that was added to the "keyPress_"+keyId domain</returns>
-        optional<id_t> addKeyPressScript(ScriptEvent scriptEvt, Keyboard::Scan key = Keyboard::Scan::Space, optional<id_t> behaviorId = nullopt);
+        optional<id_t> addKeyPressScript(ScriptEventHandler scriptEvt, Keyboard::Scan key = Keyboard::Scan::Space, optional<id_t> behaviorId = nullopt);
         /// <summary>
         /// Add the script to the "keyHold_"+keyId ScriptMap domain. Add an Actuator for the indicated 
         /// Key that calls the "keyHold_"+keyId ScriptMap domain when the Key is pressed and held.
@@ -508,21 +509,21 @@ namespace CGEngine {
         /// <param name="key">The Key to respond to</param>
         /// <param name="behaviorId">The Behavior to pass to the domain when called</param>
         /// <returns>The id of the Script that was added to the "keyRelease_"+keyId domain</returns>
-        optional<id_t> addKeyReleaseScript(ScriptEvent scriptEvt, Keyboard::Scan key = Keyboard::Scan::Space, optional<id_t> behaviorId = nullopt);
+        optional<id_t> addKeyReleaseScript(ScriptEventHandler scriptEvt, Keyboard::Scan key = Keyboard::Scan::Space, optional<id_t> behaviorId = nullopt);
         /// <summary>
         /// Adds an Actuator that calls the indicated ScriptEvent when text is entered
         /// </summary>
         /// <param name="scriptEvt">The ScriptEvent to call when text is entered</param>
         /// <param name="behaviorId">The Behavior to apply to the Actuator</param>
         /// <returns>The id of the Actuator that was added with the ScriptEvent</returns>
-        optional<id_t> addTextEnteredScript(ScriptEvent scriptEvt, optional<id_t> behaviorId = nullopt);
+        optional<id_t> addTextEnteredScript(ScriptEventHandler scriptEvt, optional<id_t> behaviorId = nullopt);
         /// <summary>
         /// Adds an Actuator that calls the indicated ScriptEvent when cursor is entered
         /// </summary>
         /// <param name="scriptEvt">The ScriptEvent to call when the cursor is moved</param>
         /// <param name="behaviorId">The Behavior to apply to the Actuator</param>
         /// <returns>The id of the Actuator that was added with the ScriptEvent</returns>
-        optional<id_t> addMouseMovedScript(ScriptEvent scriptEvt, optional<id_t> behaviorId = nullopt);
+        optional<id_t> addMouseMovedScript(ScriptEventHandler scriptEvt, optional<id_t> behaviorId = nullopt);
 
         /// <summary>
         /// Remove a Script from the "mousePress_"+buttonId ScriptMap domain

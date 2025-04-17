@@ -1,5 +1,9 @@
 #pragma once
 
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm.hpp>
+#include <gtc/type_ptr.hpp>
+#include <gtx/quaternion.hpp>
 #include "../Skeleton/Skeleton.h"
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
