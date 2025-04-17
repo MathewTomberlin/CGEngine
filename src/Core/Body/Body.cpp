@@ -577,7 +577,7 @@ namespace CGEngine {
         return nullopt;
     }
 
-    optional<id_t> Body::addMouseMovedScript(ScriptEvent scriptEvt, optional<id_t> behaviorId) {
+    optional<id_t> Body::addMouseMovedScript(ScriptEventHandler scriptEvt, optional<id_t> behaviorId) {
         InputCondition inputCondition = InputCondition(0, InputType::Cursor, InputState::Atomic);
         Behavior* behavior = nullptr;
         if (behaviorId.has_value()) {
@@ -586,7 +586,7 @@ namespace CGEngine {
         return input->addActuator(inputCondition, new Actuator(scriptEvt, this, behavior));
     }
 
-    optional<id_t> Body::addMousePressScript(ScriptEvent scriptEvt, Mouse::Button button, optional<id_t> behaviorId) {
+    optional<id_t> Body::addMousePressScript(ScriptEventHandler scriptEvt, Mouse::Button button, optional<id_t> behaviorId) {
         //The input condition called by the InputMap
         InputCondition inputConditionGlobal = InputCondition((int)button, InputType::Button, InputState::Pressed);
         Behavior* behavior = nullptr;
@@ -596,7 +596,7 @@ namespace CGEngine {
         return input->addActuator(inputConditionGlobal, new Actuator(scriptEvt, this, behavior));
     }
 
-    optional<id_t> Body::addMouseReleaseScript(ScriptEvent scriptEvt, Mouse::Button button, optional<id_t> behaviorId) {
+    optional<id_t> Body::addMouseReleaseScript(ScriptEventHandler scriptEvt, Mouse::Button button, optional<id_t> behaviorId) {
         //The input condition called by the InputMap
         InputCondition inputConditionGlobal = InputCondition((int)button, InputType::Button, InputState::Released);
         Behavior* behavior = nullptr;
@@ -606,7 +606,7 @@ namespace CGEngine {
         return input->addActuator(inputConditionGlobal, new Actuator(scriptEvt, this, behavior));
     }
 
-    optional<id_t> Body::addKeyPressScript(ScriptEvent scriptEvt, Keyboard::Scan key, optional<id_t> behaviorId) {
+    optional<id_t> Body::addKeyPressScript(ScriptEventHandler scriptEvt, Keyboard::Scan key, optional<id_t> behaviorId) {
         InputCondition inputConditionGlobal = InputCondition((int)key, InputType::Key, InputState::Pressed);
         Behavior* behavior = nullptr;
         if (behaviorId.has_value()) {
@@ -615,7 +615,7 @@ namespace CGEngine {
         return input->addActuator(inputConditionGlobal, new Actuator(scriptEvt, this, behavior));
     }
 
-    optional<id_t> Body::addKeyReleaseScript(ScriptEvent scriptEvt, Keyboard::Scan key, optional<id_t> behaviorId) {
+    optional<id_t> Body::addKeyReleaseScript(ScriptEventHandler scriptEvt, Keyboard::Scan key, optional<id_t> behaviorId) {
         InputCondition inputConditionGlobal = InputCondition((int)key, InputType::Key, InputState::Released);
         Behavior* behavior = nullptr;
         if (behaviorId.has_value()) {
@@ -624,7 +624,7 @@ namespace CGEngine {
         return input->addActuator(inputConditionGlobal, new Actuator(scriptEvt, this, behavior));
     }
 
-    optional<id_t> Body::addTextEnteredScript(ScriptEvent scriptEvt, optional<id_t> behaviorId) {
+    optional<id_t> Body::addTextEnteredScript(ScriptEventHandler scriptEvt, optional<id_t> behaviorId) {
         InputCondition inputConditionGlobal = InputCondition(0, InputType::Character, InputState::Atomic);
         Behavior* behavior = nullptr;
         if (behaviorId.has_value()) {

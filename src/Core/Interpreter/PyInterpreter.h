@@ -17,9 +17,9 @@ namespace CGEngine {
         PyInterpreter() { 
             try {
                 std::filesystem::path exeDir = getExecutableDirectory();
-                std::filesystem::path bindingsDir = exeDir; // Assumes bindings are in exe dir relative to executable
+                std::filesystem::path bindingsDir = exeDir;
                 std::filesystem::path userScriptsDir = exeDir / "scripts"; // User scripts location (/bin/scripts)
-                std::filesystem::path enginePythonDir = exeDir / "cg_engine_python" / "scripts"; //Engine base Python class
+                std::filesystem::path enginePythonDir = exeDir / "cg_engine_python" / "Scripts"; //Engine base Python class
 
                 py::module_ sys = py::module_::import("sys");
                 py::list sysPath = sys.attr("path");
@@ -114,9 +114,9 @@ namespace CGEngine {
             try {
                 py::module_ py_module;
                 try {
-                    std::filesystem::path exeDir = getExecutableDirectory(); // Make sure this returns the correct /bin directory path!
+                    std::filesystem::path exeDir = getExecutableDirectory();
                     std::filesystem::path scriptDir = exeDir / "scripts";
-                    std::filesystem::path scriptPath = scriptDir / (moduleName + ".py"); // Construct expected path
+                    std::filesystem::path scriptPath = scriptDir / (moduleName + ".py");
 
                     if (!std::filesystem::exists(scriptPath)) {
                         std::cerr << "[PyInterpreter::AttachPyScript] ERROR: No Python script at path '" << scriptPath.string() << "'" << std::endl;
