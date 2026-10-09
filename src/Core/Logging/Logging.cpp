@@ -80,8 +80,6 @@ namespace CGEngine {
 		if (logFile.is_open()) {
 			if (msgBuffer.size() > 0) {
 				logFile.write(msgBuffer.data(), msgBuffer.size());
-			} else {
-				cout << "[WARN] Logging: No messages to write to log file.\n";
 			}
 			logFile.close();
 		} else {
