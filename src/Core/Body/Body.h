@@ -74,6 +74,11 @@ namespace CGEngine {
             world->addUninitialized(this);
         }
 
+        // Reject raw pointers outright. Without this, a pointer silently converts to the
+        // bool overload below and yields an entity-less Body (see TilemapScene player bug).
+        template<typename T, typename = std::enable_if_t<std::is_pointer_v<std::decay_t<T>>>>
+        Body(T&&) = delete;
+
         virtual ~Body();
         /// <summary>
         /// The Body's name
