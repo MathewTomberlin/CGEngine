@@ -31,7 +31,7 @@ Smoke test (local, needs a GPU/desktop session): run from `build/bin/Debug`:
 $env:CGENGINE_SMOKE_FRAMES = "120"; .\main.exe; $LASTEXITCODE   # expect "SMOKE OK frames=120" and 0
 ```
 
-It checks the Python path (`testScript.py`, `DevPyScript`) and exits 0 after N frames; a Python failure exits 1. The engine expects its working directory to be the exe folder (shaders, textures, scripts are loaded relatively).
+It checks the Python path (`testScript.py`, `DevPyScript`) and exits 0 after N frames; a Python failure exits 1. The engine sets its working directory to the exe folder at startup, so it can be launched from anywhere.
 
 ## Layout
 
