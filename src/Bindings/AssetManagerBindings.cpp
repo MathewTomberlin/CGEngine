@@ -154,10 +154,14 @@ void bindAssetManager(py::module_& m) {
         }
         return (CGEngine::Body*)nullptr; // Handle the case where creation failed
         }, "Create the root Body");
-    m.def("create_body_with_mesh", [](const std::string& name, CGEngine::Mesh* mesh) {
-        // Assuming Body can be created with a Mesh pointer. Adjust as needed.
-        return CGEngine::assets.create<CGEngine::Body>(name, mesh);
-        }, "Create a Body with a mesh", py::arg("name"), py::arg("mesh_ptr"));
+    m.def("create_body_with_mesh", [](const std::string& name, CGEngine::Mesh mesh) {
+        // Body takes the Mesh by value; a Mesh* here would silently bind to Body(bool).
+        auto result = CGEngine::assets.create<CGEngine::Body>(name, std::move(mesh));
+        if (result.has_value()) {
+            return result.value().second;
+        }
+        return (CGEngine::Body*)nullptr;
+        }, "Create a Body with a mesh", py::arg("name"), py::arg("mesh"));
     //Defer - create_body_with_shape
     //Defer - create_body_with_text
     //Defer - create_body_with_sprite
