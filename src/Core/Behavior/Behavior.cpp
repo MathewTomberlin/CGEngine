@@ -35,7 +35,7 @@ namespace CGEngine {
 
 	
 	optional<id_t> Behavior::getId() {
-		return behaviorId.value();
+		return behaviorId;
 	}
 
 	Body* Behavior::getOwner() {
