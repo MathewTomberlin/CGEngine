@@ -87,9 +87,14 @@ else()
 endif()
 
 #Copy Engine Pythin class to output
-file(COPY ${CMAKE_SOURCE_DIR}/src/Core/Interpreter/Scripts
-     DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/cg_engine_python # Target subdirectory in /bin
-     FILES_MATCHING PATTERN "*.py")
+# Engine Python package (PyScript base class). Copied next to main.exe, which
+# runs from the per-config output dir (e.g. bin/Debug), so PyInterpreter finds it.
+add_custom_command(TARGET main POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/src/Core/Interpreter/Scripts"
+        "$<TARGET_FILE_DIR:main>/cg_engine_python/Scripts"
+    COMMAND ${CMAKE_COMMAND} -E echo "Copied engine Python scripts"
+)
 
 # Copy scripts directory
 add_custom_command(TARGET main POST_BUILD

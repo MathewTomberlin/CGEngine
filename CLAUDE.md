@@ -75,7 +75,9 @@ Before branching, run `git fetch` and base on the latest `develop`, not on `mast
   - `src/TilemapScene.cpp`: `AssetManager::load/create` return pairs (`.value().second`); player sprite passed by value to `create<Body>` (a `Sprite*` silently bound to `Body(bool isWorldRoot)`, leaving the player with no entity).
   - `src/Core/Behavior/Behavior.cpp`: `getId()` returned `behaviorId.value()`, which threw `bad_optional_access` for unregistered behaviors; now returns the optional.
   - `CMakeLists.txt`: Doxygen post-build step is guarded.
-- Footgun: `Body(bool isWorldRoot)` accepts any pointer through implicit conversion. Passing a pointer to `create<Body>` compiles and produces an empty Body.
+- Body constructors deliberately reject raw pointers (deleted template ctor in `Body.h`). Pass Sprite/Mesh/Text by value.
+- Python: `PyScript` package is copied next to `main.exe` (`bin/Debug/cg_engine_python/Scripts`). `cg_engine_bindings` is built to `bin/Debug`. Build all targets (`cmake --build build --config Debug`), not only `main`, or the bindings won't be there.
+- CI: `.github/workflows/build.yml` builds on Windows (build only, no window run).
 - Benign warning at startup: `AssetManager: Resource loading failed, returning default resource: lava_tile.png` (referenced by `resources/Caveman_Test2.fbx`).
 - `develop` has 120 commits not pushed to `origin/develop`.
 - `.github/copilot-instructions.md.txt` is not active (it has a `.txt` suffix).
