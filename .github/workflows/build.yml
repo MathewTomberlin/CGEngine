@@ -1,0 +1,40 @@
+name: Build
+
+on:
+  push:
+    branches: [develop, master]
+  pull_request:
+    branches: [develop, master]
+
+jobs:
+  build-windows:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Configure
+        run: >
+          cmake -S . -B build
+          -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+          -DINSTALL_MANPAGES=OFF
+          -DBUILD_DOC=OFF
+
+      - name: Build (Debug)
+        run: cmake --build build --config Debug --parallel
+
+      - name: Check outputs
+        shell: pwsh
+        run: |
+          foreach ($f in @("build/bin/Debug/main.exe",
+                           "build/bin/Debug/cg_engine_bindings.cp313-win_amd64.pyd",
+                           "build/bin/Debug/cg_engine_python/Scripts/PyScript.py")) {
+            if (-not (Test-Path $f)) { throw "Missing expected output: $f" }
+          }
