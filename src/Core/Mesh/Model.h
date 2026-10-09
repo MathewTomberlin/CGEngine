@@ -56,7 +56,7 @@ namespace CGEngine {
 		ModelNode* getRootNode() const { return rootNode; }
 		//Return a vector of the model materials
 		vector<Material*> getMaterials();
-		bool isValid() const; //TODO: Properly implement isValid in Model
+		bool isValid() const;
 	private:
 		friend class MeshImporter;
 
