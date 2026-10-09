@@ -1,6 +1,9 @@
 #include "World.h"
 #include "../Engine/Engine.h"
 #include "../../Standard/Models/CommonModels.h"
+#include <cstdlib>
+#include <filesystem>
+#include <iostream>
 using std::make_unique;
 
 namespace CGEngine {
@@ -299,6 +302,10 @@ namespace CGEngine {
         return nullopt;
     }
 
+    // Smoke mode: CGENGINE_SMOKE_FRAMES=N runs N frames, checks the Python path, then exits 0 with "SMOKE OK".
+    static int smokeFrameLimit = 0;
+    static int smokeFramesRun = 0;
+
     void World::startWorld() {
         //Initialize world singletons
         interpreter = new PyInterpreter();
@@ -315,6 +322,18 @@ namespace CGEngine {
         input->setWindow(window);
 
         assets.initialize();
+
+        if (const char* smoke = std::getenv("CGENGINE_SMOKE_FRAMES")) {
+            smokeFrameLimit = std::atoi(smoke);
+            // Run from the exe directory (bin/Debug), where testScript.py and scripts/ are copied.
+            bool pythonOk = interpreter->runScript((std::filesystem::current_path() / "testScript.py").string())
+                && interpreter->createScript("DevPyScript") != nullptr;
+            if (!pythonOk) {
+                std::cerr << "SMOKE FAIL: Python path" << std::endl;
+                std::exit(1);
+            }
+            std::cerr << "SMOKE python ok" << std::endl;
+        }
 
         //Assign the fallback material
         renderer->fallbackMaterialId = 0;
@@ -354,6 +373,10 @@ namespace CGEngine {
             initSceneList();
 
             while (window->isOpen()) {
+                if (smokeFrameLimit > 0 && ++smokeFramesRun >= smokeFrameLimit) {
+                    std::cerr << "SMOKE OK frames=" << smokeFramesRun << std::endl;
+                    endWorld();
+                }
                 updateTime();
 				if (uninitialized.size() > 0) {
 					callUninitializedStart();
