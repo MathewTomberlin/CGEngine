@@ -4,6 +4,11 @@
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
+#ifdef _WIN32
+#define NOMINMAX
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
 using std::make_unique;
 
 namespace CGEngine {
@@ -306,7 +311,20 @@ namespace CGEngine {
     static int smokeFrameLimit = 0;
     static int smokeFramesRun = 0;
 
+    // Assets, shaders and scripts are loaded by relative path, so the working
+    // directory must be the folder containing the executable (e.g. bin/Debug).
+    static void useExecutableDirectory() {
+#ifdef _WIN32
+        wchar_t path[MAX_PATH];
+        DWORD length = GetModuleFileNameW(nullptr, path, MAX_PATH);
+        if (length == 0 || length >= MAX_PATH) return;
+        std::filesystem::current_path(std::filesystem::path(path).parent_path());
+#endif
+    }
+
     void World::startWorld() {
+        useExecutableDirectory();
+
         //Initialize world singletons
         interpreter = new PyInterpreter();
         renderer = new Renderer();
