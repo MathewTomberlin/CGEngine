@@ -31,12 +31,12 @@ namespace CGEngine {
                 keyboardRotateController->setInput(DataMap(map<string, any>({ {"speed",playerSpeed} })));
 
                 //Create a body with a Sprite
-                optional<id_t> spriteTexId = assets.load<TextureResource>("triceratops.png");
+                auto spriteTexId = assets.load<TextureResource>("triceratops.png");
                 if (spriteTexId.has_value()) {
-                    Texture* spriteTex = assets.get<TextureResource>(spriteTexId.value())->getTexture();
+                    Texture* spriteTex = spriteTexId.value().second->getTexture();
                     IntRect spriteRect = IntRect({ 0,0 }, { 32,32 });
-                    optional<id_t> playerId = assets.create<Body>("Player",new Sprite(*spriteTex, spriteRect)/*, gridBody*/);
-					Body* player = assets.get<Body>(playerId.value());
+                    auto playerId = assets.create<Body>("Player", Sprite(*spriteTex, spriteRect)/*, gridBody*/);
+					Body* player = playerId.value().second;
                     if (player) {
                         player->setName("player");
                         player->zOrder = 10;
@@ -70,8 +70,8 @@ namespace CGEngine {
                 // 1. Test static mesh model import
                 {
                     // Import static mesh using existing "Mesh.obj"
-                    optional<id_t> staticModelId = assets.load<Model>("Mesh.obj");
-					Model* staticModel = assets.get<Model>(staticModelId.value());
+                    auto staticModelId = assets.load<Model>("Mesh.obj");
+					Model* staticModel = staticModelId.value().second;
 					
                     // Create instance with default transform
                     optional<id_t> staticMeshId = staticModel->instantiate(Transformation3D({ -2, 0, -1 }));
@@ -88,8 +88,8 @@ namespace CGEngine {
                 // 2. Test animated skeletal mesh import
                 {
                     // Import skeletal mesh using existing "Caveman_Test.fbx"
-                    optional<id_t> skeletalModelId = assets.load<Model>("Caveman_Test2.fbx");
-					Model* skeletalModel = assets.get<Model>(skeletalModelId.value());
+                    auto skeletalModelId = assets.load<Model>("Caveman_Test2.fbx");
+					Model* skeletalModel = skeletalModelId.value().second;
                     // Create instance with adjusted transform
                     optional<id_t> skeletalMeshId = skeletalModel->instantiate( Transformation3D({ -1, 0.5, -5 }, { 0, 0, 0 }, { 0.005f, 0.005f, 0.005f }));
                 }
@@ -98,15 +98,15 @@ namespace CGEngine {
                 
                 // Create a simple cube mesh data
                 MeshData* cubeData = getCubeModel(1.0f);
-                optional<id_t> manualModelId = assets.create<Model>("ManualCube", cubeData, "ManualCube");
-				Model* manualModel = assets.get<Model>(manualModelId.value());
+                auto manualModelId = assets.create<Model>("ManualCube", cubeData, "ManualCube");
+				Model* manualModel = manualModelId.value().second;
                 
                 // Create material for the cube
                 SurfaceParameters cubeParams = SurfaceParameters(SurfaceDomain("brick_tile.png"),SurfaceDomain(16.0f));
-                optional<id_t> cubeMaterialId = assets.create<Material>("cubeMaterial", cubeParams, assets.get<Program>(assets.defaultProgramName));
+                auto cubeMaterialId = assets.create<Material>("cubeMaterial", cubeParams, assets.get<Program>(assets.defaultProgramName));
                 
                 // Create instance with materials
-                optional<id_t> manualMeshId = manualModel->instantiate(Transformation3D({ 2, -1, -5 }),{ cubeMaterialId.value()});
+                optional<id_t> manualMeshId = manualModel->instantiate(Transformation3D({ 2, -1, -5 }),{ cubeMaterialId.value().first });
                 
                 // Add simple animation to verify transformation
                 Body* manualBody = assets.get<Body>(manualMeshId.value());
@@ -128,8 +128,8 @@ namespace CGEngine {
                 LightParameters lightParams = LightParameters();
                 lightParams.coneAngle = 60.f;
                 lightParams.lightDirection = { 0,1,-1 };
-                optional<id_t> lightId = assets.create<Light>("Light0",Vector3f{ 0, -20, 5 }, false, lightParams);
-				Light* light = assets.get<Light>(lightId.value());
+                auto lightId = assets.create<Light>("Light0",Vector3f{ 0, -20, 5 }, false, lightParams);
+				Light* light = lightId.value().second;
 
                 //Red Point Light
                 //LightParameters lightParams2 = LightParameters();
@@ -144,8 +144,8 @@ namespace CGEngine {
                 //Material* maskedMaterial = world->getMaterial(maskedMaterialId);
                 //
                 SurfaceParameters brickParams = SurfaceParameters(SurfaceDomain("brick_tile.png"), SurfaceDomain(16.0f));
-                optional<id_t> brickMaterialId = assets.create<Material>("brick",brickParams, assets.get<Program>(assets.defaultProgramName));
-                Material* brickMaterial = assets.get<Material>(brickMaterialId.value());
+                auto brickMaterialId = assets.create<Material>("brick",brickParams, assets.get<Program>(assets.defaultProgramName));
+                Material* brickMaterial = brickMaterialId.value().second;
                 //
                 //SurfaceParameters lavaParams = SurfaceParameters(SurfaceDomain("lava_tile.png"));
                 //id_t lavaMaterialId = world->createMaterial(lavaParams);
@@ -224,9 +224,9 @@ namespace CGEngine {
                 //scrollScript->setInputData("material", animMat);
                 //animPlaneBody->addUpdateScript(scrollScript);
                 //animPlaneBody->rotate(degrees(180));
-                optional<id_t> cubeModelId = assets.create<Model>("CubeModel", cubeModel, "CubeModel");
-                Model* cubeModelModel = assets.get<Model>(cubeModelId.value());
-                optional<id_t> cubeModelRootId = cubeModelModel->instantiate(Transformation3D({ -2, -1, -5 }), { brickMaterialId.value() });
+                auto cubeModelId = assets.create<Model>("CubeModel", cubeModel, "CubeModel");
+                Model* cubeModelModel = cubeModelId.value().second;
+                optional<id_t> cubeModelRootId = cubeModelModel->instantiate(Transformation3D({ -2, -1, -5 }), { brickMaterialId.value().first });
                 //optional<id_t> meshId2 = assets.create<Body>(new Mesh(cubeModel, Transformation3D({ 0,-5,-10 }, cubeScale), {brickMaterial}));
                 //optional<id_t> meshId4 = assets.create<Body>(new Mesh(cubeModel, Transformation3D({ 5,0,-10 }, cubeScale), {brickMaterial}));
                 //optional<id_t> meshId5 = assets.create<Body>(new Mesh(cubeModel, Transformation3D({ -5,0,-10 }, cubeScale), {brickMaterial}));
