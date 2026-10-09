@@ -269,6 +269,22 @@ namespace CGEngine {
 			return container.nameToId.find(resourceName) != container.nameToId.end();
 		}
 
+		/**
+		 * All live resources of type T, in ID order. Pointers stay valid until the resource is removed.
+		 */
+		template<typename T>
+		vector<T*> getAllResources() {
+			vector<T*> resources;
+			if (!hasResourceType<T>()) {
+				return resources;
+			}
+			auto& container = resourceContainers[type_index(typeid(T))].second;
+			container.resources.forEach([&resources](const ResourceEntry& entry) {
+				resources.push_back(static_cast<T*>(entry.resource.get()));
+			});
+			return resources;
+		}
+
 		template<typename T>
 		size_t getResourceCount() {
 			type_index typeId = type_index(typeid(T));

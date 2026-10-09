@@ -429,7 +429,11 @@ namespace CGEngine {
 		static MaterialUBO previousMaterialUBOData;
 		bool materialChanged = false;
 		
-		for (int i = 0; i < modelMaterials.size(); ++i) {
+		if (modelMaterials.size() > MaterialUBO::MAX_MATERIALS) {
+			log(LogWarn, "Renderer", "Model has {} materials; only the first {} are used", modelMaterials.size(), MaterialUBO::MAX_MATERIALS);
+		}
+		const size_t materialCount = min(modelMaterials.size(), static_cast<size_t>(MaterialUBO::MAX_MATERIALS));
+		for (size_t i = 0; i < materialCount; ++i) {
 			//Get the material
 			Material* material = assets.get<Material>(modelMaterials.at(i));
 			if (!material) continue;
@@ -499,9 +503,13 @@ namespace CGEngine {
 		static LightUBO previousLightUBOData;
 		bool lightChanged = false;
 
-		lightUBOData.lightCount = assets.getResourceCount<Light>();
-		for (size_t i = 0; i < assets.getResourceCount<Light>(); ++i) {
-			Light* light = assets.get<Light>(i);
+		vector<Light*> lights = assets.getAllResources<Light>();
+		if (lights.size() > LightUBO::MAX_LIGHTS) {
+			log(LogWarn, "Renderer", "Scene has {} lights; only the first {} are used", lights.size(), LightUBO::MAX_LIGHTS);
+		}
+		lightUBOData.lightCount = static_cast<int>(min(lights.size(), static_cast<size_t>(LightUBO::MAX_LIGHTS)));
+		for (int i = 0; i < lightUBOData.lightCount; ++i) {
+			Light* light = lights[i];
 			lightUBOData.lights[i].position = light->position;
 			lightUBOData.lights[i].brightness = light->parameters.brightness;
 			lightUBOData.lights[i].intensities = glm::vec4(toGlm(light->parameters.colorIntensities), 1);
@@ -510,7 +518,6 @@ namespace CGEngine {
 			lightUBOData.lights[i].coneAngle = light->parameters.coneAngle;
 			lightUBOData.lights[i].lightDirection = glm::vec4(toGlm(light->parameters.lightDirection), 1);
 		}
-		//TODO: Add support for dynamic lights
 		// Check if light UBO data has changed
 		if (memcmp(&lightUBOData, &previousLightUBOData, sizeof(LightUBO)) != 0) {
 			lightChanged = true;
