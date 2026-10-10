@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <fstream>
 #include <stdexcept>
+#include <gtx/matrix_decompose.hpp>
 
 using json = nlohmann::json;
 
@@ -17,6 +18,26 @@ namespace CGEngine {
                 throw std::invalid_argument(context + " must be [x, y, z] numbers");
             }
             return glm::vec3(value[0].get<float>(), value[1].get<float>(), value[2].get<float>());
+        }
+
+        // Finds the node with the given name in the hierarchy, or nullptr.
+        const NodeData* findNode(const NodeData& node, const std::string& name) {
+            if (node.name == name) return &node;
+            for (const NodeData& child : node.children) {
+                if (const NodeData* found = findNode(child, name)) return found;
+            }
+            return nullptr;
+        }
+
+        // Rest pose of a bone: its local transform in the model's hierarchy, split into parts.
+        struct RestPose { glm::vec3 position; glm::quat rotation; glm::vec3 scale; };
+        RestPose restPoseOf(const NodeData* node) {
+            RestPose rest { glm::vec3(0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::vec3(1.0f) };
+            if (!node) return rest;
+            glm::vec3 skew;
+            glm::vec4 perspective;
+            glm::decompose(node->transformation, rest.scale, rest.rotation, rest.position, skew, perspective);
+            return rest;
         }
 
         // Reads the keyframe times of one property. Times are seconds, strictly increasing, and inside the clip.
@@ -105,27 +126,33 @@ namespace CGEngine {
                     throw std::invalid_argument(channelContext + ": listed more than once");
                 }
 
-                // A missing property holds its rest value, so every bone always has at least one key of each kind.
+                // Keys are relative to the bone's rest pose, which comes from the model's hierarchy:
+                //   position: offset added to the rest position
+                //   rotation: Euler degrees, applied on top of the rest rotation
+                //   scale:    absolute scale
+                // A property with no keys holds its rest value, so every bone always has at least one key of each kind.
+                RestPose rest = restPoseOf(findNode(hierarchy, boneName));
+
                 std::vector<KeyPosition> positions;
                 if (channel.contains("position")) {
                     std::vector<float> times = readTimes(channel.at("position"), "position", duration, channelContext);
                     for (size_t i = 0; i < times.size(); ++i) {
-                        positions.push_back({ readVec3(channel.at("position")[i].at("v"), channelContext + " position value"), times[i] });
+                        glm::vec3 offset = readVec3(channel.at("position")[i].at("v"), channelContext + " position value");
+                        positions.push_back({ rest.position + offset, times[i] });
                     }
                 } else {
-                    positions.push_back({ glm::vec3(0.0f), 0.0f });
+                    positions.push_back({ rest.position, 0.0f });
                 }
 
-                // Rotation keys are Euler angles in degrees.
                 std::vector<KeyRotation> rotations;
                 if (channel.contains("rotation")) {
                     std::vector<float> times = readTimes(channel.at("rotation"), "rotation", duration, channelContext);
                     for (size_t i = 0; i < times.size(); ++i) {
                         glm::vec3 degrees = readVec3(channel.at("rotation")[i].at("euler"), channelContext + " rotation euler");
-                        rotations.push_back({ glm::quat(glm::radians(degrees)), times[i] });
+                        rotations.push_back({ rest.rotation * glm::quat(glm::radians(degrees)), times[i] });
                     }
                 } else {
-                    rotations.push_back({ glm::quat(1.0f, 0.0f, 0.0f, 0.0f), 0.0f });
+                    rotations.push_back({ rest.rotation, 0.0f });
                 }
 
                 std::vector<KeyScale> scales;
@@ -135,7 +162,7 @@ namespace CGEngine {
                         scales.push_back({ readVec3(channel.at("scale")[i].at("v"), channelContext + " scale value"), times[i] });
                     }
                 } else {
-                    scales.push_back({ glm::vec3(1.0f), 0.0f });
+                    scales.push_back({ rest.scale, 0.0f });
                 }
 
                 bones.emplace_back(boneName, boneData->id, positions, rotations, scales);

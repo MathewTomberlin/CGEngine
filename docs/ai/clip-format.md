@@ -34,14 +34,16 @@ scene with the top-level `"clips"` key. Paths are relative to the exe folder.
 Each channel has `bone` (must be a bone of the model; `list_animations` returns the names in its `bones` field)
 and any of `position`, `rotation`, `scale`:
 
-- `position`: keys `{ "t": seconds, "v": [x, y, z] }`, in the model's units.
-- `rotation`: keys `{ "t": seconds, "euler": [x, y, z] }`, Euler angles in **degrees**.
-- `scale`: keys `{ "t": seconds, "v": [x, y, z] }`.
+Keys are relative to each bone's rest pose (its position and rotation in the model's hierarchy):
+
+- `position`: keys `{ "t": seconds, "v": [x, y, z] }`, an offset added to the rest position, in the model's units.
+- `rotation`: keys `{ "t": seconds, "euler": [x, y, z] }`, Euler angles in **degrees**, applied on top of the rest rotation. `[0, 0, 0]` is the rest pose.
+- `scale`: keys `{ "t": seconds, "v": [x, y, z] }`, an absolute scale.
 
 Rules:
 
 - Key times are in seconds, strictly increasing within a property, and between 0 and `durationSeconds`.
-- A property you leave out holds its rest value (zero position, identity rotation, unit scale).
+- A property you leave out holds the bone's rest value.
 - The clip loops by default when played with `looping: true`; scene and control settings control this.
 
 ## Errors
