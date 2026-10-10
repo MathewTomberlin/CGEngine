@@ -93,6 +93,19 @@ try {
     Send-Command "34_clip_bad_order" '{"command":"load_clip","params":{"path":"clips/invalid/unordered_keys.json"}}'
     Send-Command "35_clip_duplicate" '{"command":"load_clip","params":{"path":"clips/invalid/duplicate_name.json"}}'
 
+    # Script hooks. The engine runs Python files given by path, and attaches scripts from the scripts folder.
+    $scriptOk = Join-Path $control "run_ok.txt"
+    $okPy = Join-Path $control "control_test_ok.py"
+    Set-Content -Path $okPy -Value ("open(r'" + ($scriptOk -replace '\\', '/') + "', 'w').write('ok')") -Encoding utf8
+    $badPy = Join-Path $control "control_test_bad.py"
+    Set-Content -Path $badPy -Value "this is not python (" -Encoding utf8
+    Send-Command "40_run_ok" ('{"command":"run_script","params":{"path":"' + ($okPy -replace '\\', '/') + '"}}')
+    Send-Command "41_run_bad" ('{"command":"run_script","params":{"path":"' + ($badPy -replace '\\', '/') + '"}}')
+    Send-Command "42_attach_missing_body" '{"command":"attach_script","params":{"name":"no_such_body","module":"ControlHitLogger"}}'
+    Send-Command "43_attach_bad_domain" '{"command":"attach_script","params":{"name":"caveman","module":"ControlHitLogger","domain":"frame"}}'
+    Send-Command "44_attach_missing_module" '{"command":"attach_script","params":{"name":"caveman","module":"no_such_module"}}'
+    Send-Command "45_attach" '{"command":"attach_script","params":{"name":"caveman","module":"ControlHitLogger","domain":"update"}}'
+
     $describe = Wait-Result "01_describe"
     Check "describe_scene returns ok" ($describe -and $describe.ok)
     $names = @($describe.result.bodies | ForEach-Object { $_.name })
@@ -184,6 +197,22 @@ try {
         Check "invalid scene rejected: $($invalid[$id].file)" ((-not $r.ok) -and ($r.error -match [regex]::Escape($expect)))
     }
 
+    $runOk = Wait-Result "40_run_ok"
+    Check "run_script runs a Python file" ($runOk.ok -and (Test-Path $scriptOk))
+    $runBad = Wait-Result "41_run_bad"
+    Check "run_script reports a Python syntax error" ((-not $runBad.ok) -and ($runBad.error -match "SyntaxError|syntax"))
+    $attachMissing = Wait-Result "42_attach_missing_body"
+    Check "attach_script rejects an unknown body" ((-not $attachMissing.ok) -and ($attachMissing.error -match "no body"))
+    $attachDomain = Wait-Result "43_attach_bad_domain"
+    Check "attach_script rejects an unknown domain" ((-not $attachDomain.ok) -and ($attachDomain.error -match "domain"))
+    $attachModule = Wait-Result "44_attach_missing_module"
+    Check "attach_script reports a module it cannot load" ((-not $attachModule.ok) -and ($attachModule.error -match "could not create"))
+    $attach = Wait-Result "45_attach"
+    Check "attach_script returns a script id" ($attach.ok -and $attach.result.domain -eq "update")
+    $hitLog = Join-Path $control "script_hits.log"
+    $hitDeadline = (Get-Date).AddSeconds(10)
+    while (-not (Test-Path $hitLog) -and (Get-Date) -lt $hitDeadline) { Start-Sleep -Milliseconds 200 }
+    Check "attached script runs each update and sees its body" ((Test-Path $hitLog) -and ((Get-Content $hitLog -Raw) -match "caveman"))
     Check "engine still running after commands" (-not $app.HasExited)
 }
 finally {

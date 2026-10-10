@@ -10,6 +10,8 @@
 #include "../Animation/ClipLoader.h"
 #include "../Skeleton/Skeleton.h"
 #include "../Scene/SceneLoader.h"
+#include "../Interpreter/PyInterpreter.h"
+#include "../Scripts/Script.h"
 #include <nlohmann/json.hpp>
 #include <algorithm>
 #include <filesystem>
@@ -178,6 +180,30 @@ namespace CGEngine {
                 else if (children != "terminate") throw std::runtime_error("children must be terminate, orphan or inherit");
                 body->deleteBody(termination);
                 return { {"removed", name}, {"children", children} };
+            }
+            if (command == "run_script") {
+                std::string path = params.at("path").get<std::string>();
+                if (!interpreter) throw std::runtime_error("Python is not running");
+                if (!interpreter->runScript(path)) {
+                    throw std::runtime_error(interpreter->lastError.empty() ? "script failed: " + path : interpreter->lastError);
+                }
+                return { {"ran", path} };
+            }
+            if (command == "attach_script") {
+                std::string name = params.at("name").get<std::string>();
+                std::string module = params.at("module").get<std::string>();
+                std::string domain = params.value("domain", std::string("update"));
+                if (domain != "start" && domain != "update" && domain != "delete") {
+                    throw std::runtime_error("domain must be \"start\", \"update\" or \"delete\"");
+                }
+                if (!interpreter) throw std::runtime_error("Python is not running");
+                Body* body = findBodyByName(name);
+                if (!body) throw std::runtime_error("no body named '" + name + "'");
+                // The module must sit in the scripts folder and define create_instance (see docs/ai/script-hooks.md).
+                Script* script = interpreter->createScript(module);
+                if (!script) throw std::runtime_error("could not create a script from module '" + module + "' (see the engine console)");
+                id_t scriptId = body->addScript(domain, script);
+                return { {"name", name}, {"domain", domain}, {"scriptId", scriptId} };
             }
             if (command == "load_clip") {
                 ClipLoadResult clip = ClipLoader::loadFile(params.at("path").get<std::string>());

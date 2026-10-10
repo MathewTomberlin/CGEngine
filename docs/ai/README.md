@@ -7,6 +7,7 @@ without writing C++, using two interfaces:
 |---|---|
 | Describe a scene (materials, lights, model placements, primitives) | [scene-format.md](scene-format.md) |
 | Drive a running engine (load scenes, change transforms and materials, remove bodies, take screenshots) | [control-api.md](control-api.md) |
+| Run Python scripts in a running engine, or attach them to bodies | [script-hooks.md](script-hooks.md) |
 | Know what is planned and what is done | [../ROADMAP.md](../ROADMAP.md) |
 
 ## Quick start

@@ -109,6 +109,20 @@ Starts a clip on the body's model.
 
 Note: animators belong to the model, so every body built from the same model shares its playback state.
 
+### `run_script`
+Runs a Python file once (format and examples: `docs/ai/script-hooks.md`).
+
+- params: `path` (required; relative to the exe folder or absolute)
+- result: `{ "ran": path }`
+- errors: the Python error text
+
+### `attach_script`
+Attaches a Python module from the `scripts` folder to a named body, for the `start`, `update` or `delete` domain.
+
+- params: `name` (body, required), `module` (required), `domain` (default `"update"`)
+- result: `{ "name", "domain", "scriptId" }`
+- errors: no body, bad domain, module that cannot be loaded
+
 ### `screenshot`
 Saves the next rendered frame as a PNG.
 
