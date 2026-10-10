@@ -80,6 +80,9 @@ namespace CGEngine {
 		map<string, AnimationNodeMapping> animationNodeMap;
 		Animator* modelAnimator = nullptr;
 		size_t bodyCount = 0;
+		// Body asset names are cache keys. Each instantiate gets its own key, and its bodies add a suffix.
+		size_t instanceCount = 0;
+		string instanceKey;
 
 		// Helper to update modelBones when adding mesh data
 		void updateBoneData(const MeshData* meshData);

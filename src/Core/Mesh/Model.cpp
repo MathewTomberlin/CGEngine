@@ -124,7 +124,8 @@ namespace CGEngine {
 		}
 
 		// Create null Mesh Body root
-		auto rootAsset = assets.create<Body>(sourcePath.append(".Root"), Mesh(nullptr));
+		instanceKey = sourcePath + "#" + std::to_string(++instanceCount);
+			auto rootAsset = assets.create<Body>(instanceKey + ".Root", Mesh(nullptr));
 		if (rootAsset.has_value()) {
 			Body* rootBody = rootAsset.value().second;
 
@@ -198,7 +199,7 @@ namespace CGEngine {
 		mesh.setModelId(getId());
 
 		// Create and attach child body
-		auto bodyAsset = assets.create<Body>(sourcePath.append(node->nodeName), mesh);
+		auto bodyAsset = assets.create<Body>(instanceKey + "." + std::to_string(bodyCount + 1) + "." + node->nodeName, mesh);
 		if (bodyAsset.has_value()) {
 			Body* body = bodyAsset.value().second;
 			bodyCount++;
