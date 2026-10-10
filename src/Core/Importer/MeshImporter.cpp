@@ -1,3 +1,4 @@
+#include <filesystem>
 #include "../World/Renderer.h"
 #include "../Engine/Engine.h"
 #include "MeshImporter.h"
@@ -268,7 +269,9 @@ namespace CGEngine {
 		for (unsigned int i = 0; i < mat->GetTextureCount(type); i++) {
 			aiString str;
 			mat->GetTexture(type, i, &str);
-			importedTextures.push_back(str.C_Str());
+			// Models may reference textures by absolute paths from the authoring machine;
+			// textures are loaded by file name from the resources folder.
+			importedTextures.push_back(std::filesystem::path(str.C_Str()).filename().string());
 		}
 		return importedTextures;
     }

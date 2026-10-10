@@ -42,7 +42,8 @@ namespace CGEngine {
         }
     }
 
-    //TODO: Properly implement isValid for this and other iResource classes
+    // A Body is valid until its destructor runs. Bodies may legitimately have no entity
+    // (the world root is created with Body(bool)), so entity presence is not the test.
     bool Body::isValid() const {
         return valid;
     }

@@ -1,3 +1,4 @@
+#include <filesystem>
 #include "../Engine/Engine.h"
 #include "Logging.h"
 
@@ -72,12 +73,13 @@ namespace CGEngine {
 			logQueue.pop();
 			msgBuffer.insert(msgBuffer.end(),logEvt.msg.begin(), logEvt.msg.end());
 		}
+		// The log folder is relative to the exe directory and may not exist yet.
+		std::error_code ec;
+		std::filesystem::create_directories(std::filesystem::path(filepath).parent_path(), ec);
 		ofstream logFile(filepath, ios::binary);
 		if (logFile.is_open()) {
 			if (msgBuffer.size() > 0) {
 				logFile.write(msgBuffer.data(), msgBuffer.size());
-			} else {
-				cout << "[WARN] Logging: No messages to write to log file.\n";
 			}
 			logFile.close();
 		} else {

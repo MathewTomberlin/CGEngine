@@ -9,6 +9,7 @@ on:
 jobs:
   build-windows:
     runs-on: windows-2022
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -38,3 +39,23 @@ jobs:
                            "build/bin/Debug/cg_engine_python/Scripts/PyScript.py")) {
             if (-not (Test-Path $f)) { throw "Missing expected output: $f" }
           }
+
+      - name: Fetch Mesa software OpenGL (llvmpipe)
+        shell: pwsh
+        run: |
+          # Hosted runners have no GPU. Mesa provides OpenGL in software; copying
+          # opengl32.dll next to main.exe makes Windows load it instead of the system GL.
+          $url = "https://github.com/pal1000/mesa-dist-win/releases/download/26.2.4/mesa3d-26.2.4-release-msvc.7z"
+          Invoke-WebRequest -Uri $url -OutFile mesa.7z
+          & "C:\Program Files\7-Zip\7z.exe" x mesa.7z -omesa "x64\opengl32.dll" "x64\libgallium_wgl.dll" "x64\d3d10warp.dll" "x64\dxil.dll" -y
+          if ($LASTEXITCODE -ne 0) { throw "7z extraction failed" }
+          Copy-Item mesa/x64/*.dll build/bin/Debug/
+
+      - name: Smoke run
+        shell: pwsh
+        timeout-minutes: 10
+        env:
+          CGENGINE_SMOKE_FRAMES: "120"
+        run: |
+          & build/bin/Debug/main.exe
+          if ($LASTEXITCODE -ne 0) { throw "Smoke run failed with exit code $LASTEXITCODE" }
