@@ -49,6 +49,8 @@ namespace CGEngine {
         //Bodies
         vector<Body*> uninitialized;
         void addUninitialized(Body* body);
+        /// Forget a Body that is being deleted before its start() ran, so the start pass never sees it.
+        void removeUninitialized(Body* body);
 
         //Root Body
         Body* getRoot();

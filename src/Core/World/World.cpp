@@ -8,6 +8,7 @@ extern bool cgEngineBindingsLinked;
 bool* keepBindingsLinked = &cgEngineBindingsLinked;
 #include "../Scene/SceneLoader.h"
 #include "../Control/ControlChannel.h"
+#include <algorithm>
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
@@ -381,6 +382,10 @@ namespace CGEngine {
 
     void World::addUninitialized(Body* body) {
         uninitialized.push_back(body);
+    }
+
+    void World::removeUninitialized(Body* body) {
+        uninitialized.erase(std::remove(uninitialized.begin(), uninitialized.end(), body), uninitialized.end());
     }
 
     void World::callUninitializedStart() {
