@@ -20,6 +20,16 @@ GRID_H = 3
 EXTRA_LINKS = 2  # loops added on top of the spanning tree
 MAX_ENEMIES_PER_ROOM = 5
 
+# Enemy kinds. "slime" walks at the player, "archer" keeps its distance and shoots, "brute" is slow and tough.
+# Deeper rooms (more links from the start) get a larger share of archers and brutes.
+ENEMY_KINDS = ("slime", "archer", "brute")
+ARCHER_MIN_DEPTH = 1
+BRUTE_MIN_DEPTH = 2
+
+# Item drops: what a defeated enemy leaves behind. Chances are per kind: (heart, coin); the rest drop nothing.
+ITEM_KINDS = ("heart", "coin")
+DROP_CHANCES = {"slime": (0.1, 0.3), "archer": (0.15, 0.4), "brute": (0.35, 0.45)}
+
 
 class Level:
     def __init__(self, seed, grid_w, grid_h, room_w, room_h):
@@ -36,6 +46,7 @@ class Level:
         self.goal = None          # global tile of the goal
         self.goal_room = None
         self.enemy_spawns = {}    # room -> list of global tiles for initial enemies
+        self.enemy_kinds = {}     # room -> list of kinds, one per entry of enemy_spawns[room]
 
     def room_of(self, gx, gy):
         return (gx // self.room_w, gy // self.room_h)
@@ -192,4 +203,28 @@ def generate(seed, grid_w=GRID_W, grid_h=GRID_H, room_w=ROOM_W, room_h=ROOM_H):
         rng.shuffle(spots)
         level.enemy_spawns[room] = spots[:count]
 
+    # Kinds are drawn after every layout choice, so adding kinds did not change any existing seed's layout.
+    for room in level.rooms():
+        level.enemy_kinds[room] = [_enemy_kind(rng, depth[room]) for _ in level.enemy_spawns[room]]
+
     return level
+
+
+def _enemy_kind(rng, depth):
+    roll = rng.random()
+    if depth >= BRUTE_MIN_DEPTH and roll < 0.05 + 0.04 * depth:
+        return "brute"
+    if depth >= ARCHER_MIN_DEPTH and roll > 0.85 - 0.03 * depth:
+        return "archer"
+    return "slime"
+
+
+def drop_for(seed, enemy_id, kind):
+    """The item a defeated enemy leaves: "heart", "coin" or None. The same seed, id and kind always agree."""
+    roll = random.Random(seed * 100003 + enemy_id).random()
+    heart, coin = DROP_CHANCES[kind]
+    if roll < heart:
+        return "heart"
+    if roll < heart + coin:
+        return "coin"
+    return None
