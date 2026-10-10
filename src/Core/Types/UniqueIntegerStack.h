@@ -10,37 +10,26 @@ namespace CGEngine {
     template <typename IntType = id_t>
     class UniqueIntegerStack {
     public:
-        UniqueIntegerStack(IntType count) {
-            for (IntType i = 0; i < count; i++) {
-                uniqueIds.insert(i);
-            }
-        };
+        // Ids 0..count-1 are available. They are not stored up front: every id at or above nextUnused has never been
+        // handed out, so only returned ids need a set. (Filling a set with 1000 ids per stack cost about 1 ms per Body.)
+        UniqueIntegerStack(IntType count) : count(count) {};
 
         IntType receive(optional<IntType>* reciever) {
-            if (uniqueIds.size() > 0) {
-                IntType id = *uniqueIds.begin();
-                uniqueIds.erase(id);
-                *reciever = id;
-                mappedIds[reciever] = id;
-                removedIds.insert(id);
-                return id;
+            if (optional<IntType> id = next()) {
+                *reciever = id.value();
+                mappedIds[reciever] = id.value();
+                return id.value();
             }
             return 0U;
         }
 
         IntType take() {
-            if (uniqueIds.size() > 0) {
-                IntType id = *uniqueIds.begin();
-                uniqueIds.erase(id);
-                removedIds.insert(id);
-                return id;
-            }
-            return 0U;
+            return next().value_or(0U);
         }
 
         void give(IntType key) {
             if (removedIds.find(key) != removedIds.end()) {
-                uniqueIds.insert(key);
+                returnedIds.insert(key);
                 removedIds.erase(key);
             }
         }
@@ -52,11 +41,28 @@ namespace CGEngine {
                 *reciever = nullopt;
                 mappedIds.erase(reciever);
                 removedIds.erase(id);
-                uniqueIds.insert(id);
+                returnedIds.insert(id);
             }
         }
     private:
-        set<IntType> uniqueIds;
+        // The smallest available id: a returned one (all are below nextUnused), else the next never-used one.
+        optional<IntType> next() {
+            IntType id;
+            if (!returnedIds.empty()) {
+                id = *returnedIds.begin();
+                returnedIds.erase(returnedIds.begin());
+            } else if (nextUnused < count) {
+                id = nextUnused++;
+            } else {
+                return nullopt;
+            }
+            removedIds.insert(id);
+            return id;
+        }
+
+        IntType count = 0;
+        IntType nextUnused = 0;
+        set<IntType> returnedIds;
         set<IntType> removedIds;
         map<optional<IntType>*, IntType> mappedIds;
     };
