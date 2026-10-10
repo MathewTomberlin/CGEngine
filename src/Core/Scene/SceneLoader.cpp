@@ -50,8 +50,9 @@ namespace CGEngine {
 
             id_t materialId = overrides.empty() ? assets.getDefaultId<Material>().value_or(0) : overrides.front();
             Mesh mesh(meshData.value().second, transform, { materialId });
-            // Bodies are cached by asset name, so the name carries the scene body name to stay unique.
-            auto body = assets.create<Body>("body:" + name, mesh);
+            // Body asset names are cache keys. A new key per load stops a reloaded scene returning the old body with its old transform.
+            static size_t primitiveCount = 0;
+            auto body = assets.create<Body>("body:" + name + "#" + std::to_string(++primitiveCount), mesh);
             if (!body.has_value()) {
                 throw std::runtime_error("failed to create body '" + name + "'");
             }
