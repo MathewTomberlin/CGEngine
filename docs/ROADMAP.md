@@ -1,0 +1,40 @@
+# CGEngine roadmap: AI-first engine
+
+Goal: an engine that an AI (or a person working with one) can use to create models, scenes,
+skeletons, animations and games through structured data and a control interface, with
+performance and documentation treated as first-class requirements.
+
+Status: `[ ]` not started, `[~]` in progress, `[x]` done.
+
+## Phase 1: data-driven content (in progress)
+- [x] **1.1** JSON scene loader (materials, lights, model bodies) - `src/Core/Scene/SceneLoader.*`
+- [x] **1.2** Example scene and startup hook (`CGENGINE_SCENE`) - `resources/scenes/example.json`
+- [x] **1.3** Scene format documentation - `docs/ai/scene-format.md`
+- [ ] **1.4** Scene validation tests (bad files, unknown references, missing assets)
+- [ ] **1.5** Primitive bodies (cube, sphere, plane) in the scene format, without an asset file
+
+## Phase 2: AI control channel
+- [ ] **2.1** File-based command inbox/outbox (`cg_control/inbox`, `cg_control/outbox`), one JSON command per file, polled each frame. No sockets, no dependencies, works with any agent that can write files.
+- [ ] **2.2** Commands: `load_scene`, `describe_scene` (bodies, transforms, materials, lights as JSON), `set_transform`, `set_material`, `remove_body`.
+- [ ] **2.3** `screenshot` command: render to PNG so an agent can look at the result.
+- [ ] **2.4** `get_stats` command (frame time, draw calls, asset counts).
+- [ ] **2.5** Control API documentation and command schema (`docs/ai/control-api.md`).
+
+## Phase 3: performance
+- [ ] **3.1** Baseline frame-time and draw-call measurements, recorded in smoke output.
+- [ ] **3.2** Renderer: batch draws by material and program; avoid per-frame UBO re-uploads when unchanged (already partly done via memcmp).
+- [ ] **3.3** Asset load timing and caching review.
+
+## Phase 4: skeletons, animation, games
+- [ ] **4.1** Skeleton and animation authoring in scene/asset files (clips referenced by name).
+- [ ] **4.2** Script hooks reachable from the control channel (PyScript / C++ behaviors).
+- [ ] **4.3** Example game built only from scene files and scripts.
+
+## Tooling and quality
+- [x] CI build on Windows (`.github/workflows/build.yml`) with Mesa software OpenGL smoke run
+- [ ] Unit tests for pure logic (scene parsing, command parsing) runnable without a GPU
+- [ ] Documentation index (`docs/ai/README.md`) for agents
+
+## Open questions
+- "JEV" as an AI app controller was mentioned but not specified. Phase 2 is designed so an
+  external controller (JEV or otherwise) can drive the engine through the file channel.

@@ -1,6 +1,7 @@
 #include "World.h"
 #include "../Engine/Engine.h"
 #include "../../Standard/Models/CommonModels.h"
+#include "../Scene/SceneLoader.h"
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
@@ -340,6 +341,17 @@ namespace CGEngine {
         input->setWindow(window);
 
         assets.initialize();
+
+        // Optional scene file (CGENGINE_SCENE=path) loaded before the first frame.
+        if (const char* scenePath = std::getenv("CGENGINE_SCENE")) {
+            SceneLoadResult scene = SceneLoader::loadFile(scenePath);
+            if (!scene.ok) {
+                std::cerr << "Scene load failed: " << scene.error << std::endl;
+                if (std::getenv("CGENGINE_SMOKE_FRAMES")) std::exit(1);
+            } else {
+                std::cerr << "SCENE loaded bodies=" << scene.bodies << " lights=" << scene.lights << " materials=" << scene.materials << std::endl;
+            }
+        }
 
         if (const char* smoke = std::getenv("CGENGINE_SMOKE_FRAMES")) {
             smokeFrameLimit = std::atoi(smoke);
