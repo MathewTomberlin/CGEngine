@@ -82,6 +82,26 @@ Removes a body and destroys it. The world root cannot be removed.
 - result: `{ "removed": name, "children": mode }`
 - errors: no body with that name, root removal, unknown `children` mode
 
+### `list_animations`
+Lists the animation clips of the model a body belongs to, and the playback state.
+
+- params: `name` (required; a body inside an imported model)
+- result: `{ "current", "timeSeconds", "durationSeconds", "paused", "speed", "looping", "animations": [ { "name", "durationSeconds" } ] }`
+- errors: no body, body not part of a model, model without clips
+
+### `play_animation`
+Starts a clip on the body's model.
+
+- params: `name`, `animation` (required), `speed` (default 1), `looping` (default true; false holds the last pose)
+- result: the playback state after the change
+- errors: as above, or the clip is not in the model
+
+### `pause_animation`
+- params: `name` (required), `paused` (default true; false resumes)
+- result: `{ "name", "paused" }`
+
+Note: animators belong to the model, so every body built from the same model shares its playback state.
+
 ### `screenshot`
 Saves the next rendered frame as a PNG.
 
