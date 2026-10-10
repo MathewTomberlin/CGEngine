@@ -19,6 +19,8 @@ namespace CGEngine {
 		int id;
 	public:
 		Bone(const string& name, int id, const aiNodeAnim* channel);
+		/// Bone from keyframes that are already in engine units (used by data-defined clips). Keys must have strictly increasing times.
+		Bone(const string& name, int id, vector<KeyPosition> positions, vector<KeyRotation> rotations, vector<KeyScale> scales);
 		void update(float animTime);
 		glm::mat4 getLocalTransform();
 		string getBoneName() const;

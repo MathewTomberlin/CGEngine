@@ -16,6 +16,12 @@ namespace CGEngine {
 		return boneData == other;
 	}
 
+	vector<string> Skeleton::getBoneNames() const {
+		vector<string> names;
+		for (const auto& entry : boneData) names.push_back(entry.first);
+		return names;
+	}
+
 	bool Skeleton::hasBone(const string& boneName) const {
 		return boneData.find(boneName) != boneData.end();
 	}

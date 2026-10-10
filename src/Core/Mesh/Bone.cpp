@@ -31,6 +31,13 @@ namespace CGEngine {
 		}
 	}
 
+	Bone::Bone(const string& name, int id, vector<KeyPosition> positions, vector<KeyRotation> rotations, vector<KeyScale> scales)
+		: positions(std::move(positions)), rotations(std::move(rotations)), scales(std::move(scales)), name(name), id(id), localTransform(1.0f) {
+		numPositions = static_cast<int>(this->positions.size());
+		numRotations = static_cast<int>(this->rotations.size());
+		numScales = static_cast<int>(this->scales.size());
+	}
+
 	void Bone::update(float animTime) {
 		glm::mat4 translation = interpolatePosition(animTime);
 		glm::mat4 rotation = interpolateRotation(animTime);

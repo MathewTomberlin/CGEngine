@@ -2,6 +2,7 @@
 
 #include "../World/Renderer.h"
 #include "../Skeleton/Skeleton.h"
+#include <algorithm>
 
 namespace CGEngine {
 	// This class is a container for meshes associated with an entity. Its exact purpose is
@@ -59,6 +60,10 @@ namespace CGEngine {
 		//Return a vector of the model materials
 		vector<Material*> getMaterials();
 		bool isValid() const;
+		/// The skeleton shared by this model's meshes, or nullptr if the model is not skeletal.
+		Skeleton* getSkeleton() const { return modelSkeleton; }
+		/// Register a clip (for example one loaded from a clip file) as belonging to this model.
+		void addAnimationName(const string& name) { if (find(modelAnimations.begin(), modelAnimations.end(), name) == modelAnimations.end()) modelAnimations.push_back(name); }
 	private:
 		friend class MeshImporter;
 

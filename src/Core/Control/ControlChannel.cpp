@@ -7,6 +7,8 @@
 #include "../Mesh/Model.h"
 #include "../Animation/Animator.h"
 #include "../Animation/Animation.h"
+#include "../Animation/ClipLoader.h"
+#include "../Skeleton/Skeleton.h"
 #include "../Scene/SceneLoader.h"
 #include <nlohmann/json.hpp>
 #include <algorithm>
@@ -177,6 +179,11 @@ namespace CGEngine {
                 body->deleteBody(termination);
                 return { {"removed", name}, {"children", children} };
             }
+            if (command == "load_clip") {
+                ClipLoadResult clip = ClipLoader::loadFile(params.at("path").get<std::string>());
+                if (!clip.ok) throw std::runtime_error(clip.error);
+                return { {"name", clip.name} };
+            }
             if (command == "list_animations") {
                 Model* model = nullptr;
                 Animator* animator = requireAnimator(params.at("name").get<std::string>(), model);
@@ -184,7 +191,11 @@ namespace CGEngine {
                 for (const std::string& clip : model->getAnimationNames()) {
                     clips.push_back({ {"name", clip}, {"durationSeconds", clipDurationSeconds(clip)} });
                 }
-                return { {"current", animator->getCurrentAnimationName()}, {"timeSeconds", animator->getTimeSeconds()},
+                json bones = json::array();
+                if (Skeleton* skeleton = model->getSkeleton()) {
+                    for (const std::string& bone : skeleton->getBoneNames()) bones.push_back(bone);
+                }
+                return { {"bones", bones}, {"current", animator->getCurrentAnimationName()}, {"timeSeconds", animator->getTimeSeconds()},
                          {"durationSeconds", animator->getDurationSeconds()}, {"paused", animator->isPaused()},
                          {"speed", animator->getSpeed()}, {"looping", animator->isLooping()}, {"animations", clips} };
             }

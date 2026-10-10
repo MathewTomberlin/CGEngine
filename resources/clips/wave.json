@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "name": "wave",
+  "model": "Caveman_Test2.fbx",
+  "durationSeconds": 2.0,
+  "channels": [
+    { "bone": "UpperArm.R", "rotation": [
+        { "t": 0.0, "euler": [0, 0, 0] },
+        { "t": 1.0, "euler": [0, 0, -60] },
+        { "t": 2.0, "euler": [0, 0, 0] } ] },
+    { "bone": "Forearm.R", "rotation": [
+        { "t": 0.0, "euler": [0, 0, 0] },
+        { "t": 1.0, "euler": [0, 0, -90] },
+        { "t": 2.0, "euler": [0, 0, 0] } ] }
+  ]
+}

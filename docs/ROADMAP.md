@@ -26,7 +26,7 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done.
 - [ ] **3.3** Asset load timing and caching review.
 
 ## Phase 4: skeletons, animation, games
-- [~] **4.1** Skeleton and animation authoring. Done: clip listing, play/pause/speed/looping via control channel and scene files; bone-matrix fix for multi-mesh models. Next: clips defined as data (keyframes in JSON) instead of only imported files.
+- [x] **4.1** Skeleton and animation authoring. Done: clip listing, play/pause/speed/looping via control channel and scene files; bone-matrix fix for multi-mesh models; clips defined as JSON keyframes (`load_clip`, scene `"clips"`, `docs/ai/clip-format.md`).
 - [ ] **4.2** Script hooks reachable from the control channel (PyScript / C++ behaviors).
 - [ ] **4.3** Example game built only from scene files and scripts.
 
