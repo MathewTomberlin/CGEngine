@@ -154,19 +154,24 @@ cge.key_down = _fake
 
     # Kill an enemy with the sword while the demo scene's movement scripts are still alive. This is the path that
     # crashed before: an enemy removed mid-frame. The script finds the game object, puts a one-health enemy just
-    # east of the player, faces east, and presses J once.
+    # east of the player, faces east, and presses J on the first frame. The enemy closes in at ENEMY_SPEED, so a
+    # swing held back by wall-clock time can land after it reaches the player and miss. Pressing on the first frame
+    # keeps the swing ahead of the enemy whatever the frame rate.
     $killScript = @'
 import gc
-import time
 import cg_engine_bindings as cge
 game = next(o for o in gc.get_objects() if type(o).__name__ == "DungeonGame")
 room = game.room
 game.facing = (1.0, 0.0)
 game.enemies.setdefault(room, []).append({"id": 9999, "x": game.px + 0.6, "z": game.pz, "hp": 1})
 game.load_room(room)
-_t0 = time.perf_counter()
+_presses = 0
 def _fake(name):
-    return name == "J" and time.perf_counter() - _t0 > 0.3 and time.perf_counter() - _t0 < 0.6
+    global _presses
+    if name != "J":
+        return False
+    _presses += 1
+    return _presses == 1
 cge.key_down = _fake
 '@
     $killFile = Join-Path $control "kill_enemy.py"
