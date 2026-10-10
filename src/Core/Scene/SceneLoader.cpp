@@ -1,6 +1,8 @@
 #include "SceneLoader.h"
 #include "../Engine/Engine.h"
+#include "../../Standard/Models/CommonModels.h"
 #include <fstream>
+#include <sstream>
 #include <stdexcept>
 
 using json = nlohmann::json;
@@ -21,6 +23,33 @@ namespace CGEngine {
                 throw std::invalid_argument(context + ": '" + key + "' is required and must be a string");
             }
             return obj.at(key).get<std::string>();
+        }
+
+        // Cube or plane generated in code. Meshes are cached per size, so bodies can share them.
+        void createPrimitiveBody(const json& b, const std::string& name, const Transformation3D& transform, const std::vector<id_t>& overrides) {
+            std::string primitive = requireString(b, "primitive", "body '" + name + "'");
+            if (primitive != "cube" && primitive != "plane") {
+                throw std::invalid_argument("body '" + name + "' has unknown primitive '" + primitive + "' (use \"cube\" or \"plane\")");
+            }
+            float size = b.value("size", 1.0f);
+            std::ostringstream meshName;
+            meshName << "primitive:" << primitive << ":" << size;
+
+            auto meshData = assets.create<MeshData>(meshName.str(),
+                primitive == "cube" ? getCubeVertices(size) : getPlaneVertices(size, 0.0f, Vector3f(0, 0, 0)),
+                primitive == "cube" ? getCubeIndices() : getPlaneIndices());
+            if (!meshData.has_value()) {
+                throw std::runtime_error("failed to create mesh for primitive body '" + name + "'");
+            }
+
+            id_t materialId = overrides.empty() ? assets.getDefaultId<Material>().value_or(0) : overrides.front();
+            Mesh mesh(meshData.value().second, transform, { materialId });
+            // Bodies are cached by asset name, so the name carries the scene body name to stay unique.
+            auto body = assets.create<Body>("body:" + name, mesh);
+            if (!body.has_value()) {
+                throw std::runtime_error("failed to create body '" + name + "'");
+            }
+            body.value().second->setName(name);
         }
 
         std::string nameOf(const json& obj, const std::string& context) {
@@ -92,7 +121,6 @@ namespace CGEngine {
             if (scene.contains("bodies")) {
                 for (const json& b : scene.at("bodies")) {
                     std::string name = nameOf(b, "body");
-                    std::string modelPath = requireString(b, "model", "body '" + name + "'");
                     Transformation3D transform(
                         readVec3(b, "position", Vector3f(0, 0, 0)),
                         readVec3(b, "rotation", Vector3f(0, 0, 0)),
@@ -109,6 +137,13 @@ namespace CGEngine {
                         overrides.push_back(materialId.value());
                     }
 
+                    if (b.contains("primitive")) {
+                        createPrimitiveBody(b, name, transform, overrides);
+                        result.bodies++;
+                        continue;
+                    }
+
+                    std::string modelPath = requireString(b, "model", "body '" + name + "'");
                     auto model = assets.load<Model>(modelPath);
                     if (!model.has_value()) {
                         throw std::runtime_error("failed to load model '" + modelPath + "' for body '" + name + "'");
