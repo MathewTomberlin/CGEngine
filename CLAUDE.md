@@ -89,3 +89,10 @@ Before branching, run `git fetch` and base on the latest `develop`, not on `mast
 - Benign warning at startup: `AssetManager: Resource loading failed, returning default resource: lava_tile.png` (referenced by `resources/Caveman_Test2.fbx`).
 - `develop` has 120 commits not pushed to `origin/develop`.
 - `.github/copilot-instructions.md.txt` is not active (it has a `.txt` suffix).
+
+## AI-first workflow
+
+- Direction and status: `docs/ROADMAP.md` (update the checklist when you finish a task).
+- Author scenes as JSON: `docs/ai/scene-format.md`, example in `resources/scenes/example.json`.
+- Drive a running engine by dropping JSON commands into `cg_control/inbox`: `docs/ai/control-api.md`.
+  Integration test: `tools/test_control_channel.ps1`.
