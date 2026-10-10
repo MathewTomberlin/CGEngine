@@ -237,8 +237,9 @@ def goal():
 
 def slash():
     b = Builder("slash")
-    # A flat crescent in front of the player, curving around its facing direction (-Y).
-    b.torus("dg_slash", (0, 0.3, 0.25), 0.45, 0.03, rot=(0, 0, -90), arc=120, segments=10, sides=4, scale=(1, 1, 0.5))
+    # A flat crescent in front of the player, where the swing hits (DungeonGame.SLASH_REACH, about 0.9 ahead).
+    # The ring is centred 0.35 ahead and bulges forward (-Y), so the arc runs from about 0.6 to 0.85 in front.
+    b.torus("dg_slash", (0, -0.35, 0.3), 0.5, 0.04, rot=(0, 0, -90), arc=120, segments=10, sides=4, scale=(1, 1, 0.5))
     return b
 
 
