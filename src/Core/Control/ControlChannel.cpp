@@ -112,6 +112,7 @@ namespace CGEngine {
                 return {
                     {"frames", frames},
                     {"frameSeconds", time.getDeltaSec()},
+                    {"drawCalls", renderer->getLastFrameDrawCalls()},
                     {"bodies", assets.getResourceCount<Body>()},
                     {"lights", assets.getResourceCount<Light>()},
                     {"materials", assets.getResourceCount<Material>()}

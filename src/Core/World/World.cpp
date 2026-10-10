@@ -414,7 +414,7 @@ namespace CGEngine {
                         auto elapsed = std::chrono::steady_clock::now() - smokeStart;
                         avgMs = std::chrono::duration<double, std::milli>(elapsed).count() / (smokeFramesRun - 1);
                     }
-                    std::cerr << "SMOKE OK frames=" << smokeFramesRun << " avgFrameMs=" << avgMs << std::endl;
+                    std::cerr << "SMOKE OK frames=" << smokeFramesRun << " avgFrameMs=" << avgMs << " drawCalls=" << renderer->getLastFrameDrawCalls() << std::endl;
                     endWorld();
                 }
                 if (smokeFrameLimit > 0 && smokeFramesRun == 1) smokeStart = std::chrono::steady_clock::now();

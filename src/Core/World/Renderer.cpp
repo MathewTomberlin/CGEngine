@@ -217,10 +217,13 @@ namespace CGEngine {
 	}
 
 	bool Renderer::setGLWindowState(bool state) {
-		// Make the window no longer the active window for OpenGL calls
+		// setActive switches the GL context (wglMakeCurrent) and costs ~0.7 ms, so skip redundant calls.
+		if (state == glWindowActive) return true;
 		bool success = window->setActive(state);
 		if (!success) {
 			log(this, LogError, "Failed to set window state to {}", (state) ? "active" : "inactive");
+		} else {
+			glWindowActive = state;
 		}
 		return success;
 	}
@@ -357,6 +360,7 @@ namespace CGEngine {
 			program->setUniform("timeSec", time.getElapsedSec());
 
 			//Draw the MeshData by index, if available, or by vertices
+			++drawCallsThisFrame;
 			if (meshData->indices.size()) {
 				GL_CHECK(glDrawElements(GL_TRIANGLES, meshData->indices.size(), GL_UNSIGNED_INT, 0));
 			} else {
@@ -746,6 +750,8 @@ namespace CGEngine {
 
 	void Renderer::clear() {
 		renderOrder.clear();
+		lastFrameDrawCalls = drawCallsThisFrame;
+		drawCallsThisFrame = 0;
 	}
 	
 	void Renderer::sortZ() {
