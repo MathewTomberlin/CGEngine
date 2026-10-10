@@ -16,7 +16,24 @@ namespace CGEngine {
 		void calculateBoneTransform(const NodeData* node, glm::mat4 parentTransform);
 		vector<glm::mat4> getBoneMatrices();
 		void setSkeleton(Skeleton* skeleton) { this->skeleton = skeleton; }
+		/// Name of the clip being played, or empty if none.
+		string getCurrentAnimationName() const;
+		/// Playback speed multiplier (1 = normal, 0.5 = half speed). Negative values are not supported.
+		void setSpeed(float speed) { this->speed = speed; }
+		float getSpeed() const { return speed; }
+		/// Looping clips wrap at the end; non-looping clips hold their last pose.
+		void setLooping(bool looping) { this->looping = looping; }
+		bool isLooping() const { return looping; }
+		void setPaused(bool paused) { this->paused = paused; }
+		bool isPaused() const { return paused; }
+		/// Current position in the clip, in seconds.
+		float getTimeSeconds() const;
+		/// Length of the current clip in seconds (0 if none).
+		float getDurationSeconds() const;
 	private:
+		float speed = 1.0f;
+		bool looping = true;
+		bool paused = false;
 		/// <summary>
 		/// The matrix transformation passed to the shader for each bone in a pose
 		/// </summary>

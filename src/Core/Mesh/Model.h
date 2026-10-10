@@ -48,6 +48,8 @@ namespace CGEngine {
 		string getModelPath() const { return sourcePath; };
 		//Return the model animator
 		Animator* getAnimator() const { return modelAnimator; }
+		/// Names of the animation clips imported with this model.
+		const vector<string>& getAnimationNames() const { return modelAnimations; }
 		//Create and return an animator if the model is skeletal
 		Animator* createAnimator() const;
 		// Add methods for manually building hierarchy

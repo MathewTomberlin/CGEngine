@@ -1,4 +1,5 @@
 #include "Animator.h"
+#include <cmath>
 #include "../Engine/Engine.h"
 
 namespace CGEngine {
@@ -28,15 +29,37 @@ namespace CGEngine {
 		if (ticksPerSecond <= 0) {
 			ticksPerSecond = 24.0f;
 		}
-		currentTime += dt * ticksPerSecond;
+		if (!paused) {
+			currentTime += dt * speed * ticksPerSecond;
+		}
 
-		//Wrap time for looping
+		//Wrap time for looping, or hold the last pose
 		float duration = currentAnimation->getDuration();
-		if (currentTime >= duration) {
-			currentTime = 0;
+		if (duration > 0 && currentTime >= duration) {
+			if (looping) {
+				currentTime = fmod(currentTime, duration);
+			} else {
+				currentTime = duration;
+			}
 		}
 
 		calculateBoneTransform(&currentAnimation->getRoot(), glm::mat4(1.0f));
+	}
+
+	string Animator::getCurrentAnimationName() const {
+		return currentAnimation ? currentAnimation->getName() : string();
+	}
+
+	float Animator::getTimeSeconds() const {
+		if (!currentAnimation) return 0.0f;
+		float ticksPerSecond = currentAnimation->getTicksPerSecond() > 0 ? currentAnimation->getTicksPerSecond() : 24.0f;
+		return currentTime / ticksPerSecond;
+	}
+
+	float Animator::getDurationSeconds() const {
+		if (!currentAnimation) return 0.0f;
+		float ticksPerSecond = currentAnimation->getTicksPerSecond() > 0 ? currentAnimation->getTicksPerSecond() : 24.0f;
+		return currentAnimation->getDuration() / ticksPerSecond;
 	}
 
 	void Animator::playAnimation(const string& animationName) {

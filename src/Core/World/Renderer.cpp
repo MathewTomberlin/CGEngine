@@ -412,18 +412,16 @@ namespace CGEngine {
 
 	Animator* Renderer::updateAnimator(Mesh* mesh) {
 		//Update each model's animator, if present, once per frame (instead of once per mesh per model per frame)
-		Animator* animator = nullptr;
 		optional<id_t> meshModelId = mesh->getModelId();
-		if (meshModelId.has_value()) {
-			Model* meshModel = assets.get<Model>(meshModelId.value());
-			// Only update animation once per model per frame
-			if (meshModel && updatedModels.find(meshModelId.value()) == updatedModels.end()) {
-				animator = meshModel->getAnimator();
-				if (animator) {
-					animator->updateAnimation(time.getDeltaSec());
-					updatedModels.insert(meshModelId.value());
-				}
-			}
+		if (!meshModelId.has_value()) return nullptr;
+		Model* meshModel = assets.get<Model>(meshModelId.value());
+		if (!meshModel) return nullptr;
+		Animator* animator = meshModel->getAnimator();
+		// Advance the clip once per model per frame, but return the animator for every mesh of the
+		// model: each mesh needs the bone matrices, not only the first one drawn.
+		if (animator && updatedModels.find(meshModelId.value()) == updatedModels.end()) {
+			animator->updateAnimation(time.getDeltaSec());
+			updatedModels.insert(meshModelId.value());
 		}
 		return animator;
 	}
