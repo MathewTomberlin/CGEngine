@@ -152,6 +152,33 @@ cge.key_down = _fake
     Write-Host ("      state after the walk back: player x={0} hp={1} room=({2},{3})" -f $back.player[0], $back.hp, $back.room[0], $back.room[1])
     Check "the west wall stops the player again" ($back.player[0] -gt 0.6 -and $back.player[0] -lt 1.3)
 
+    # Kill an enemy with the sword while the demo scene's movement scripts are still alive. This is the path that
+    # crashed before: an enemy removed mid-frame. The script finds the game object, puts a one-health enemy just
+    # east of the player, faces east, and presses J once.
+    $killScript = @'
+import gc
+import time
+import cg_engine_bindings as cge
+game = next(o for o in gc.get_objects() if type(o).__name__ == "DungeonGame")
+room = game.room
+game.facing = (1.0, 0.0)
+game.enemies.setdefault(room, []).append({"id": 9999, "x": game.px + 0.6, "z": game.pz, "hp": 1})
+game.load_room(room)
+_t0 = time.perf_counter()
+def _fake(name):
+    return name == "J" and time.perf_counter() - _t0 > 0.3 and time.perf_counter() - _t0 < 0.6
+cge.key_down = _fake
+'@
+    $killFile = Join-Path $control "kill_enemy.py"
+    Set-Content -Path $killFile -Value $killScript -Encoding utf8
+    Send-Command "04_kill" ('{"command":"run_script","params":{"path":"' + ($killFile -replace '\\', '/') + '"}}')
+    $killRan = Wait-Result "04_kill"
+    Check "the kill script runs" ($killRan.ok)
+    Start-Sleep -Milliseconds 1500
+    $beforeKill = Read-State
+    Check "the sword kills the one-health enemy (enemy count back to the level's own count)" ($beforeKill.enemies -eq $back.enemies)
+    Check "engine still running after the kill" (-not $app.HasExited)
+
     Check "engine still running after the scripted run" (-not $app.HasExited)
     $errText = if (Test-Path $errLog) { Get-Content $errLog -Raw } else { "" }
     Check "no Python traceback in the engine's error output" (-not ($errText -match "Traceback"))

@@ -14,6 +14,8 @@ namespace CGEngine {
     
     Body::~Body() {
         valid = false;
+        //The render order is rebuilt each frame, but a Body removed mid-frame would otherwise stay in it until then.
+        if (renderer && getId().has_value()) renderer->remove(getId().value());
         //Remove input actions from their domains (without deleting domains) and delete the input actions
         input->eraseActuatorIds(listenerIds);
         //Delete any timers
