@@ -1,6 +1,11 @@
 #include "World.h"
 #include "../Engine/Engine.h"
 #include "../../Standard/Models/CommonModels.h"
+
+// Keeps the embedded cg_engine_bindings module (CoreBindings.cpp) in main.exe. The pointer has external
+// linkage, so the compiler cannot drop it as unused.
+extern bool cgEngineBindingsLinked;
+bool* keepBindingsLinked = &cgEngineBindingsLinked;
 #include "../Scene/SceneLoader.h"
 #include "../Control/ControlChannel.h"
 #include <chrono>
@@ -346,17 +351,6 @@ namespace CGEngine {
 
         assets.initialize();
 
-        // Optional scene file (CGENGINE_SCENE=path) loaded before the first frame.
-        if (const char* scenePath = std::getenv("CGENGINE_SCENE")) {
-            SceneLoadResult scene = SceneLoader::loadFile(scenePath);
-            if (!scene.ok) {
-                std::cerr << "Scene load failed: " << scene.error << std::endl;
-                if (std::getenv("CGENGINE_SMOKE_FRAMES")) std::exit(1);
-            } else {
-                std::cerr << "SCENE loaded bodies=" << scene.bodies << " lights=" << scene.lights << " materials=" << scene.materials << std::endl;
-            }
-        }
-
         if (const char* smoke = std::getenv("CGENGINE_SMOKE_FRAMES")) {
             smokeFrameLimit = std::atoi(smoke);
             // Run from the exe directory (bin/Debug), where testScript.py and scripts/ are copied.
@@ -405,6 +399,18 @@ namespace CGEngine {
         while (running) {
             renderer->initializeOpenGL();
             initSceneList();
+
+            // The scene file loads after the built-in scene, so its replaceWorld can clear the built-in bodies.
+            // Scene load events create those bodies, which is why this cannot run in startWorld.
+            if (const char* scenePath = std::getenv("CGENGINE_SCENE")) {
+                SceneLoadResult scene = SceneLoader::loadFile(scenePath);
+                if (!scene.ok) {
+                    std::cerr << "Scene load failed: " << scene.error << std::endl;
+                    if (std::getenv("CGENGINE_SMOKE_FRAMES")) std::exit(1);
+                } else {
+                    std::cerr << "SCENE loaded bodies=" << scene.bodies << " lights=" << scene.lights << " materials=" << scene.materials << std::endl;
+                }
+            }
 
             while (window->isOpen()) {
                 if (smokeFrameLimit > 0 && ++smokeFramesRun >= smokeFrameLimit) {

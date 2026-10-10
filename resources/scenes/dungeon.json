@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "replaceWorld": true,
+  "materials": [
+    { "name": "floor", "diffuseTexture": "grass_tile.png" },
+    { "name": "wall", "diffuseTexture": "brick_tile.png" },
+    { "name": "goal", "diffuseTexture": "water_tile.png" },
+    { "name": "enemy", "diffuseTexture": "lava_tile.png" },
+    { "name": "player", "diffuseTexture": "checkered_tile.png" },
+    { "name": "slash", "diffuseTexture": "checkered_tile.png" }
+  ],
+  "lights": [
+    { "name": "sun", "position": [0, -20, 5], "direction": [0, 1, -1], "brightness": 6, "color": [1, 1, 1], "coneAngle": 90 }
+  ],
+  "scripts": [
+    { "body": "Root", "module": "DungeonGame", "domain": "update" }
+  ]
+}

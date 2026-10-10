@@ -127,6 +127,9 @@ namespace CGEngine {
 		/// </summary>
 		/// <param name="body">The Body to add to the Renderer</param>
 		void add(id_t body);
+		/// Remove a body from this frame's render order. Called when a Body is destroyed, so a removed Body
+		/// is never drawn or ray-cast later in the same frame.
+		void remove(id_t body);
 		/// <summary>
 		/// Calculate the greatest Z-Order of Bodies
 		/// </summary>

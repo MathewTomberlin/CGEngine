@@ -12,13 +12,19 @@ Failures are reported with a message; a bad scene never silently produces a part
 ```json
 {
   "version": 1,
+  "replaceWorld": false,
+  "clips": [ ... ],
   "materials": [ ... ],
   "lights": [ ... ],
-  "bodies": [ ... ]
+  "bodies": [ ... ],
+  "scripts": [ ... ]
 }
 ```
 
-`version` must be `1`. The three lists are optional. Order matters only for references: materials are created before bodies, so a body can name any material in the file.
+`version` must be `1`. Every list is optional. Order matters only for references: clips are loaded first, then materials, lights, bodies, and finally scripts, so a body can name any material in the file, and a script can name any body in the file or one loaded earlier.
+
+- `replaceWorld` (default `false`): when `true`, every body under the world root is removed before the file loads. Use it when the file describes the whole level. Without it, the file is added to what is already in the world.
+- `scripts`: attaches a Python script module to a named body. Each entry is `{ "body": name, "module": name, "domain": "update" }`. `domain` is `start`, `update` (default) or `delete`. The module must be in the `scripts` folder and define `create_instance()`. See `docs/ai/script-hooks.md`.
 
 ## materials
 
@@ -67,7 +73,7 @@ Animators belong to the model, so bodies that use the same model share its clip.
 
 ## Example
 
-See `resources/scenes/example.json`.
+See `resources/scenes/example.json`. A complete game scene that uses `replaceWorld` and `scripts` is `resources/scenes/dungeon.json`.
 
 ## Limits and notes
 

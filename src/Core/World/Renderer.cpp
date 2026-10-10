@@ -1,3 +1,4 @@
+#include <algorithm>
 #include "../Engine/Engine.h"
 #include "Renderer.h"
 #include "../../Standard/Models/CommonModels.h"
@@ -692,6 +693,10 @@ namespace CGEngine {
 
 	void Renderer::add(id_t bodyId) {
 		renderOrder.push_back(bodyId);
+	}
+
+	void Renderer::remove(id_t bodyId) {
+		renderOrder.erase(std::remove(renderOrder.begin(), renderOrder.end(), bodyId), renderOrder.end());
 	}
 
 	int Renderer::zMax() {
