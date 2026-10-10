@@ -1,0 +1,1 @@
+{ "version": 1, "materials": [ { "name": "shiny", "diffuseTexture": "brick_tile.png", "specular": 2 } ] }

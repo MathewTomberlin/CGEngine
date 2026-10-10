@@ -109,7 +109,7 @@ vec3 applyLight(Light light, vec3 surfColor, vec3 surfNormal, vec3 surfPos, vec3
     
     //Specular lighting
     float specularity = 0.0;
-    vec3 specularColor = normalize(materials[mtl].specularColor.rgb);
+    vec3 specularColor = materials[mtl].specularColor.rgb;
     float specularPower = max(1.0,materials[mtl].smoothnessFactor);
     float specularOpacity = clamp(materials[mtl].smoothnessFactor,0.0,1.0);
     vec3 specularMap = vec3(1,1,1);
@@ -137,7 +137,7 @@ void main() {
     int mtl = int(matId);
 
     //Material Diffuse - Calculated without lighting
-    vec4 diffuseColor = vec4(normalize(materials[mtl].diffuseColor.rgb),1);
+    vec4 diffuseColor = vec4(materials[mtl].diffuseColor.rgb,1);                               //0-1, as given by the material
     if(materials[mtl].useDiffuseTexture != 0){                                                       //Surface color is derived from diffuse texture color * material diffuse color, if set
         vec2 diffuseUV = (uv * materials[mtl].diffuseTextureUVScale);
         diffuseUV += (materials[mtl].diffuseTextureScrollSpeed*timeSec);
@@ -165,8 +165,11 @@ void main() {
     if(surfOpacity < materials[mtl].alphaCutoff) discard;                                       //Discard fragments with alpha below the cutoff
 
     //Surface lighting
+    //Unlit materials show their surface colour. Lit ones get only what the lights give (ambient fill + direct light);
+    //adding the full unlit colour as well made every lit surface at least as bright as its texture and overexposed white ones.
     vec3 linearColor = surfColor.rgb;
     if(materials[mtl].useLighting != 0){
+        linearColor = vec3(0.0);
         vec3 surfNormal = normalize(transpose(inverse(mat3(model))) * normal);
         vec3 surfViewDir = normalize(cameraPosition - surfPos);
 

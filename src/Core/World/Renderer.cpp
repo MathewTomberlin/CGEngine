@@ -808,7 +808,8 @@ namespace CGEngine {
 	}
 
 	glm::vec3 Renderer::toGlm(Color c) {
-		return glm::vec3(c.r, c.g, c.b);
+		//sf::Color channels are bytes; shaders take 0-1
+		return glm::vec3(c.r, c.g, c.b) / 255.f;
 	}
 
 	Vector2f Renderer::fromGlm(glm::vec2 v) {

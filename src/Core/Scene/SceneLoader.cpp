@@ -8,6 +8,8 @@
 #include <algorithm>
 #include "../../Standard/Models/CommonModels.h"
 #include <chrono>
+#include <cmath>
+#include <cstdint>
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
@@ -79,6 +81,12 @@ namespace CGEngine {
                 if (body != root && body->getParent() == root) topLevel.push_back(body);
             }
             for (Body* body : topLevel) body->deleteBody(ChildrenTermination::Terminate);
+            // Lights belong to the level too: a replaced world keeps none of the old scene's lights.
+            std::vector<id_t> lightIds;
+            for (Light* light : assets.getAllResources<Light>()) {
+                if (auto id = light->getId()) lightIds.push_back(id.value());
+            }
+            for (id_t id : lightIds) assets.remove<Light>(id);
         }
     }
 
@@ -134,8 +142,16 @@ namespace CGEngine {
                     std::string name = nameOf(m, "material");
                     std::string texture = requireString(m, "diffuseTexture", "material '" + name + "'");
                     float uvScale = m.value("uvScale", 1.0f);
+                    // Strength of the white highlight, 0 (matte) to 1 (the engine default).
+                    float specular = m.value("specular", 1.0f);
+                    if (specular < 0.0f || specular > 1.0f) {
+                        throw std::invalid_argument("material '" + name + "': specular must be between 0 and 1");
+                    }
+                    std::uint8_t specularByte = static_cast<std::uint8_t>(std::lround(specular * 255.0f));
+                    // The texture scale is a Vector2f; a bare float would land in the colour intensity instead.
                     auto created = assets.create<Material>(name,
-                        SurfaceParameters(SurfaceDomain(texture, uvScale)),
+                        SurfaceParameters(SurfaceDomain(texture, Vector2f(uvScale, uvScale)),
+                            SurfaceDomain(32.0f, Color(specularByte, specularByte, specularByte))),
                         assets.get<Program>(assets.defaultProgramName));
                     if (!created.has_value()) {
                         throw std::runtime_error("failed to create material '" + name + "'");
@@ -149,13 +165,15 @@ namespace CGEngine {
                     std::string name = nameOf(l, "light");
                     Vector3f position = readVec3(l, "position", Vector3f(0, 0, 0));
                     bool directional = l.value("directional", false);
+                    // Defaults come from LightParameters, so scene files and C++ lights agree.
+                    const LightParameters defaults;
                     LightParameters params(
-                        l.value("brightness", 5.0f),
-                        readVec3(l, "color", Vector3f(1, 1, 1)),
-                        l.value("attenuation", 0.005f),
-                        l.value("ambiance", 0.001f),
-                        l.value("coneAngle", 180.0f),
-                        readVec3(l, "direction", Vector3f(0, 0, -1)));
+                        l.value("brightness", defaults.brightness),
+                        readVec3(l, "color", defaults.colorIntensities),
+                        l.value("attenuation", defaults.attenuation),
+                        l.value("ambiance", defaults.ambiance),
+                        l.value("coneAngle", defaults.coneAngle),
+                        readVec3(l, "direction", defaults.lightDirection));
                     auto created = assets.create<Light>(name, position, directional, params);
                     if (!created.has_value()) {
                         throw std::runtime_error("failed to create light '" + name + "'");
