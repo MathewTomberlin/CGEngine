@@ -130,6 +130,9 @@ Saves the next rendered frame as a PNG.
 - result: `{ "queued": true, "path": "..." }` immediately. The file appears after the next frame
   is rendered, so poll for the file if you need the image.
 - The saved image is opaque (alpha 255).
+- Use a Windows path (for example `C:/work/shot.png`). Git Bash paths such as `/c/work/shot.png` are read
+  as `C:\c\work\shot.png`, the save fails, and the only trace is a "Failed to save image" line in the
+  engine's console output. The result file still reports `ok: true`.
 
 ### `get_stats`
 - params: none
