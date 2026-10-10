@@ -2,6 +2,7 @@
 #include "../Engine/Engine.h"
 #include "../Animation/Animator.h"
 #include "../Animation/Animation.h"
+#include "../Animation/ClipLoader.h"
 #include <algorithm>
 #include "../../Standard/Models/CommonModels.h"
 #include <fstream>
@@ -83,6 +84,15 @@ namespace CGEngine {
         try {
             if (!scene.is_object() || scene.value("version", 0) != 1) {
                 throw std::invalid_argument("scene must be an object with \"version\": 1");
+            }
+
+            // Clip files come first: a body may play any clip of its model.
+            if (scene.contains("clips")) {
+                for (const json& path : scene.at("clips")) {
+                    if (!path.is_string()) throw std::invalid_argument("'clips' must be a list of file paths");
+                    ClipLoadResult clip = ClipLoader::loadFile(path.get<std::string>());
+                    if (!clip.ok) throw std::invalid_argument("clip file '" + path.get<std::string>() + "': " + clip.error);
+                }
             }
 
             // Materials first, so bodies can reference them by name.
