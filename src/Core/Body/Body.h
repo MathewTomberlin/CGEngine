@@ -740,12 +740,14 @@ namespace CGEngine {
         /// Whether the start function for the newly created Body has been called or not
         /// </summary>
         bool initialized = false;
+     public:
         /// <summary>
         /// Delete the Body and, based on the setting, either orphan, inherit, or terminate its children
         /// </summary>
         /// <param name="inheritChildren">Whether the Body's children should be orphaned, inherited, or terminated</param>
         /// <returns>The nulled reference</returns>
         Body* deleteBody(ChildrenTermination inheritChildren = ChildrenTermination::Orphan);
+     private:
         //Draw the assigned Drawable shape to target with the provided transform
         void onDraw(RenderTarget& target, const Transform& transform) const;
 

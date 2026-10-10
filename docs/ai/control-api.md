@@ -68,6 +68,20 @@ Changes a named body's mesh transform. Only the fields you send are changed.
 - result: the body's transform after the change
 - errors: no body with that name, body has no mesh. If several bodies share a name, the first is used.
 
+### `set_material`
+Assigns a material (by name, from a scene's `materials` or any loaded material) to a body's mesh.
+
+- params: `name` (body, required), `material` (required), `recursive` (bool, default `true`: also applies to the sub-parts of a model instance)
+- result: `{ "name": ..., "material": ..., "meshesUpdated": n }`
+- errors: no body with that name, no material with that name
+
+### `remove_body`
+Removes a body and destroys it. The world root cannot be removed.
+
+- params: `name` (required), `children` (`"terminate"` default: remove the subtree; `"orphan"`: move children to the world root; `"inherit"`: move children to the parent)
+- result: `{ "removed": name, "children": mode }`
+- errors: no body with that name, root removal, unknown `children` mode
+
 ### `screenshot`
 Saves the next rendered frame as a PNG.
 

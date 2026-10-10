@@ -71,6 +71,13 @@ try {
     foreach ($id in ($invalid.Keys | Sort-Object)) {
         Send-Command $id ('{"command":"load_scene","params":{"path":"' + $invalid[$id].file + '"}}')
     }
+    Send-Command "15_set_material" '{"command":"set_material","params":{"name":"block","material":"brick"}}'
+    Send-Command "16_set_material_bad" '{"command":"set_material","params":{"name":"block","material":"nope"}}'
+    Send-Command "17_remove_body" '{"command":"remove_body","params":{"name":"block_big"}}'
+    Send-Command "18_remove_root" '{"command":"remove_body","params":{"name":"Root"}}'
+    Send-Command "19_remove_missing" '{"command":"remove_body","params":{"name":"no_such_body"}}'
+    Send-Command "20_describe_after_remove" '{"command":"describe_scene"}'
+    Send-Command "21_stats_after_remove" '{"command":"get_stats"}'
 
     $describe = Wait-Result "01_describe"
     Check "describe_scene returns ok" ($describe -and $describe.ok)
@@ -110,6 +117,23 @@ try {
     $described = Wait-Result "08_describe_primitives"
     $pnames = @($described.result.bodies | ForEach-Object { $_.name })
     Check "primitives appear by name in describe_scene" (($pnames -contains "block") -and ($pnames -contains "block_big"))
+
+    $setMat = Wait-Result "15_set_material"
+    Check "set_material assigns a material to a mesh" ($setMat.ok -and $setMat.result.meshesUpdated -ge 1)
+    $setBad = Wait-Result "16_set_material_bad"
+    Check "set_material rejects an unknown material" ((-not $setBad.ok) -and ($setBad.error -match "no material"))
+    $removed = Wait-Result "17_remove_body"
+    Check "remove_body reports removal" ($removed.ok -and $removed.result.removed -eq "block_big")
+    $rootRemoval = Wait-Result "18_remove_root"
+    Check "remove_body refuses the world root" ((-not $rootRemoval.ok) -and ($rootRemoval.error -match "root"))
+    $missingRemoval = Wait-Result "19_remove_missing"
+    Check "remove_body reports a missing body" ((-not $missingRemoval.ok) -and ($missingRemoval.error -match "no body"))
+    $afterRemove = Wait-Result "20_describe_after_remove"
+    $remaining = @($afterRemove.result.bodies | ForEach-Object { $_.name })
+    Check "removed body is gone from describe_scene" (-not ($remaining -contains "block_big"))
+    Check "other bodies survive a removal" ($remaining -contains "block")
+    $statsAfter = Wait-Result "21_stats_after_remove"
+    Check "get_stats still answers after removal" ($statsAfter.ok -and $statsAfter.result.bodies -gt 0)
 
     foreach ($id in ($invalid.Keys | Sort-Object)) {
         $r = Wait-Result $id
