@@ -22,7 +22,7 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done.
 
 ## Phase 3: performance
 - [x] **3.1** Baseline frame time in smoke output (`avgFrameMs`). Baseline: Release, example scene, 1500 frames: **4.2 ms/frame** (3 runs: 4.21, 4.20, 4.20). Draw-call count not yet reported.
-- [ ] **3.2** Renderer: batch draws by material and program; avoid per-frame UBO re-uploads when unchanged (already partly done via memcmp).
+- [x] **3.2** Renderer hot path. Release, example scene: **3.8 ms -> 0.86 ms per frame**, draw calls **22 -> 8**. Causes fixed: (a) Body re-parenting left stale entries in the root child list, so models were queued and drawn twice (fixed in `Body::attachBody`/`detachBody`); (b) shader uniform locations were looked up with `glGetUniformLocation` on every call (now cached per program). Further batching not yet done.
 - [ ] **3.3** Asset load timing and caching review.
 
 ## Phase 4: skeletons, animation, games
