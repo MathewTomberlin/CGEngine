@@ -248,6 +248,50 @@ def slash():
 MODELS = [knight, slime, archer, brute, arrow, heart, coin, goal, slash]
 
 
+def stabilise_obj(path):
+    """Rewrite an exported OBJ in a fixed order, so re-exporting an unchanged model gives the same file.
+
+    Blender writes the vn list in a different order on each export; faces refer to normals by index, so the
+    face lines are remapped to the sorted order. Everything else is kept as written.
+    """
+    with open(path, encoding="utf-8") as f:
+        lines = f.read().splitlines()
+    normals = [line for line in lines if line.startswith("vn ")]
+    ordered = sorted(set(normals))
+    position = {line: i + 1 for i, line in enumerate(ordered)}
+    new_index = {old: position[line] for old, line in enumerate(normals, start=1)}
+    out = []
+    normals_written = False
+    for line in lines:
+        if line.startswith("vn "):
+            if not normals_written:
+                out.extend(ordered)
+                normals_written = True
+            continue
+        if line.startswith("f "):
+            corners = []
+            for corner in line.split()[1:]:
+                parts = corner.split("/")
+                if len(parts) == 3 and parts[2]:
+                    parts[2] = str(new_index[int(parts[2])])
+                corners.append("/".join(parts))
+            line = "f " + " ".join(corners)
+        out.append(line)
+    # Faces also come out in a varying order. Order does not matter for drawing, so each run of faces (one material
+    # group) is sorted.
+    stable, run = [], []
+    for line in out + [""]:
+        if line.startswith("f "):
+            run.append(line)
+            continue
+        stable.extend(sorted(run))
+        run = []
+        stable.append(line)
+    stable.pop()
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
+        f.write("\n".join(stable) + "\n")
+
+
 def run():
     os.makedirs(OUT_DIR, exist_ok=True)
     scene = bpy.context.scene
@@ -267,6 +311,7 @@ def run():
         bpy.ops.wm.obj_export(filepath=path, export_selected_objects=True, forward_axis="NEGATIVE_Z",
                               up_axis="Y", export_materials=True, export_normals=True, export_uv=True,
                               export_triangulated_mesh=True, apply_modifiers=True, path_mode="STRIP")
+        stabilise_obj(path)
         obj.select_set(False)
         obj.location = (3 + i * 1.5, 3, 0)  # a row for viewing, clear of the default cube; export used the origin
         exported.append((obj.name, len(obj.data.polygons)))
