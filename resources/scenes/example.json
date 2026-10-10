@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "materials": [
+    { "name": "brick", "diffuseTexture": "brick_tile.png", "uvScale": 16 }
+  ],
+  "lights": [
+    { "name": "sun", "position": [0, -20, 5], "direction": [0, 1, -1], "brightness": 5, "color": [1, 1, 1], "coneAngle": 60 }
+  ],
+  "bodies": [
+    { "name": "cube", "model": "Mesh.obj", "material": "brick", "position": [0, 0, -5], "scale": [1, 1, 1] },
+    { "name": "cube_right", "model": "Mesh.obj", "position": [3, 0, -5], "rotation": [0, 45, 0] }
+  ]
+}

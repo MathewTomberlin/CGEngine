@@ -27,6 +27,7 @@ namespace CGEngine {
 		void setRotation(Vector3f rot);
 		void rotate(Vector3f delta);
 		void setScale(Vector3f scale);
+		Transformation3D getTransformation() const { return transformation; }
 		void scale(Vector3f delta);
 		MeshData* getMeshData();
 		void setMeshData(MeshData* model);

@@ -27,6 +27,7 @@ namespace CGEngine {
 		}
 
 		// Link program
+		uniformLocations.clear();
 		GL_CHECK(glLinkProgram(objectId));
 
 		// Detach shaders
@@ -103,11 +104,17 @@ namespace CGEngine {
 			return -1;
 		}
 
+		auto cached = uniformLocations.find(uniformName);
+		if (cached != uniformLocations.end()) {
+			return cached->second;
+		}
+
 		GLint uniform = glGetUniformLocation(objectId, uniformName);
 		if (uniform == -1) {
 			// Using LogDebug instead of Error because missing attributes might be expected
 			log(LogDebug, "Program", "Program uniform not found: {}", uniformName);
 		}
+		uniformLocations.emplace(uniformName, uniform);
 
 		return uniform;
 	}

@@ -349,7 +349,8 @@ namespace CGEngine {
         /// </summary>
         /// <param name="body">The Body to detach from this Body</param>
         /// <param name="keepWorldTransform">Whether to keep its global transform as its new transform</param>
-        void detachBody(Body* body, const bool keepWorldTransform = true);
+        /// Remove body from this Body's children. Unless attachToRoot is false, the body is then attached to the world root.
+        void detachBody(Body* body, const bool keepWorldTransform = true, const bool attachToRoot = true);
         /// <summary>
         /// Detach from a parent (and attack to the world root)
         /// </summary>

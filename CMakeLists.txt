@@ -28,6 +28,14 @@ FetchContent_Declare(SFML
     SYSTEM)
 FetchContent_MakeAvailable(SFML)
 
+# JSON for data-driven scenes (AI-authored content)
+FetchContent_Declare(nlohmann_json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG v3.11.3
+    GIT_SHALLOW ON
+    EXCLUDE_FROM_ALL)
+FetchContent_MakeAvailable(nlohmann_json)
+
 add_subdirectory(external/pybind11)
 file(GLOB_RECURSE source "${CMAKE_CURRENT_SOURCE_DIR}/src/*.*")
 
@@ -45,6 +53,7 @@ target_include_directories(CGEngineCore PUBLIC
 )
 target_link_libraries(CGEngineCore PUBLIC
     SFML::Graphics
+    nlohmann_json::nlohmann_json
     # Add other direct dependencies IF CGEngineCore code uses them directly:
     ${OPENGL_LIBRARIES}
     ${GLEW_LIBRARY}

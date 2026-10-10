@@ -59,3 +59,8 @@ jobs:
         run: |
           & build/bin/Debug/main.exe
           if ($LASTEXITCODE -ne 0) { throw "Smoke run failed with exit code $LASTEXITCODE" }
+
+      - name: Control channel test
+        shell: pwsh
+        timeout-minutes: 5
+        run: pwsh tools/test_control_channel.ps1

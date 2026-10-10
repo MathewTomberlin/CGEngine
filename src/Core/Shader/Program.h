@@ -2,6 +2,7 @@
 
 #include "Shader.h"
 #include <glm.hpp>
+#include <unordered_map>
 #include <gtc/type_ptr.hpp>
 
 #define GL_CHECK(x) x; checkGLError(#x, __FILE__, __LINE__)
@@ -36,6 +37,8 @@ namespace CGEngine {
 		GLuint getObjectId() const;
 		GLint attrib(const GLchar* attribName) const;
 		GLint uniform(const GLchar* uniformName) const;
+		// Uniform locations by name, including misses (-1), so each name is looked up once per link.
+		mutable std::unordered_map<std::string, GLint> uniformLocations;
 
 		void setAttrib(const GLchar* attribName, GLfloat v0) {
 			glVertexAttrib1f(attrib(attribName), v0);

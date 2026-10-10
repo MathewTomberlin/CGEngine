@@ -285,6 +285,19 @@ namespace CGEngine {
 			return resources;
 		}
 
+		/// Name a resource was registered under, if any.
+		template<typename T>
+		optional<string> getName(id_t id) {
+			if (!hasResourceType<T>()) {
+				return nullopt;
+			}
+			auto& container = resourceContainers[type_index(typeid(T))].second;
+			for (const auto& [name, nameId] : container.nameToId) {
+				if (nameId == id) return name;
+			}
+			return nullopt;
+		}
+
 		template<typename T>
 		size_t getResourceCount() {
 			type_index typeId = type_index(typeid(T));

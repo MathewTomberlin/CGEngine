@@ -163,6 +163,11 @@ namespace CGEngine {
 		void pullGL();
 
 		bool processRender();
+		/// Number of glDraw calls issued in the last rendered frame.
+		unsigned int getLastFrameDrawCalls() const { return lastFrameDrawCalls; }
+		void saveScreenshot(const std::string& path);
+		/// Save the next presented frame to a PNG at path. Taken before the buffer swap.
+		void requestScreenshot(const std::string& path) { pendingScreenshotPath = path; }
 		void setWindow(RenderWindow* window);
 		Camera* getCurrentCamera();
 		void setCurrentCamera(unique_ptr<Camera> camera);
@@ -197,6 +202,10 @@ namespace CGEngine {
 		/// Observation pointer of the RenderWindow owned by Screen
 		/// </summary>
 		RenderWindow* window = nullptr;
+		string pendingScreenshotPath;
+		bool glWindowActive = false;
+		unsigned int drawCallsThisFrame = 0;
+		unsigned int lastFrameDrawCalls = 0;
 		/// <summary>
 		/// Clear the renderOrder and bodyTransform map
 		/// </summary>

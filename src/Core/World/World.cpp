@@ -1,6 +1,9 @@
 #include "World.h"
 #include "../Engine/Engine.h"
 #include "../../Standard/Models/CommonModels.h"
+#include "../Scene/SceneLoader.h"
+#include "../Control/ControlChannel.h"
+#include <chrono>
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
@@ -310,6 +313,7 @@ namespace CGEngine {
     // Smoke mode: CGENGINE_SMOKE_FRAMES=N runs N frames, checks the Python path, then exits 0 with "SMOKE OK".
     static int smokeFrameLimit = 0;
     static int smokeFramesRun = 0;
+    static std::chrono::steady_clock::time_point smokeStart;
 
     // Assets, shaders and scripts are loaded by relative path, so the working
     // directory must be the folder containing the executable (e.g. bin/Debug).
@@ -324,6 +328,7 @@ namespace CGEngine {
 
     void World::startWorld() {
         useExecutableDirectory();
+        ControlChannel::initialize();
 
         //Initialize world singletons
         interpreter = new PyInterpreter();
@@ -340,6 +345,17 @@ namespace CGEngine {
         input->setWindow(window);
 
         assets.initialize();
+
+        // Optional scene file (CGENGINE_SCENE=path) loaded before the first frame.
+        if (const char* scenePath = std::getenv("CGENGINE_SCENE")) {
+            SceneLoadResult scene = SceneLoader::loadFile(scenePath);
+            if (!scene.ok) {
+                std::cerr << "Scene load failed: " << scene.error << std::endl;
+                if (std::getenv("CGENGINE_SMOKE_FRAMES")) std::exit(1);
+            } else {
+                std::cerr << "SCENE loaded bodies=" << scene.bodies << " lights=" << scene.lights << " materials=" << scene.materials << std::endl;
+            }
+        }
 
         if (const char* smoke = std::getenv("CGENGINE_SMOKE_FRAMES")) {
             smokeFrameLimit = std::atoi(smoke);
@@ -392,9 +408,16 @@ namespace CGEngine {
 
             while (window->isOpen()) {
                 if (smokeFrameLimit > 0 && ++smokeFramesRun >= smokeFrameLimit) {
-                    std::cerr << "SMOKE OK frames=" << smokeFramesRun << std::endl;
+                    // Average frame time over frames 2..N (frame 1 includes first-use setup).
+                    double avgMs = 0;
+                    if (smokeFramesRun > 1) {
+                        auto elapsed = std::chrono::steady_clock::now() - smokeStart;
+                        avgMs = std::chrono::duration<double, std::milli>(elapsed).count() / (smokeFramesRun - 1);
+                    }
+                    std::cerr << "SMOKE OK frames=" << smokeFramesRun << " avgFrameMs=" << avgMs << " drawCalls=" << renderer->getLastFrameDrawCalls() << std::endl;
                     endWorld();
                 }
+                if (smokeFrameLimit > 0 && smokeFramesRun == 1) smokeStart = std::chrono::steady_clock::now();
                 updateTime();
 				if (uninitialized.size() > 0) {
 					callUninitializedStart();
@@ -408,6 +431,7 @@ namespace CGEngine {
                         renderer->setGLWindowState(false);
                     }
                 }
+                ControlChannel::poll();
             }
         }
     }
