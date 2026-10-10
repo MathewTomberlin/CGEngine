@@ -27,7 +27,7 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done.
 
 ## Phase 4: skeletons, animation, games
 - [x] **4.1** Skeleton and animation authoring. Done: clip listing, play/pause/speed/looping via control channel and scene files; bone-matrix fix for multi-mesh models; clips defined as JSON keyframes (`load_clip`, scene `"clips"`, `docs/ai/clip-format.md`).
-- [ ] **4.2** Script hooks reachable from the control channel (PyScript / C++ behaviors).
+- [x] **4.2** Script hooks reachable from the control channel: `run_script` and `attach_script` for PyScript modules (`docs/ai/script-hooks.md`). C++ behaviours are not exposed yet.
 - [ ] **4.3** Example game built only from scene files and scripts.
 
 ## Tooling and quality

@@ -1,3 +1,5 @@
+#pragma once
+
 #include <pybind11/embed.h>
 #include <pybind11/stl.h>
 #include <string>
@@ -14,7 +16,10 @@ namespace CGEngine {
 
 	class PyInterpreter {
     public:
-        PyInterpreter() { 
+        /// Message from the last failed runScript call, empty if it succeeded.
+        std::string lastError;
+
+        PyInterpreter() {
             try {
                 std::filesystem::path exeDir = getExecutableDirectory();
                 std::filesystem::path bindingsDir = exeDir;
@@ -72,6 +77,7 @@ namespace CGEngine {
         bool runScript(const std::string& scriptPath) {
             // Acquire the Python Global Interpreter Lock
             py::gil_scoped_acquire acquire;
+            lastError.clear();
 
             try {
                 // Use py::eval_file to execute the script.
@@ -81,6 +87,7 @@ namespace CGEngine {
                 // Check if a Python exception occurred *during* execution but was handled within Python
                 if (PyErr_Occurred()) {
                     py::error_already_set error; // Fetch the error
+                    lastError = error.what();
                     std::cerr << "[PyInterpreter] Python handled error running PyScript '" << scriptPath << "': " << error.what() << std::endl;
                     PyErr_Clear(); // Clear the error state
                     return false;
@@ -89,11 +96,13 @@ namespace CGEngine {
 
             } catch (const py::error_already_set& e) {
                 // Catch exceptions thrown by py::eval_file (syntax errors, runtime exceptions)
+                lastError = e.what();
                 std::cerr << "[PyInterpreter] Python error running PyScript '" << scriptPath << e.what() << std::endl;
                 // PyErr_Clear() is implicitly handled by error_already_set destructor
                 return false;
             } catch (const std::exception& e) {
                 // Catch C++ exceptions during the process
+                lastError = e.what();
                 std::cerr << "[PyInterpreter] C++ error running PyScript'" << scriptPath << "': " << e.what() << std::endl;
                 return false;
             }
