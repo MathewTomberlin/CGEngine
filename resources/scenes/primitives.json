@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "materials": [
+    { "name": "brick", "diffuseTexture": "brick_tile.png", "uvScale": 4 }
+  ],
+  "bodies": [
+    { "name": "block", "primitive": "cube", "size": 1, "position": [0, 0, -5] },
+    { "name": "block_big", "primitive": "cube", "size": 2, "material": "brick", "position": [3, 0, -5] }
+  ]
+}

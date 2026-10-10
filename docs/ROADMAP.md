@@ -10,8 +10,8 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done.
 - [x] **1.1** JSON scene loader (materials, lights, model bodies) - `src/Core/Scene/SceneLoader.*`
 - [x] **1.2** Example scene and startup hook (`CGENGINE_SCENE`) - `resources/scenes/example.json`
 - [x] **1.3** Scene format documentation - `docs/ai/scene-format.md`
-- [ ] **1.4** Scene validation tests (bad files, unknown references, missing assets); missing-file path is covered by the control channel test
-- [ ] **1.5** Primitive bodies (cube, sphere, plane) in the scene format, without an asset file
+- [x] **1.4** Scene validation tests: syntax errors, bad version, bad vectors, unknown material/primitive, missing model (`resources/scenes/invalid/`, checked by `tools/test_control_channel.ps1`)
+- [x] **1.5** Primitive bodies in the scene format: `"primitive": "cube"` or `"plane"` with `"size"` (no sphere yet). Example: `resources/scenes/primitives.json`
 
 ## Phase 2: AI control channel (done except set_material / remove_body)
 - [x] **2.1** File-based command inbox/outbox (`cg_control/inbox`, `cg_control/outbox`), one JSON command per file, polled each frame. No sockets, no dependencies, works with any agent that can write files.

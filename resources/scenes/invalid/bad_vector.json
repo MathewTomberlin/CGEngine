@@ -1,0 +1,1 @@
+{ "version": 1, "bodies": [ { "name": "cube", "primitive": "cube", "position": [1, 2] } ] }

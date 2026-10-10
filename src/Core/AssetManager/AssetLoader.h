@@ -54,6 +54,7 @@ namespace CGEngine {
 				auto shader = std::make_unique<Shader>(Shader::readFile(resourcePath.string(), GL_VERTEX_SHADER));
 				return shader;
 			}
+			return nullptr;
 		}
 	};
 
@@ -64,6 +65,7 @@ namespace CGEngine {
 				auto shader = std::make_unique<Shader>(Shader::readFile(resourcePath.string(), GL_FRAGMENT_SHADER));
 				return shader;
 			}
+			return nullptr;
 		}
 	};
 
@@ -72,8 +74,11 @@ namespace CGEngine {
 		unique_ptr<IResource> load(const filesystem::path& resourcePath) override {
 			if (filesystem::exists(resourcePath)) {
 				auto model = std::make_unique<Model>(resourcePath.string());
+				// A file that exists but fails to import is not a usable resource.
+				if (!model->isValid()) return nullptr;
 				return model;
 			}
+			return nullptr;
 		}
 	};
 }

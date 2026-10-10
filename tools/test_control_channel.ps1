@@ -58,6 +58,19 @@ try {
     Send-Command "04_bad" '{"command":"no_such_command"}'
     Send-Command "05_shot" ('{"command":"screenshot","params":{"path":"' + ($shot -replace '\\', '/') + '"}}')
     Send-Command "06_missing_scene" '{"command":"load_scene","params":{"path":"scenes/missing.json"}}'
+    Send-Command "07_primitives" '{"command":"load_scene","params":{"path":"scenes/primitives.json"}}'
+    Send-Command "08_describe_primitives" '{"command":"describe_scene"}'
+    $invalid = @{
+        "09_syntax"   = @{ file = "scenes/invalid/syntax_error.json";      error = "invalid JSON" }
+        "10_material" = @{ file = "scenes/invalid/unknown_material.json";  error = "unknown material" }
+        "11_primitive"= @{ file = "scenes/invalid/unknown_primitive.json"; error = "unknown primitive" }
+        "12_model"    = @{ file = "scenes/invalid/missing_model.json";     error = "failed to load model" }
+        "13_version"  = @{ file = "scenes/invalid/bad_version.json";       error = "version" }
+        "14_vector"   = @{ file = "scenes/invalid/bad_vector.json";        error = "3 numbers" }
+    }
+    foreach ($id in ($invalid.Keys | Sort-Object)) {
+        Send-Command $id ('{"command":"load_scene","params":{"path":"' + $invalid[$id].file + '"}}')
+    }
 
     $describe = Wait-Result "01_describe"
     Check "describe_scene returns ok" ($describe -and $describe.ok)
@@ -91,6 +104,18 @@ try {
 
     $missing = Wait-Result "06_missing_scene"
     Check "load_scene reports a missing file" ((-not $missing.ok) -and ($missing.error -match "cannot open"))
+
+    $prims = Wait-Result "07_primitives"
+    Check "primitive scene loads (2 bodies)" ($prims.ok -and $prims.result.bodies -eq 2)
+    $described = Wait-Result "08_describe_primitives"
+    $pnames = @($described.result.bodies | ForEach-Object { $_.name })
+    Check "primitives appear by name in describe_scene" (($pnames -contains "block") -and ($pnames -contains "block_big"))
+
+    foreach ($id in ($invalid.Keys | Sort-Object)) {
+        $r = Wait-Result $id
+        $expect = $invalid[$id].error
+        Check "invalid scene rejected: $($invalid[$id].file)" ((-not $r.ok) -and ($r.error -match [regex]::Escape($expect)))
+    }
 
     Check "engine still running after commands" (-not $app.HasExited)
 }
