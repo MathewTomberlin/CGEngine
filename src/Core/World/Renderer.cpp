@@ -99,7 +99,11 @@ namespace CGEngine {
 
 		glGenBuffers(1, &boneUBO);
 		glBindBuffer(GL_UNIFORM_BUFFER, boneUBO);
-		glBufferData(GL_UNIFORM_BUFFER, sizeof(BoneUBO), nullptr, GL_STATIC_DRAW);
+		// Start with identity bones: undefined contents here would skin meshes into garbage before the first pose is sent.
+		BoneUBO identityBones;
+		for (int i = 0; i < BoneUBO::MAX_BONES; ++i) identityBones.boneMatrices[i] = glm::mat4(1.0f);
+		identityBones.boneCount = 0;
+		glBufferData(GL_UNIFORM_BUFFER, sizeof(BoneUBO), &identityBones, GL_STATIC_DRAW);
 		glBindBufferBase(GL_UNIFORM_BUFFER, 1, boneUBO);
 
 		glGenBuffers(1, &transformUBO);

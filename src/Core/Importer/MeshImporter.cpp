@@ -208,7 +208,8 @@ namespace CGEngine {
 				for (auto& [vertexId, weights] : vertexWeights) {
 					float totalWeight = 0.0f;
 					int assignedInfluences = 0;
-					sort(weights.begin(), weights.end());
+					// Strongest influences first: sort by weight (descending), not by bone id.
+					sort(weights.begin(), weights.end(), [](const pair<int, float>& a, const pair<int, float>& b) { return a.second > b.second; });
 
 					// Assign up to MAX_BONE_INFLUENCE weights
 					for (size_t influenceId = 0; influenceId < min(weights.size(), size_t(MAX_BONE_INFLUENCE)); ++influenceId) {
@@ -227,7 +228,7 @@ namespace CGEngine {
 					}
 
 					// Normalize weights only if they don't sum to 1
-					if (abs(totalWeight - 1.0f) > 0.001f) {
+					if (totalWeight > 0.0f && abs(totalWeight - 1.0f) > 0.001f) {
 						for (int influenceId = 0; influenceId < assignedInfluences; ++influenceId) {
 							vertices[vertexId].weights[influenceId] /= totalWeight;
 						}
