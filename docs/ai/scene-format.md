@@ -53,6 +53,8 @@ Failures are reported with a message; a bad scene never silently produces a part
 | `rotation` | [x, y, z] | no       | `[0,0,0]`   | Euler angles in degrees.                                      |
 | `scale`    | [x, y, z] | no       | `[1,1,1]`   |                                                               |
 
+Optional top-level `"clips"`: a list of clip file paths (see `docs/ai/clip-format.md`), loaded before bodies.
+
 Optional animation keys on a body:
 
 | field             | type   | default | notes                                                      |
