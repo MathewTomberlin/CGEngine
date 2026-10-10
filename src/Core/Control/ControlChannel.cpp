@@ -108,6 +108,39 @@ namespace CGEngine {
                 renderer->requestScreenshot(path);
                 return { {"queued", true}, {"path", path}, {"note", "written after the next rendered frame"} };
             }
+            if (command == "set_material") {
+                std::string name = params.at("name").get<std::string>();
+                std::string materialName = params.at("material").get<std::string>();
+                Body* body = findBodyByName(name);
+                if (!body) throw std::runtime_error("no body named '" + name + "'");
+                optional<id_t> materialId = assets.getId<Material>(materialName);
+                if (!materialId.has_value()) throw std::runtime_error("no material named '" + materialName + "'");
+                size_t meshes = 0;
+                auto assignMaterial = [&](Body* b) {
+                    if (Mesh* mesh = b->get<Mesh*>()) {
+                        mesh->setMaterials({ materialId.value() });
+                        meshes++;
+                    }
+                };
+                // recursive (default true) also applies to the sub-parts of a model instance.
+                if (params.value("recursive", true)) body->apply(assignMaterial);
+                else assignMaterial(body);
+                return { {"name", name}, {"material", materialName}, {"meshesUpdated", meshes} };
+            }
+            if (command == "remove_body") {
+                std::string name = params.at("name").get<std::string>();
+                Body* body = findBodyByName(name);
+                if (!body) throw std::runtime_error("no body named '" + name + "'");
+                if (body == world->getRoot()) throw std::runtime_error("the world root cannot be removed");
+                // children: "terminate" (default) removes the subtree, "orphan" moves children to the root, "inherit" to the parent.
+                std::string children = params.value("children", std::string("terminate"));
+                ChildrenTermination termination = ChildrenTermination::Terminate;
+                if (children == "orphan") termination = ChildrenTermination::Orphan;
+                else if (children == "inherit") termination = ChildrenTermination::Inherit;
+                else if (children != "terminate") throw std::runtime_error("children must be terminate, orphan or inherit");
+                body->deleteBody(termination);
+                return { {"removed", name}, {"children", children} };
+            }
             if (command == "get_stats") {
                 return {
                     {"frames", frames},

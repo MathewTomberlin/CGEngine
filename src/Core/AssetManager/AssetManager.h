@@ -285,6 +285,20 @@ namespace CGEngine {
 			return resources;
 		}
 
+		/// Remove a resource and its name mapping. Pointers to it become dangling; callers must not use them.
+		template<typename T>
+		bool remove(id_t id) {
+			if (!hasResourceType<T>()) return false;
+			auto& container = resourceContainers[type_index(typeid(T))].second;
+			if (!container.resources.has(id)) return false;
+			for (auto it = container.nameToId.begin(); it != container.nameToId.end(); ) {
+				if (it->second == id) it = container.nameToId.erase(it);
+				else ++it;
+			}
+			container.resources.remove(id);
+			return true;
+		}
+
 		/// Name a resource was registered under, if any.
 		template<typename T>
 		optional<string> getName(id_t id) {

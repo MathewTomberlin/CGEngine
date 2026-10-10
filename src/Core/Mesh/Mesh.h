@@ -32,6 +32,7 @@ namespace CGEngine {
 		MeshData* getMeshData();
 		void setMeshData(MeshData* model);
 		vector<id_t> getMaterials();
+		void setMaterials(vector<id_t> newMaterials) { materials = std::move(newMaterials); }
 		id_t addMaterial(id_t materialId);
 		void clearMaterials();
 		string getMeshName() const;

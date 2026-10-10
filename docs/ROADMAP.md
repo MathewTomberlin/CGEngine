@@ -15,7 +15,7 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done.
 
 ## Phase 2: AI control channel (done except set_material / remove_body)
 - [x] **2.1** File-based command inbox/outbox (`cg_control/inbox`, `cg_control/outbox`), one JSON command per file, polled each frame. No sockets, no dependencies, works with any agent that can write files.
-- [x] **2.2** Commands (`load_scene`, `describe_scene`, `set_transform` done; `set_material`, `remove_body` pending): `load_scene`, `describe_scene` (bodies, transforms, materials, lights as JSON), `set_transform`, `set_material`, `remove_body`.
+- [x] **2.2** Commands: `load_scene`, `describe_scene` (bodies, transforms, materials, lights as JSON), `set_transform`, `set_material`, `remove_body`.
 - [x] **2.3** `screenshot` command: render to PNG so an agent can look at the result.
 - [x] **2.4** `get_stats` command (frame time, draw calls, asset counts).
 - [x] **2.5** Control API documentation (`docs/ai/control-api.md`); integration test `tools/test_control_channel.ps1`.
@@ -33,8 +33,13 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done.
 ## Tooling and quality
 - [x] CI build on Windows (`.github/workflows/build.yml`) with Mesa software OpenGL smoke run
 - [ ] Unit tests for pure logic (scene parsing, command parsing) runnable without a GPU
-- [ ] Documentation index (`docs/ai/README.md`) for agents
+- [x] Documentation index (`docs/ai/README.md`) for agents
 
 ## Open questions
 - "JEV" as an AI app controller was mentioned but not specified. Phase 2 is designed so an
   external controller (JEV or otherwise) can drive the engine through the file channel.
+
+## Notes from development (living section)
+- The render cost was not where it looked: a body re-parenting bug quietly doubled the work (fixed). Measure before optimising; the first guess was wrong twice.
+- Undefined behaviour hides until a Debug build runs it. The asset loaders and `Body::deleteBody` each had one. Smoke and control tests are the safety net; add a check whenever a path is touched.
+- Remaining big-ticket items: batching draws by material (3.2 continuation) and skeleton/animation authoring (4.1).

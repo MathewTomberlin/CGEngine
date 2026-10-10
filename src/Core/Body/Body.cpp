@@ -831,36 +831,42 @@ namespace CGEngine {
     }
 
     Body* Body::deleteBody(ChildrenTermination termination) {
-        //Default behavior is that children detach (and therefor attach to world root)
+        //Children: Inherit moves them to this Body's parent, Orphan moves them to the world root,
+        //Terminate deletes the whole subtree.
         for (int childId = children.size() - 1; childId >= 0; --childId) {
-            Body* child = assets.get<Body>(children[childId]); // Assuming 'assets' is accessible
-            if (child) {
-                switch (termination) {
-                case ChildrenTermination::Inherit:
-                    if (parentId.has_value()) {
-                        Body* parent = assets.get<Body>(parentId.value());
-                        if (parent) {
-                            child->exchange(parent);
-                            break;
-                        }
+            Body* child = assets.get<Body>(children[childId]);
+            if (!child) {
+                log(LogError, "Body::deleteBody", "Child Body with ID {} not found in AssetManager!", children[childId]);
+                continue;
+            }
+            switch (termination) {
+            case ChildrenTermination::Inherit:
+                if (parentId.has_value()) {
+                    Body* parent = assets.get<Body>(parentId.value());
+                    if (parent) {
+                        child->exchange(parent);
+                        break;
                     }
-                    [[fallthrough]];
-                case ChildrenTermination::Orphan:
-                    child->detach();
-                    break;
-                case ChildrenTermination::Terminate:
-                    child->deleteBody();
-                    break;
                 }
-            } else {
-                // CRITICAL: Log an error here. An ID in the children list
-                // MUST correspond to a valid Body in the AssetManager.
-                log(LogError, "Body::[MethodName]", "Child Body with ID {} not found in AssetManager!", childId);
-
+                [[fallthrough]];
+            case ChildrenTermination::Orphan:
+                child->detach();
+                break;
+            case ChildrenTermination::Terminate:
+                child->deleteBody(ChildrenTermination::Terminate);
+                break;
             }
         }
 
-        delete this;
+        //Remove this Body from its parent without re-attaching it to the root. It is being destroyed.
+        if (parentId.has_value()) {
+            if (Body* parent = assets.get<Body>(parentId.value())) {
+                parent->detachBody(this, false, false);
+            }
+        }
+
+        //The AssetManager owns this Body. Removing it destroys it, so nothing may touch it afterwards.
+        assets.remove<Body>(getId().value_or(0));
         return nullptr;
     }
 
