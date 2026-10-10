@@ -69,6 +69,12 @@ try {
     Check "player starts in the start room" ($start.room[0] -eq 0 -and $start.room[1] -eq 0)
     Check "the level has enemies outside the start room" ($start.enemies -ge 1)
 
+    # replaceWorld removes the built-in demo, including bodies that had not started yet when the scene loaded.
+    Send-Command "00_describe" '{"command":"describe_scene"}'
+    $described = Wait-Result "00_describe"
+    $foreign = @($described.result.bodies | Where-Object { $_.name -ne "Root" -and -not $_.name.StartsWith("dg_") })
+    Check "replaceWorld leaves only the dungeon's bodies (found: $($foreign.name -join ', '))" ($described.ok -and $foreign.Count -eq 0)
+
     # Replace key_down with a scripted sequence, measured from when the script runs:
     #   0.0 to 1.0 s: D (walk right, about 4 tiles)
     #   2.5 to 6.0 s: A (walk left until the west wall stops the player)

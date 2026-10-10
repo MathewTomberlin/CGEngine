@@ -78,7 +78,10 @@ namespace CGEngine {
             Body* root = world->getRoot();
             std::vector<Body*> topLevel;
             for (Body* body : assets.getAllResources<Body>()) {
-                if (body != root && body->getParent() == root) topLevel.push_back(body);
+                // A body with no parent yet is top-level too: Body::start() attaches it to the root on the first frame,
+                // and a scene loaded at startup runs before that.
+                Body* parent = body->getParent();
+                if (body != root && (parent == root || parent == nullptr)) topLevel.push_back(body);
             }
             for (Body* body : topLevel) body->deleteBody(ChildrenTermination::Terminate);
             // Lights belong to the level too: a replaced world keeps none of the old scene's lights.
