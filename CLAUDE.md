@@ -25,6 +25,14 @@ Pre-built third-party libs are checked in under `external/` (`glew-2.1.0`, `assi
 
 There is no automated test suite. Verify changes by building and running `main.exe`.
 
+Smoke test (local, needs a GPU/desktop session): run from `build/bin/Debug`:
+
+```powershell
+$env:CGENGINE_SMOKE_FRAMES = "120"; .\main.exe; $LASTEXITCODE   # expect "SMOKE OK frames=120" and 0
+```
+
+It checks the Python path (`testScript.py`, `DevPyScript`) and exits 0 after N frames; a Python failure exits 1. The engine expects its working directory to be the exe folder (shaders, textures, scripts are loaded relatively).
+
 ## Layout
 
 - `CMakeLists.txt`: builds the static library `CGEngineCore` from every file under `src/`, adds `src/Bindings` (pybind11 bindings for the engine types), and links `main` (from `src/main.cpp`) against it.

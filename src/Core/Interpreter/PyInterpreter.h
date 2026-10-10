@@ -53,6 +53,7 @@ namespace CGEngine {
                 throw;
 			} catch (const std::exception& e) {
                 std::cerr << "[PyInterpreter] Fatal C++ Error during initialization: " << e.what() << std::endl;
+                throw;
             } catch (...) {
                 std::cerr << "[PyInterpreter] Fatal Unknown Error during initialization." << std::endl;
                 throw;
@@ -109,8 +110,6 @@ namespace CGEngine {
             // Acquire the Python Global Interpreter Lock
             py::gil_scoped_acquire acquire;
             
-            //The Script assigned with the PyScript
-            Script* script = nullptr;
             try {
                 py::module_ py_module;
                 try {
@@ -160,9 +159,6 @@ namespace CGEngine {
                 return new Script(py_instance); //Return the constructed Script
             } catch (const std::exception& e) {
                 std::cerr << "[PyInterpreter::AttachPyScript] C++ exception while importing PyScript. Error: " << e.what() << std::endl;
-                if (script && !script->getId().has_value()) { // Check if it wasn't successfully added
-                    delete script;
-                }
                 return nullptr;
             }
 

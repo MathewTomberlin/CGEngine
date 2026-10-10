@@ -111,7 +111,7 @@ namespace CGEngine {
 
 		if (!rootNode) {
 			log(this, LogError, "Failed to instantiate model with root node");
-			return 0;
+			return nullopt;
 		}
 
 		//Use override materials if provided, otherwise use model materials
@@ -243,6 +243,6 @@ namespace CGEngine {
 	}
 
 	bool Model::isValid() const {
-		return true;
+		return rootNode != nullptr;
 	}
 }
