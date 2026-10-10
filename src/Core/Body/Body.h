@@ -624,14 +624,14 @@ namespace CGEngine {
         template <typename TBehavior, typename... Args, typename = std::enable_if_t<std::is_base_of_v<Behavior, TBehavior>>>
         std::optional<std::pair<id_t, TBehavior*>> createBehavior(Args&&... args) {
             auto behavior = std::make_unique<TBehavior>(this, std::forward<Args>(args)...);
-            TBehavior* rawBehavior = new_behavior_ptr.get();
+            TBehavior* rawBehavior = behavior.get();
             if (!rawBehavior) {
                 log(LogError, "Body::createBehavior", "make_unique failed to return a valid pointer!");
                 return nullopt;
             }
             id_t behaviorId = behaviors.add(std::move(behavior));
             rawBehavior->setId(behaviorId);
-            return { behaviorId, rawBehavior };
+            return std::optional<std::pair<id_t, TBehavior*>>(std::in_place, behaviorId, rawBehavior);
         }
 		/// <summary>
 		/// Return the number of children attached to this Body

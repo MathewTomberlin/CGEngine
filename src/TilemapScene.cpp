@@ -47,20 +47,22 @@ namespace CGEngine {
                         //Add an AnimationBehavior to the player and get the new Behavior's ID
                         AnimationParameters playerAnimParams = AnimationParameters();
                         playerAnimParams.startRunning = false;
-                        optional<id_t> animBehaviorId = (new AnimationBehavior(player, playerAnimParams))->getId();
+                        // createBehavior registers the Behavior with the player, so it has an id and receives its domain calls.
+                        auto animBehavior = player->createBehavior<AnimationBehavior>(playerAnimParams);
+                        optional<id_t> animBehaviorId = animBehavior.has_value() ? optional<id_t>(animBehavior.value().first) : nullopt;
 
                         //Add KeyRelease scripts that call the "endAnimation" domain on the animationBehavior via its id
                         player->addKeyReleaseScript([](ScArgs args) {
-                            args.behavior->callDomain("endAnimation");
+                            if (args.behavior) args.behavior->callDomain("endAnimation");
                             }, Keyboard::Scan::W, animBehaviorId);
                         player->addKeyReleaseScript([](ScArgs args) {
-                            args.behavior->callDomain("endAnimation");
+                            if (args.behavior) args.behavior->callDomain("endAnimation");
                             }, Keyboard::Scan::S, animBehaviorId);
                         player->addKeyReleaseScript([](ScArgs args) {
-                            args.behavior->callDomain("endAnimation");
+                            if (args.behavior) args.behavior->callDomain("endAnimation");
                             }, Keyboard::Scan::A, animBehaviorId);
                         player->addKeyReleaseScript([](ScArgs args) {
-                            args.behavior->callDomain("endAnimation");
+                            if (args.behavior) args.behavior->callDomain("endAnimation");
                             }, Keyboard::Scan::D, animBehaviorId);
                     }
                 }
