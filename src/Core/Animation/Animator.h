@@ -1,5 +1,7 @@
 #pragma once
 
+#include <map>
+
 #include "../World/Renderer.h"
 #include "Animation.h"
 
@@ -44,5 +46,11 @@ namespace CGEngine {
 		/// Oberservation pointer of the Skeleton owned by AssetManager
 		/// </summary>
 		Skeleton* skeleton = nullptr;
+		/// Inverse of each bone's rest global transform, from the same hierarchy the animator walks.
+		/// Used for skinning so the rest pose is exactly the bind pose, whatever the imported offsets say.
+		std::map<std::string, glm::mat4> inverseRest;
+		const Animation* restBuiltFor = nullptr;
+		void buildRestPose();
+		void collectRest(const NodeData& node, glm::mat4 parentTransform);
 	};
 }

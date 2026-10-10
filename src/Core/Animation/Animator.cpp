@@ -29,6 +29,7 @@ namespace CGEngine {
 		if (ticksPerSecond <= 0) {
 			ticksPerSecond = 24.0f;
 		}
+		buildRestPose();
 		if (!paused) {
 			currentTime += dt * speed * ticksPerSecond;
 		}
@@ -44,6 +45,25 @@ namespace CGEngine {
 		}
 
 		calculateBoneTransform(&currentAnimation->getRoot(), glm::mat4(1.0f));
+	}
+
+	void Animator::buildRestPose() {
+		if (currentAnimation == restBuiltFor) return;
+		restBuiltFor = currentAnimation;
+		inverseRest.clear();
+		if (currentAnimation && skeleton) {
+			collectRest(currentAnimation->getRoot(), glm::mat4(1.0f));
+		}
+	}
+
+	void Animator::collectRest(const NodeData& node, glm::mat4 parentTransform) {
+		glm::mat4 global = parentTransform * node.transformation;
+		if (skeleton && skeleton->hasBone(node.name)) {
+			inverseRest[node.name] = glm::inverse(global);
+		}
+		for (const NodeData& child : node.children) {
+			collectRest(child, global);
+		}
 	}
 
 	string Animator::getCurrentAnimationName() const {
@@ -87,11 +107,12 @@ namespace CGEngine {
 		}
 		glm::mat4 globalTransform = parentTransform * nodeTransform;
 
-		//Apply bone offset from skeleton to pose bone transform
+		//Skin relative to the rest pose: pose = animated global * inverse(rest global)
 		if (skeleton && skeleton->hasBone(nodeName)) {
 			optional<BoneData> boneData = skeleton->getBoneData(nodeName);
 			if (boneData.has_value()) {
-				pose[boneData.value().id] = globalTransform * boneData.value().offset;
+				auto rest = inverseRest.find(nodeName);
+				pose[boneData.value().id] = globalTransform * (rest != inverseRest.end() ? rest->second : boneData.value().offset);
 			}
 		}
 
