@@ -125,7 +125,7 @@ void bindScriptTypes(py::module_& m) {
 
         // State Getters/Setters
         .def("get_rendering_enabled", &CGEngine::Body::getRenderingEnabled, "Check if the body rendering is enabled")
-        .def("set_rendering_enabled", &CGEngine::Body::setRenderingEnabled, py::arg("enabled"), "Enable or disable rendering for this body")
+        .def("set_rendering_enabled", &CGEngine::Body::setRenderingEnabled, py::arg("enabled"), "Enable or disable rendering for this body and its children")
         .def("get_intersect_enabled", &CGEngine::Body::getIntersectEnabled, "Check if intersection testing is enabled for this body")
         .def("set_intersect_enabled", &CGEngine::Body::setIntersectEnabled, py::arg("enabled"), "Enable or disable intersection testing for this body")
         // Add bounds rendering getters/setters if needed
