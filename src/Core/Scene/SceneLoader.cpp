@@ -1,5 +1,8 @@
 #include "SceneLoader.h"
 #include "../Engine/Engine.h"
+#include "../Animation/Animator.h"
+#include "../Animation/Animation.h"
+#include <algorithm>
 #include "../../Standard/Models/CommonModels.h"
 #include <fstream>
 #include <sstream>
@@ -151,6 +154,20 @@ namespace CGEngine {
                     optional<id_t> rootId = model.value().second->instantiate(transform, overrides);
                     if (!rootId.has_value()) {
                         throw std::runtime_error("failed to instantiate model '" + modelPath + "' for body '" + name + "'");
+                    }
+                    // Optional clip to play. Animators belong to the model, so bodies sharing a model share its clip.
+                    if (b.contains("animation")) {
+                        std::string clip = requireString(b, "animation", "body '" + name + "'");
+                        Model* loaded = model.value().second;
+                        Animator* animator = loaded->getAnimator();
+                        const auto& clips = loaded->getAnimationNames();
+                        if (!animator || std::find(clips.begin(), clips.end(), clip) == clips.end()) {
+                            throw std::invalid_argument("body '" + name + "' references unknown animation '" + clip + "' in model '" + modelPath + "'");
+                        }
+                        animator->playAnimation(clip);
+                        animator->setSpeed(b.value("animationSpeed", 1.0f));
+                        animator->setLooping(b.value("animationLooping", true));
+                        animator->setPaused(false);
                     }
                     assets.get<Body>(rootId.value())->setName(name);
                     result.bodies++;
