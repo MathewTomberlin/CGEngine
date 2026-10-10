@@ -238,6 +238,24 @@ namespace CGEngine {
 		window->popGLStates();
 	}
 
+	void Renderer::saveScreenshot(const std::string& path) {
+		Vector2u size = window->getSize();
+		vector<std::uint8_t> pixels(static_cast<size_t>(size.x) * size.y * 4);
+		glReadPixels(0, 0, size.x, size.y, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+		// GL rows start at the bottom of the window; PNG rows start at the top.
+		const size_t rowBytes = static_cast<size_t>(size.x) * 4;
+		for (unsigned int y = 0; y < size.y / 2; ++y) {
+			std::swap_ranges(pixels.begin() + y * rowBytes, pixels.begin() + (y + 1) * rowBytes,
+				pixels.begin() + (size.y - 1 - y) * rowBytes);
+		}
+		// The default framebuffer alpha is not meaningful; write opaque pixels.
+		for (size_t i = 3; i < pixels.size(); i += 4) pixels[i] = 255;
+		sf::Image image(size, pixels.data());
+		if (!image.saveToFile(path)) {
+			log(this, LogError, "Failed to save screenshot to '{}'", path);
+		}
+	}
+
 	bool Renderer::processRender() {
 		try {
 			// Activate OpenGL context once for the entire render pass
@@ -274,6 +292,10 @@ namespace CGEngine {
 			}
 #endif
 
+			if (!pendingScreenshotPath.empty()) {
+				saveScreenshot(pendingScreenshotPath);
+				pendingScreenshotPath.clear();
+			}
 			window->display();
 			setGLWindowState(false);
 			return true;

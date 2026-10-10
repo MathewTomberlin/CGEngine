@@ -2,6 +2,7 @@
 #include "../Engine/Engine.h"
 #include "../../Standard/Models/CommonModels.h"
 #include "../Scene/SceneLoader.h"
+#include "../Control/ControlChannel.h"
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
@@ -325,6 +326,7 @@ namespace CGEngine {
 
     void World::startWorld() {
         useExecutableDirectory();
+        ControlChannel::initialize();
 
         //Initialize world singletons
         interpreter = new PyInterpreter();
@@ -420,6 +422,7 @@ namespace CGEngine {
                         renderer->setGLWindowState(false);
                     }
                 }
+                ControlChannel::poll();
             }
         }
     }
