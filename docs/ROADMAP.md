@@ -21,7 +21,7 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done.
 - [x] **2.5** Control API documentation (`docs/ai/control-api.md`); integration test `tools/test_control_channel.ps1`.
 
 ## Phase 3: performance
-- [ ] **3.1** Baseline frame-time and draw-call measurements, recorded in smoke output.
+- [x] **3.1** Baseline frame time in smoke output (`avgFrameMs`). Baseline: Release, example scene, 1500 frames: **4.2 ms/frame** (3 runs: 4.21, 4.20, 4.20). Draw-call count not yet reported.
 - [ ] **3.2** Renderer: batch draws by material and program; avoid per-frame UBO re-uploads when unchanged (already partly done via memcmp).
 - [ ] **3.3** Asset load timing and caching review.
 
