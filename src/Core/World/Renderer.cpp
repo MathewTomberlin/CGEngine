@@ -124,6 +124,8 @@ namespace CGEngine {
 			MeshData* meshData = mesh->getMeshData();
 			//Don't throw an error because null Mesh Bodies are valid (but not rendered)
 			if (!meshData) return;
+			// Upload once per MeshData. Each Mesh over the same data shares its buffers and VAO.
+			if (meshData->vao != 0U) return;
 
 			vector<id_t> meshMaterialIds = mesh->getMaterials();
 			Material* renderMaterial = assets.get<Material>(fallbackMaterialId);

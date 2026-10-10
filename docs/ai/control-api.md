@@ -42,7 +42,7 @@ Each command file:
 Loads a scene file (format: `docs/ai/scene-format.md`). Paths are relative to the exe folder.
 
 - params: `path` (string, required)
-- result: `{ "bodies": n, "lights": n, "materials": n }` (counts created)
+- result: `{ "bodies": n, "lights": n, "materials": n, "scripts": n, "loadMs": x }` (counts created; `loadMs` is the wall time of the load)
 - errors: missing file, invalid JSON, unknown material or model, duplicate names
 
 ### `describe_scene`

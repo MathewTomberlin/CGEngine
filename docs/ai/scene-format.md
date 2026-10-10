@@ -80,3 +80,7 @@ See `resources/scenes/example.json`. A complete game scene that uses `replaceWor
 - Names are used as asset/Body names; keep them unique within their kind.
 - A model that fails to load stops the load with an error naming the body.
 - Units are engine units; the camera is at the origin looking down -Z by default.
+
+## Testing
+
+`python -I tools/test_scene_format.py` (no GPU) checks every scene in `resources/scenes` against the rules above and confirms each file in `resources/scenes/invalid` is rejected for its reason. It does not run the C++ loader; `tools/test_control_channel.ps1` does that.

@@ -7,6 +7,7 @@
 #include "../Interpreter/PyInterpreter.h"
 #include <algorithm>
 #include "../../Standard/Models/CommonModels.h"
+#include <chrono>
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
@@ -50,8 +51,9 @@ namespace CGEngine {
 
             id_t materialId = overrides.empty() ? assets.getDefaultId<Material>().value_or(0) : overrides.front();
             Mesh mesh(meshData.value().second, transform, { materialId });
-            // Bodies are cached by asset name, so the name carries the scene body name to stay unique.
-            auto body = assets.create<Body>("body:" + name, mesh);
+            // Body asset names are cache keys. A new key per load stops a reloaded scene returning the old body with its old transform.
+            static size_t primitiveCount = 0;
+            auto body = assets.create<Body>("body:" + name + "#" + std::to_string(++primitiveCount), mesh);
             if (!body.has_value()) {
                 throw std::runtime_error("failed to create body '" + name + "'");
             }
@@ -81,6 +83,13 @@ namespace CGEngine {
     }
 
     SceneLoadResult SceneLoader::loadFile(const std::filesystem::path& path) {
+        auto start = std::chrono::steady_clock::now();
+        SceneLoadResult result = loadFileUntimed(path);
+        result.loadMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+        return result;
+    }
+
+    SceneLoadResult SceneLoader::loadFileUntimed(const std::filesystem::path& path) {
         std::ifstream file(path);
         if (!file) {
             SceneLoadResult result;
