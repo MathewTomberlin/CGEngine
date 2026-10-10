@@ -53,6 +53,16 @@ Failures are reported with a message; a bad scene never silently produces a part
 | `rotation` | [x, y, z] | no       | `[0,0,0]`   | Euler angles in degrees.                                      |
 | `scale`    | [x, y, z] | no       | `[1,1,1]`   |                                                               |
 
+Optional animation keys on a body:
+
+| field             | type   | default | notes                                                      |
+|-------------------|--------|---------|------------------------------------------------------------|
+| `animation`       | string | none    | Clip name from the model (see `list_animations`). Starts it at load. |
+| `animationSpeed`  | number | `1`     | Playback speed multiplier.                                 |
+| `animationLooping`| bool   | `true`  | `false` holds the last pose.                               |
+
+Animators belong to the model, so bodies that use the same model share its clip. The last body in the file wins.
+
 ## Example
 
 See `resources/scenes/example.json`.

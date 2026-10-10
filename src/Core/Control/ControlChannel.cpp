@@ -3,6 +3,10 @@
 #include "../Mesh/Mesh.h"
 #include "../Light/Light.h"
 #include "../Material/Material.h"
+#include "../Body/Body.h"
+#include "../Mesh/Model.h"
+#include "../Animation/Animator.h"
+#include "../Animation/Animation.h"
 #include "../Scene/SceneLoader.h"
 #include <nlohmann/json.hpp>
 #include <algorithm>
@@ -32,6 +36,38 @@ namespace CGEngine {
                 throw std::invalid_argument(std::string("'") + key + "' must be [x, y, z]");
             }
             return Vector3f(value[0].get<float>(), value[1].get<float>(), value[2].get<float>());
+        }
+
+        Body* findBodyByName(const std::string& name);
+
+        // The model a named body belongs to: the first mesh in its subtree that was imported from a model.
+        Model* findModelFor(Body* body) {
+            Model* found = nullptr;
+            body->apply([&found](Body* b) {
+                if (found) return;
+                if (Mesh* mesh = b->get<Mesh*>()) {
+                    if (mesh->getModelId().has_value()) found = assets.get<Model>(mesh->getModelId().value());
+                }
+            });
+            return found;
+        }
+
+        Animator* requireAnimator(const std::string& name, Model*& model) {
+            Body* body = findBodyByName(name);
+            if (!body) throw std::runtime_error("no body named '" + name + "'");
+            model = findModelFor(body);
+            if (!model) throw std::runtime_error("body '" + name + "' is not part of an imported model");
+            Animator* animator = model->getAnimator();
+            if (!animator) throw std::runtime_error("model of body '" + name + "' has no animation clips");
+            return animator;
+        }
+
+        double clipDurationSeconds(const std::string& clip) {
+            optional<id_t> id = assets.getId<Animation>(clip);
+            if (!id.has_value()) return 0.0;
+            Animation* animation = assets.get<Animation>(id.value());
+            float ticksPerSecond = animation->getTicksPerSecond() > 0 ? animation->getTicksPerSecond() : 24.0f;
+            return animation->getDuration() / ticksPerSecond;
         }
 
         Body* findBodyByName(const std::string& name) {
@@ -140,6 +176,39 @@ namespace CGEngine {
                 else if (children != "terminate") throw std::runtime_error("children must be terminate, orphan or inherit");
                 body->deleteBody(termination);
                 return { {"removed", name}, {"children", children} };
+            }
+            if (command == "list_animations") {
+                Model* model = nullptr;
+                Animator* animator = requireAnimator(params.at("name").get<std::string>(), model);
+                json clips = json::array();
+                for (const std::string& clip : model->getAnimationNames()) {
+                    clips.push_back({ {"name", clip}, {"durationSeconds", clipDurationSeconds(clip)} });
+                }
+                return { {"current", animator->getCurrentAnimationName()}, {"timeSeconds", animator->getTimeSeconds()},
+                         {"durationSeconds", animator->getDurationSeconds()}, {"paused", animator->isPaused()},
+                         {"speed", animator->getSpeed()}, {"looping", animator->isLooping()}, {"animations", clips} };
+            }
+            if (command == "play_animation") {
+                std::string name = params.at("name").get<std::string>();
+                std::string clip = params.at("animation").get<std::string>();
+                Model* model = nullptr;
+                Animator* animator = requireAnimator(name, model);
+                const auto& clips = model->getAnimationNames();
+                if (std::find(clips.begin(), clips.end(), clip) == clips.end()) {
+                    throw std::runtime_error("model of '" + name + "' has no animation named '" + clip + "'");
+                }
+                animator->playAnimation(clip);
+                animator->setSpeed(params.value("speed", 1.0f));
+                animator->setLooping(params.value("looping", true));
+                animator->setPaused(false);
+                return { {"name", name}, {"animation", clip}, {"speed", animator->getSpeed()}, {"looping", animator->isLooping()} };
+            }
+            if (command == "pause_animation") {
+                std::string name = params.at("name").get<std::string>();
+                Model* model = nullptr;
+                Animator* animator = requireAnimator(name, model);
+                animator->setPaused(params.value("paused", true));
+                return { {"name", name}, {"paused", animator->isPaused()} };
             }
             if (command == "get_stats") {
                 return {

@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "bodies": [
+    { "name": "caveman", "model": "Caveman_Test2.fbx", "animation": "Scene", "animationSpeed": 0.5, "position": [0, -3, -10] }
+  ]
+}
