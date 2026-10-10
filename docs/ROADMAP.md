@@ -10,15 +10,15 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done.
 - [x] **1.1** JSON scene loader (materials, lights, model bodies) - `src/Core/Scene/SceneLoader.*`
 - [x] **1.2** Example scene and startup hook (`CGENGINE_SCENE`) - `resources/scenes/example.json`
 - [x] **1.3** Scene format documentation - `docs/ai/scene-format.md`
-- [ ] **1.4** Scene validation tests (bad files, unknown references, missing assets)
+- [ ] **1.4** Scene validation tests (bad files, unknown references, missing assets); missing-file path is covered by the control channel test
 - [ ] **1.5** Primitive bodies (cube, sphere, plane) in the scene format, without an asset file
 
-## Phase 2: AI control channel
-- [ ] **2.1** File-based command inbox/outbox (`cg_control/inbox`, `cg_control/outbox`), one JSON command per file, polled each frame. No sockets, no dependencies, works with any agent that can write files.
-- [ ] **2.2** Commands: `load_scene`, `describe_scene` (bodies, transforms, materials, lights as JSON), `set_transform`, `set_material`, `remove_body`.
-- [ ] **2.3** `screenshot` command: render to PNG so an agent can look at the result.
-- [ ] **2.4** `get_stats` command (frame time, draw calls, asset counts).
-- [ ] **2.5** Control API documentation and command schema (`docs/ai/control-api.md`).
+## Phase 2: AI control channel (done except set_material / remove_body)
+- [x] **2.1** File-based command inbox/outbox (`cg_control/inbox`, `cg_control/outbox`), one JSON command per file, polled each frame. No sockets, no dependencies, works with any agent that can write files.
+- [x] **2.2** Commands (`load_scene`, `describe_scene`, `set_transform` done; `set_material`, `remove_body` pending): `load_scene`, `describe_scene` (bodies, transforms, materials, lights as JSON), `set_transform`, `set_material`, `remove_body`.
+- [x] **2.3** `screenshot` command: render to PNG so an agent can look at the result.
+- [x] **2.4** `get_stats` command (frame time, draw calls, asset counts).
+- [x] **2.5** Control API documentation (`docs/ai/control-api.md`); integration test `tools/test_control_channel.ps1`.
 
 ## Phase 3: performance
 - [ ] **3.1** Baseline frame-time and draw-call measurements, recorded in smoke output.
