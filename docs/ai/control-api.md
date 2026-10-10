@@ -82,11 +82,18 @@ Removes a body and destroys it. The world root cannot be removed.
 - result: `{ "removed": name, "children": mode }`
 - errors: no body with that name, root removal, unknown `children` mode
 
+### `load_clip`
+Loads an animation clip from a file (format: `docs/ai/clip-format.md`).
+
+- params: `path` (required; relative to the exe folder or absolute)
+- result: `{ "name": clip name }`
+- errors: invalid clip, unknown bone, duplicate name, model not skeletal
+
 ### `list_animations`
 Lists the animation clips of the model a body belongs to, and the playback state.
 
 - params: `name` (required; a body inside an imported model)
-- result: `{ "current", "timeSeconds", "durationSeconds", "paused", "speed", "looping", "animations": [ { "name", "durationSeconds" } ] }`
+- result: `{ "bones": [skeleton bone names], "current", "timeSeconds", "durationSeconds", "paused", "speed", "looping", "animations": [ { "name", "durationSeconds" } ] }`
 - errors: no body, body not part of a model, model without clips
 
 ### `play_animation`

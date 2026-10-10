@@ -1,0 +1,2 @@
+{ "version": 1, "name": "bad_bone", "model": "Caveman_Test2.fbx", "durationSeconds": 1.0,
+  "channels": [ { "bone": "Tail", "rotation": [ { "t": 0.0, "euler": [0, 0, 0] } ] } ] }

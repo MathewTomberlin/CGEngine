@@ -1,0 +1,2 @@
+{ "version": 1, "name": "Scene", "model": "Caveman_Test2.fbx", "durationSeconds": 1.0,
+  "channels": [ { "bone": "Head", "rotation": [ { "t": 0.0, "euler": [0, 0, 0] } ] } ] }

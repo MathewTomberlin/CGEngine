@@ -85,6 +85,13 @@ try {
     Send-Command "26_play_bad_clip" '{"command":"play_animation","params":{"name":"caveman","animation":"nope"}}'
     Send-Command "27_play" '{"command":"play_animation","params":{"name":"caveman","animation":"Scene","speed":2.0,"looping":false}}'
     Send-Command "28_list_after" '{"command":"list_animations","params":{"name":"caveman"}}'
+    Send-Command "29_load_clip" '{"command":"load_clip","params":{"path":"clips/wave.json"}}'
+    Send-Command "30_load_clip_again" '{"command":"load_clip","params":{"path":"clips/wave.json"}}'
+    Send-Command "31_list_with_clip" '{"command":"list_animations","params":{"name":"caveman"}}'
+    Send-Command "32_play_wave" '{"command":"play_animation","params":{"name":"caveman","animation":"wave"}}'
+    Send-Command "33_clip_bad_bone" '{"command":"load_clip","params":{"path":"clips/invalid/unknown_bone.json"}}'
+    Send-Command "34_clip_bad_order" '{"command":"load_clip","params":{"path":"clips/invalid/unordered_keys.json"}}'
+    Send-Command "35_clip_duplicate" '{"command":"load_clip","params":{"path":"clips/invalid/duplicate_name.json"}}'
 
     $describe = Wait-Result "01_describe"
     Check "describe_scene returns ok" ($describe -and $describe.ok)
@@ -151,6 +158,22 @@ try {
     Check "play_animation sets speed and looping" ($play.ok -and $play.result.speed -eq 2.0 -and $play.result.looping -eq $false)
     $listAfter = Wait-Result "28_list_after"
     Check "play_animation resumes playback" ($listAfter.ok -and $listAfter.result.paused -eq $false -and $listAfter.result.speed -eq 2.0)
+
+    $clip = Wait-Result "29_load_clip"
+    Check "load_clip registers a clip from a file" ($clip.ok -and $clip.result.name -eq "wave")
+    $clipAgain = Wait-Result "30_load_clip_again"
+    Check "load_clip refuses a name that already exists" ((-not $clipAgain.ok) -and ($clipAgain.error -match "already exists"))
+    $withClip = Wait-Result "31_list_with_clip"
+    $clipNames = @($withClip.result.animations | ForEach-Object { $_.name })
+    Check "list_animations shows the loaded clip and the skeleton's bones" ($clipNames -contains "wave" -and $withClip.result.bones.Count -gt 0 -and ($withClip.result.bones -contains "UpperArm.R"))
+    $playWave = Wait-Result "32_play_wave"
+    Check "the loaded clip can be played" ($playWave.ok -and $playWave.result.animation -eq "wave")
+    $badBone = Wait-Result "33_clip_bad_bone"
+    Check "clip with an unknown bone is rejected" ((-not $badBone.ok) -and ($badBone.error -match "not a bone"))
+    $badOrder = Wait-Result "34_clip_bad_order"
+    Check "clip with unordered keys is rejected" ((-not $badOrder.ok) -and ($badOrder.error -match "strictly increase"))
+    $dupClip = Wait-Result "35_clip_duplicate"
+    Check "clip reusing an existing name is rejected" ((-not $dupClip.ok) -and ($dupClip.error -match "already exists"))
 
     $statsAfter = Wait-Result "21_stats_after_remove"
     Check "get_stats still answers after removal" ($statsAfter.ok -and $statsAfter.result.bodies -gt 0)

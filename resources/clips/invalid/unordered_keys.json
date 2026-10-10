@@ -1,0 +1,2 @@
+{ "version": 1, "name": "bad_order", "model": "Caveman_Test2.fbx", "durationSeconds": 1.0,
+  "channels": [ { "bone": "Head", "rotation": [ { "t": 0.5, "euler": [0, 0, 0] }, { "t": 0.2, "euler": [0, 0, 10] } ] } ] }

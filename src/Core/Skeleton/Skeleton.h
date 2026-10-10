@@ -22,6 +22,8 @@ namespace CGEngine {
         /// <returns>True if they are equivalent</returns>
         bool equals(const map<string, BoneData>& other) const;
         bool hasBone(const string& boneName) const;
+        /// Names of all bones in the skeleton.
+        vector<string> getBoneNames() const;
         optional<BoneData> getBoneData(const string& boneName) const;
         bool isValid() const;
     private:
