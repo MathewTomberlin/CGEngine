@@ -9,8 +9,8 @@ Conventions, so models drop into the engine without per-model fixes:
 - 1 Blender unit = 1 tile. Origin at the feet (z = 0 in Blender, y = 0 in the engine).
 - Front faces Blender -Y. The export maps Blender +Z to engine +Y and Blender -Y to engine +Z, so a model
   faces engine +Z, towards the camera. Turning it by atan2(fx, fz) degrees about Y faces direction (fx, fz).
-- Colours only, no textures. The engine's shader normalises the diffuse colour, so only the hue counts and
-  pure black must be avoided. Material names start with "dg_" because engine materials share one namespace.
+- Colours only, no textures. The engine uses each material's diffuse colour (Kd) as given. Material names
+  start with "dg_" because engine materials share one namespace.
 """
 import math
 import os
@@ -53,6 +53,8 @@ def material(name):
         if bsdf:
             bsdf.inputs["Base Color"].default_value = (*rgb, 1.0)
             bsdf.inputs["Roughness"].default_value = 0.8
+            # Exported as Ks. A weak highlight keeps top faces from washing out under the dungeon's overhead sun.
+            bsdf.inputs["Specular IOR Level"].default_value = 0.1
     return mat
 
 
