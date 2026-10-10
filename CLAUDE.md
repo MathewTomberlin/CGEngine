@@ -43,7 +43,7 @@ It checks the Python path (`testScript.py`, `DevPyScript`) and exits 0 after N f
   - `World/`: owns the Body list and drives update/render; `startWorld()` creates the `PyInterpreter`, the `Renderer`, the window, and initializes `assets`.
   - `Interpreter/`: `PyInterpreter.h` embeds Python (`py::scoped_interpreter`), adds `resources/scripts` and `cg_engine_python/Scripts` to `sys.path`, and creates PyScripts.
   - `Mesh/`, `Material/`, `Shader/`, `Light/`, `Camera/`, `Animation/`, `Skeleton/`, `Importer/`, `Timers/`, `Input/`, `Time/`, `Logging/`, `Types/`, `AssetManager/`.
-- `src/Bindings/`: pybind11 modules exposing engine types to Python.
+- `src/Bindings/`: pybind11 bindings exposing engine types to Python. They are embedded in `main.exe` (`PYBIND11_EMBEDDED_MODULE`), not a separate `.pyd`: a `.pyd` carries its own copy of the engine's globals, so scripts would not see the world being drawn. `GameBindings.cpp` holds the helpers for Python-driven games (`key_down`, `find_body`, `load_scene_json`, `remove_body`, `set_camera`).
 - `src/Standard/`: reusable building blocks (`Behaviors/`, `Drawables/` such as `Tilemap`, `Models/`, `Scripts/`).
 - `src/TilemapScene.cpp`: the demo scene wired to `main`.
 - `resources/`: models, textures, fonts, `shaders/`, tilemap data, and `scripts/` (Python), copied beside the exe.
@@ -84,7 +84,8 @@ Before branching, run `git fetch` and base on the latest `develop`, not on `mast
   - `src/Core/Behavior/Behavior.cpp`: `getId()` returned `behaviorId.value()`, which threw `bad_optional_access` for unregistered behaviors; now returns the optional.
   - `CMakeLists.txt`: Doxygen post-build step is guarded.
 - Body constructors deliberately reject raw pointers (deleted template ctor in `Body.h`). Pass Sprite/Mesh/Text by value.
-- Python: `PyScript` package is copied next to `main.exe` (`bin/Debug/cg_engine_python/Scripts`). `cg_engine_bindings` is built to `bin/Debug`. Build all targets (`cmake --build build --config Debug`), not only `main`, or the bindings won't be there.
+- Python: `PyScript` package is copied next to `main.exe` (`bin/Debug/cg_engine_python/Scripts`). `cg_engine_bindings` is embedded in `main.exe`, so building `main` is enough. After adding a new `.cpp` under `src/`, rerun the CMake configure step: the source list is a glob evaluated at configure time.
+- Sample game: `docs/games/dungeon.md` (`resources/scenes/dungeon.json`). Tests: `python -I tools/test_dungeon_gen.py` (no GPU) and `tools/test_dungeon_game.ps1`.
 - CI: `.github/workflows/build.yml` builds on Windows (build only, no window run).
 - Benign warning at startup: `AssetManager: Resource loading failed, returning default resource: lava_tile.png` (referenced by `resources/Caveman_Test2.fbx`).
 - `develop` has 120 commits not pushed to `origin/develop`.

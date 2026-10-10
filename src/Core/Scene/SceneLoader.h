@@ -14,6 +14,7 @@ namespace CGEngine {
         size_t materials = 0;
         size_t lights = 0;
         size_t bodies = 0;
+        size_t scripts = 0;
     };
 
     /// <summary>

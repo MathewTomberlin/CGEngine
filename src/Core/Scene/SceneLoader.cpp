@@ -3,6 +3,8 @@
 #include "../Animation/Animator.h"
 #include "../Animation/Animation.h"
 #include "../Animation/ClipLoader.h"
+#include "../Body/Body.h"
+#include "../Interpreter/PyInterpreter.h"
 #include <algorithm>
 #include "../../Standard/Models/CommonModels.h"
 #include <fstream>
@@ -59,6 +61,23 @@ namespace CGEngine {
         std::string nameOf(const json& obj, const std::string& context) {
             return requireString(obj, "name", context);
         }
+
+        Body* findBodyNamed(const std::string& name) {
+            for (Body* body : assets.getAllResources<Body>()) {
+                if (body->getName() == name) return body;
+            }
+            return nullptr;
+        }
+
+        // Removes every body under the world root except the root itself. Each direct child takes its subtree with it.
+        void clearWorld() {
+            Body* root = world->getRoot();
+            std::vector<Body*> topLevel;
+            for (Body* body : assets.getAllResources<Body>()) {
+                if (body != root && body->getParent() == root) topLevel.push_back(body);
+            }
+            for (Body* body : topLevel) body->deleteBody(ChildrenTermination::Terminate);
+        }
     }
 
     SceneLoadResult SceneLoader::loadFile(const std::filesystem::path& path) {
@@ -84,6 +103,11 @@ namespace CGEngine {
         try {
             if (!scene.is_object() || scene.value("version", 0) != 1) {
                 throw std::invalid_argument("scene must be an object with \"version\": 1");
+            }
+
+            // "replaceWorld": true removes everything under the root first, so the scene is the whole level.
+            if (scene.value("replaceWorld", false)) {
+                clearWorld();
             }
 
             // Clip files come first: a body may play any clip of its model.
@@ -181,6 +205,24 @@ namespace CGEngine {
                     }
                     assets.get<Body>(rootId.value())->setName(name);
                     result.bodies++;
+                }
+            }
+
+            // Scripts attach to bodies by name. The body must exist by now, from this file or earlier.
+            if (scene.contains("scripts")) {
+                for (const json& s : scene.at("scripts")) {
+                    std::string bodyName = requireString(s, "body", "script entry");
+                    std::string module = requireString(s, "module", "script for body '" + bodyName + "'");
+                    std::string domain = s.value("domain", std::string("update"));
+                    if (domain != "start" && domain != "update" && domain != "delete") {
+                        throw std::invalid_argument("script for body '" + bodyName + "': domain must be \"start\", \"update\" or \"delete\"");
+                    }
+                    Body* body = findBodyNamed(bodyName);
+                    if (!body) throw std::invalid_argument("script for unknown body '" + bodyName + "'");
+                    Script* script = interpreter->createScript(module);
+                    if (!script) throw std::runtime_error("could not create a script from module '" + module + "' (see the engine console)");
+                    body->addScript(domain, script);
+                    result.scripts++;
                 }
             }
 

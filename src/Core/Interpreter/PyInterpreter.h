@@ -7,6 +7,9 @@
 #include <filesystem>
 #include <iostream>
 
+// Defined in src/Bindings/CoreBindings.cpp. Referencing it keeps the embedded Python module in the link.
+extern bool cgEngineBindingsLinked;
+
 inline std::filesystem::path getExecutableDirectory() {
     return std::filesystem::current_path();
 }

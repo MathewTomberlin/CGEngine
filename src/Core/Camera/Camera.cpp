@@ -46,8 +46,10 @@ namespace CGEngine {
 		glm::vec3 pos(position.x, position.y, position.z);
 		assert(pos != this->position);
 		glm::vec3 direction = glm::normalize(pos - this->position);
-		angleY = glm::radians(asinf(-direction.y));
-		angleX = -glm::radians(atan2f(-direction.x, -direction.z));
+		// Angles are in degrees and the orientation is Rz * Ry * Rx (see getOrientation), so the forward
+		// vector is Rx(-angleX) * Ry(-angleY) * (0, 0, -1). Solving for the forward vector gives these.
+		angleY = glm::degrees(asinf(direction.x));
+		angleX = glm::degrees(atan2f(-direction.y, -direction.z));
 		normalizeAngles();
 	}
 

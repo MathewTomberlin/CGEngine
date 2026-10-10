@@ -28,11 +28,11 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done.
 ## Phase 4: skeletons, animation, games
 - [x] **4.1** Skeleton and animation authoring. Done: clip listing, play/pause/speed/looping via control channel and scene files; bone-matrix fix for multi-mesh models; clips defined as JSON keyframes (`load_clip`, scene `"clips"`, `docs/ai/clip-format.md`).
 - [x] **4.2** Script hooks reachable from the control channel: `run_script` and `attach_script` for PyScript modules (`docs/ai/script-hooks.md`). C++ behaviours are not exposed yet.
-- [ ] **4.3** Example game built only from scene files and scripts.
+- [x] **4.3** Example game built only from scene files and scripts: a top-down action adventure with procedural rooms, enemies, a sword and a goal (`docs/games/dungeon.md`). Needed the bindings embedded in `main.exe` (see Notes).
 
 ## Tooling and quality
 - [x] CI build on Windows (`.github/workflows/build.yml`) with Mesa software OpenGL smoke run
-- [ ] Unit tests for pure logic (scene parsing, command parsing) runnable without a GPU
+- [~] Unit tests for pure logic runnable without a GPU. Done for the dungeon generator (`python -I tools/test_dungeon_gen.py`). Scene and command parsing still need tests.
 - [x] Documentation index (`docs/ai/README.md`) for agents
 
 ## Open questions
@@ -43,4 +43,5 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done.
 - The render cost was not where it looked: a body re-parenting bug quietly doubled the work (fixed). Measure before optimising; the first guess was wrong twice.
 - Undefined behaviour hides until a Debug build runs it. The asset loaders and `Body::deleteBody` each had one. Smoke and control tests are the safety net; add a check whenever a path is touched.
 - The "giant blue shapes" seen around the caveman were not a skinning bug. They came from a scene caveman loaded at too large a scale, so the bodies could not be told apart. Keep scene scales sane when debugging, and name bodies distinctly.
-- Remaining big-ticket items: batching draws by material (3.2 continuation) and skeleton/animation authoring (4.1).
+- The Python bindings were a separate `.pyd` with its own copy of the engine's globals. Scripts loaded bodies into a world the renderer never saw. They are now embedded in `main.exe` (`PYBIND11_EMBEDDED_MODULE`), so scripts and the engine share one state. Any new `.cpp` under `src/` needs a CMake configure run, because the source list is a glob.
+- Remaining big-ticket items: batching draws by material (3.2 continuation), skeleton/animation authoring (4.1), and the dungeon's next steps (sound-free combat is a start; more enemy types and item drops would follow).

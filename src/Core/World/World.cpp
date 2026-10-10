@@ -1,6 +1,11 @@
 #include "World.h"
 #include "../Engine/Engine.h"
 #include "../../Standard/Models/CommonModels.h"
+
+// Keeps the embedded cg_engine_bindings module (CoreBindings.cpp) in main.exe. The pointer has external
+// linkage, so the compiler cannot drop it as unused.
+extern bool cgEngineBindingsLinked;
+bool* keepBindingsLinked = &cgEngineBindingsLinked;
 #include "../Scene/SceneLoader.h"
 #include "../Control/ControlChannel.h"
 #include <chrono>

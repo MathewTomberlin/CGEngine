@@ -25,11 +25,17 @@ void bindAnimator(py::module_& m);
 void bindCoreTypes(py::module_& m);
 void bindModel(py::module_& m);
 void bindWorld(py::module_& m);
+void bindGame(py::module_& m);
 
-// PYBIND11_MODULE is the entry point. Python calls this when the module is imported.
-// - First argument (cg_engine_bindings): MUST match the target name in src/Bindings/CMakeLists.txt
-// - Second argument (m): Represents the Python module object.
-PYBIND11_MODULE(cg_engine_bindings, m) {
+// The bindings are embedded in main.exe, not built as a separate .pyd. A .pyd would carry its own copy
+// of the engine's globals (assets, world, renderer), so scripts would see a different world from the one
+// being drawn. Embedded modules share the engine's state. The module is registered before the interpreter
+// starts, so `import cg_engine_bindings` finds it without a file on sys.path.
+//   - First argument (cg_engine_bindings): the module name scripts import.
+//   - Second argument (m): the Python module object.
+bool cgEngineBindingsLinked = true; // referenced by PyInterpreter so the linker keeps this file
+
+PYBIND11_EMBEDDED_MODULE(cg_engine_bindings, m) {
 
     m.doc() = "Python bindings for the CG Engine";
 
@@ -50,6 +56,7 @@ PYBIND11_MODULE(cg_engine_bindings, m) {
     bindAnimator(m);
     bindModel(m);
     bindWorld(m);
+    bindGame(m);
     //extern CGEngine::PyInterpreter* interpreter;
     //m.attr("py_interpreter") = py::cast(*interpreter);
 }

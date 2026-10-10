@@ -1,0 +1,100 @@
+# Dungeon: a sample action adventure
+
+A top-down action adventure with procedurally generated rooms, written only as a scene file and Python
+scripts. It shows the AI-first workflow end to end: an agent can read the design, change the generator or
+the rules, run the tests, and load the game in a running engine.
+
+## Run it
+
+From the repo root, after a Debug build:
+
+```bash
+cd build/bin/Debug
+CGENGINE_SCENE=scenes/dungeon.json DUNGEON_SEED=7 ./main.exe
+```
+
+On Windows PowerShell:
+
+```powershell
+$env:CGENGINE_SCENE = "scenes/dungeon.json"; $env:DUNGEON_SEED = "7"; .\main.exe
+```
+
+`DUNGEON_SEED` picks the layout. Without it, the seed is the current time. The same seed always gives the
+same first level. Each completed level uses the next seed.
+
+## Controls
+
+| Key | Action |
+|---|---|
+| W A S D or arrow keys | Move |
+| J or Space | Swing the sword (short reach, about 0.35 s cooldown) |
+
+Each enemy has 2 health and takes one hit per swing. Touching an enemy costs one heart. You have 3 hearts,
+shown as small cubes above the player. Losing all of them restarts the level. The glowing tile in the far
+room is the goal; reaching it starts the next level.
+
+## Files
+
+| File | Role |
+|---|---|
+| `resources/scenes/dungeon.json` | Scene: materials, a light, and the script attached to the world root. `replaceWorld` clears the default demo first. |
+| `resources/scripts/DungeonGame.py` | Game controller. Runs every frame: input, movement, enemies, sword, rooms, camera, and a state file. |
+| `resources/scripts/DungeonGen.py` | Procedural layout. Pure Python, no engine imports. |
+| `tools/test_dungeon_gen.py` | Offline tests for the generator (300 seeds): connectivity, doors, enemy placement, determinism. |
+| `tools/test_dungeon_game.ps1` | Integration test: runs the engine, replaces the keyboard with a scripted sequence, checks the game state. |
+
+## How it works
+
+**Layout.** The level is a 3 by 3 grid of rooms, each 13 by 9 tiles. Rooms are linked by a random spanning
+tree, plus two extra links so there are loops. Neighbouring rooms share a two-tile border with a door at the
+middle of the linked side. Pillars sit on a lattice that never touches the centre row or column, so every
+floor tile stays reachable. The goal is in one of the rooms farthest from the start. Enemy count grows with
+distance from the start, capped at five per room.
+
+**Rooms load on demand.** Only the room the player is in has bodies in the world. Walking through a door
+unloads the old room and loads the new one. Enemies keep their positions while their room is unloaded.
+
+**Game state lives in Python.** Positions, health and enemy lists are plain Python values. Bodies are
+updated from that state each frame and are only used to show it. Collision is a check on the level's tile
+set, so there is no physics engine involved.
+
+**The world root drives the game.** `resources/scenes/dungeon.json` attaches `DungeonGame` to the root's
+`update` domain. Input comes from `cg_engine_bindings.key_down`. The bindings used by the game are:
+
+| Function | Purpose |
+|---|---|
+| `key_down(name)` | Whether a named key is held (W A S D Up Down Left Right J K Space Enter R Escape) |
+| `find_body(name)` | The live body with that name, or `None` |
+| `load_scene_json(text)` | Add bodies to the world from JSON text, in the scene-file format |
+| `remove_body(name)` | Remove a body and its children |
+| `set_camera(position, target)` | Place the camera in world coordinates and aim it |
+
+## Observing a running game
+
+The game writes `cg_control/dungeon_state.json` four times a second, next to the control channel folders:
+
+```json
+{ "level": 1, "seed": 7, "hp": 3, "room": [0, 0], "goal_room": [2, 1], "player": [6.0, 4.0], "enemies": 9 }
+```
+
+An agent can read this file instead of taking screenshots to find out where the player is.
+
+## Tests
+
+```bash
+python -I tools/test_dungeon_gen.py
+```
+
+```powershell
+pwsh tools/test_dungeon_game.ps1
+```
+
+The generator test needs no GPU and no build. The game test needs a Debug build and a desktop session
+(or Mesa software OpenGL, see `CLAUDE.md`).
+
+## Extending it
+
+- New rules go in `DungeonGame.py`. Keep the constants at the top of the file.
+- New layouts go in `DungeonGen.py`. Add a check to `tools/test_dungeon_gen.py` for each guarantee you rely on.
+- New enemy types: give them a material in `dungeon.json`, a body name prefix, and an update rule.
+- For a different game, copy `dungeon.json` and write a new controller. The engine parts are the same.
