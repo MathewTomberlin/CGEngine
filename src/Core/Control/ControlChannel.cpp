@@ -126,7 +126,7 @@ namespace CGEngine {
             if (command == "load_scene") {
                 SceneLoadResult scene = SceneLoader::loadFile(params.at("path").get<std::string>());
                 if (!scene.ok) throw std::runtime_error(scene.error);
-                return { {"bodies", scene.bodies}, {"lights", scene.lights}, {"materials", scene.materials}, {"scripts", scene.scripts} };
+                return { {"bodies", scene.bodies}, {"lights", scene.lights}, {"materials", scene.materials}, {"scripts", scene.scripts}, {"loadMs", scene.loadMs} };
             }
             if (command == "describe_scene") {
                 return describeScene();

@@ -7,6 +7,7 @@
 #include "../Interpreter/PyInterpreter.h"
 #include <algorithm>
 #include "../../Standard/Models/CommonModels.h"
+#include <chrono>
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
@@ -82,6 +83,13 @@ namespace CGEngine {
     }
 
     SceneLoadResult SceneLoader::loadFile(const std::filesystem::path& path) {
+        auto start = std::chrono::steady_clock::now();
+        SceneLoadResult result = loadFileUntimed(path);
+        result.loadMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+        return result;
+    }
+
+    SceneLoadResult SceneLoader::loadFileUntimed(const std::filesystem::path& path) {
         std::ifstream file(path);
         if (!file) {
             SceneLoadResult result;
