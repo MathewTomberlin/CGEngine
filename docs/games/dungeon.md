@@ -29,9 +29,22 @@ same first level. Each completed level uses the next seed.
 | W A S D or arrow keys | Move |
 | J or Space | Swing the sword (short reach, about 0.35 s cooldown) |
 
-Each enemy has 2 health and takes one hit per swing. Touching an enemy costs one heart. You have 3 hearts,
-shown as small cubes above the player. Losing all of them restarts the level. The glowing tile in the far
-room is the goal; reaching it starts the next level.
+Touching an enemy or being hit by an arrow costs one heart. You have 3 hearts, shown as small cubes above the
+player. Losing all of them restarts the level. The glowing tile in the far room is the goal; reaching it starts
+the next level.
+
+## Enemies and items
+
+| Enemy | Health | Behaviour | First appears |
+|---|---|---|---|
+| Slime (`enemy` material) | 2 | Walks straight at the player. | Any room but the start |
+| Archer (`archer`) | 1 | Keeps 3 to 5 tiles away and shoots a bolt every 2 s when the player is within 7 tiles. Bolts stop at walls. | 1 link from the start |
+| Brute (`brute`, bigger cube) | 4 | Slow, and reaches a little further because it is larger. | 2 links from the start |
+
+Each sword swing deals one damage. A defeated enemy may drop an item where it stood: a **heart** restores one
+heart (it stays on the floor while your health is full) and a **coin** adds to the coin count. Brutes drop most
+often. Items stay in their room when you leave it. Drops are decided by `DungeonGen.drop_for(seed, enemy_id,
+kind)`, so a run with the same seed and the same kills gives the same drops.
 
 ## Files
 
@@ -49,7 +62,8 @@ room is the goal; reaching it starts the next level.
 tree, plus two extra links so there are loops. Neighbouring rooms share a two-tile border with a door at the
 middle of the linked side. Pillars sit on a lattice that never touches the centre row or column, so every
 floor tile stays reachable. The goal is in one of the rooms farthest from the start. Enemy count grows with
-distance from the start, capped at five per room.
+distance from the start, capped at five per room. Enemy kinds are drawn last, so they never change a seed's
+layout; deeper rooms get more archers and brutes.
 
 **Rooms load on demand.** Only the room the player is in has bodies in the world. Walking through a door
 unloads the old room and loads the new one. Enemies keep their positions while their room is unloaded.
@@ -74,7 +88,8 @@ set, so there is no physics engine involved.
 The game writes `cg_control/dungeon_state.json` four times a second, next to the control channel folders:
 
 ```json
-{ "level": 1, "seed": 7, "hp": 3, "room": [0, 0], "goal_room": [2, 1], "player": [6.0, 4.0], "enemies": 9 }
+{ "level": 1, "seed": 7, "hp": 3, "room": [0, 0], "goal_room": [2, 1], "player": [6.0, 4.0], "enemies": 26,
+  "enemy_kinds": { "slime": 20, "archer": 3, "brute": 3 }, "items": 0, "bolts": 0, "coins": 0 }
 ```
 
 An agent can read this file instead of taking screenshots to find out where the player is.
@@ -96,5 +111,8 @@ The generator test needs no GPU and no build. The game test needs a Debug build 
 
 - New rules go in `DungeonGame.py`. Keep the constants at the top of the file.
 - New layouts go in `DungeonGen.py`. Add a check to `tools/test_dungeon_gen.py` for each guarantee you rely on.
-- New enemy types: give them a material in `dungeon.json`, a body name prefix, and an update rule.
+- New enemy types: add the kind to `DungeonGen.ENEMY_KINDS` and `_enemy_kind`, give it a material in `dungeon.json`,
+  an entry in `ENEMY_STATS` and `DROP_CHANCES`, and a rule in `update_enemies`.
+- Bodies created during play (bolts, items) go through `add_room_body` / `remove_room_body`, so leaving the
+  room removes them and their names are never reused.
 - For a different game, copy `dungeon.json` and write a new controller. The engine parts are the same.

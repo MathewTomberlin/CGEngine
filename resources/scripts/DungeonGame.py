@@ -6,7 +6,7 @@ keyboard, moves the player and enemies on the level grid, handles the sword, and
 player crosses a door. Game state lives here in Python. Bodies are only used to show that state.
 
 Controls: WASD or arrow keys to move, J or Space to swing the sword, the goal is the glowing tile
-in the far room. Set DUNGEON_SEED to choose a layout (default: the current time).
+in the far room. Enemies come in three kinds (slime, archer, brute) and may drop a heart or a coin. Set DUNGEON_SEED to choose a layout (default: the current time).
 """
 import json
 import math
@@ -19,10 +19,8 @@ from PyScript import PyScript
 import DungeonGen
 
 PLAYER_SPEED = 4.0          # tiles per second
-ENEMY_SPEED = 1.6
 PLAYER_RADIUS = 0.3
-ENEMY_RADIUS = 0.35
-CONTACT_DISTANCE = 0.7      # an enemy this close hurts the player
+CONTACT_DISTANCE = 0.7      # an enemy this close (plus its extra size) hurts the player
 INVULNERABLE_TIME = 1.0     # seconds of protection after a hit
 MAX_HP = 3
 ATTACK_COOLDOWN = 0.35
@@ -33,6 +31,20 @@ GOAL_RADIUS = 0.6
 CAMERA_HEIGHT = 12.0
 CAMERA_BACK = 5.0           # the camera sits this far behind the player, for a three-quarter view
 STATE_INTERVAL = 0.25       # seconds between writes to cg_control/dungeon_state.json
+
+# Enemy kinds (DungeonGen.ENEMY_KINDS). size is the cube's half extent; radius is used for wall collision.
+ENEMY_STATS = {
+    "slime":  {"speed": 1.6, "hp": 2, "size": 0.35, "radius": 0.35, "material": "enemy"},
+    "archer": {"speed": 1.3, "hp": 1, "size": 0.3,  "radius": 0.3,  "material": "archer"},
+    "brute":  {"speed": 0.9, "hp": 4, "size": 0.5,  "radius": 0.45, "material": "brute"},
+}
+ARCHER_RANGE = (3.0, 5.0)   # an archer backs off inside the first distance and closes in beyond the second
+ARCHER_SHOT_TIME = 2.0      # seconds between shots
+ARCHER_SIGHT = 7.0          # an archer only shoots at a player this close
+BOLT_SPEED = 5.0
+BOLT_HIT_DISTANCE = 0.4
+ITEM_PICKUP_DISTANCE = 0.55
+ITEM_MATERIALS = {"heart": "heart", "coin": "coin"}
 
 
 def cube(name, size, pos, material):
@@ -60,8 +72,12 @@ class DungeonGame(PyScript):
         self.room_bodies = []       # names of every body loaded for self.room
         self.room_handles = {}      # name -> Body, for enemies and the goal in self.room
         self.fixed = {}             # name -> Body, for the player, sword and hearts
-        self.enemies = {}           # room -> list of {"id", "x", "z", "hp"}
+        self.enemies = {}           # room -> list of {"id", "kind", "x", "z", "hp", "shot"}
         self.next_enemy_id = 0
+        self.items = {}             # room -> list of {"id", "kind", "x", "z"}, left by defeated enemies
+        self.bolts = []             # archer shots in self.room: {"id", "x", "z", "dx", "dz"}
+        self.next_object_id = 0     # names for items and bolts are never reused, even across rooms
+        self.coins = 0
         self.px = self.pz = 0.0
         self.facing = (0.0, 1.0)
         self.hp = MAX_HP
@@ -104,7 +120,11 @@ class DungeonGame(PyScript):
         self.enter_room_under_player()
         if self.reached_goal():
             return
-        self.update_enemies(dt)
+        self.pick_up_items()
+        if self.update_bolts(dt):
+            return
+        if self.update_enemies(dt):
+            return
         self.update_sword(dt)
         self.update_hud()
         self.update_camera()
@@ -116,9 +136,12 @@ class DungeonGame(PyScript):
     def write_state(self):
         """Write the game state to cg_control/dungeon_state.json, so an agent can read it without a screenshot."""
         enemies = sum(len(v) for v in self.enemies.values())
+        kinds = {kind: sum(1 for v in self.enemies.values() for e in v if e["kind"] == kind)
+                 for kind in DungeonGen.ENEMY_KINDS}
         state = {"level": self.level_no, "seed": self.level_seed, "hp": self.hp,
                  "room": list(self.room) if self.room else None, "goal_room": list(self.level.goal_room),
-                 "player": [round(self.px, 3), round(self.pz, 3)], "enemies": enemies}
+                 "player": [round(self.px, 3), round(self.pz, 3)], "enemies": enemies, "enemy_kinds": kinds,
+                 "items": sum(len(v) for v in self.items.values()), "bolts": len(self.bolts), "coins": self.coins}
         os.makedirs("cg_control", exist_ok=True)
         tmp = "cg_control/dungeon_state.json.tmp"
         with open(tmp, "w") as f:
@@ -144,10 +167,12 @@ class DungeonGame(PyScript):
         self.level = DungeonGen.generate(seed)
         self.level_seed = seed
         self.enemies = {}
+        self.items = {}
         for room, spots in self.level.enemy_spawns.items():
             self.enemies[room] = []
-            for gx, gy in spots:
-                self.enemies[room].append({"id": self.next_enemy_id, "x": float(gx), "z": float(gy), "hp": 2})
+            for (gx, gy), kind in zip(spots, self.level.enemy_kinds[room]):
+                self.enemies[room].append({"id": self.next_enemy_id, "kind": kind, "x": float(gx), "z": float(gy),
+                                           "hp": ENEMY_STATS[kind]["hp"], "shot": ARCHER_SHOT_TIME})
                 self.next_enemy_id += 1
         self.px, self.pz = float(self.level.start[0]), float(self.level.start[1])
         self.hp = MAX_HP
@@ -169,7 +194,9 @@ class DungeonGame(PyScript):
             gx, gy = self.level.goal
             bodies.append(cube("dg_goal", 0.3, (gx, 0.4, gy), "goal"))
         for enemy in self.enemies.get(room, []):
-            bodies.append(cube(self.enemy_name(enemy), 0.35, (enemy["x"], 0.35, enemy["z"]), "enemy"))
+            bodies.append(self.enemy_cube(enemy))
+        for item in self.items.get(room, []):
+            bodies.append(self.item_cube(item))
         cge.load_scene_json(json.dumps({"version": 1, "bodies": bodies}))
         self.room_bodies = [body["name"] for body in bodies]
         for name in self.room_bodies:
@@ -181,10 +208,34 @@ class DungeonGame(PyScript):
             cge.remove_body(name)
         self.room_bodies = []
         self.room_handles = {}
+        self.bolts = []             # shots do not outlive the room they were fired in
         self.room = None
+
+    def add_room_body(self, body):
+        """Add one body to the loaded room, so unload_room removes it with the rest."""
+        cge.load_scene_json(json.dumps({"version": 1, "bodies": [body]}))
+        self.room_bodies.append(body["name"])
+        self.room_handles[body["name"]] = cge.find_body(body["name"])
+
+    def remove_room_body(self, name):
+        cge.remove_body(name)
+        if name in self.room_bodies:
+            self.room_bodies.remove(name)
+        self.room_handles.pop(name, None)
+
+    def new_object_id(self):
+        self.next_object_id += 1
+        return self.next_object_id
 
     def enemy_name(self, enemy):
         return f"dg_enemy_{enemy['id']}"
+
+    def enemy_cube(self, enemy):
+        stats = ENEMY_STATS[enemy["kind"]]
+        return cube(self.enemy_name(enemy), stats["size"], (enemy["x"], stats["size"], enemy["z"]), stats["material"])
+
+    def item_cube(self, item):
+        return cube(f"dg_item_{item['id']}", 0.15, (item["x"], 0.15, item["z"]), ITEM_MATERIALS[item["kind"]])
 
     def reached_goal(self):
         if self.room != self.level.goal_room:
@@ -230,26 +281,75 @@ class DungeonGame(PyScript):
     # ----- enemies and combat -------------------------------------------------------------
 
     def update_enemies(self, dt):
+        """Move and attack with every enemy in the room. Returns True if the player was defeated."""
         for enemy in list(self.enemies.get(self.room, [])):
+            stats = ENEMY_STATS[enemy["kind"]]
             dx, dz = self.px - enemy["x"], self.pz - enemy["z"]
             distance = math.hypot(dx, dz)
-            if distance > 0.01:
-                step = ENEMY_SPEED * dt
+            # Slimes and brutes walk straight at the player. Archers keep to a band of distances and shoot.
+            direction = 1.0
+            if enemy["kind"] == "archer":
+                if distance < ARCHER_RANGE[0]:
+                    direction = -1.0
+                elif distance <= ARCHER_RANGE[1]:
+                    direction = 0.0
+                enemy["shot"] -= dt
+                if enemy["shot"] <= 0.0 and 0.01 < distance < ARCHER_SIGHT:
+                    enemy["shot"] = ARCHER_SHOT_TIME
+                    self.fire_bolt(enemy["x"], enemy["z"], dx / distance, dz / distance)
+            if distance > 0.01 and direction:
+                step = stats["speed"] * dt * direction
                 nx = enemy["x"] + dx / distance * step
                 nz = enemy["z"] + dz / distance * step
-                if self.free_for_enemy(nx, enemy["z"]):
+                if self.free(nx, enemy["z"], stats["radius"]):
                     enemy["x"] = nx
-                if self.free_for_enemy(enemy["x"], nz):
+                if self.free(enemy["x"], nz, stats["radius"]):
                     enemy["z"] = nz
             body = self.room_handles.get(self.enemy_name(enemy))
             if body is not None:
-                body.get_mesh().set_position(cge.Vector3f(enemy["x"], 0.35, enemy["z"]))
-            if distance < CONTACT_DISTANCE and self.invulnerable <= 0.0:
+                body.get_mesh().set_position(cge.Vector3f(enemy["x"], stats["size"], enemy["z"]))
+            reach = CONTACT_DISTANCE + stats["size"] - ENEMY_STATS["slime"]["size"]
+            if distance < reach and self.invulnerable <= 0.0:
                 if self.hurt():
-                    return  # the level restarted, so this room's enemy list is stale
+                    return True  # the level restarted, so this room's enemy list is stale
+        return False
 
-    def free_for_enemy(self, x, z):
-        return self.free(x, z, ENEMY_RADIUS)
+    def fire_bolt(self, x, z, dx, dz):
+        bolt = {"id": self.new_object_id(), "x": x, "z": z, "dx": dx, "dz": dz}
+        self.bolts.append(bolt)
+        self.add_room_body(cube(f"dg_bolt_{bolt['id']}", 0.08, (x, 0.35, z), "bolt"))
+
+    def update_bolts(self, dt):
+        """Fly archer shots. A shot stops at a wall or on the player. Returns True if the player was defeated."""
+        for bolt in list(self.bolts):
+            bolt["x"] += bolt["dx"] * BOLT_SPEED * dt
+            bolt["z"] += bolt["dz"] * BOLT_SPEED * dt
+            name = f"dg_bolt_{bolt['id']}"
+            hit_player = near(bolt["x"], bolt["z"], self.px, self.pz, BOLT_HIT_DISTANCE)
+            if hit_player or not self.level.passable(math.floor(bolt["x"] + 0.5), math.floor(bolt["z"] + 0.5)):
+                self.bolts.remove(bolt)
+                self.remove_room_body(name)
+                if hit_player and self.invulnerable <= 0.0 and self.hurt():
+                    return True
+                continue
+            body = self.room_handles.get(name)
+            if body is not None:
+                body.get_mesh().set_position(cge.Vector3f(bolt["x"], 0.35, bolt["z"]))
+        return False
+
+    def pick_up_items(self):
+        """Collect items the player stands on. A heart is left on the floor while health is full."""
+        for item in list(self.items.get(self.room, [])):
+            if not near(item["x"], item["z"], self.px, self.pz, ITEM_PICKUP_DISTANCE):
+                continue
+            if item["kind"] == "heart":
+                if self.hp >= MAX_HP:
+                    continue  # leave it for later
+                self.hp += 1
+            else:
+                self.coins += 1
+            self.items[self.room].remove(item)
+            self.remove_room_body(f"dg_item_{item['id']}")
 
     def hurt(self):
         """Take one point of damage. Returns True if the player was defeated and the level restarted."""
@@ -291,10 +391,12 @@ class DungeonGame(PyScript):
 
     def kill_enemy(self, enemy):
         self.enemies[self.room].remove(enemy)
-        name = self.enemy_name(enemy)
-        cge.remove_body(name)
-        self.room_bodies.remove(name)
-        self.room_handles.pop(name, None)
+        self.remove_room_body(self.enemy_name(enemy))
+        kind = DungeonGen.drop_for(self.level_seed, enemy["id"], enemy["kind"])
+        if kind is not None:
+            item = {"id": self.new_object_id(), "kind": kind, "x": enemy["x"], "z": enemy["z"]}
+            self.items.setdefault(self.room, []).append(item)
+            self.add_room_body(self.item_cube(item))
 
     # ----- presentation -------------------------------------------------------------------
 

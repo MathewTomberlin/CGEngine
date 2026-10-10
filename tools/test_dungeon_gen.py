@@ -112,9 +112,36 @@ for seed in SEEDS:
             check(seed, "enemy is not on the room border",
                   1 < gx % level.room_w < level.room_w - 2 and 1 < gy % level.room_h < level.room_h - 2)
 
+    # Enemy kinds: one known kind per spawn, the same for the same seed, and none tougher than the room allows.
+    check(seed, "kinds listed for every room", set(level.enemy_kinds) == set(level.enemy_spawns))
+    check(seed, "same seed gives same kinds", level.enemy_kinds == again.enemy_kinds)
+    for room, kinds in level.enemy_kinds.items():
+        check(seed, "one kind per enemy", len(kinds) == len(level.enemy_spawns[room]))
+        for kind in kinds:
+            check(seed, "kind is known", kind in dg.ENEMY_KINDS)
+            if kind == "archer":
+                check(seed, "archers only from their depth", level.room_depth[room] >= dg.ARCHER_MIN_DEPTH)
+            if kind == "brute":
+                check(seed, "brutes only from their depth", level.room_depth[room] >= dg.BRUTE_MIN_DEPTH)
+
+    # Drops: a known item or nothing, and the same answer every time.
+    for enemy_id in range(10):
+        for kind in dg.ENEMY_KINDS:
+            item = dg.drop_for(seed, enemy_id, kind)
+            check(seed, "drop is a known item or nothing", item is None or item in dg.ITEM_KINDS)
+            check(seed, "drop is deterministic", item == dg.drop_for(seed, enemy_id, kind))
+
     # Different seeds should usually give different layouts.
     if seed > 0:
         check(seed, "neighbouring seeds differ", dg.generate(seed - 1).floors != level.floors)
+
+# Across many seeds every kind and every item turns up, so none is unreachable by mistake.
+all_kinds = {k for seed in SEEDS for ks in dg.generate(seed).enemy_kinds.values() for k in ks}
+if all_kinds != set(dg.ENEMY_KINDS):
+    failures.append(f"enemy kinds seen across seeds: {sorted(all_kinds)}")
+all_items = {dg.drop_for(seed, i, k) for seed in range(20) for i in range(20) for k in dg.ENEMY_KINDS}
+if all_items != set(dg.ITEM_KINDS) | {None}:
+    failures.append(f"drops seen: {sorted(map(str, all_items))}")
 
 if failures:
     print(f"{len(failures)} check(s) failed across {len(SEEDS)} seeds:")

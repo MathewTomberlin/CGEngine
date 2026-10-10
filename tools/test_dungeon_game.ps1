@@ -163,7 +163,7 @@ import cg_engine_bindings as cge
 game = next(o for o in gc.get_objects() if type(o).__name__ == "DungeonGame")
 room = game.room
 game.facing = (1.0, 0.0)
-game.enemies.setdefault(room, []).append({"id": 9999, "x": game.px + 0.6, "z": game.pz, "hp": 1})
+game.enemies.setdefault(room, []).append({"id": 9999, "kind": "slime", "x": game.px + 0.6, "z": game.pz, "hp": 1, "shot": 0.0})
 game.load_room(room)
 _presses = 0
 def _fake(name):
@@ -183,6 +183,56 @@ cge.key_down = _fake
     $beforeKill = Read-State
     Check "the sword kills the one-health enemy (enemy count back to the level's own count)" ($beforeKill.enemies -eq $back.enemies)
     Check "engine still running after the kill" (-not $app.HasExited)
+    Check "the state lists enemy kinds" ($null -ne $beforeKill.enemy_kinds -and $beforeKill.enemy_kinds.slime -ge 1)
+
+    # An archer shoots: restore full health and put an archer four tiles east of the standing player with its shot ready. The bolt flies through
+    # the open centre row, hits the player and costs one heart. Then a heart item at the player's feet restores it,
+    # and a coin is counted. The archer is removed again so it does not keep shooting.
+    $archerScript = @'
+import gc
+import cg_engine_bindings as cge
+game = next(o for o in gc.get_objects() if type(o).__name__ == "DungeonGame")
+cge.key_down = lambda name: False
+game.hp = 3
+game.invulnerable = 0.0
+game.enemies.setdefault(game.room, []).append({"id": 9998, "kind": "archer", "x": game.px + 4.0, "z": game.pz, "hp": 1, "shot": 0.0})
+game.load_room(game.room)
+'@
+    $archerFile = Join-Path $control "archer.py"
+    Set-Content -Path $archerFile -Value $archerScript -Encoding utf8
+    $hpBefore = 3   # the archer script restores full health first, whatever the earlier steps cost
+    Send-Command "05_archer" ('{"command":"run_script","params":{"path":"' + ($archerFile -replace '\\', '/') + '"}}')
+    $archerRan = Wait-Result "05_archer"
+    Check "the archer script runs" ($archerRan.ok)
+    $shot = $null
+    $shotDeadline = (Get-Date).AddSeconds(10)
+    while ((Get-Date) -lt $shotDeadline) {
+        Start-Sleep -Milliseconds 250
+        $shot = Read-State
+        if ($shot.hp -lt $hpBefore) { break }
+    }
+    Check "an archer's bolt costs the player a heart" ($shot.hp -eq $hpBefore - 1)
+
+    $itemScript = @'
+import gc
+game = next(o for o in gc.get_objects() if type(o).__name__ == "DungeonGame")
+archer = next(e for e in game.enemies[game.room] if e["id"] == 9998)
+game.enemies[game.room].remove(archer)
+game.items.setdefault(game.room, []).append({"id": 99001, "kind": "heart", "x": game.px, "z": game.pz})
+game.items[game.room].append({"id": 99002, "kind": "coin", "x": game.px, "z": game.pz})
+game.load_room(game.room)
+'@
+    $itemFile = Join-Path $control "items.py"
+    Set-Content -Path $itemFile -Value $itemScript -Encoding utf8
+    $coinsBefore = (Read-State).coins
+    Send-Command "06_items" ('{"command":"run_script","params":{"path":"' + ($itemFile -replace '\\', '/') + '"}}')
+    $itemsRan = Wait-Result "06_items"
+    Check "the item script runs" ($itemsRan.ok)
+    Start-Sleep -Milliseconds 1000
+    $picked = Read-State
+    Check "a heart item restores a heart" ($picked.hp -eq $hpBefore)
+    Check "a coin item is counted" ($picked.coins -eq $coinsBefore + 1)
+    Check "engine still running after bolts and items" (-not $app.HasExited)
 
     Check "engine still running after the scripted run" (-not $app.HasExited)
     $errText = if (Test-Path $errLog) { Get-Content $errLog -Raw } else { "" }

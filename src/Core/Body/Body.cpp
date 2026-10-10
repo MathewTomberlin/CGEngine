@@ -14,6 +14,8 @@ namespace CGEngine {
     
     Body::~Body() {
         valid = false;
+        //A Body deleted before its start pass must not reach World::callUninitializedStart after it is freed.
+        if (world) world->removeUninitialized(this);
         //The render order is rebuilt each frame, but a Body removed mid-frame would otherwise stay in it until then.
         if (renderer && getId().has_value()) renderer->remove(getId().value());
         //Remove input actions from their domains (without deleting domains) and delete the input actions
