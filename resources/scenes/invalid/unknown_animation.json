@@ -1,0 +1,1 @@
+{ "version": 1, "bodies": [ { "name": "caveman", "model": "Caveman_Test2.fbx", "animation": "no_such_clip" } ] }

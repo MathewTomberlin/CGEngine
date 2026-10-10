@@ -67,6 +67,7 @@ try {
         "12_model"    = @{ file = "scenes/invalid/missing_model.json";     error = "failed to load model" }
         "13_version"  = @{ file = "scenes/invalid/bad_version.json";       error = "version" }
         "14_vector"   = @{ file = "scenes/invalid/bad_vector.json";        error = "3 numbers" }
+        "22_anim"     = @{ file = "scenes/invalid/unknown_animation.json";  error = "unknown animation" }
     }
     foreach ($id in ($invalid.Keys | Sort-Object)) {
         Send-Command $id ('{"command":"load_scene","params":{"path":"' + $invalid[$id].file + '"}}')
@@ -78,6 +79,12 @@ try {
     Send-Command "19_remove_missing" '{"command":"remove_body","params":{"name":"no_such_body"}}'
     Send-Command "20_describe_after_remove" '{"command":"describe_scene"}'
     Send-Command "21_stats_after_remove" '{"command":"get_stats"}'
+    Send-Command "23_load_animated" '{"command":"load_scene","params":{"path":"scenes/animated.json"}}'
+    Send-Command "24_list_animations" '{"command":"list_animations","params":{"name":"caveman"}}'
+    Send-Command "25_pause" '{"command":"pause_animation","params":{"name":"caveman","paused":true}}'
+    Send-Command "26_play_bad_clip" '{"command":"play_animation","params":{"name":"caveman","animation":"nope"}}'
+    Send-Command "27_play" '{"command":"play_animation","params":{"name":"caveman","animation":"Scene","speed":2.0,"looping":false}}'
+    Send-Command "28_list_after" '{"command":"list_animations","params":{"name":"caveman"}}'
 
     $describe = Wait-Result "01_describe"
     Check "describe_scene returns ok" ($describe -and $describe.ok)
@@ -132,6 +139,19 @@ try {
     $remaining = @($afterRemove.result.bodies | ForEach-Object { $_.name })
     Check "removed body is gone from describe_scene" (-not ($remaining -contains "block_big"))
     Check "other bodies survive a removal" ($remaining -contains "block")
+    $loadAnim = Wait-Result "23_load_animated"
+    Check "animated scene loads" ($loadAnim.ok -and $loadAnim.result.bodies -eq 1)
+    $list = Wait-Result "24_list_animations"
+    Check "list_animations reports the clip and its duration" ($list.ok -and $list.result.current -eq "Scene" -and $list.result.animations.Count -ge 1 -and $list.result.durationSeconds -gt 0)
+    $pause = Wait-Result "25_pause"
+    Check "pause_animation pauses" ($pause.ok -and $pause.result.paused -eq $true)
+    $badPlay = Wait-Result "26_play_bad_clip"
+    Check "play_animation rejects an unknown clip" ((-not $badPlay.ok) -and ($badPlay.error -match "no animation named"))
+    $play = Wait-Result "27_play"
+    Check "play_animation sets speed and looping" ($play.ok -and $play.result.speed -eq 2.0 -and $play.result.looping -eq $false)
+    $listAfter = Wait-Result "28_list_after"
+    Check "play_animation resumes playback" ($listAfter.ok -and $listAfter.result.paused -eq $false -and $listAfter.result.speed -eq 2.0)
+
     $statsAfter = Wait-Result "21_stats_after_remove"
     Check "get_stats still answers after removal" ($statsAfter.ok -and $statsAfter.result.bodies -gt 0)
 
