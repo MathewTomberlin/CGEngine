@@ -804,6 +804,8 @@ namespace CGEngine {
 
     void Body::queueRendering() {
         if (!getId().has_value()) return;
+        //A hidden Body hides its subtree, so hiding a model's root hides the whole model.
+        if (!bodyParams.rendering) return;
         renderer->add(getId().value());
 
         //Draw children recursively
