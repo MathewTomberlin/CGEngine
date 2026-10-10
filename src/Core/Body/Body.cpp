@@ -424,9 +424,13 @@ namespace CGEngine {
     void Body::attachBody(Body* child) {
         //Do nothing on null input
         if (!child || !child->getId().has_value()) return;
-        //If child is already attached, detach
-        if (child->parentId.has_value() && child->parentId != world->getRoot()->getId()) {
-            child->detach();
+        //If child is already attached (including to the world root), remove it from its old parent first.
+        //Detach without re-attaching to the root: the child is attached to this Body below, and a root
+        //attach here would leave a stale entry in the root's children (rendered and scripted twice).
+        if (child->parentId.has_value()) {
+            if (Body* oldParent = assets.get<Body>(child->parentId.value())) {
+                oldParent->detachBody(child, true, false);
+            }
         }
         //Add the child to children
         children.push_back(child->getId().value());
@@ -434,7 +438,7 @@ namespace CGEngine {
         child->parentId = this->getId();
     }
 
-    void Body::detachBody(Body* child, const bool keepWorldTranform) {
+    void Body::detachBody(Body* child, const bool keepWorldTranform, const bool attachToRoot) {
         //Do nothing on null input
         if (!child || !child->getId().has_value()) return;
         //Find the body to detach
@@ -449,7 +453,9 @@ namespace CGEngine {
             }
             //Remove child from children
             children.erase(iterator);
-            world->getRoot()->attachBody(child);
+            if (attachToRoot) {
+                world->getRoot()->attachBody(child);
+            }
         }
     }
 
