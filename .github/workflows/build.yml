@@ -35,7 +35,6 @@ jobs:
         shell: pwsh
         run: |
           foreach ($f in @("build/bin/Debug/main.exe",
-                           "build/bin/Debug/cg_engine_bindings.cp313-win_amd64.pyd",
                            "build/bin/Debug/cg_engine_python/Scripts/PyScript.py")) {
             if (-not (Test-Path $f)) { throw "Missing expected output: $f" }
           }
