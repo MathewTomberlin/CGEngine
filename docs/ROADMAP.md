@@ -42,4 +42,5 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done.
 ## Notes from development (living section)
 - The render cost was not where it looked: a body re-parenting bug quietly doubled the work (fixed). Measure before optimising; the first guess was wrong twice.
 - Undefined behaviour hides until a Debug build runs it. The asset loaders and `Body::deleteBody` each had one. Smoke and control tests are the safety net; add a check whenever a path is touched.
+- The "giant blue shapes" seen around the caveman were not a skinning bug. They came from a scene caveman loaded at too large a scale, so the bodies could not be told apart. Keep scene scales sane when debugging, and name bodies distinctly.
 - Remaining big-ticket items: batching draws by material (3.2 continuation) and skeleton/animation authoring (4.1).
