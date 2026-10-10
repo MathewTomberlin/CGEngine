@@ -1,0 +1,1 @@
+{ "version": 1, "bodies": [ { "name": "ghost", "model": "no_such_model.obj" } ] }

@@ -1,0 +1,1 @@
+{ "version": 1, "bodies": [ { "name": "cube", "model": "Mesh.obj", "material": "does_not_exist" } ] }
