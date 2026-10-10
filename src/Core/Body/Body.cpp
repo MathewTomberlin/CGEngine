@@ -531,6 +531,16 @@ namespace CGEngine {
         }
     }
 
+    // Every input actuator a Body registers is recorded, so the destructor can remove it. An actuator keeps raw
+    // pointers to its Body and Behavior; left behind after the Body is deleted, it crashes on the next key press.
+    optional<id_t> Body::registerActuator(InputCondition condition, Actuator* actuator) {
+        optional<id_t> id = input->addActuator(condition, actuator);
+        if (id.has_value()) {
+            listenerIds[condition].push_back(id.value());
+        }
+        return id;
+    }
+
     optional<id_t> Body::addOverlapMousePressScript(Script* script, Mouse::Button button, optional<id_t> behaviorId, bool alwaysAddListener) {
         //The input condition called by the InputMap
         InputCondition inputCondition = InputCondition((int)button, InputType::Button, InputState::Pressed);
@@ -539,7 +549,7 @@ namespace CGEngine {
             if (behaviorId.has_value()) {
                 behavior = behaviors.get(behaviorId.value()).get();
             }
-            input->addActuator(inputCondition, new Actuator(MouseOverlapPressEvent, this, behavior));
+            registerActuator(inputCondition, new Actuator(MouseOverlapPressEvent, this, behavior));
         }
         //Add the script to the input condition for clicking
         if (script != nullptr) {
@@ -556,7 +566,7 @@ namespace CGEngine {
             if (behaviorId.has_value()) {
                 behavior = behaviors.get(behaviorId.value()).get();
             }
-            input->addActuator(inputCondition, new Actuator(MouseOverlapReleaseEvent, this, behavior));
+            registerActuator(inputCondition, new Actuator(MouseOverlapReleaseEvent, this, behavior));
         }
         if (script != nullptr) {
             return scripts.addScript("mouseRelease_" + to_string((int)button), script);
@@ -594,7 +604,7 @@ namespace CGEngine {
         if (behaviorId.has_value()) {
             behavior = behaviors.get(behaviorId.value()).get();
         }
-        return input->addActuator(inputCondition, new Actuator(scriptEvt, this, behavior));
+        return registerActuator(inputCondition, new Actuator(scriptEvt, this, behavior));
     }
 
     optional<id_t> Body::addMousePressScript(ScriptEventHandler scriptEvt, Mouse::Button button, optional<id_t> behaviorId) {
@@ -604,7 +614,7 @@ namespace CGEngine {
         if (behaviorId.has_value()) {
             behavior = behaviors.get(behaviorId.value()).get();
         }
-        return input->addActuator(inputConditionGlobal, new Actuator(scriptEvt, this, behavior));
+        return registerActuator(inputConditionGlobal, new Actuator(scriptEvt, this, behavior));
     }
 
     optional<id_t> Body::addMouseReleaseScript(ScriptEventHandler scriptEvt, Mouse::Button button, optional<id_t> behaviorId) {
@@ -614,7 +624,7 @@ namespace CGEngine {
         if (behaviorId.has_value()) {
             behavior = behaviors.get(behaviorId.value()).get();
         }
-        return input->addActuator(inputConditionGlobal, new Actuator(scriptEvt, this, behavior));
+        return registerActuator(inputConditionGlobal, new Actuator(scriptEvt, this, behavior));
     }
 
     optional<id_t> Body::addKeyPressScript(ScriptEventHandler scriptEvt, Keyboard::Scan key, optional<id_t> behaviorId) {
@@ -623,7 +633,7 @@ namespace CGEngine {
         if (behaviorId.has_value()) {
             behavior = behaviors.get(behaviorId.value()).get();
         }
-        return input->addActuator(inputConditionGlobal, new Actuator(scriptEvt, this, behavior));
+        return registerActuator(inputConditionGlobal, new Actuator(scriptEvt, this, behavior));
     }
 
     optional<id_t> Body::addKeyReleaseScript(ScriptEventHandler scriptEvt, Keyboard::Scan key, optional<id_t> behaviorId) {
@@ -632,7 +642,7 @@ namespace CGEngine {
         if (behaviorId.has_value()) {
             behavior = behaviors.get(behaviorId.value()).get();
         }
-        return input->addActuator(inputConditionGlobal, new Actuator(scriptEvt, this, behavior));
+        return registerActuator(inputConditionGlobal, new Actuator(scriptEvt, this, behavior));
     }
 
     optional<id_t> Body::addTextEnteredScript(ScriptEventHandler scriptEvt, optional<id_t> behaviorId) {
@@ -641,7 +651,7 @@ namespace CGEngine {
         if (behaviorId.has_value()) {
             behavior = behaviors.get(behaviorId.value()).get();
         }
-        return input->addActuator(inputConditionGlobal, new Actuator(scriptEvt, this, behavior));
+        return registerActuator(inputConditionGlobal, new Actuator(scriptEvt, this, behavior));
     }
 
     optional<id_t> Body::addKeyHoldScript(Script* script, Keyboard::Scan key, optional<id_t> behaviorId) {
