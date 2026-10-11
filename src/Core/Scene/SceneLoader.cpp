@@ -34,6 +34,25 @@ namespace CGEngine {
             return obj.at(key).get<std::string>();
         }
 
+        // Each entry of "instances" is a transform relative to the body: position, rotation (degrees) and scale, all optional.
+        std::vector<glm::mat4> readInstances(const json& b, const std::string& name) {
+            std::vector<glm::mat4> matrices;
+            if (!b.contains("instances")) return matrices;
+            const json& list = b.at("instances");
+            if (!list.is_array()) {
+                throw std::invalid_argument("body '" + name + "': 'instances' must be an array");
+            }
+            for (const json& entry : list) {
+                if (!entry.is_object()) {
+                    throw std::invalid_argument("body '" + name + "': each instance must be an object");
+                }
+                Transformation3D transform(readVec3(entry, "position", Vector3f(0, 0, 0)),
+                    readVec3(entry, "rotation", Vector3f(0, 0, 0)), readVec3(entry, "scale", Vector3f(1, 1, 1)));
+                matrices.push_back(Mesh::modelMatrixOf(transform));
+            }
+            return matrices;
+        }
+
         // Cube or plane generated in code. Meshes are cached per size, so bodies can share them.
         void createPrimitiveBody(const json& b, const std::string& name, const Transformation3D& transform, const std::vector<id_t>& overrides) {
             std::string primitive = requireString(b, "primitive", "body '" + name + "'");
@@ -53,6 +72,7 @@ namespace CGEngine {
 
             id_t materialId = overrides.empty() ? assets.getDefaultId<Material>().value_or(0) : overrides.front();
             Mesh mesh(meshData.value().second, transform, { materialId });
+            mesh.setInstances(readInstances(b, name));
             // Body asset names are cache keys. A new key per load stops a reloaded scene returning the old body with its old transform.
             static size_t primitiveCount = 0;
             auto body = assets.create<Body>("body:" + name + "#" + std::to_string(++primitiveCount), mesh);
@@ -210,6 +230,9 @@ namespace CGEngine {
                         continue;
                     }
 
+                    if (b.contains("instances")) {
+                        throw std::invalid_argument("body '" + name + "': \"instances\" only applies to primitive bodies");
+                    }
                     std::string modelPath = requireString(b, "model", "body '" + name + "'");
                     auto model = assets.load<Model>(modelPath);
                     if (!model.has_value()) {

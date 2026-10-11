@@ -63,6 +63,8 @@ in vec3 position;
 in vec2 texCoord;
 in vec3 vertNormal;
 in float materialId;
+in mat4 instanceMatrix;	//Read only when instanced is set (see Renderer::drawInstances)
+uniform bool instanced;
 in ivec4 boneIds;
 in vec4 weights;
 
@@ -98,10 +100,11 @@ void main() {
 	}
 
 	//Final transformations
-	vec4 worldPos = model * bonePosition;
+	mat4 instanceTransform = instanced ? instanceMatrix : mat4(1.0f);
+	vec4 worldPos = model * instanceTransform * bonePosition;
 
 	uv = texCoord;
-	normal = normalize(mat3(model) * boneNormal);
+	normal = normalize(mat3(model * instanceTransform) * boneNormal);
 	vertex = worldPos.xyz;
 	matId = materialId;
 

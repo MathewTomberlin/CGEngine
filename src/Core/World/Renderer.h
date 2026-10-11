@@ -186,6 +186,8 @@ namespace CGEngine {
 		unsigned int getLastFrameDrawCalls() const { return lastFrameDrawCalls; }
 		/// Meshes skipped in the last rendered frame because their bounds were outside the camera's view.
 		unsigned int getLastFrameCulledDraws() const { return lastFrameCulledDraws; }
+		/// Instances skipped in the last rendered frame because they were outside the view.
+		unsigned int getLastFrameCulledInstances() const { return lastFrameCulledInstances; }
 		void saveScreenshot(const std::string& path);
 		/// Save the next presented frame to a PNG at path. Taken before the buffer swap.
 		void requestScreenshot(const std::string& path) { pendingScreenshotPath = path; }
@@ -230,6 +232,12 @@ namespace CGEngine {
 		unsigned int lastFrameDrawCalls = 0;
 		unsigned int culledDrawsThisFrame = 0;
 		unsigned int lastFrameCulledDraws = 0;
+		unsigned int culledInstancesThisFrame = 0;
+		unsigned int lastFrameCulledInstances = 0;
+		// Instances of the mesh being drawn that are inside the view (filled by collectVisibleInstances).
+		vector<glm::mat4> visibleInstances;
+		void collectVisibleInstances(const glm::mat4& bodyMatrix, const MeshData* meshData, const vector<glm::mat4>& instances);
+		void drawInstances(Mesh* mesh, MeshData* meshData, Program* program);
 		// Planes of the view frustum (normal.xyz, distance w; points with dot(normal, p) + w >= 0 are inside), set each frame.
 		std::array<glm::vec4, 6> frustumPlanes{};
 		void updateFrustum();

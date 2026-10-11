@@ -78,6 +78,16 @@ The plane is the cube's front face: a square in the local XY plane at local `z =
 `[-90, 0, 0]` to lie flat, its surface sits at `position.y + size`. To put a floor surface at `y = 0`, place the
 plane at `y = -size`, as `resources/scripts/DungeonGame.py` does.
 
+Instancing: a primitive body can list `"instances"`, one entry per copy. Each entry has an optional `position`,
+`rotation` (degrees) and `scale`, relative to the body. The body is drawn once for all of them, in one draw call,
+and each instance is culled against the view on its own. The body's own transform still applies to every instance.
+`"instances"` is only accepted on primitive bodies.
+
+```json
+{ "name": "floor", "primitive": "plane", "size": 0.5, "material": "floor",
+  "instances": [ { "position": [0, -0.5, 0], "rotation": [-90, 0, 0] }, { "position": [1, -0.5, 0], "rotation": [-90, 0, 0] } ] }
+```
+
 Optional top-level `"clips"`: a list of clip file paths (see `docs/ai/clip-format.md`), loaded before bodies.
 
 Optional animation keys on a body:

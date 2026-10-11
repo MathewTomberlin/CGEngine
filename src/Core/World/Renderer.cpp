@@ -340,6 +340,51 @@ namespace CGEngine {
 		}
 	}
 
+	void Renderer::collectVisibleInstances(const glm::mat4& bodyMatrix, const MeshData* meshData, const vector<glm::mat4>& instances) {
+		visibleInstances.clear();
+		for (const glm::mat4& instance : instances) {
+			if (isVisible(bodyMatrix * instance, meshData->boundsMin, meshData->boundsMax)) {
+				visibleInstances.push_back(instance);
+			}
+		}
+		culledInstancesThisFrame += static_cast<unsigned int>(instances.size() - visibleInstances.size());
+	}
+
+	void Renderer::drawInstances(Mesh* mesh, MeshData* meshData, Program* program) {
+		// One matrix per instance in a buffer, read as a per-instance attribute (divisor 1) on the mesh's own VAO.
+		if (mesh->instanceBuffer == 0U) {
+			GL_CHECK(glGenBuffers(1, &mesh->instanceBuffer));
+		}
+		GL_CHECK(glBindBuffer(GL_ARRAY_BUFFER, mesh->instanceBuffer));
+		GL_CHECK(glBufferData(GL_ARRAY_BUFFER, visibleInstances.size() * sizeof(glm::mat4), visibleInstances.data(), GL_STREAM_DRAW));
+
+		// A mat4 attribute takes four consecutive locations, one per column. A shader without it gets -1 and skips this.
+		const GLint location = program->attrib("instanceMatrix");
+		if (location >= 0) {
+			for (GLint column = 0; column < 4; ++column) {
+				GL_CHECK(glEnableVertexAttribArray(location + column));
+				GL_CHECK(glVertexAttribPointer(location + column, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4), (void*)(sizeof(glm::vec4) * column)));
+				GL_CHECK(glVertexAttribDivisor(location + column, 1));
+			}
+		}
+
+		const GLsizei count = static_cast<GLsizei>(visibleInstances.size());
+		if (meshData->indices.size()) {
+			GL_CHECK(glDrawElementsInstanced(GL_TRIANGLES, meshData->indices.size(), GL_UNSIGNED_INT, 0, count));
+		} else {
+			GL_CHECK(glDrawArraysInstanced(GL_TRIANGLES, 0, meshData->vertices.size(), count));
+		}
+
+		// Put the attribute back the way the mesh's own draws expect it: no array, no divisor.
+		if (location >= 0) {
+			for (GLint column = 0; column < 4; ++column) {
+				GL_CHECK(glDisableVertexAttribArray(location + column));
+				GL_CHECK(glVertexAttribDivisor(location + column, 0));
+			}
+		}
+		GL_CHECK(glBindBuffer(GL_ARRAY_BUFFER, 0));
+	}
+
 	bool Renderer::isVisible(const glm::mat4& model, const glm::vec3& localMin, const glm::vec3& localMax) const {
 		// Bounds of the transformed box. For a rotated box this is larger than the box itself, so the test is conservative.
 		glm::vec3 worldMin(std::numeric_limits<float>::max());
@@ -369,10 +414,18 @@ namespace CGEngine {
 			return;
 		}
 
-		// Skinned meshes are skipped: their bind-pose bounds do not cover the animated pose.
+		// Skinned meshes are never culled or instanced: their bind-pose bounds do not cover the animated pose.
+		const glm::mat4 bodyMatrix = getBodyGlobalTransform(mesh->getBodyId());
+		const bool instanced = meshData->bones.empty() && !mesh->getInstances().empty();
 		if (meshData->bones.empty()) {
 			if (!meshData->boundsValid) meshData->computeBounds();
-			if (!isVisible(getBodyGlobalTransform(mesh->getBodyId()), meshData->boundsMin, meshData->boundsMax)) {
+			if (instanced) {
+				collectVisibleInstances(bodyMatrix, meshData, mesh->getInstances());
+				if (visibleInstances.empty()) {
+					++culledDrawsThisFrame;
+					return;
+				}
+			} else if (!isVisible(bodyMatrix, meshData->boundsMin, meshData->boundsMax)) {
 				++culledDrawsThisFrame;
 				return;
 			}
@@ -404,7 +457,7 @@ namespace CGEngine {
 			LightUBO lightUBOData = LightUBO();
 			setLightUBOData(lightUBOData);
 			TransformUBO transformUBOData = TransformUBO();
-			setTransformUBOData(transformUBOData, getBodyGlobalTransform(mesh->getBodyId()));
+			setTransformUBOData(transformUBOData, bodyMatrix);
 			//If the mesh has bones, set the bone uniform values
 			if (animator) {
 				BoneUBO boneUBOData = BoneUBO();
@@ -412,13 +465,16 @@ namespace CGEngine {
 			}
 			program->setUniform("cameraPosition", toGlm(currentCamera->getPosition()));
 			program->setUniform("timeSec", time.getElapsedSec());
+			program->setUniform("instanced", instanced ? 1 : 0);
 
 			//Draw the MeshData by index, if available, or by vertices
 			++drawCallsThisFrame;
-			if (meshData->indices.size()) {
+			if (instanced) {
+				drawInstances(mesh, meshData, program);
+			} else if (meshData->indices.size()) {
 				GL_CHECK(glDrawElements(GL_TRIANGLES, meshData->indices.size(), GL_UNSIGNED_INT, 0));
 			} else {
-				GL_CHECK(glDrawArrays(GL_TRIANGLES, 0, meshData->vertices.size() / 5));
+				GL_CHECK(glDrawArrays(GL_TRIANGLES, 0, meshData->vertices.size()));
 			}
 
 			// Unbind varray, shaders, and texture
@@ -823,6 +879,8 @@ namespace CGEngine {
 		drawCallsThisFrame = 0;
 		lastFrameCulledDraws = culledDrawsThisFrame;
 		culledDrawsThisFrame = 0;
+		lastFrameCulledInstances = culledInstancesThisFrame;
+		culledInstancesThisFrame = 0;
 	}
 	
 	void Renderer::sortZ() {

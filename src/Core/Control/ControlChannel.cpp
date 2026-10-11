@@ -253,6 +253,7 @@ namespace CGEngine {
                     {"frameSeconds", time.getDeltaSec()},
                     {"drawCalls", renderer->getLastFrameDrawCalls()},
                     {"culledDraws", renderer->getLastFrameCulledDraws()},
+                    {"culledInstances", renderer->getLastFrameCulledInstances()},
                     {"bodies", assets.getResourceCount<Body>()},
                     {"lights", assets.getResourceCount<Light>()},
                     {"materials", assets.getResourceCount<Material>()}

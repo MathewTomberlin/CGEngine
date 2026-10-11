@@ -68,6 +68,7 @@ try {
         "13_version"  = @{ file = "scenes/invalid/bad_version.json";       error = "version" }
         "14_vector"   = @{ file = "scenes/invalid/bad_vector.json";        error = "3 numbers" }
         "22_anim"     = @{ file = "scenes/invalid/unknown_animation.json";  error = "unknown animation" }
+        "42_instances"= @{ file = "scenes/invalid/instances_on_model.json";  error = "only applies to primitive" }
     "23_specular" = @{ file = "scenes/invalid/bad_specular.json";       error = "specular must be between 0 and 1" }
     }
     foreach ($id in ($invalid.Keys | Sort-Object)) {
@@ -221,6 +222,14 @@ try {
     Send-Command "41_cull_stats" '{"command":"get_stats"}'
     $cullStats = Wait-Result "41_cull_stats"
     Check "a body outside the view is culled, not drawn" ($cullStats.ok -and $cullStats.result.culledDraws -ge 1 -and $cullStats.result.drawCalls -ge 1)
+
+    # Instancing: both instances of this body are far outside the view, so each is culled on its own.
+    Send-Command "43_inst_load" '{"command":"load_scene","params":{"path":"scenes/instancing_test.json"}}'
+    $instLoad = Wait-Result "43_inst_load"
+    Check "instanced scene loads" ($instLoad.ok)
+    Send-Command "44_inst_stats" '{"command":"get_stats"}'
+    $instStats = Wait-Result "44_inst_stats"
+    Check "instances outside the view are culled one by one" ($instStats.ok -and $instStats.result.culledInstances -ge 2)
     Check "engine still running after commands" (-not $app.HasExited)
 }
 finally {
