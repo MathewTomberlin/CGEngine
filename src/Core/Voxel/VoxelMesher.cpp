@@ -342,5 +342,96 @@ namespace CGEngine {
 				}
 			}
 		}
+
+		// Skirts: where the surface crosses a chunk's side, a strip runs a block down from it. A neighbour at another level
+		// of detail has its surface a little off the same line, and the strip covers the gap, so the seam is hidden.
+		auto topOfColumn = [&](const auto& value, float& height) {
+			for (int j = H * R - 1; j >= -1; --j) {
+				const float lower = value(j);
+				const float upper = value(j + 1);
+				if (lower > SmoothIso && upper <= SmoothIso) {
+					const float t = (lower - SmoothIso) / (lower - upper);
+					const float y0 = position(0, j, 0).y;
+					const float y1 = position(0, j + 1, 0).y;
+					height = y0 + t * (y1 - y0);
+					return true;
+				}
+			}
+			return false;
+		};
+		auto addSkirt = [&](glm::vec3 a, glm::vec3 b, glm::vec3 normal) {
+			const glm::vec3 down(0.0f, -1.0f, 0.0f);
+			const unsigned int first = static_cast<unsigned int>(out.vertices.size());
+			const glm::vec3 corners[4] = { a, b, b + down, a + down };
+			for (const glm::vec3& corner : corners) {
+				VoxelVertex vertex = smoothVertex(chunk, palette, corner);
+				vertex.normal = normal;
+				out.vertices.push_back(vertex);
+			}
+			// Wound so the strip faces its normal.
+			const glm::vec3 across = b - a;
+			const glm::vec3 drop = down;
+			if (glm::dot(glm::cross(across, drop), normal) >= 0.0f) {
+				out.indices.insert(out.indices.end(), { first, first + 1, first + 2, first, first + 2, first + 3 });
+			} else {
+				out.indices.insert(out.indices.end(), { first, first + 2, first + 1, first, first + 3, first + 2 });
+			}
+		};
+		const int last = S * R;
+		// The two sides at x = first and last sample, along z.
+		for (int side = 0; side < 2; ++side) {
+			const int i = side == 0 ? 0 : last;
+			const float x = position(i, 0, 0).x;
+			for (int k = 0; k < last; ++k) {
+				float heightA = 0.0f;
+				float heightB = 0.0f;
+				const bool foundA = topOfColumn([&](int j) { return sample(i, j, k); }, heightA);
+				const bool foundB = topOfColumn([&](int j) { return sample(i, j, k + 1); }, heightB);
+				if (!foundA || !foundB) continue;
+				addSkirt(glm::vec3(x, heightA, position(0, 0, k).z), glm::vec3(x, heightB, position(0, 0, k + 1).z),
+					glm::vec3(side == 0 ? -1.0f : 1.0f, 0.0f, 0.0f));
+			}
+		}
+		// The two sides at z = first and last sample, along x.
+		for (int side = 0; side < 2; ++side) {
+			const int k = side == 0 ? 0 : last;
+			const float z = position(0, 0, k).z;
+			for (int i = 0; i < last; ++i) {
+				float heightA = 0.0f;
+				float heightB = 0.0f;
+				const bool foundA = topOfColumn([&](int j) { return sample(i, j, k); }, heightA);
+				const bool foundB = topOfColumn([&](int j) { return sample(i + 1, j, k); }, heightB);
+				if (!foundA || !foundB) continue;
+				addSkirt(glm::vec3(position(i, 0, 0).x, heightA, z), glm::vec3(position(i + 1, 0, 0).x, heightB, z),
+					glm::vec3(0.0f, 0.0f, side == 0 ? -1.0f : 1.0f));
+			}
+		}
+	}
+	void buildBlob(const std::array<glm::vec3, 256>& palette, uint8_t block, glm::vec3 centre, float radius, MeshArrays& out) {
+		// A round ball of the block's colour: the look of a block in flight, which is smooth rather than cubic.
+		const int rings = 8;
+		const int segments = 12;
+		const float pi = 3.14159265f;
+		const unsigned int first = static_cast<unsigned int>(out.vertices.size());
+		for (int r = 0; r <= rings; ++r) {
+			const float phi = pi * static_cast<float>(r) / static_cast<float>(rings);
+			for (int s = 0; s <= segments; ++s) {
+				const float theta = 2.0f * pi * static_cast<float>(s) / static_cast<float>(segments);
+				const glm::vec3 normal(std::sin(phi) * std::cos(theta), std::cos(phi), std::sin(phi) * std::sin(theta));
+				VoxelVertex vertex;
+				vertex.position = centre + normal * radius;
+				vertex.normal = normal;
+				vertex.texCoord = glm::vec2(theta / (2.0f * pi), phi / pi);
+				vertex.colour = palette[static_cast<size_t>(block)];
+				out.vertices.push_back(vertex);
+			}
+		}
+		for (int r = 0; r < rings; ++r) {
+			for (int s = 0; s < segments; ++s) {
+				const unsigned int a = first + static_cast<unsigned int>(r * (segments + 1) + s);
+				const unsigned int b = a + static_cast<unsigned int>(segments + 1);
+				out.indices.insert(out.indices.end(), { a, b, a + 1, a + 1, b, b + 1 });
+			}
+		}
 	}
 }

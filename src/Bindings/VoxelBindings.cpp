@@ -78,6 +78,10 @@ void bindVoxel(py::module_& m) {
            "does. Returns (pos, vel, on_ground).")
         .def("simulate", &VoxelWorld::simulate, py::arg("dt"), py::arg("budget_ms") = 1.0, py::arg("tick_seconds") = 0.1,
              "Advance the block physics by dt seconds, within budget_ms of work. Ticks run every tick_seconds. Returns the cells looked at.")
+        .def("set_detail", &VoxelWorld::setDetail, py::arg("near_chunks"), py::arg("near_samples") = 2,
+             "Finer smooth skin near the camera: the chunks within near_chunks of the focus use near_samples per block. 0 turns it off.")
+        .def("chunk_quads", &VoxelWorld::chunkQuads, py::arg("cx"), py::arg("cz"),
+             "The quads in a loaded chunk's mesh (0 if it is not loaded or has none).")
         .def("set_move_seconds", &VoxelWorld::setMoveSeconds, py::arg("seconds"),
              "How long a falling block takes to move one cell (0 for instant moves). A block in flight is not in the world until it lands.")
         .def("moving_blocks", [](const VoxelWorld& world) {

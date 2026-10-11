@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cstdlib>
 #include <chrono>
 #include "VoxelWorld.h"
 #include "../Engine/Engine.h"
@@ -94,9 +95,42 @@ namespace CGEngine {
 		const int next = std::max(0, resolution);
 		if (next == smoothResolution) return;
 		smoothResolution = next;
-		for (auto& entry : chunks) {
-			if (entry.second.loaded) markDirty(entry.first.first, entry.first.second);
+		refreshResolutions(focusCx, focusCz, true);
+	}
+
+	void VoxelWorld::setDetail(int nearChunks, int nearSamples) {
+		nearRadius = std::max(0, nearChunks);
+		nearResolution = std::max(1, nearSamples);
+		refreshResolutions(focusCx, focusCz, true);
+	}
+
+	int VoxelWorld::resolutionFor(int cx, int cz) const {
+		if (smoothResolution <= 0) return 0;
+		if (nearRadius > 0 && focusKnown && std::max(std::abs(cx - focusCx), std::abs(cz - focusCz)) <= nearRadius) {
+			return std::max(smoothResolution, nearResolution);
 		}
+		return smoothResolution;
+	}
+
+	void VoxelWorld::refreshResolutions(int focusX, int focusZ, bool force) {
+		if (!force && focusKnown && focusX == focusCx && focusZ == focusCz) return;
+		focusCx = focusX;
+		focusCz = focusZ;
+		focusKnown = true;
+		for (auto& entry : chunks) {
+			Chunk& chunk = entry.second;
+			if (!chunk.loaded) continue;   // a chunk gets its level when its terrain is installed
+			const int wanted = resolutionFor(entry.first.first, entry.first.second);
+			if (wanted != chunk.resolution) {
+				chunk.resolution = wanted;
+				markDirty(entry.first.first, entry.first.second);
+			}
+		}
+	}
+
+	int VoxelWorld::chunkQuads(int cx, int cz) const {
+		const Chunk* chunk = findChunk(cx, cz);
+		return chunk && chunk->loaded ? chunk->quads : 0;
 	}
 
 	int VoxelWorld::floorDiv(int a, int b) {
@@ -226,6 +260,7 @@ namespace CGEngine {
 		chunk.blocks = std::move(result.blocks);
 		applyEdits(result.cx, result.cz, chunk.blocks);
 		chunk.loaded = true;
+		chunk.resolution = resolutionFor(result.cx, result.cz);
 		// The chunk's faces, and those of the neighbours that face it, are meshed from the new blocks.
 		markDirty(result.cx, result.cz);
 		markNeighboursDirty(result.cx, result.cz);
@@ -339,7 +374,7 @@ namespace CGEngine {
 		chunk.dirty = false;
 		chunk.meshing = true;
 		dirtyKeys.erase(std::make_pair(cx, cz));
-		const int resolution = smoothResolution;
+		const int resolution = chunk.resolution;
 		PaddedChunk padded = snapshot(cx, cz, resolution > 0 ? 3 : 1);
 		const std::array<glm::vec3, 256> colours = palette;
 		const uint32_t generation = chunk.generation;
@@ -392,6 +427,8 @@ namespace CGEngine {
 	}
 
 	int VoxelWorld::update(double budgetMs, int focusX, int focusZ) {
+		refreshResolutions(focusX, focusZ, false);
+		updateMovingBlocks();
 		// 1. Install the terrain that finished generating.
 		std::deque<TerrainResult> installed;
 		{
@@ -482,5 +519,35 @@ namespace CGEngine {
 		}
 		chunks.clear();
 		dirtyKeys.clear();
+	}
+
+	// The blocks in flight are drawn as balls that move with them, in one runtime mesh that is rebuilt while any move.
+	void VoxelWorld::updateMovingBlocks() {
+		const std::vector<VoxelSimulation::Move>& moves = simulation.inFlight();
+		if (moves.empty() && !movingShown) return;
+		MeshArrays balls;
+		for (const VoxelSimulation::Move& move : moves) {
+			const double t = move.duration > 0.0 ? std::min(1.0, move.elapsed / move.duration) : 1.0;
+			glm::vec3 corner(0.0f);
+			for (int axis = 0; axis < 3; ++axis) {
+				corner[axis] = static_cast<float>(move.from[axis] + (move.to[axis] - move.from[axis]) * t);
+			}
+			buildBlob(palette, move.block, corner + glm::vec3(0.5f), 0.42f, balls);
+		}
+		Body* body = movingBody.first ? assets.get<Body>(movingBody.second) : nullptr;
+		if (body) {
+			updateCompactMeshBody(body, std::move(balls.vertices), std::move(balls.indices));
+		} else if (!balls.vertices.empty()) {
+			std::vector<id_t> materials;
+			if (auto materialId = assets.getId<Material>(material)) {
+				materials.push_back(materialId.value());
+			} else {
+				materials.push_back(assets.getDefaultId<Material>().value_or(0));
+			}
+			body = createCompactMeshBody("voxel_moving_blocks", std::move(balls.vertices), std::move(balls.indices),
+				materials, Vector3f(0.0f, 0.0f, 0.0f));
+			if (body) movingBody = { true, body->getId().value_or(0) };
+		}
+		movingShown = !moves.empty();
 	}
 }

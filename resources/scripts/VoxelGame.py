@@ -42,7 +42,8 @@ SIM_BUDGET_MS = 1.5          # time per frame for the block physics (falling san
 # Block physics runs in ticks this far apart, and a falling block takes most of a tick to move one cell, so sand and water
 # move at a pace the eye can follow: a block falls about four cells a second by default.
 SIM_TICK = float(os.environ.get("VOXEL_SIM_TICK", "0.25"))
-MOVING_BODY = "moving_blocks"   # the one mesh that draws every block in flight
+NEAR_RADIUS = int(os.environ.get("VOXEL_NEAR_RADIUS", "3"))     # chunks around the player that get the finer skin
+NEAR_SAMPLES = int(os.environ.get("VOXEL_NEAR_SAMPLES", "2"))   # samples per block there (the far chunks use VOXEL_SMOOTH)
 EDITS_FILE = "cg_control/voxel_edits.bin"
 STATE_INTERVAL = 0.25       # seconds between writes to cg_control/voxel_state.json
 # The outline of the block the crosshair is on (yellow: it is broken), and of the cell a block would be placed in
@@ -153,8 +154,6 @@ class VoxelGame(PyScript):
         self.broken = False
         self.hud_ready = False          # the label and the outline bodies exist (made on the second frame)
         self.paused = False             # the pause menu is open: the world stands still and the mouse is free
-        self.moving_created = False     # the mesh of blocks in flight exists
-        self.moving_shown = False       # it currently draws blocks (otherwise it is hidden)
         self.outline_keys = {}          # the last outline shown under each name, so unchanged ones are not re-uploaded
         self.outline_bodies = set()     # the outlines already made as runtime meshes
         self.slot = 0                   # the hotbar slot placing uses
@@ -210,7 +209,6 @@ class VoxelGame(PyScript):
             self.update_player(dt)
             self.update_target()
             self.edit_blocks()
-        self.update_moving_blocks()
         self.update_outlines()
         self.update_hud()
         self.update_sky(dt)
@@ -230,6 +228,8 @@ class VoxelGame(PyScript):
                                     falls=block in VoxelGen.FALLS, liquid=block in VoxelGen.LIQUIDS)
         self.world.set_smoothing(SMOOTH_RESOLUTION)
         self.world.set_move_seconds(SIM_TICK * 0.9)   # a falling block lands just before the next tick
+        # Smooth skin nearest the camera is finer: NEAR_SAMPLES per block within NEAR_RADIUS chunks.
+        self.world.set_detail(NEAR_RADIUS, NEAR_SAMPLES)
         cge.set_environment(shadows=SHADOWS, shadow_radius=SHADOW_RADIUS)
         self.world.set_terrain(self.seed, VoxelGen.SEA_LEVEL, 8, 44, VoxelGen.SNOW_LEVEL, VoxelGen.TREE_CHANCE,
                           VoxelGen.CAVE_WIDTH)
@@ -435,28 +435,6 @@ class VoxelGame(PyScript):
 
     def update_target(self):
         self.target = physics.raycast(self.solid, tuple(self.eye()), self.look_direction())
-
-    def update_moving_blocks(self):
-        """Draw the blocks in flight, each part of the way from where it left to where it will land, in a steady
-        fall. The world does not hold them until they land, so this mesh is the only place they are seen."""
-        if not self.hud_ready:   # runtime meshes are made a frame after the scene starts (see frame)
-            return
-        moves = self.world.moving_blocks()
-        if not moves and not self.moving_shown:
-            return
-        boxes = []
-        for block, src, dst, progress in moves:
-            pos = [src[i] + (dst[i] - src[i]) * progress for i in range(3)]
-            boxes.append((tuple(pos), tuple(p + 1.0 for p in pos), VoxelGen.COLOURS.get(block, (1.0, 1.0, 1.0))))
-        if not boxes:
-            boxes.append((HIDDEN_BOX[0], HIDDEN_BOX[1], (0.0, 0.0, 0.0)))
-        arrays = boxes_arrays(boxes)
-        if self.moving_created:
-            cge.update_mesh_body(MOVING_BODY, *arrays)
-        else:
-            cge.create_mesh_body(MOVING_BODY, *arrays, materials=["voxel"], position=cge.Vector3f(0, 0, 0))
-            self.moving_created = True
-        self.moving_shown = bool(moves)
 
     def show_outline(self, name, box, colour):
         """Show the outline of box (lo, hi) in colour as the runtime mesh called name, or hide it when box is None."""
