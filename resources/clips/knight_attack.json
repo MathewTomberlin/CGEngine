@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "name": "knight_attack",
+  "model": "models/dungeon/knight_rig.fbx",
+  "durationSeconds": 0.45,
+  "channels": [
+    {
+      "bone": "ArmR",
+      "rotation": [
+        {
+          "t": 0.0,
+          "euler": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "t": 0.15,
+          "euler": [
+            95,
+            0,
+            0
+          ]
+        },
+        {
+          "t": 0.45,
+          "euler": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "bone": "Spine",
+      "rotation": [
+        {
+          "t": 0.0,
+          "euler": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "t": 0.15,
+          "euler": [
+            12,
+            0,
+            0
+          ]
+        },
+        {
+          "t": 0.45,
+          "euler": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "replaceWorld": true,
+  "clips": [ "clips/knight_idle.json", "clips/knight_walk.json", "clips/knight_attack.json" ],
+  "lights": [ { "name": "sun", "directional": true, "direction": [0.3, -1, -0.6], "brightness": 0.9, "ambiance": 0.45 } ],
+  "bodies": [
+    { "name": "knight", "model": "models/dungeon/knight_rig.fbx", "position": [0, 0, 0], "animation": "knight_idle", "animationLooping": true }
+  ]
+}

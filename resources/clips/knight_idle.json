@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "name": "knight_idle",
+  "model": "models/dungeon/knight_rig.fbx",
+  "durationSeconds": 2.0,
+  "channels": [
+    {
+      "bone": "Spine",
+      "rotation": [
+        {
+          "t": 0.0,
+          "euler": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "t": 1.0,
+          "euler": [
+            2,
+            0,
+            0
+          ]
+        },
+        {
+          "t": 2.0,
+          "euler": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "bone": "Head",
+      "rotation": [
+        {
+          "t": 0.0,
+          "euler": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "t": 1.0,
+          "euler": [
+            -2,
+            0,
+            0
+          ]
+        },
+        {
+          "t": 2.0,
+          "euler": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
+    }
+  ]
+}
