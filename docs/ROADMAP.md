@@ -67,8 +67,8 @@ Goal: enormous worlds with no hitching while chunks load.
 - [x] **9.2** Greedy meshing on a padded copy of the chunk: no world lookup per face, and coplanar faces merge. About 2.3 times fewer quads than per-face meshing.
 - [x] **9.3** Compact voxel vertices, 48 bytes against 80. Byte attributes, even normalised, made each draw several times slower on the NVIDIA driver, so every attribute is a float (measured: render 50 ms to 5 ms with only the position enabled).
 - [x] **9.4** Mouse look. The arrow keys' turn past 90 degrees flipped the camera upside down (`Camera::lookAt` only reached yaw in [-90, 90]); fixed. Static meshes no longer skin with the bone matrices an animated model left behind (a `skinned` uniform).
-- [ ] **9.5** Region batching: several chunks in one mesh, so fewer draws. Measure with `culledDraws` and `drawCalls` in `get_stats`.
-- [ ] **9.6** Release-build numbers for the voxel sample, and an in-engine test (`tools/test_voxels.ps1`) that walks, waits for the chunks, and checks the worst frame.
+- [ ] **9.5** Region batching (several chunks in one mesh, fewer draws). Deferred: at 700 chunks in view the Release build still runs at about 630 frames a second with a 3.5 ms worst frame, so it is not needed yet. Revisit when there are many more draws per chunk.
+- [x] **9.6** Measured and tested. Release, 169 chunks: loaded in 1.2 s, about 1100 frames a second when still, worst frame 8 ms while walking and turning. Debug: about 100 frames a second, worst frame about 15 ms. Release, 700 chunks: about 630 frames a second. `tools/test_voxels.ps1` loads the world, walks and turns with scripted keys, and checks the chunks, the pitch and the worst frame.
 - [ ] **9.7** Trees, caves, sky and lighting for the voxel world.
 
 ## Tooling and quality
