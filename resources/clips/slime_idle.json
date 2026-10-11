@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "name": "slime_idle",
+  "model": "models/dungeon/slime_rig.fbx",
+  "durationSeconds": 2.0,
+  "channels": [
+    {
+      "bone": "Body",
+      "scale": [
+        {
+          "t": 0.0,
+          "v": [
+            1,
+            1,
+            1
+          ]
+        },
+        {
+          "t": 1.0,
+          "v": [
+            1.03,
+            1.03,
+            0.97
+          ]
+        },
+        {
+          "t": 2.0,
+          "v": [
+            1,
+            1,
+            1
+          ]
+        }
+      ]
+    }
+  ]
+}

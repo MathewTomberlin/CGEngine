@@ -40,7 +40,7 @@ MODEL_DIR = "models/dungeon/"
 # Enemy kinds (DungeonGen.ENEMY_KINDS). size is how far the body reaches (contact range grows with it);
 # radius is used for wall collision.
 ENEMY_STATS = {
-    "slime":  {"speed": 1.6, "hp": 2, "size": 0.35, "radius": 0.35, "model": "slime"},
+    "slime":  {"speed": 1.6, "hp": 2, "size": 0.35, "radius": 0.35, "model": "slime_rig.fbx"},
     "archer": {"speed": 1.3, "hp": 1, "size": 0.3,  "radius": 0.3,  "model": "archer"},
     "brute":  {"speed": 0.9, "hp": 4, "size": 0.5,  "radius": 0.45, "model": "brute"},
 }
@@ -59,7 +59,8 @@ def cube(name, size, pos, material):
 
 
 def model(name, file, pos, yaw=0.0, scale=1.0):
-    return {"name": name, "model": MODEL_DIR + file + ".obj", "position": list(pos),
+    path = file if file.endswith(".fbx") else file + ".obj"
+    return {"name": name, "model": MODEL_DIR + path, "position": list(pos),
             "rotation": [0, yaw, 0], "scale": [scale, scale, scale]}
 
 
@@ -117,6 +118,7 @@ class DungeonGame(PyScript):
         self.setup_done = False
         self.broken = False
         self.state_timer = 0.0
+        self.slime_clip_started = False   # the shared slime model has started its hop
         self.anim = None            # clip the player is playing; None forces the next choice to start
         self.attack_time = 0.0      # seconds left of the attack clip
 
@@ -158,6 +160,7 @@ class DungeonGame(PyScript):
         self.update_player_animation(dt, moved)
         self.update_hud()
         self.update_props()
+        self.start_slime_clip()
         self.update_camera()
         self.state_timer -= dt
         if self.state_timer <= 0.0:
@@ -353,10 +356,6 @@ class DungeonGame(PyScript):
             body = self.room_handles.get(self.enemy_name(enemy))
             if body is not None:
                 place(body, enemy["x"], 0.0, enemy["z"], yaw_towards(dx, dz) if distance > 0.01 else None)
-                if enemy["kind"] == "slime":
-                    # Squash and stretch while it hops along. Each slime gets its own phase.
-                    s = math.sin(self.clock * 9.0 + enemy["id"])
-                    body.get_mesh().set_scale(cge.Vector3f(1.0 + 0.08 * s, 1.0 - 0.12 * s, 1.0 + 0.08 * s))
             reach = CONTACT_DISTANCE + stats["size"] - ENEMY_STATS["slime"]["size"]
             if distance < reach and self.invulnerable <= 0.0:
                 if self.hurt():
@@ -457,6 +456,20 @@ class DungeonGame(PyScript):
             heart = self.fixed[f"dg_heart_{i}"]
             heart.set_rendering_enabled(i < self.hp)
             place(heart, self.px - 0.25 + 0.25 * i, 1.05, self.pz - 0.1)
+
+    def start_slime_clip(self):
+        """Slimes share one model, so one animator: start its hop once, when the first slime body is in the room."""
+        if self.slime_clip_started or not any(name.startswith("dg_enemy_") and self.enemy_kind_of(name) == "slime" for name in self.room_handles):
+            return
+        self.slime_clip_started = True
+        slime = next(name for name in self.room_handles if self.enemy_kind_of(name) == "slime")
+        cge.play_clip(slime, "slime_hop", True)
+
+    def enemy_kind_of(self, name):
+        for enemy in self.enemies.get(self.room, []):
+            if self.enemy_name(enemy) == name:
+                return enemy["kind"]
+        return None
 
     def update_props(self):
         """Idle motion: coins and the goal crystal spin, hearts on the floor bob."""
