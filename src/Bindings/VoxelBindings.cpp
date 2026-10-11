@@ -1,6 +1,8 @@
 #include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
 #include <SFML/System/Vector3.hpp>
 #include "../Core/Voxel/VoxelWorld.h"
+#include "../Core/Voxel/VoxelBody.h"
 
 namespace py = pybind11;
 using namespace py::literals;
@@ -51,6 +53,52 @@ void bindVoxel(py::module_& m) {
         .def("set_smoothing", &VoxelWorld::setSmoothing, py::arg("resolution"),
              "The surface style: 0 for cubes, or the number of samples per block for a smooth skin (1 for the block scale, 2 for half blocks). Loaded chunks are re-meshed.")
         .def("smoothing", &VoxelWorld::smoothing, "The surface style set by set_smoothing: 0 for cubes, else the samples per block.")
+        .def("define_block", [](VoxelWorld& world, int block_id, sf::Vector3f colour, bool solid, bool falls, bool liquid) {
+            world.setColour(block_id, glm::vec3(colour.x, colour.y, colour.z));
+            world.defineBlock(block_id, BlockType{ solid, falls, liquid });
+        }, py::arg("block_id"), py::arg("colour"), py::arg("solid") = true, py::arg("falls") = false, py::arg("liquid") = false,
+           "Define a block id: its colour, whether it is solid (blocks movement), falls (sand-like, moves down into air or liquid) and liquid (flows, as water does).")
+        .def("is_solid", &VoxelWorld::isSolid, py::arg("x"), py::arg("y"), py::arg("z"),
+             "True if the block at these coordinates is solid. Air and liquids are not.")
+        .def("step_body", [](const VoxelWorld& world, std::array<double, 3> pos, std::array<double, 3> vel, double dt,
+                bool flying, double halfWidth, double height) {
+            VoxelBodyShape shape;
+            shape.halfWidth = halfWidth;
+            shape.height = height;
+            VoxelBodyState body;
+            body.pos = pos;
+            body.vel = vel;
+            const VoxelBodyState next = world.stepBody(body, shape, dt, flying);
+            return py::make_tuple(py::make_tuple(next.pos[0], next.pos[1], next.pos[2]),
+                py::make_tuple(next.vel[0], next.vel[1], next.vel[2]), next.onGround);
+        }, py::arg("pos"), py::arg("vel"), py::arg("dt"), py::arg("flying") = false, py::arg("half_width") = 0.3,
+           py::arg("height") = 1.8,
+           "Move a box with its feet at pos (x, y, z) and speed vel, for dt seconds, through the solid blocks, as VoxelPhysics.step "
+           "does. Returns (pos, vel, on_ground).")
+        .def("simulate", &VoxelWorld::simulate, py::arg("dt"), py::arg("budget_ms") = 1.0,
+             "Advance the block physics by dt seconds, within budget_ms of work. Returns the cells looked at.")
+        .def("activate", [](VoxelWorld& world, int x, int y, int z) { world.physics().activate(x, y, z); },
+             py::arg("x"), py::arg("y"), py::arg("z"), "Queue a cell for the simulation, so it is looked at on the next tick.")
+        .def("active_count", [](VoxelWorld& world) { return world.physics().activeCount(); },
+             "Cells queued for the simulation. A world with nothing moving has none.")
+        .def("add_rule", [](VoxelWorld& world, int block, int neighbour, int becomes, float chance) {
+            world.physics().addRule(VoxelSimulation::Rule{ static_cast<uint8_t>(block), static_cast<uint8_t>(neighbour),
+                static_cast<uint8_t>(becomes), chance });
+        }, py::arg("block"), py::arg("neighbour"), py::arg("becomes"), py::arg("chance") = 1.0f,
+           "A reaction: a block that touches the neighbour kind becomes the other block, with this chance per tick.")
+        .def("clear_rules", [](VoxelWorld& world) { world.physics().clearRules(); }, "Remove every reaction rule.")
+        .def("set_tick_hook", [](VoxelWorld& world, py::object fn) {
+            if (fn.is_none()) {
+                world.physics().setHook(nullptr);
+                return;
+            }
+            // Called once per queued block per tick, from the main thread (the GIL is held). Return a block id to replace
+            // the block, or None to leave it.
+            world.physics().setHook([fn](int x, int y, int z, int block) {
+                py::object result = fn(x, y, z, block);
+                return result.is_none() ? -1 : result.cast<int>();
+            });
+        }, py::arg("fn"), "A Python function (x, y, z, block) -> block id or None, run on every queued block each tick. None removes it.")
         .def("save_edits", &VoxelWorld::saveEdits, py::arg("path"),
              "Write the edited blocks to a binary file. False if it cannot be written.")
         .def("load_edits", &VoxelWorld::loadEdits, py::arg("path"),

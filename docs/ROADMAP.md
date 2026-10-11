@@ -81,12 +81,15 @@ Goal: the terrain looks rounded and real, the blocks obey physics the scripts ca
   block, with occlusion. One sample per block: 1.08 million quads for 841 chunks, 655 frames a second in Release, load
   1.7 s, 222 MB. Two samples per block gives half-block detail but 4.7 million quads, so it is not the default. Not yet:
   a finer skin near the camera with a coarser one far away (the seams need skirts or matched edges).
-- [ ] **10.2** Block physics: block types with properties (solid, falls, liquid), and a cellular simulation that only
-  ticks the active cells (falling sand and gravel, water that spreads and levels off). Changes re-mesh the chunks.
-- [ ] **10.3** Programmable rules: reaction rules as data (`grass + water -> dirt`) evaluated by the simulation, and
-  Python callbacks for the rest. The simulation runs only in the loaded area near the player.
-- [ ] **10.4** Collision in C++: a box sweep against the blocks, so the player and many moving bodies can use the
-  same world queries, and collision is faster than the Python version.
+- [x] **10.2** Block physics (`VoxelSimulation`, `VoxelBlocks.h`): block types (solid, falls, liquid). Sand and gravel
+  fall, and swap down past water. Water is a full source with flowing levels 7 to 1, so it spreads and drains and stays
+  finite. Only changed cells are queued, so an idle world costs nothing. Checked by `tools/voxel_world_check.py`.
+- [~] **10.3** Programmable rules: done are reaction rules as data (`add_rule`, a block touching a kind becomes another, with
+  a chance) and a Python hook that sees each queued block per tick. The simulation runs only on loaded chunks. Not yet: a
+  rule file format, and rules that move blocks other than by falling.
+- [x] **10.4** Collision in C++ (`VoxelBody.cpp`, `world.step_body`): the same mover as `VoxelPhysics.step`, on the block
+  types. The player uses it. `tools/voxel_world_check.py` checks 300 random moves against the Python version and they agree
+  to 1e-9. The world's dirty chunks are a set, so `update` no longer scans every chunk each frame.
 - [ ] **10.5** Shadows: a shadow map for the sun, covering the area near the camera.
 - [ ] **10.6** Region batching (9.5) once the smooth skin raises the draw and vertex counts.
 - [ ] **10.7** An on-screen hotbar (8.4).

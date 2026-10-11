@@ -32,7 +32,9 @@ MAX_PITCH = 85.0            # the engine's camera stops at this angle
 SPAWN_HEIGHT = 60.0         # above the tallest column, so the player drops onto the terrain
 RESPAWN_DEPTH = -20.0       # below this the player is put back at the spawn height
 # The blocks the number keys 1 to 7 choose from when placing (the hotbar), and the file the F5 and F9 keys save and load.
-HOTBAR = [VoxelGen.STONE, VoxelGen.DIRT, VoxelGen.GRASS, VoxelGen.WOOD, VoxelGen.LEAVES, VoxelGen.SAND, VoxelGen.SNOW]
+HOTBAR = [VoxelGen.STONE, VoxelGen.DIRT, VoxelGen.GRASS, VoxelGen.WOOD, VoxelGen.LEAVES, VoxelGen.SAND, VoxelGen.GRAVEL,
+          VoxelGen.SNOW, VoxelGen.WATER]
+SIM_BUDGET_MS = 1.5          # time per frame for the block physics (falling sand, flowing water)
 EDITS_FILE = "cg_control/voxel_edits.bin"
 STATE_INTERVAL = 0.25       # seconds between writes to cg_control/voxel_state.json
 SMOOTH_RESOLUTION = int(os.environ.get("VOXEL_SMOOTH", "1"))   # samples per block for the smooth skin; 0 draws cubes
@@ -112,6 +114,7 @@ class VoxelGame(PyScript):
             self.wanted_centre = centre
             self.request_chunks(centre)
         self.world.update(UPLOAD_BUDGET_MS, centre[0], centre[1])
+        self.world.simulate(dt, SIM_BUDGET_MS)
 
         self.update_mouse()
         self.update_player(dt)
@@ -130,7 +133,8 @@ class VoxelGame(PyScript):
     def setup(self):
         self.world = cge.VoxelWorld(VoxelGen.CHUNK, VoxelGen.HEIGHT, "voxel")
         for block, rgb in VoxelGen.COLOURS.items():
-            self.world.set_colour(block, cge.Vector3f(*rgb))
+            self.world.define_block(block, cge.Vector3f(*rgb), solid=block not in VoxelGen.LIQUIDS,
+                                    falls=block in VoxelGen.FALLS, liquid=block in VoxelGen.LIQUIDS)
         self.world.set_smoothing(SMOOTH_RESOLUTION)
         self.world.set_terrain(self.seed, VoxelGen.SEA_LEVEL, 8, 44, VoxelGen.SNOW_LEVEL, VoxelGen.TREE_CHANCE,
                           VoxelGen.CAVE_WIDTH)
@@ -213,7 +217,8 @@ class VoxelGame(PyScript):
 
         # Physics waits until the chunk under the player is in the world, so the player does not fall through air.
         if self.world.is_loaded(*self.chunk_under_player()):
-            pos, vel, self.on_ground = physics.step(self.solid, tuple(self.pos), tuple(self.vel), dt, self.flying)
+            # The engine's mover is the same as physics.step (tests check they agree), and it is faster.
+            pos, vel, self.on_ground = self.world.step_body(tuple(self.pos), tuple(self.vel), dt, self.flying)
             self.pos = list(pos)
             self.vel = list(vel)
         if self.pos[1] < RESPAWN_DEPTH:
@@ -221,7 +226,7 @@ class VoxelGame(PyScript):
             self.vel = [0.0, 0.0, 0.0]
 
     def solid(self, x, y, z):
-        return self.world.get_block(x, y, z) != 0
+        return self.world.is_solid(x, y, z)
 
     def eye(self):
         return [self.pos[0], self.pos[1] + physics.EYE_HEIGHT, self.pos[2]]
@@ -309,7 +314,7 @@ class VoxelGame(PyScript):
         state = {"chunks": stats["chunks"], "loaded": stats["loaded"], "pending": stats["pending"],
                  "dirty": stats["dirty"], "meshing": stats["meshing"], "quads": stats["quads"],
                  "upload_ms": round(stats["upload_ms"], 3), "edits": stats["edits"], "slot": self.slot,
-                 "smoothing": self.world.smoothing(),
+                 "smoothing": self.world.smoothing(), "active": self.world.active_count(),
                  "seed": self.seed, "frames": self.frames,
                  "player": [round(v, 3) for v in self.pos], "on_ground": self.on_ground, "flying": self.flying,
                  "mouse_captured": self.mouse_captured, "yaw": round(self.yaw, 3), "pitch": round(self.pitch, 3),
