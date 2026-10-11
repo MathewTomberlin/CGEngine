@@ -20,6 +20,7 @@ namespace CGEngine {
 			vector<id_t> modelMaterials = importSceneMaterials(scene);
 			//Tracks the model skeletal state and total bones during recursive node visits
 			map<string, BoneData> modelBones;
+			importPath = path;
 			//Import all nodes from the scene recursively
 			ImportResult result = processNode(scene->mRootNode, scene, modelBones, modelMaterials);
 			result.materials = modelMaterials;
@@ -139,10 +140,22 @@ namespace CGEngine {
 		//Create a new MeshNodeData for this node and assign this node's name and transform to it
 		MeshNodeData* meshNode = new MeshNodeData(fromSceneNode->mName.C_Str(), fromAiMatrix4toGlm(fromSceneNode->mTransformation));
 
-		//Try to import mesh data from this node to the new mesh node
-		if (!importMesh(meshNode, fromSceneNode, scene, modelBones, modelMaterials)) {
-			log(this, LogError, "Mesh node at id is out-of-bounds for scene meshes");
-			return ImportResult();
+		//A node can hold several meshes (Assimp splits a mesh per material, e.g. an OBJ object with several materials).
+		//The first goes on this node; each other one goes on a child node with an identity transform, so it shares this node's placement.
+		log(this, LogInfo, "- Importing MeshData for node '{}' [Meshes: {}, Children: {}]", fromSceneNode->mName.C_Str(), fromSceneNode->mNumMeshes, fromSceneNode->mNumChildren);
+		for (unsigned int i = 0; i < fromSceneNode->mNumMeshes; i++) {
+			unsigned int sceneMeshId = fromSceneNode->mMeshes[i];
+			if (sceneMeshId >= scene->mNumMeshes) {
+				log(this, LogError, "Mesh node at id is out-of-bounds for scene meshes");
+				return ImportResult();
+			}
+			MeshNodeData* target = meshNode;
+			if (i > 0) {
+				target = new MeshNodeData(string(fromSceneNode->mName.C_Str()) + "." + std::to_string(i), glm::mat4(1.0f));
+				target->parent = meshNode;
+				meshNode->children.push_back(target);
+			}
+			importMesh(target, scene->mMeshes[sceneMeshId], sceneMeshId, fromSceneNode, modelBones, modelMaterials);
 		}
 
 		//Recursively visit all children, setting the child node's parent to this node and assigning the child node to this node's children
@@ -154,13 +167,8 @@ namespace CGEngine {
 		return ImportResult(meshNode);
     }
 
-	bool MeshImporter::importMesh(MeshNodeData* toModelNode, aiNode* fromSceneNode, const aiScene* scene, map<string, BoneData>& modelBones, vector<id_t> modelMaterials) {
-		//Import MeshData only for nodes with meshes
-		if (fromSceneNode->mNumMeshes > 0) {
-			if (fromSceneNode->mMeshes[0] >= scene->mNumMeshes) return false;
-			aiMesh* mesh = scene->mMeshes[fromSceneNode->mMeshes[0]];
-			log(this, LogInfo, "- Importing MeshData for node '{}' [Meshes: {}, Children: {}]", fromSceneNode->mName.C_Str(), fromSceneNode->mNumMeshes, fromSceneNode->mNumChildren);
-
+	void MeshImporter::importMesh(MeshNodeData* toModelNode, aiMesh* mesh, unsigned int sceneMeshId, aiNode* fromSceneNode, map<string, BoneData>& modelBones, vector<id_t> modelMaterials) {
+		{
 			//Get position, texture coordinates, and normal from the import mesh node or, if not available, the use the default value
 			vector<VertexData> vertices;
 			vertices.reserve(mesh->mNumVertices);
@@ -236,8 +244,10 @@ namespace CGEngine {
 				}
 			}
 			
-			//Finally, create MeshData with node name, vertices, indices, and modelBones
-			auto meshDataAsset = assets.create<MeshData>(mesh->mName.C_Str(), fromSceneNode->mName.C_Str(), vertices, indices, modelBones);
+			//Finally, create MeshData with node name, vertices, indices, and modelBones.
+			//The asset name is unique per file and scene mesh: mesh names repeat (per-material parts, "Cube" in many files), and create() returns an existing asset of the same name.
+			string meshDataName = importPath + "#" + std::to_string(sceneMeshId) + ":" + mesh->mName.C_Str();
+			auto meshDataAsset = assets.create<MeshData>(meshDataName, fromSceneNode->mName.C_Str(), vertices, indices, modelBones);
 			if (meshDataAsset.has_value()) {
 				optional<id_t> meshDataId = meshDataAsset.value().first;
 				toModelNode->meshData = assets.get<MeshData>(meshDataId.value());
@@ -245,10 +255,7 @@ namespace CGEngine {
 				toModelNode->materialId = modelMaterials[mesh->mMaterialIndex];
 				log(this, LogDebug, "  - Created node with Material Id {}, {} vertices, {} indices, and {} bones", toModelNode->materialId, toModelNode->meshData->vertices.size(), toModelNode->meshData->indices.size(), toModelNode->meshData->bones.size());
 			}
-		} else {
-			toModelNode->meshData = nullptr;
 		}
-		return true;
 	}
 
 	Model* MeshImporter::createModel(MeshData* meshData, string name) {

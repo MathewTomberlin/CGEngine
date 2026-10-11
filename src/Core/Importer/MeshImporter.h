@@ -84,20 +84,22 @@ namespace CGEngine {
 		/// <returns></returns>
 		ImportResult processNode(aiNode* fromSceneNode, const aiScene* scene, map<string, BoneData>& modelBones, vector<id_t> modelMaterials);
 		/// <summary>
-		/// For each sceneNode with a Mesh, import MeshData (vertices, indices, weights, bones)
+		/// Import one scene mesh as MeshData (vertices, indices, weights, bones) onto a Mesh node
 		/// </summary>
-		/// <param name="toMeshNode">The Mesh node to apply scene node data to</param>
-		/// <param name="fromSceneNode">The scene node to parse</param>
-		/// <param name="scene">The scene to get Meshes from</param>
+		/// <param name="toMeshNode">The Mesh node to apply the mesh data to</param>
+		/// <param name="mesh">The scene mesh to import</param>
+		/// <param name="sceneMeshId">Index of the mesh in the scene, used to name the MeshData asset uniquely</param>
+		/// <param name="fromSceneNode">The scene node that holds the mesh</param>
 		/// <param name="modelBones">The map to populate with mesh bone data</param>
 		/// <param name="modelMaterials"></param>
-		/// <returns></returns>
-		bool importMesh(MeshNodeData* toMeshNode, aiNode* fromSceneNode, const aiScene* scene, map<string, BoneData>& modelBones, vector<id_t> modelMaterials);
+		void importMesh(MeshNodeData* toMeshNode, aiMesh* mesh, unsigned int sceneMeshId, aiNode* fromSceneNode, map<string, BoneData>& modelBones, vector<id_t> modelMaterials);
         vector<string> loadMaterialTextures(aiMaterial* mat, aiTextureType type);
 		unsigned int getFormatOptions(string format);
 		string getFormat(string path);
 		void importAnimations(const aiScene* scene, Skeleton* skeleton, vector<string>& modelAnimations);
         Assimp::Importer modelImporter;
 		const aiScene* currentScene = nullptr;
+		//Path of the file being imported; part of each MeshData asset name
+		string importPath;
     };
 }

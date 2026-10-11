@@ -308,7 +308,7 @@ namespace CGEngine {
         /// <returns>True if the Body will be rendered</returns>
         bool getRenderingEnabled() const;
         /// <summary>
-        /// Disable rendering of this Body (by world->renderWorld())
+        /// Enable or disable rendering of this Body and all of its children (by world->renderWorld())
         /// </summary>
         /// <param name="visible">Whether the Body is visible or not</param>
         void setRenderingEnabled(bool enabled);

@@ -9,6 +9,7 @@ without writing C++, using two interfaces:
 | Drive a running engine (load scenes, change transforms and materials, remove bodies, take screenshots) | [control-api.md](control-api.md) |
 | Run Python scripts in a running engine, or attach them to bodies | [script-hooks.md](script-hooks.md) |
 | Sample game built from scene and script files (procedural dungeon) | [../games/dungeon.md](../games/dungeon.md) |
+| Make models in Blender for the engine (script-built, OBJ export, conventions) | [../games/dungeon.md#models](../games/dungeon.md#models), `tools/blender/dungeon_models.py` |
 | Know what is planned and what is done | [../ROADMAP.md](../ROADMAP.md) |
 
 ## Quick start

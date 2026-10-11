@@ -59,6 +59,15 @@ Failures are reported with a message; a bad scene never silently produces a part
 | `rotation` | [x, y, z] | no       | `[0,0,0]`   | Euler angles in degrees.                                      |
 | `scale`    | [x, y, z] | no       | `[1,1,1]`   |                                                               |
 
+### Primitive bodies
+
+A body can use `"primitive": "cube"` or `"primitive": "plane"` instead of `"model"`, with an optional `"size"`
+(default `1`). `size` is the half extent: a cube of size `0.5` is one unit wide.
+
+The plane is the cube's front face: a square in the local XY plane at local `z = size`, facing +Z. Rotated
+`[-90, 0, 0]` to lie flat, its surface sits at `position.y + size`. To put a floor surface at `y = 0`, place the
+plane at `y = -size`, as `resources/scripts/DungeonGame.py` does.
+
 Optional top-level `"clips"`: a list of clip file paths (see `docs/ai/clip-format.md`), loaded before bodies.
 
 Optional animation keys on a body:

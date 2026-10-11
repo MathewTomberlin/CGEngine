@@ -28,15 +28,19 @@ SLASH_TIME = 0.18
 SLASH_REACH = 0.9           # how far in front of the player the swing lands
 SLASH_RADIUS = 0.85
 GOAL_RADIUS = 0.6
-CAMERA_HEIGHT = 12.0
-CAMERA_BACK = 5.0           # the camera sits this far behind the player, for a three-quarter view
+CAMERA_HEIGHT = 7.5
+CAMERA_BACK = 4.5           # the camera sits this far behind the player, for a three-quarter view
 STATE_INTERVAL = 0.25       # seconds between writes to cg_control/dungeon_state.json
 
-# Enemy kinds (DungeonGen.ENEMY_KINDS). size is the cube's half extent; radius is used for wall collision.
+# Models, built in Blender by tools/blender/dungeon_models.py. Each faces +Z with its origin at its feet.
+MODEL_DIR = "models/dungeon/"
+
+# Enemy kinds (DungeonGen.ENEMY_KINDS). size is how far the body reaches (contact range grows with it);
+# radius is used for wall collision.
 ENEMY_STATS = {
-    "slime":  {"speed": 1.6, "hp": 2, "size": 0.35, "radius": 0.35, "material": "enemy"},
-    "archer": {"speed": 1.3, "hp": 1, "size": 0.3,  "radius": 0.3,  "material": "archer"},
-    "brute":  {"speed": 0.9, "hp": 4, "size": 0.5,  "radius": 0.45, "material": "brute"},
+    "slime":  {"speed": 1.6, "hp": 2, "size": 0.35, "radius": 0.35, "model": "slime"},
+    "archer": {"speed": 1.3, "hp": 1, "size": 0.3,  "radius": 0.3,  "model": "archer"},
+    "brute":  {"speed": 0.9, "hp": 4, "size": 0.5,  "radius": 0.45, "model": "brute"},
 }
 ARCHER_RANGE = (3.0, 5.0)   # an archer backs off inside the first distance and closes in beyond the second
 ARCHER_SHOT_TIME = 2.0      # seconds between shots
@@ -44,16 +48,35 @@ ARCHER_SIGHT = 7.0          # an archer only shoots at a player this close
 BOLT_SPEED = 5.0
 BOLT_HIT_DISTANCE = 0.4
 ITEM_PICKUP_DISTANCE = 0.55
-ITEM_MATERIALS = {"heart": "heart", "coin": "coin"}
+BOLT_HEIGHT = 0.4
+SPIN_SPEED = 120.0          # degrees per second for coins and the goal crystal
 
 
 def cube(name, size, pos, material):
     return {"name": name, "primitive": "cube", "size": size, "position": list(pos), "material": material}
 
 
+def model(name, file, pos, yaw=0.0, scale=1.0):
+    return {"name": name, "model": MODEL_DIR + file + ".obj", "position": list(pos),
+            "rotation": [0, yaw, 0], "scale": [scale, scale, scale]}
+
+
+def yaw_towards(dx, dz):
+    """Degrees about Y that turn a model facing +Z towards (dx, dz)."""
+    return math.degrees(math.atan2(dx, dz))
+
+
+def place(body, x, y, z, yaw=None):
+    mesh = body.get_mesh()
+    mesh.set_position(cge.Vector3f(x, y, z))
+    if yaw is not None:
+        mesh.set_rotation(cge.Vector3f(0.0, yaw, 0.0))
+
+
 def floor_tile(name, gx, gy):
-    # A plane is built in the XY plane, so it is turned to lie flat on the XZ floor.
-    return {"name": name, "primitive": "plane", "size": 0.5, "position": [gx, 0.0, gy],
+    # A plane primitive is a square at local z = size, facing +Z (docs/ai/scene-format.md). Turned to lie flat,
+    # its surface is at position.y + size, so it is placed at -size to put the floor surface at y = 0.
+    return {"name": name, "primitive": "plane", "size": 0.5, "position": [gx, -0.5, gy],
             "rotation": [-90, 0, 0], "material": "floor"}
 
 
@@ -78,6 +101,7 @@ class DungeonGame(PyScript):
         self.bolts = []             # archer shots in self.room: {"id", "x", "z", "dx", "dz"}
         self.next_object_id = 0     # names for items and bolts are never reused, even across rooms
         self.coins = 0
+        self.clock = 0.0            # seconds of play, for idle motion (bobbing, spinning)
         self.px = self.pz = 0.0
         self.facing = (0.0, 1.0)
         self.hp = MAX_HP
@@ -109,6 +133,7 @@ class DungeonGame(PyScript):
         now = time.perf_counter()
         dt = 0.0 if self.last is None else min(0.05, now - self.last)
         self.last = now
+        self.clock += dt
         if not self.setup_done:
             self.setup()
             self.setup_done = True
@@ -127,6 +152,7 @@ class DungeonGame(PyScript):
             return
         self.update_sword(dt)
         self.update_hud()
+        self.update_props()
         self.update_camera()
         self.state_timer -= dt
         if self.state_timer <= 0.0:
@@ -153,10 +179,10 @@ class DungeonGame(PyScript):
     def setup(self):
         """Create the bodies that live for the whole game: the player, the sword and the hearts."""
         bodies = [
-            cube("dg_player", 0.3, (0, 0.3, 0), "player"),
-            cube("dg_slash", 0.3, (0, 0.2, 0), "slash"),
+            model("dg_player", "knight", (0, 0, 0)),
+            model("dg_slash", "slash", (0, 0, 0)),
         ]
-        bodies += [cube(f"dg_heart_{i}", 0.1, (0, 1.0, 0), "player") for i in range(MAX_HP)]
+        bodies += [model(f"dg_heart_{i}", "heart", (0, 1.0, 0), scale=0.6) for i in range(MAX_HP)]
         cge.load_scene_json(json.dumps({"version": 1, "bodies": bodies}))
         for body in bodies:
             self.fixed[body["name"]] = cge.find_body(body["name"])
@@ -192,15 +218,15 @@ class DungeonGame(PyScript):
         bodies += [cube(f"dg_w_{gx}_{gy}", 0.5, (gx, 0.5, gy), "wall") for gx, gy in walls]
         if room == self.level.goal_room:
             gx, gy = self.level.goal
-            bodies.append(cube("dg_goal", 0.3, (gx, 0.4, gy), "goal"))
+            bodies.append(model("dg_goal", "goal", (gx, 0.0, gy)))
         for enemy in self.enemies.get(room, []):
-            bodies.append(self.enemy_cube(enemy))
+            bodies.append(self.enemy_body(enemy))
         for item in self.items.get(room, []):
-            bodies.append(self.item_cube(item))
+            bodies.append(self.item_body(item))
         cge.load_scene_json(json.dumps({"version": 1, "bodies": bodies}))
         self.room_bodies = [body["name"] for body in bodies]
         for name in self.room_bodies:
-            if name == "dg_goal" or name.startswith("dg_enemy_"):
+            if name == "dg_goal" or name.startswith("dg_enemy_") or name.startswith("dg_item_"):
                 self.room_handles[name] = cge.find_body(name)
 
     def unload_room(self):
@@ -230,12 +256,12 @@ class DungeonGame(PyScript):
     def enemy_name(self, enemy):
         return f"dg_enemy_{enemy['id']}"
 
-    def enemy_cube(self, enemy):
-        stats = ENEMY_STATS[enemy["kind"]]
-        return cube(self.enemy_name(enemy), stats["size"], (enemy["x"], stats["size"], enemy["z"]), stats["material"])
+    def enemy_body(self, enemy):
+        yaw = yaw_towards(self.px - enemy["x"], self.pz - enemy["z"])
+        return model(self.enemy_name(enemy), ENEMY_STATS[enemy["kind"]]["model"], (enemy["x"], 0.0, enemy["z"]), yaw)
 
-    def item_cube(self, item):
-        return cube(f"dg_item_{item['id']}", 0.15, (item["x"], 0.15, item["z"]), ITEM_MATERIALS[item["kind"]])
+    def item_body(self, item):
+        return model(f"dg_item_{item['id']}", item["kind"], (item["x"], 0.0, item["z"]))
 
     def reached_goal(self):
         if self.room != self.level.goal_room:
@@ -262,7 +288,7 @@ class DungeonGame(PyScript):
                 self.px += dx * step
             if self.free(self.px, self.pz + dz * step, PLAYER_RADIUS):
                 self.pz += dz * step
-        self.fixed["dg_player"].get_mesh().set_position(cge.Vector3f(self.px, 0.3, self.pz))
+        place(self.fixed["dg_player"], self.px, 0.0, self.pz, yaw_towards(*self.facing))
 
     def free(self, x, z, radius):
         """True if a box of this radius around (x, z) lies only on passable tiles."""
@@ -307,7 +333,11 @@ class DungeonGame(PyScript):
                     enemy["z"] = nz
             body = self.room_handles.get(self.enemy_name(enemy))
             if body is not None:
-                body.get_mesh().set_position(cge.Vector3f(enemy["x"], stats["size"], enemy["z"]))
+                place(body, enemy["x"], 0.0, enemy["z"], yaw_towards(dx, dz) if distance > 0.01 else None)
+                if enemy["kind"] == "slime":
+                    # Squash and stretch while it hops along. Each slime gets its own phase.
+                    s = math.sin(self.clock * 9.0 + enemy["id"])
+                    body.get_mesh().set_scale(cge.Vector3f(1.0 + 0.08 * s, 1.0 - 0.12 * s, 1.0 + 0.08 * s))
             reach = CONTACT_DISTANCE + stats["size"] - ENEMY_STATS["slime"]["size"]
             if distance < reach and self.invulnerable <= 0.0:
                 if self.hurt():
@@ -317,7 +347,7 @@ class DungeonGame(PyScript):
     def fire_bolt(self, x, z, dx, dz):
         bolt = {"id": self.new_object_id(), "x": x, "z": z, "dx": dx, "dz": dz}
         self.bolts.append(bolt)
-        self.add_room_body(cube(f"dg_bolt_{bolt['id']}", 0.08, (x, 0.35, z), "bolt"))
+        self.add_room_body(model(f"dg_bolt_{bolt['id']}", "arrow", (x, BOLT_HEIGHT, z), yaw_towards(dx, dz)))
 
     def update_bolts(self, dt):
         """Fly archer shots. A shot stops at a wall or on the player. Returns True if the player was defeated."""
@@ -334,7 +364,7 @@ class DungeonGame(PyScript):
                 continue
             body = self.room_handles.get(name)
             if body is not None:
-                body.get_mesh().set_position(cge.Vector3f(bolt["x"], 0.35, bolt["z"]))
+                place(body, bolt["x"], BOLT_HEIGHT, bolt["z"])
         return False
 
     def pick_up_items(self):
@@ -378,7 +408,8 @@ class DungeonGame(PyScript):
             return
         self.slash_time -= dt
         slash = self.fixed["dg_slash"]
-        slash.get_mesh().set_position(cge.Vector3f(self.slash_x, 0.2, self.slash_z))
+        # The crescent is modelled in front of its origin, so it sits on the player and turns with the swing.
+        place(slash, self.px, 0.0, self.pz, yaw_towards(*self.facing))
         for enemy in list(self.enemies.get(self.room, [])):
             if enemy["id"] in self.slash_hits or not near(enemy["x"], enemy["z"], self.slash_x, self.slash_z, SLASH_RADIUS):
                 continue
@@ -396,7 +427,7 @@ class DungeonGame(PyScript):
         if kind is not None:
             item = {"id": self.new_object_id(), "kind": kind, "x": enemy["x"], "z": enemy["z"]}
             self.items.setdefault(self.room, []).append(item)
-            self.add_room_body(self.item_cube(item))
+            self.add_room_body(self.item_body(item))
 
     # ----- presentation -------------------------------------------------------------------
 
@@ -404,7 +435,22 @@ class DungeonGame(PyScript):
         for i in range(MAX_HP):
             heart = self.fixed[f"dg_heart_{i}"]
             heart.set_rendering_enabled(i < self.hp)
-            heart.get_mesh().set_position(cge.Vector3f(self.px - 0.25 + 0.25 * i, 1.0, self.pz - 0.6))
+            place(heart, self.px - 0.25 + 0.25 * i, 1.05, self.pz - 0.1)
+
+    def update_props(self):
+        """Idle motion: coins and the goal crystal spin, hearts on the floor bob."""
+        spin = (self.clock * SPIN_SPEED) % 360.0
+        goal = self.room_handles.get("dg_goal")
+        if goal is not None:
+            place(goal, self.level.goal[0], 0.0, self.level.goal[1], spin)
+        for item in self.items.get(self.room, []):
+            body = self.room_handles.get(f"dg_item_{item['id']}")
+            if body is None:
+                continue
+            if item["kind"] == "coin":
+                place(body, item["x"], 0.0, item["z"], spin)
+            else:
+                place(body, item["x"], 0.06 + 0.06 * math.sin(self.clock * 4.0 + item["id"]), item["z"])
 
     def update_camera(self):
         cge.set_camera(cge.Vector3f(self.px, CAMERA_HEIGHT, self.pz + CAMERA_BACK),
