@@ -130,8 +130,8 @@ vec3 applyLight(Light light, vec3 surfColor, vec3 surfNormal, vec3 surfPos, vec3
 }
 
 void main() {
-    //Model-space surface position
-    vec3 surfPos = vec3(model * vec4(vertex, 1));
+    //World-space surface position and normal: the vertex shader already applied the model transform to both
+    vec3 surfPos = vertex;
     vec4 surfColor = vec4(1.0);
     float surfOpacity = 1;
     int mtl = int(matId);
@@ -170,7 +170,7 @@ void main() {
     vec3 linearColor = surfColor.rgb;
     if(materials[mtl].useLighting != 0){
         linearColor = vec3(0.0);
-        vec3 surfNormal = normalize(transpose(inverse(mat3(model))) * normal);
+        vec3 surfNormal = normalize(normal);
         vec3 surfViewDir = normalize(cameraPosition - surfPos);
 
         for(int i = 0; i < lightCount; ++i){
