@@ -12,6 +12,7 @@
 #include "../Core/Mesh/Mesh.h"
 #include "../Core/Mesh/Model.h"
 #include "../Core/Material/Material.h"
+#include "../Core/Mesh/RuntimeMesh.h"
 #include "../Core/Animation/Animator.h"
 #include <algorithm>
 #include "../Core/Scene/SceneLoader.h"
@@ -147,7 +148,7 @@ void bindGame(py::module_& m) {
     m.def("create_mesh_body", [](const std::string& name, py::buffer positions, py::buffer normals, py::buffer colours,
                                   py::buffer uvs, py::buffer materialIds, py::buffer indices, std::vector<std::string> materials,
                                   sf::Vector3f position) {
-        if (findBody(name)) throw std::invalid_argument("a body named '" + name + "' already exists");
+        if (findBodyByName(name)) throw std::invalid_argument("a body named '" + name + "' already exists");
         RuntimeMeshArrays arrays = buildRuntimeMesh(positions, normals, colours, uvs, materialIds, indices);
         std::vector<id_t> materialList;
         for (const std::string& materialName : materials) {
@@ -156,19 +157,9 @@ void bindGame(py::module_& m) {
             materialList.push_back(materialId.value());
         }
         if (materialList.empty()) materialList.push_back(assets.getDefaultId<Material>().value_or(0));
-
-        static size_t runtimeMeshCount = 0;
-        auto meshData = assets.create<MeshData>("runtime:" + name + "#" + std::to_string(++runtimeMeshCount),
-            std::move(arrays.vertices), std::move(arrays.indices));
-        if (!meshData.has_value()) throw std::runtime_error("failed to create mesh data for body '" + name + "'");
-        meshData.value().second->runtimeMesh = true;
-
-        Mesh mesh(meshData.value().second, Transformation3D(position), materialList);
-        // Body asset names are cache keys; a unique key per body avoids the cache returning an old body.
-        static size_t runtimeBodyCount = 0;
-        auto body = assets.create<Body>("body:" + name + "#" + std::to_string(++runtimeBodyCount), mesh);
-        if (!body.has_value()) throw std::runtime_error("failed to create body '" + name + "'");
-        body.value().second->setName(name);
+        if (!createRuntimeMeshBody(name, std::move(arrays.vertices), std::move(arrays.indices), materialList, position)) {
+            throw std::runtime_error("failed to create body '" + name + "'");
+        }
     }, py::arg("name"), py::arg("positions"), py::arg("normals"), py::arg("colours"), py::arg("uvs"),
         py::arg("material_ids"), py::arg("indices"), py::arg("materials") = std::vector<std::string>{},
         py::arg("position") = sf::Vector3f(0, 0, 0),
@@ -176,32 +167,18 @@ void bindGame(py::module_& m) {
 
     m.def("update_mesh_body", [](const std::string& name, py::buffer positions, py::buffer normals, py::buffer colours,
                                   py::buffer uvs, py::buffer materialIds, py::buffer indices) {
-        Body* body = findBody(name);
+        Body* body = findBodyByName(name);
         if (!body) throw std::invalid_argument("no body named '" + name + "'");
-        Mesh* mesh = body->get<Mesh*>();
-        MeshData* meshData = mesh ? mesh->getMeshData() : nullptr;
-        if (!meshData || !meshData->runtimeMesh) throw std::invalid_argument("body '" + name + "' was not made by create_mesh_body");
         RuntimeMeshArrays arrays = buildRuntimeMesh(positions, normals, colours, uvs, materialIds, indices);
-        meshData->vertices = std::move(arrays.vertices);
-        meshData->indices = std::move(arrays.indices);
-        meshData->boundsValid = false;
-        meshData->gpuDirty = true;
+        if (!updateRuntimeMeshBody(body, std::move(arrays.vertices), std::move(arrays.indices))) {
+            throw std::invalid_argument("body '" + name + "' was not made by create_mesh_body");
+        }
     }, py::arg("name"), py::arg("positions"), py::arg("normals"), py::arg("colours"), py::arg("uvs"),
         py::arg("material_ids"), py::arg("indices"),
         "Replace the vertices and indices of a body made by create_mesh_body. The GPU copy is updated before the next frame.");
 
     m.def("remove_mesh_body", [](const std::string& name) {
-        Body* body = findBody(name);
-        if (!body || body == world->getRoot()) return false;
-        Mesh* mesh = body->get<Mesh*>();
-        MeshData* meshData = mesh ? mesh->getMeshData() : nullptr;
-        body->deleteBody(ChildrenTermination::Terminate);
-        // Runtime mesh data belongs to its body alone, so it goes with the body: GL objects first, then the asset.
-        if (meshData && meshData->runtimeMesh) {
-            renderer->releaseMeshData(meshData);
-            if (auto id = meshData->getId()) assets.remove<MeshData>(id.value());
-        }
-        return true;
+        return removeRuntimeMeshBody(name);
     }, py::arg("name"), "Remove a body made by create_mesh_body, and free its mesh. Returns False if there is no such body.");
 
     m.def("set_camera", [](sf::Vector3f position, sf::Vector3f target) {
