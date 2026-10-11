@@ -24,6 +24,8 @@ CONTACT_DISTANCE = 0.7      # an enemy this close (plus its extra size) hurts th
 INVULNERABLE_TIME = 1.0     # seconds of protection after a hit
 MAX_HP = 3
 ATTACK_COOLDOWN = 0.35
+ATTACK_ANIM_TIME = 0.45     # length of the knight_attack clip
+PLAYER_MODEL = "models/dungeon/knight_rig.fbx"   # rigged knight; clips come from dungeon.json
 SLASH_TIME = 0.18
 SLASH_REACH = 0.9           # how far in front of the player the swing lands
 SLASH_RADIUS = 0.85
@@ -38,7 +40,7 @@ MODEL_DIR = "models/dungeon/"
 # Enemy kinds (DungeonGen.ENEMY_KINDS). size is how far the body reaches (contact range grows with it);
 # radius is used for wall collision.
 ENEMY_STATS = {
-    "slime":  {"speed": 1.6, "hp": 2, "size": 0.35, "radius": 0.35, "model": "slime"},
+    "slime":  {"speed": 1.6, "hp": 2, "size": 0.35, "radius": 0.35, "model": "slime_rig.fbx"},
     "archer": {"speed": 1.3, "hp": 1, "size": 0.3,  "radius": 0.3,  "model": "archer"},
     "brute":  {"speed": 0.9, "hp": 4, "size": 0.5,  "radius": 0.45, "model": "brute"},
 }
@@ -57,7 +59,8 @@ def cube(name, size, pos, material):
 
 
 def model(name, file, pos, yaw=0.0, scale=1.0):
-    return {"name": name, "model": MODEL_DIR + file + ".obj", "position": list(pos),
+    path = file if file.endswith(".fbx") else file + ".obj"
+    return {"name": name, "model": MODEL_DIR + path, "position": list(pos),
             "rotation": [0, yaw, 0], "scale": [scale, scale, scale]}
 
 
@@ -115,6 +118,9 @@ class DungeonGame(PyScript):
         self.setup_done = False
         self.broken = False
         self.state_timer = 0.0
+        self.slime_clip_started = False   # the shared slime model has started its hop
+        self.anim = None            # clip the player is playing; None forces the next choice to start
+        self.attack_time = 0.0      # seconds left of the attack clip
 
     # ----- engine entry point -------------------------------------------------------------
 
@@ -141,7 +147,7 @@ class DungeonGame(PyScript):
 
         self.cooldown = max(0.0, self.cooldown - dt)
         self.invulnerable = max(0.0, self.invulnerable - dt)
-        self.move_player(dt)
+        moved = self.move_player(dt)
         self.enter_room_under_player()
         if self.reached_goal():
             return
@@ -151,8 +157,10 @@ class DungeonGame(PyScript):
         if self.update_enemies(dt):
             return
         self.update_sword(dt)
+        self.update_player_animation(dt, moved)
         self.update_hud()
         self.update_props()
+        self.start_slime_clip()
         self.update_camera()
         self.state_timer -= dt
         if self.state_timer <= 0.0:
@@ -179,13 +187,14 @@ class DungeonGame(PyScript):
     def setup(self):
         """Create the bodies that live for the whole game: the player, the sword and the hearts."""
         bodies = [
-            model("dg_player", "knight", (0, 0, 0)),
             model("dg_slash", "slash", (0, 0, 0)),
         ]
         bodies += [model(f"dg_heart_{i}", "heart", (0, 1.0, 0), scale=0.6) for i in range(MAX_HP)]
         cge.load_scene_json(json.dumps({"version": 1, "bodies": bodies}))
         for body in bodies:
             self.fixed[body["name"]] = cge.find_body(body["name"])
+        # The player comes from dungeon.json: a body made from Python during the update has no animator (see roadmap).
+        self.fixed["dg_player"] = cge.find_body("dg_player")
         self.fixed["dg_slash"].set_rendering_enabled(False)
 
     def start_level(self, seed):
@@ -289,6 +298,20 @@ class DungeonGame(PyScript):
             if self.free(self.px, self.pz + dz * step, PLAYER_RADIUS):
                 self.pz += dz * step
         place(self.fixed["dg_player"], self.px, 0.0, self.pz, yaw_towards(*self.facing))
+        return bool(dx or dz)
+
+    def update_player_animation(self, dt, moved):
+        """Choose the clip: attack while swinging, walk while moving, otherwise idle. Only changes are sent to the engine."""
+        self.attack_time = max(0.0, self.attack_time - dt)
+        if self.attack_time > 0.0:
+            want = "knight_attack"
+        elif moved:
+            want = "knight_walk"
+        else:
+            want = "knight_idle"
+        if want != self.anim:
+            cge.play_clip("dg_player", want, want != "knight_attack")
+            self.anim = want
 
     def free(self, x, z, radius):
         """True if a box of this radius around (x, z) lies only on passable tiles."""
@@ -334,10 +357,6 @@ class DungeonGame(PyScript):
             body = self.room_handles.get(self.enemy_name(enemy))
             if body is not None:
                 place(body, enemy["x"], 0.0, enemy["z"], yaw_towards(dx, dz) if distance > 0.01 else None)
-                if enemy["kind"] == "slime":
-                    # Squash and stretch while it hops along. Each slime gets its own phase.
-                    s = math.sin(self.clock * 9.0 + enemy["id"])
-                    body.get_mesh().set_scale(cge.Vector3f(1.0 + 0.08 * s, 1.0 - 0.12 * s, 1.0 + 0.08 * s))
             reach = CONTACT_DISTANCE + stats["size"] - ENEMY_STATS["slime"]["size"]
             if distance < reach and self.invulnerable <= 0.0:
                 if self.hurt():
@@ -397,6 +416,8 @@ class DungeonGame(PyScript):
         self.attack_was_down = attack
         if pressed and self.cooldown <= 0.0:
             self.cooldown = ATTACK_COOLDOWN
+            self.attack_time = ATTACK_ANIM_TIME
+            self.anim = None            # replay the attack clip from its start
             self.slash_time = SLASH_TIME
             self.slash_hits = set()
             fx, fz = self.facing
@@ -436,6 +457,20 @@ class DungeonGame(PyScript):
             heart = self.fixed[f"dg_heart_{i}"]
             heart.set_rendering_enabled(i < self.hp)
             place(heart, self.px - 0.25 + 0.25 * i, 1.05, self.pz - 0.1)
+
+    def start_slime_clip(self):
+        """Slimes share one model, so one animator: start its hop once, when the first slime body is in the room."""
+        if self.slime_clip_started or not any(name.startswith("dg_enemy_") and self.enemy_kind_of(name) == "slime" for name in self.room_handles):
+            return
+        self.slime_clip_started = True
+        slime = next(name for name in self.room_handles if self.enemy_kind_of(name) == "slime")
+        cge.play_clip(slime, "slime_hop", True)
+
+    def enemy_kind_of(self, name):
+        for enemy in self.enemies.get(self.room, []):
+            if self.enemy_name(enemy) == name:
+                return enemy["kind"]
+        return None
 
     def update_props(self):
         """Idle motion: coins and the goal crystal spin, hearts on the floor bob."""

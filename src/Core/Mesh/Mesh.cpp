@@ -33,7 +33,6 @@ namespace CGEngine {
 		Transformation3D combinedTransformation = Transformation3D(position, rotation, scale);
 
 		renderer->renderMesh(this, meshData, combinedTransformation);
-		renderer->commitGL();
 	}
 
 	void Mesh::bindTexture(Texture* texture) {

@@ -4,7 +4,7 @@
     { "name": "brick", "diffuseTexture": "brick_tile.png", "uvScale": 16 }
   ],
   "lights": [
-    { "name": "sun", "position": [0, -20, 5], "direction": [0, 1, -1], "brightness": 5, "color": [1, 1, 1], "coneAngle": 60 }
+    { "name": "sun", "position": [0, 20, 5], "direction": [0, -1, -1], "brightness": 3.5, "color": [1, 1, 1], "coneAngle": 60 }
   ],
   "bodies": [
     { "name": "cube", "model": "Mesh.obj", "material": "brick", "position": [0, 0, -5], "scale": [1, 1, 1] },

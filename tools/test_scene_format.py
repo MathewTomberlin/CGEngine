@@ -42,6 +42,7 @@ EXPECTED_INVALID = {
     "unknown_material.json": "unknown material",
     "unknown_primitive.json": "unknown primitive",
     "unknown_animation.json": None,
+    "bad_specular.json": "specular must be between 0 and 1",
 }
 
 
@@ -108,6 +109,8 @@ def check_scene(scene):
             raise SceneError(f"material '{name}': texture '{m['diffuseTexture']}' does not exist")
         if "uvScale" in m and not is_number(m["uvScale"]):
             raise SceneError(f"material '{name}': 'uvScale' must be a number")
+        if "specular" in m and not (is_number(m["specular"]) and 0 <= m["specular"] <= 1):
+            raise SceneError(f"material '{name}': specular must be between 0 and 1")
     material_names = {m["name"] for m in materials}
 
     lights = lists.get("lights", [])

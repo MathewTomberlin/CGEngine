@@ -723,6 +723,7 @@ namespace CGEngine {
         /// <summary>
         /// The map of listener ids by domain for the Body so they may be erased when the Body is deleted
         /// </summary>
+        optional<id_t> registerActuator(InputCondition condition, Actuator* actuator);
         map<InputCondition, vector<id_t>> listenerIds;
         /// <summary>
         /// Add the listener id so that it can be erased when the Body is deleted

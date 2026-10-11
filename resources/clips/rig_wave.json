@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "name": "rig_wave",
+  "model": "models/dungeon/rig_test.fbx",
+  "durationSeconds": 2.0,
+  "channels": [
+    { "bone": "Arm", "rotation": [
+        { "t": 0.0, "euler": [0, 0, 0] },
+        { "t": 1.0, "euler": [0, 0, -70] },
+        { "t": 2.0, "euler": [0, 0, 0] } ] }
+  ]
+}

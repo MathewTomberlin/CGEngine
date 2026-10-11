@@ -129,8 +129,9 @@ namespace CGEngine {
                 //Spotlight
                 LightParameters lightParams = LightParameters();
                 lightParams.coneAngle = 60.f;
-                lightParams.lightDirection = { 0,1,-1 };
-                auto lightId = assets.create<Light>("Light0",Vector3f{ 0, -20, 5 }, false, lightParams);
+                lightParams.lightDirection = { 0,-1,-1 };
+                //Above the scene (y is up), pointing down and away from the camera
+                auto lightId = assets.create<Light>("Light0",Vector3f{ 0, 20, 5 }, false, lightParams);
 				Light* light = lightId.value().second;
 
                 //Red Point Light

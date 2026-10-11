@@ -9,8 +9,8 @@ Conventions, so models drop into the engine without per-model fixes:
 - 1 Blender unit = 1 tile. Origin at the feet (z = 0 in Blender, y = 0 in the engine).
 - Front faces Blender -Y. The export maps Blender +Z to engine +Y and Blender -Y to engine +Z, so a model
   faces engine +Z, towards the camera. Turning it by atan2(fx, fz) degrees about Y faces direction (fx, fz).
-- Colours only, no textures. The engine's shader normalises the diffuse colour, so only the hue counts and
-  pure black must be avoided. Material names start with "dg_" because engine materials share one namespace.
+- Colours only, no textures. The engine uses each material's diffuse colour (Kd) as given. Material names
+  start with "dg_" because engine materials share one namespace.
 """
 import math
 import os
@@ -53,6 +53,8 @@ def material(name):
         if bsdf:
             bsdf.inputs["Base Color"].default_value = (*rgb, 1.0)
             bsdf.inputs["Roughness"].default_value = 0.8
+            # Exported as Ks. A weak highlight keeps top faces from washing out under the dungeon's overhead sun.
+            bsdf.inputs["Specular IOR Level"].default_value = 0.1
     return mat
 
 
@@ -82,7 +84,7 @@ class Builder:
         verts = bmesh.ops.create_cube(self.bm, size=1.0)["verts"]
         self._finish(verts, mat_name, trs(loc, rot, size))
 
-    def sphere(self, mat_name, loc, radius, scale=(1, 1, 1), rot=(0, 0, 0), segments=10, rings=6, smooth=False):
+    def sphere(self, mat_name, loc, radius, scale=(1, 1, 1), rot=(0, 0, 0), segments=10, rings=6, smooth=True):
         verts = bmesh.ops.create_uvsphere(self.bm, u_segments=segments, v_segments=rings, radius=1.0)["verts"]
         self._finish(verts, mat_name, trs(loc, rot, [radius * s for s in scale]), smooth)
 
@@ -91,7 +93,7 @@ class Builder:
         verts = bmesh.ops.create_cone(self.bm, cap_ends=True, segments=segments, radius1=r1, radius2=r2, depth=depth)["verts"]
         self._finish(verts, mat_name, trs(loc, rot, scale))
 
-    def torus(self, mat_name, loc, major, minor, rot=(0, 0, 0), segments=16, sides=6, arc=360.0, scale=(1, 1, 1)):
+    def torus(self, mat_name, loc, major, minor, rot=(0, 0, 0), segments=16, sides=6, arc=360.0, scale=(1, 1, 1), smooth=True):
         """Ring in the local XY plane. arc < 360 gives an open bend (used for the bow and the sword arc)."""
         rings = []
         closed = arc >= 360.0
@@ -113,7 +115,7 @@ class Builder:
         if not closed:
             self.bm.faces.new(rings[0][::-1])
             self.bm.faces.new(rings[-1])
-        self._finish([v for ring in rings for v in ring], mat_name, trs(loc, rot, scale))
+        self._finish([v for ring in rings for v in ring], mat_name, trs(loc, rot, scale), smooth)
 
     def build(self, collection):
         old = bpy.data.objects.get(self.name)
@@ -246,6 +248,50 @@ def slash():
 MODELS = [knight, slime, archer, brute, arrow, heart, coin, goal, slash]
 
 
+def stabilise_obj(path):
+    """Rewrite an exported OBJ in a fixed order, so re-exporting an unchanged model gives the same file.
+
+    Blender writes the vn list in a different order on each export; faces refer to normals by index, so the
+    face lines are remapped to the sorted order. Everything else is kept as written.
+    """
+    with open(path, encoding="utf-8") as f:
+        lines = f.read().splitlines()
+    normals = [line for line in lines if line.startswith("vn ")]
+    ordered = sorted(set(normals))
+    position = {line: i + 1 for i, line in enumerate(ordered)}
+    new_index = {old: position[line] for old, line in enumerate(normals, start=1)}
+    out = []
+    normals_written = False
+    for line in lines:
+        if line.startswith("vn "):
+            if not normals_written:
+                out.extend(ordered)
+                normals_written = True
+            continue
+        if line.startswith("f "):
+            corners = []
+            for corner in line.split()[1:]:
+                parts = corner.split("/")
+                if len(parts) == 3 and parts[2]:
+                    parts[2] = str(new_index[int(parts[2])])
+                corners.append("/".join(parts))
+            line = "f " + " ".join(corners)
+        out.append(line)
+    # Faces also come out in a varying order. Order does not matter for drawing, so each run of faces (one material
+    # group) is sorted.
+    stable, run = [], []
+    for line in out + [""]:
+        if line.startswith("f "):
+            run.append(line)
+            continue
+        stable.extend(sorted(run))
+        run = []
+        stable.append(line)
+    stable.pop()
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
+        f.write("\n".join(stable) + "\n")
+
+
 def run():
     os.makedirs(OUT_DIR, exist_ok=True)
     scene = bpy.context.scene
@@ -265,6 +311,7 @@ def run():
         bpy.ops.wm.obj_export(filepath=path, export_selected_objects=True, forward_axis="NEGATIVE_Z",
                               up_axis="Y", export_materials=True, export_normals=True, export_uv=True,
                               export_triangulated_mesh=True, apply_modifiers=True, path_mode="STRIP")
+        stabilise_obj(path)
         obj.select_set(False)
         obj.location = (3 + i * 1.5, 3, 0)  # a row for viewing, clear of the default cube; export used the origin
         exported.append((obj.name, len(obj.data.polygons)))

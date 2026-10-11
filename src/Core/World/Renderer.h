@@ -11,6 +11,7 @@
 #include <map>
 #include <string>
 #include <set>
+#include <unordered_map>
 #include <iostream>
 #include "../Shader/UniformBuffers.h"
 #include "../Importer/MeshImporter.h"
@@ -207,6 +208,7 @@ namespace CGEngine {
 		RenderWindow* window = nullptr;
 		string pendingScreenshotPath;
 		bool glWindowActive = false;
+		bool sfmlGLStatesActive = false;	//True while SFML's GL states are pushed (see commitGL/pullGL)
 		unsigned int drawCallsThisFrame = 0;
 		unsigned int lastFrameDrawCalls = 0;
 		/// <summary>
@@ -227,6 +229,7 @@ namespace CGEngine {
 		/// The current render camera. This is set during OpenGL initialization and used to set the view matrix for the shader program.
 		/// </summary>
 		unique_ptr<Camera> currentCamera = nullptr;
+		glm::mat4 cameraMatrix = glm::mat4(1.0f);	//currentCamera's matrix for the frame being rendered
 		/// <summary>
 		/// The order in which to draw bodies, with Bodies further back in the vector drawn on top of other Bodies. This is cleared and re-calculated each frame
 		/// </summary>
@@ -239,6 +242,18 @@ namespace CGEngine {
 		GLenum initGlew();
 		Program* program;
 		int boundTextures = 0;
+		/// <summary>
+		/// A material's UBO entry and texture handles, read once per frame: several draws share a material, and each
+		/// parameter read is a string lookup. Cleared in clear().
+		/// </summary>
+		struct MaterialFrameEntry {
+			MaterialUBO::Material ubo{};
+			Texture* diffuseTexture = nullptr;
+			Texture* specularTexture = nullptr;
+			Texture* opacityTexture = nullptr;
+		};
+		unordered_map<id_t, MaterialFrameEntry> materialFrameCache;
+		MaterialFrameEntry& getMaterialFrameEntry(id_t materialId, Material* material);
 
 		//Fallback Material
 		id_t fallbackMaterialId;
@@ -260,7 +275,7 @@ namespace CGEngine {
 		void updateLightUBO(const LightUBO& lightData);
 		void updateBoneUBO(const BoneUBO& boneData);
 		void updateTransformUBO(const TransformUBO& transformData);
-		void bindTextureAndSetUniform(Material* material, const string& paramName, Program* program, int materialIndex, int& boundTextures);
+		void bindTextureAndSetUniform(Texture* texture, const string& paramName, Program* program, int materialIndex, int& boundTextures);
 		void setMaterialUBOData(MaterialUBO materialUBOData, vector<id_t> modelMaterials, Program* program);
 		void setLightUBOData(LightUBO lightUBOData);
 		void setBoneUBOData(BoneUBO boneUBOData, Animator* animator);

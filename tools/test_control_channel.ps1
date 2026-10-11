@@ -68,6 +68,7 @@ try {
         "13_version"  = @{ file = "scenes/invalid/bad_version.json";       error = "version" }
         "14_vector"   = @{ file = "scenes/invalid/bad_vector.json";        error = "3 numbers" }
         "22_anim"     = @{ file = "scenes/invalid/unknown_animation.json";  error = "unknown animation" }
+    "23_specular" = @{ file = "scenes/invalid/bad_specular.json";       error = "specular must be between 0 and 1" }
     }
     foreach ($id in ($invalid.Keys | Sort-Object)) {
         Send-Command $id ('{"command":"load_scene","params":{"path":"' + $invalid[$id].file + '"}}')

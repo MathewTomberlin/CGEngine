@@ -241,11 +241,16 @@ namespace CGEngine {
 	}
 
 	void Renderer::commitGL() {
+		// Each push and pop saves or restores every GL state, so only switch when the mode changes.
+		if (sfmlGLStatesActive) return;
 		window->pushGLStates();
+		sfmlGLStatesActive = true;
 	}
 
 	void Renderer::pullGL() {
+		if (!sfmlGLStatesActive) return;
 		window->popGLStates();
+		sfmlGLStatesActive = false;
 	}
 
 	void Renderer::saveScreenshot(const std::string& path) {
@@ -443,17 +448,72 @@ namespace CGEngine {
 		return program;
 	}
 
-	void Renderer::bindTextureAndSetUniform(Material* material, const string& paramName, Program* program, int materialIndex, int& boundTextures) {
-		optional<ParamData> paramData = material->getParameter(paramName);
-		if (paramData.has_value()) {
-			Texture* textureData = any_cast<Texture*>(paramData.value().data);
-			if (textureData != nullptr) {
-				GL_CHECK(glActiveTexture(GL_TEXTURE0 + boundTextures));
-				GL_CHECK(glBindTexture(GL_TEXTURE_2D, textureData->getNativeHandle()));
-				program->setUniform(getUniformArrayPropertyName("materialTextures", materialIndex, paramName).c_str(), boundTextures);
-				boundTextures++;
-			}
+	void Renderer::bindTextureAndSetUniform(Texture* texture, const string& paramName, Program* program, int materialIndex, int& boundTextures) {
+		if (texture != nullptr) {
+			GL_CHECK(glActiveTexture(GL_TEXTURE0 + boundTextures));
+			GL_CHECK(glBindTexture(GL_TEXTURE_2D, texture->getNativeHandle()));
+			program->setUniform(getUniformArrayPropertyName("materialTextures", materialIndex, paramName).c_str(), boundTextures);
+			boundTextures++;
 		}
+	}
+
+	Renderer::MaterialFrameEntry& Renderer::getMaterialFrameEntry(id_t materialId, Material* material) {
+		auto cached = materialFrameCache.find(materialId);
+		if (cached != materialFrameCache.end()) return cached->second;
+
+		MaterialFrameEntry& entry = materialFrameCache[materialId];
+		auto textureParameter = [material](const char* paramName) -> Texture* {
+			optional<ParamData> paramData = material->getParameter(paramName);
+			return paramData.has_value() ? any_cast<Texture*>(paramData.value().data) : nullptr;
+		};
+		entry.diffuseTexture = textureParameter("diffuseTexture");
+		entry.specularTexture = textureParameter("specularTexture");
+		entry.opacityTexture = textureParameter("opacityTexture");
+
+		optional<ParamData> paramData = nullopt;
+		paramData = material->getParameter("diffuseColor");
+		if (paramData.has_value()) entry.ubo.diffuseColor = glm::vec4(toGlm(any_cast<Color>(paramData.value().data)), 1);
+		paramData = material->getParameter("diffuseTextureUVScale");
+		if (paramData.has_value()) entry.ubo.diffuseTextureUVScale = toGlm(any_cast<Vector2f>(paramData.value().data));
+		paramData = material->getParameter("diffuseTextureOffset");
+		if (paramData.has_value()) entry.ubo.diffuseTextureOffset = toGlm(any_cast<Vector2f>(paramData.value().data));
+		paramData = material->getParameter("diffuseTextureScrollSpeed");
+		if (paramData.has_value()) entry.ubo.diffuseTextureScrollSpeed = toGlm(any_cast<Vector2f>(paramData.value().data));
+		paramData = material->getParameter("specularColor");
+		if (paramData.has_value()) entry.ubo.specularColor = glm::vec4(toGlm(any_cast<Color>(paramData.value().data)), 1);
+		paramData = material->getParameter("specularTextureUVScale");
+		if (paramData.has_value()) entry.ubo.specularTextureUVScale = toGlm(any_cast<Vector2f>(paramData.value().data));
+		paramData = material->getParameter("specularTextureOffset");
+		if (paramData.has_value()) entry.ubo.specularTextureOffset = toGlm(any_cast<Vector2f>(paramData.value().data));
+		paramData = material->getParameter("specularTextureScrollSpeed");
+		if (paramData.has_value()) entry.ubo.specularTextureScrollSpeed = toGlm(any_cast<Vector2f>(paramData.value().data));
+		paramData = material->getParameter("opacityTextureUVScale");
+		if (paramData.has_value()) entry.ubo.opacityTextureUVScale = toGlm(any_cast<Vector2f>(paramData.value().data));
+		paramData = material->getParameter("opacityTextureOffset");
+		if (paramData.has_value()) entry.ubo.opacityTextureOffset = toGlm(any_cast<Vector2f>(paramData.value().data));
+		paramData = material->getParameter("opacityTextureScrollSpeed");
+		if (paramData.has_value()) entry.ubo.opacityTextureScrollSpeed = toGlm(any_cast<Vector2f>(paramData.value().data));
+		paramData = material->getParameter("smoothnessFactor");
+		if (paramData.has_value()) entry.ubo.smoothnessFactor = any_cast<float>(paramData.value().data);
+		paramData = material->getParameter("opacity");
+		if (paramData.has_value()) entry.ubo.opacity = any_cast<float>(paramData.value().data);
+		paramData = material->getParameter("alphaCutoff");
+		if (paramData.has_value()) entry.ubo.alphaCutoff = any_cast<float>(paramData.value().data);
+		paramData = material->getParameter("gamma");
+		if (paramData.has_value()) entry.ubo.gamma = any_cast<float>(paramData.value().data);
+		paramData = material->getParameter("opacityMasked");
+		if (paramData.has_value()) entry.ubo.opacityMasked = any_cast<bool>(paramData.value().data);
+		paramData = material->getParameter("useGammaCorrection");
+		if (paramData.has_value()) entry.ubo.useGammaCorrection = any_cast<bool>(paramData.value().data);
+		paramData = material->getParameter("useDiffuseTexture");
+		if (paramData.has_value()) entry.ubo.useDiffuseTexture = any_cast<bool>(paramData.value().data);
+		paramData = material->getParameter("useSpecularTexture");
+		if (paramData.has_value()) entry.ubo.useSpecularTexture = any_cast<bool>(paramData.value().data);
+		paramData = material->getParameter("useOpacityTexture");
+		if (paramData.has_value()) entry.ubo.useOpacityTexture = any_cast<bool>(paramData.value().data);
+		paramData = material->getParameter("useLighting");
+		if (paramData.has_value()) entry.ubo.useLighting = any_cast<bool>(paramData.value().data);
+		return entry;
 	}
 
 	void Renderer::setMaterialUBOData(MaterialUBO materialUBOData, vector<id_t> modelMaterials, Program* program) {
@@ -465,57 +525,14 @@ namespace CGEngine {
 		}
 		const size_t materialCount = min(modelMaterials.size(), static_cast<size_t>(MaterialUBO::MAX_MATERIALS));
 		for (size_t i = 0; i < materialCount; ++i) {
-			//Get the material
 			Material* material = assets.get<Material>(modelMaterials.at(i));
 			if (!material) continue;
-			optional<ParamData> paramData = nullopt;
-			//For diffuse, specular and opacity textures: Get the texture data, if available, and bind it to the shader, then set the materialTextures[i].diff/spec/opacityTexture uniform
-			bindTextureAndSetUniform(material, "diffuseTexture", program, i, boundTextures);
-			bindTextureAndSetUniform(material, "specularTexture", program, i, boundTextures);
-			bindTextureAndSetUniform(material, "opacityTexture", program, i, boundTextures);
-
-			paramData = material->getParameter("diffuseColor");
-			if (paramData.has_value()) materialUBOData.materials[i].diffuseColor = glm::vec4(toGlm(any_cast<Color>(paramData.value().data)), 1);
-			paramData = material->getParameter("diffuseTextureUVScale");
-			if (paramData.has_value()) materialUBOData.materials[i].diffuseTextureUVScale = toGlm(any_cast<Vector2f>(paramData.value().data));
-			paramData = material->getParameter("diffuseTextureOffset");
-			if (paramData.has_value()) materialUBOData.materials[i].diffuseTextureOffset = toGlm(any_cast<Vector2f>(paramData.value().data));
-			paramData = material->getParameter("diffuseTextureScrollSpeed");
-			if (paramData.has_value()) materialUBOData.materials[i].diffuseTextureScrollSpeed = toGlm(any_cast<Vector2f>(paramData.value().data));
-			paramData = material->getParameter("specularColor");
-			if (paramData.has_value()) materialUBOData.materials[i].specularColor = glm::vec4(toGlm(any_cast<Color>(paramData.value().data)), 1);
-			paramData = material->getParameter("specularTextureUVScale");
-			if (paramData.has_value()) materialUBOData.materials[i].specularTextureUVScale = toGlm(any_cast<Vector2f>(paramData.value().data));
-			paramData = material->getParameter("specularTextureOffset");
-			if (paramData.has_value()) materialUBOData.materials[i].specularTextureOffset = toGlm(any_cast<Vector2f>(paramData.value().data));
-			paramData = material->getParameter("specularTextureScrollSpeed");
-			if (paramData.has_value()) materialUBOData.materials[i].specularTextureScrollSpeed = toGlm(any_cast<Vector2f>(paramData.value().data));
-			paramData = material->getParameter("opacityTextureUVScale");
-			if (paramData.has_value()) materialUBOData.materials[i].opacityTextureUVScale = toGlm(any_cast<Vector2f>(paramData.value().data));
-			paramData = material->getParameter("opacityTextureOffset");
-			if (paramData.has_value()) materialUBOData.materials[i].opacityTextureOffset = toGlm(any_cast<Vector2f>(paramData.value().data));
-			paramData = material->getParameter("opacityTextureScrollSpeed");
-			if (paramData.has_value()) materialUBOData.materials[i].opacityTextureScrollSpeed = toGlm(any_cast<Vector2f>(paramData.value().data));
-			paramData = material->getParameter("smoothnessFactor");
-			if (paramData.has_value()) materialUBOData.materials[i].smoothnessFactor = any_cast<float>(paramData.value().data);
-			paramData = material->getParameter("opacity");
-			if (paramData.has_value()) materialUBOData.materials[i].opacity = any_cast<float>(paramData.value().data);
-			paramData = material->getParameter("alphaCutoff");
-			if (paramData.has_value()) materialUBOData.materials[i].alphaCutoff = any_cast<float>(paramData.value().data);
-			paramData = material->getParameter("gamma");
-			if (paramData.has_value()) materialUBOData.materials[i].gamma = any_cast<float>(paramData.value().data);
-			paramData = material->getParameter("opacityMasked");
-			if (paramData.has_value()) materialUBOData.materials[i].opacityMasked = any_cast<bool>(paramData.value().data);
-			paramData = material->getParameter("useGammaCorrection");
-			if (paramData.has_value()) materialUBOData.materials[i].useGammaCorrection = any_cast<bool>(paramData.value().data);
-			paramData = material->getParameter("useDiffuseTexture");
-			if (paramData.has_value()) materialUBOData.materials[i].useDiffuseTexture = any_cast<bool>(paramData.value().data);
-			paramData = material->getParameter("useSpecularTexture");
-			if (paramData.has_value()) materialUBOData.materials[i].useSpecularTexture = any_cast<bool>(paramData.value().data);
-			paramData = material->getParameter("useOpacityTexture");
-			if (paramData.has_value()) materialUBOData.materials[i].useOpacityTexture = any_cast<bool>(paramData.value().data);
-			paramData = material->getParameter("useLighting");
-			if (paramData.has_value()) materialUBOData.materials[i].useLighting = any_cast<bool>(paramData.value().data);
+			MaterialFrameEntry& entry = getMaterialFrameEntry(modelMaterials.at(i), material);
+			//Bind the diffuse, specular and opacity textures, if any, and set the materialTextures[i] uniforms
+			bindTextureAndSetUniform(entry.diffuseTexture, "diffuseTexture", program, i, boundTextures);
+			bindTextureAndSetUniform(entry.specularTexture, "specularTexture", program, i, boundTextures);
+			bindTextureAndSetUniform(entry.opacityTexture, "opacityTexture", program, i, boundTextures);
+			materialUBOData.materials[i] = entry.ubo;
 		}
 		//TODO: Add support for dynamic materials
 		// Check if material UBO data has changed
@@ -572,7 +589,7 @@ namespace CGEngine {
 
 	void Renderer::setTransformUBOData(TransformUBO transformUBOData, glm::mat4 combinedTransform) {
 		transformUBOData.model = combinedTransform;
-		transformUBOData.camera = currentCamera->getMatrix();
+		transformUBOData.camera = cameraMatrix;
 		updateTransformUBO(transformUBOData);
 	}
 
@@ -759,6 +776,7 @@ namespace CGEngine {
 
 	void Renderer::clear() {
 		renderOrder.clear();
+		materialFrameCache.clear();
 		lastFrameDrawCalls = drawCallsThisFrame;
 		drawCallsThisFrame = 0;
 	}
@@ -768,6 +786,9 @@ namespace CGEngine {
 	}
 
 	void Renderer::render(RenderTarget* window) {
+		//The camera does not move during a render pass, so its matrix is computed once here, not for every draw
+		if (currentCamera) cameraMatrix = currentCamera->getMatrix();
+
 		//Sort the renderOrder by zOrder if zSorting is enabled
 		if (zSortingEnabled) {
 			sortZ();
@@ -808,7 +829,8 @@ namespace CGEngine {
 	}
 
 	glm::vec3 Renderer::toGlm(Color c) {
-		return glm::vec3(c.r, c.g, c.b);
+		//sf::Color channels are bytes; shaders take 0-1
+		return glm::vec3(c.r, c.g, c.b) / 255.f;
 	}
 
 	Vector2f Renderer::fromGlm(glm::vec2 v) {
