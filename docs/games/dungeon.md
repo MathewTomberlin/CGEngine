@@ -21,6 +21,7 @@ $env:CGENGINE_SCENE = "scenes/dungeon.json"; $env:DUNGEON_SEED = "7"; .\main.exe
 
 `DUNGEON_SEED` picks the layout. Without it, the seed is the current time. The same seed always gives the
 same first level. Each completed level uses the next seed.
+`DUNGEON_FIXED_STEP` (seconds, for tests) makes every frame advance the same game time, so the scripted walks do not depend on the frame rate. The state file reports `frames`.
 
 ## Controls
 

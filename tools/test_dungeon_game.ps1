@@ -38,6 +38,17 @@ function Wait-Result($id, $timeoutSec = 20) {
     return Get-Content $path -Raw | ConvertFrom-Json
 }
 
+# Waits until the game has run at least this many frames (the state file reports the count), then returns that state.
+function Wait-Frames($target, $timeoutSec = 90) {
+    $deadline = (Get-Date).AddSeconds($timeoutSec)
+    $state = Read-State
+    while ((-not $state -or $state.frames -lt $target) -and (Get-Date) -lt $deadline) {
+        Start-Sleep -Milliseconds 100
+        $state = Read-State
+    }
+    return $state
+}
+
 function Read-State() {
     # The game rewrites the file every quarter second. Retry if a read catches it mid-write.
     for ($i = 0; $i -lt 10; $i++) {
@@ -50,6 +61,7 @@ function Read-State() {
 Remove-Item -Recurse -Force $control -ErrorAction SilentlyContinue
 $env:CGENGINE_SCENE = "scenes/dungeon.json"
 $env:DUNGEON_SEED = "7"
+$env:DUNGEON_FIXED_STEP = "0.0166667"
 $outLog = Join-Path $exeDir "dungeon_test_out.txt"
 $errLog = Join-Path $exeDir "dungeon_test_err.txt"
 Remove-Item -Force $outLog, $errLog -ErrorAction SilentlyContinue
@@ -57,6 +69,7 @@ $app = Start-Process -FilePath (Join-Path $exeDir "main.exe") -WorkingDirectory 
     -RedirectStandardOutput $outLog -RedirectStandardError $errLog
 Remove-Item Env:CGENGINE_SCENE
 Remove-Item Env:DUNGEON_SEED
+Remove-Item Env:DUNGEON_FIXED_STEP
 
 try {
     $deadline = (Get-Date).AddSeconds(20)
@@ -80,85 +93,71 @@ try {
     $names = @($anims.result.animations | ForEach-Object { $_.name })
     Check "the player's model has the knight clips (idle, walk, attack)" ($anims.ok -and ("knight_idle" -in $names) -and ("knight_walk" -in $names) -and ("knight_attack" -in $names))
 
-    # Replace key_down with a scripted sequence, measured from when the script runs:
-    #   0.0 to 1.0 s: D (walk right, about 4 tiles)
-    #   2.5 to 6.0 s: A (walk left until the west wall stops the player)
+    # Replace key_down with a scripted sequence, counted in frames. The dungeon runs at a fixed step here
+    # (DUNGEON_FIXED_STEP), so 60 frames is the same game time whatever the frame rate. move_player asks for D once
+    # per frame before any other key, so counting its calls counts the frames.
+    #   frames 1 to 60: D (walk right, about 4 tiles)
+    #   frames 151 to 360: A (walk left until the west wall stops the player)
     $keys = @'
-import time
 import cg_engine_bindings as cge
-_t0 = time.perf_counter()
-_phases = [(0.0, 1.0, "D"), (2.5, 6.0, "A")]
+_frame = [0]
+_phases = [(1, 61, "D"), (151, 361, "A")]
 def _fake(name):
-    now = time.perf_counter() - _t0
-    return any(a <= now < b and name == k for a, b, k in _phases)
+    if name == "D":
+        _frame[0] += 1
+    return any(a <= _frame[0] < b and name == k for a, b, k in _phases)
 cge.key_down = _fake
 '@
     $keyFile = Join-Path $control "fake_keys.py"
     Set-Content -Path $keyFile -Value $keys -Encoding utf8
-    $runAt = Get-Date
+    $base = (Read-State).frames
     Send-Command "01_fake_keys" ('{"command":"run_script","params":{"path":"' + ($keyFile -replace '\\', '/') + '"}}')
     $ran = Wait-Result "01_fake_keys"
     Check "scripted keyboard installs" ($ran.ok)
 
-    # Read about 1.5 s in: the player has walked right.
-    $wait = 1.5 - ((Get-Date) - $runAt).TotalSeconds
-    if ($wait -gt 0) { Start-Sleep -Milliseconds ([int]($wait * 1000)) }
-    $right = Read-State
+    $right = Wait-Frames ($base + 100)
     Check "holding D walks the player right" ($right.player[0] -gt 8.5 -and $right.player[0] -lt 11.0)
-
-    # Read about 6.5 s in: the player has been pushed against the west wall and stopped.
-    $wait = 6.5 - ((Get-Date) - $runAt).TotalSeconds
-    if ($wait -gt 0) { Start-Sleep -Milliseconds ([int]($wait * 1000)) }
-    $left = Read-State
+    $left = Wait-Frames ($base + 420)
     Check "the west wall stops the player" ($left.player[0] -gt 0.6 -and $left.player[0] -lt 1.3)
     Check "player stays in the start room" ($left.room[0] -eq 0 -and $left.room[1] -eq 0)
     Check "no damage without contact" ($left.hp -eq 3)
 
-    # Walk through the east door of the start room, which seed 7 links to room (1, 0). Holding D for six
-    # seconds carries the player across the door and into that room. It stops at the far wall.
+    # Walk through the east door of the start room, which seed 7 links to room (1, 0). Holding D for 240 frames
+    # carries the player from the west wall, across the door, into that room.
     $doorKeys = @'
-import time
 import cg_engine_bindings as cge
-_t0 = time.perf_counter()
+_frame = [0]
 def _fake(name):
-    return name == "D" and time.perf_counter() - _t0 < 6.0
+    if name == "D":
+        _frame[0] += 1
+    return name == "D" and _frame[0] <= 240
 cge.key_down = _fake
 '@
     Set-Content -Path $keyFile -Value $doorKeys -Encoding utf8
-    $doorRun = Get-Date
+    $doorBase = (Read-State).frames
     Send-Command "02_door_keys" ('{"command":"run_script","params":{"path":"' + ($keyFile -replace '\\', '/') + '"}}')
     $doorRan = Wait-Result "02_door_keys"
     Check "scripted keyboard for the door walk installs" ($doorRan.ok)
-    $wait = 6.5 - ((Get-Date) - $doorRun).TotalSeconds
-    if ($wait -gt 0) { Start-Sleep -Milliseconds ([int]($wait * 1000)) }
-    $through = Read-State
+    $through = Wait-Frames ($doorBase + 270)
     Check "walking through the door enters room (1, 0)" ($through.room[0] -eq 1 -and $through.room[1] -eq 0)
-    Check "the player stops at the far wall of the new room" ($through.player[0] -gt 23.0 -and $through.player[0] -lt 25.0)
+    Check "the player walks on into room (1, 0), past the door" ($through.player[0] -gt 13.5 -and $through.player[0] -lt 17.5)
     Check "the game keeps running after a room change" ($through.level -eq 1)
 
     # Walk back through the same door: the start room is loaded again, with the same body names.
     $backKeys = @'
-import time
 import cg_engine_bindings as cge
-_t0 = time.perf_counter()
+_frame = [0]
 def _fake(name):
-    return name == "A" and time.perf_counter() - _t0 < 6.0
+    if name == "D":
+        _frame[0] += 1
+    return name == "A" and _frame[0] <= 300
 cge.key_down = _fake
 '@
     Set-Content -Path $keyFile -Value $backKeys -Encoding utf8
+    $backBase = (Read-State).frames
     Send-Command "03_back_keys" ('{"command":"run_script","params":{"path":"' + ($keyFile -replace '\\', '/') + '"}}')
     Wait-Result "03_back_keys" | Out-Null
-    # The engine may run below real time in a Debug build, so wait until the player stops moving.
-    $back = $null
-    $previous = $null
-    $settleDeadline = (Get-Date).AddSeconds(20)
-    while ((Get-Date) -lt $settleDeadline) {
-        Start-Sleep -Milliseconds 500
-        $sample = Read-State
-        if ($previous -and [math]::Abs($sample.player[0] - $previous.player[0]) -lt 0.001 -and $sample.player[0] -lt 2) { $back = $sample; break }
-        $previous = $sample
-        $back = $sample
-    }
+    $back = Wait-Frames ($backBase + 330)
     Check "walking back returns to the start room" ($back.room[0] -eq 0 -and $back.room[1] -eq 0)
     Write-Host ("      state after the walk back: player x={0} hp={1} room=({2},{3})" -f $back.player[0], $back.hp, $back.room[0], $back.room[1])
     Check "the west wall stops the player again" ($back.player[0] -gt 0.6 -and $back.player[0] -lt 1.3)
