@@ -556,6 +556,8 @@ namespace CGEngine {
 			program->setUniform("skinned", meshData->bones.empty() ? 0 : 1);
 			// The shadow map: in its own pass the fragment shader stops early; otherwise surfaces look the sun's shadow up.
 			program->setUniform("shadowPass", shadowPass ? 1 : 0);
+			// Voxel meshes project their texture in world space (see triplanar in StdFragShader.frag).
+			program->setUniform("triplanar", meshData->compact ? 1 : 0);
 			program->setUniform("shadowsOn", (shadowsActive && !shadowPass) ? 1 : 0);
 			if (shadowsActive && !shadowPass) {
 				const GLint shadowUnit = 15;   // above the material textures' units

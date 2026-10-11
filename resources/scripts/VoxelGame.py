@@ -39,6 +39,10 @@ SHADOWS = os.environ.get("VOXEL_SHADOWS", "1") != "0"   # the sun casts shadows 
 SHADOW_RADIUS = float(os.environ.get("VOXEL_SHADOW_RADIUS", "40"))
 HUD_FONT = "fonts/defaultFont.ttf"   # the font for the labels (copied with the resources)
 SIM_BUDGET_MS = 1.5          # time per frame for the block physics (falling sand, flowing water)
+# Block physics runs in ticks this far apart, and a falling block takes most of a tick to move one cell, so sand and water
+# move at a pace the eye can follow: a block falls about four cells a second by default.
+SIM_TICK = float(os.environ.get("VOXEL_SIM_TICK", "0.25"))
+MOVING_BODY = "moving_blocks"   # the one mesh that draws every block in flight
 EDITS_FILE = "cg_control/voxel_edits.bin"
 STATE_INTERVAL = 0.25       # seconds between writes to cg_control/voxel_state.json
 # The outline of the block the crosshair is on (yellow: it is broken), and of the cell a block would be placed in
@@ -79,10 +83,36 @@ def box_faces(lo, hi):
     ]
 
 
+def boxes_arrays(boxes):
+    """Arrays for solid boxes: each (lo, hi, colour) is a closed box whose faces are wound to face outward."""
+    positions, normals, colours, uvs, material_ids, indices = [], [], [], [], [], []
+    face_uvs = ((0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0))
+    for lo, hi, colour in boxes:
+        for corners, normal in box_faces(lo, hi):
+            first = len(positions) // 3
+            for corner, uv in zip(corners, face_uvs):
+                positions.extend(corner)
+                normals.extend(normal)
+                colours.extend(colour)
+                uvs.extend(uv)
+                material_ids.append(0.0)
+            # Two triangles, wound so their normal faces outward.
+            a, b, c = corners[0], corners[1], corners[2]
+            u = [b[i] - a[i] for i in range(3)]
+            w = [c[i] - a[i] for i in range(3)]
+            cross = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]]
+            if sum(cross[i] * normal[i] for i in range(3)) >= 0:
+                indices.extend((first, first + 1, first + 2, first, first + 2, first + 3))
+            else:
+                indices.extend((first, first + 2, first + 1, first, first + 3, first + 2))
+    return (array("f", positions), array("f", normals), array("f", colours), array("f", uvs),
+            array("f", material_ids), array("I", indices))
+
+
 def outline_arrays(lo, hi, colour):
     """Arrays for the twelve edges of the box lo..hi, each edge a thin bar that sticks out a little from the box."""
-    positions, normals, colours, uvs, material_ids, indices = [], [], [], [], [], []
     t = WIRE_THICKNESS
+    boxes = []
     for axis in range(3):
         o1, o2 = [i for i in range(3) if i != axis]
         for v1 in (lo[o1], hi[o1]):
@@ -91,25 +121,8 @@ def outline_arrays(lo, hi, colour):
                 bmin[axis], bmax[axis] = lo[axis] - t, hi[axis] + t
                 bmin[o1], bmax[o1] = v1 - t, v1 + t
                 bmin[o2], bmax[o2] = v2 - t, v2 + t
-                for corners, normal in box_faces(bmin, bmax):
-                    first = len(positions) // 3
-                    for corner in corners:
-                        positions.extend(corner)
-                        normals.extend(normal)
-                        colours.extend(colour)
-                        uvs.extend((0.0, 0.0))
-                        material_ids.append(0.0)
-                    # Two triangles, wound so their normal faces outward.
-                    a, b, c = (corners[0], corners[1], corners[2])
-                    u = [b[i] - a[i] for i in range(3)]
-                    w = [c[i] - a[i] for i in range(3)]
-                    cross = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]]
-                    if sum(cross[i] * normal[i] for i in range(3)) >= 0:
-                        indices.extend((first, first + 1, first + 2, first, first + 2, first + 3))
-                    else:
-                        indices.extend((first, first + 2, first + 1, first, first + 3, first + 2))
-    return (array("f", positions), array("f", normals), array("f", colours), array("f", uvs),
-            array("f", material_ids), array("I", indices))
+                boxes.append((bmin, bmax, colour))
+    return boxes_arrays(boxes)
 
 
 def mix(a, b, t):
@@ -140,6 +153,8 @@ class VoxelGame(PyScript):
         self.broken = False
         self.hud_ready = False          # the label and the outline bodies exist (made on the second frame)
         self.paused = False             # the pause menu is open: the world stands still and the mouse is free
+        self.moving_created = False     # the mesh of blocks in flight exists
+        self.moving_shown = False       # it currently draws blocks (otherwise it is hidden)
         self.outline_keys = {}          # the last outline shown under each name, so unchanged ones are not re-uploaded
         self.outline_bodies = set()     # the outlines already made as runtime meshes
         self.slot = 0                   # the hotbar slot placing uses
@@ -190,11 +205,12 @@ class VoxelGame(PyScript):
             self.update_pause_menu()
             dt = 0.0
         else:
-            self.world.simulate(dt, SIM_BUDGET_MS)
+            self.world.simulate(dt, SIM_BUDGET_MS, SIM_TICK)
             self.update_mouse()
             self.update_player(dt)
             self.update_target()
             self.edit_blocks()
+        self.update_moving_blocks()
         self.update_outlines()
         self.update_hud()
         self.update_sky(dt)
@@ -213,6 +229,7 @@ class VoxelGame(PyScript):
             self.world.define_block(block, cge.Vector3f(*rgb), solid=block not in VoxelGen.LIQUIDS,
                                     falls=block in VoxelGen.FALLS, liquid=block in VoxelGen.LIQUIDS)
         self.world.set_smoothing(SMOOTH_RESOLUTION)
+        self.world.set_move_seconds(SIM_TICK * 0.9)   # a falling block lands just before the next tick
         cge.set_environment(shadows=SHADOWS, shadow_radius=SHADOW_RADIUS)
         self.world.set_terrain(self.seed, VoxelGen.SEA_LEVEL, 8, 44, VoxelGen.SNOW_LEVEL, VoxelGen.TREE_CHANCE,
                           VoxelGen.CAVE_WIDTH)
@@ -419,6 +436,28 @@ class VoxelGame(PyScript):
     def update_target(self):
         self.target = physics.raycast(self.solid, tuple(self.eye()), self.look_direction())
 
+    def update_moving_blocks(self):
+        """Draw the blocks in flight, each part of the way from where it left to where it will land, in a steady
+        fall. The world does not hold them until they land, so this mesh is the only place they are seen."""
+        if not self.hud_ready:   # runtime meshes are made a frame after the scene starts (see frame)
+            return
+        moves = self.world.moving_blocks()
+        if not moves and not self.moving_shown:
+            return
+        boxes = []
+        for block, src, dst, progress in moves:
+            pos = [src[i] + (dst[i] - src[i]) * progress for i in range(3)]
+            boxes.append((tuple(pos), tuple(p + 1.0 for p in pos), VoxelGen.COLOURS.get(block, (1.0, 1.0, 1.0))))
+        if not boxes:
+            boxes.append((HIDDEN_BOX[0], HIDDEN_BOX[1], (0.0, 0.0, 0.0)))
+        arrays = boxes_arrays(boxes)
+        if self.moving_created:
+            cge.update_mesh_body(MOVING_BODY, *arrays)
+        else:
+            cge.create_mesh_body(MOVING_BODY, *arrays, materials=["voxel"], position=cge.Vector3f(0, 0, 0))
+            self.moving_created = True
+        self.moving_shown = bool(moves)
+
     def show_outline(self, name, box, colour):
         """Show the outline of box (lo, hi) in colour as the runtime mesh called name, or hide it when box is None."""
         key = (box, colour)
@@ -458,6 +497,7 @@ class VoxelGame(PyScript):
     def save_and_load(self):
         if self.pressed("Save", bool(cge.key_down("F5"))):
             os.makedirs("cg_control", exist_ok=True)
+            self.world.settle_moves()   # blocks in flight land first, so none is missing from the file
             self.world.save_edits(EDITS_FILE)
         if self.pressed("Load", bool(cge.key_down("F9"))):
             self.world.load_edits(EDITS_FILE)

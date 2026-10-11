@@ -98,6 +98,31 @@ Goal: the terrain looks rounded and real, the blocks obey physics the scripts ca
 - [ ] **10.6** Region batching (9.5). Not needed yet: with the smooth skin, 841 chunks run at 650 frames a second in Release.
 - [ ] **10.7** An on-screen hotbar (8.4).
 
+## Phase 11: making the voxel sample feel right to play (from playing it)
+Goal: the world reads well at a human pace, and the engine's own state is easy to see and to test.
+- [x] **11.1** Mouse look at a quarter of the first setting (0.00625 degrees a pixel, `VOXEL_MOUSE_SENSITIVITY`). Escape
+  opens a pause menu: the mouse is freed and the world stands still; Resume locks the mouse; Quit closes the app.
+  `tools/test_pause_menu.ps1` checks each step with scripted input.
+- [x] **11.2** Aim feedback: the block under the crosshair is outlined in yellow (the block that breaks), and the cell a
+  new block would fill is outlined in the selected block's colour. A label names the block in view, and a hotbar along
+  the bottom shows the nine choices with the selected one in brackets.
+- [x] **11.3** Full screen with `CGENGINE_FULLSCREEN=1`, at the desktop resolution. It is read once at start-up.
+- [x] **11.4** Falling blocks are slower and visible in flight. A block takes most of a tick (0.25 s by default, `VOXEL_SIM_TICK`)
+  to move a cell, and the game draws it moving between the cells (`VoxelSimulation` moves, `world.moving_blocks()`).
+  Water still steps level by level on the tick.
+- [x] **11.5** Textures on voxel meshes are projected in world space and blended by facing (triplanar), so slopes and
+  walls keep the block's texture shape instead of stretching.
+- [ ] **11.6** Light for caves: propagate sky and torch light through the blocks so caves and overhangs are dark. Without
+  it the shadow map is the only sense of depth underground.
+- [ ] **11.7** LOD for the smooth skin: two samples a block near the camera and one far away, with the seams matched or
+  skirted. Two samples everywhere is 4.7 million quads for 841 chunks.
+- [ ] **11.8** Frame rate: the labels and outlines together cut the Release rate from about 650 to about 360 frames a second
+  (measured after the HUD landed). Find out which part costs it (the per-frame text state switch, or the outline uploads)
+  before anything else is optimised.
+- [ ] **11.9** Entities: the player's box mover is C++ (`step_body`), but other bodies have no collision. A body component
+  that uses the same mover, so scripts can make many walking or falling bodies.
+- [ ] **11.10** Player in water: water is not solid, so the player falls through it. A slower fall and buoyancy in liquid.
+
 ## Tooling and quality
 - [x] CI build on Windows (`.github/workflows/build.yml`) with Mesa software OpenGL smoke run
 - [~] Unit tests for pure logic runnable without a GPU. Done for the dungeon generator (`python -I tools/test_dungeon_gen.py`) and for the scene format and command list (`python -I tools/test_scene_format.py`: example scenes, invalid fixtures, documented commands). The C++ parsers in `SceneLoader` and `ControlChannel` are still covered only by the GPU integration test.
@@ -115,3 +140,6 @@ Goal: the terrain looks rounded and real, the blocks obey physics the scripts ca
 - A wrong value can hide behind another wrong value. Hue-only colours, an always-on unlit base and a light under the floor each made the others look plausible; fixing one at a time looked worse until all three were fixed. Compare screenshots of every shipped scene before and after any rendering change.
 - Look at the scene before trusting it. The dungeon floor sat half a tile above y = 0 for its whole life, because a plane primitive's surface is offset by its size. Cubes hid it; the first real models sank to the waist. Screenshots through the control channel caught it.
 - Remaining big-ticket items: Phase 5, batching draws by material (3.2 continuation), and the dungeon's next steps (an inventory, a shop for coins, and sound).
+- Voxel notes (from the voxel sample, later work): the smooth skin looks much better than the cubes, and shadows read well once the map is cached. The HUD took several passes: the screen's own view is a square in the middle of the window, so window-wide text needs its own view, and text draws over meshes only with a high z order. A closed window used to restart the scene (the run loop now ends).
+- How I feel about it: the engine is in good shape for building games quickly from Python, and the voxel sample feels like a real game now. My worries are the frame-rate drop from the HUD (11.8), the `Body` draw path that casts a transformable to a shape to draw text (it works, but it is undefined behaviour and should store a drawable), and tests that depend on frame timing. I want to fix those before adding more features.
+- The tests run through the control channel with scripted input. They are the best guard against regressions in the game, and they caught a real engine bug (the run loop), so keep adding one for each new interaction.
