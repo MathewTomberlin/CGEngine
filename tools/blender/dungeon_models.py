@@ -84,7 +84,7 @@ class Builder:
         verts = bmesh.ops.create_cube(self.bm, size=1.0)["verts"]
         self._finish(verts, mat_name, trs(loc, rot, size))
 
-    def sphere(self, mat_name, loc, radius, scale=(1, 1, 1), rot=(0, 0, 0), segments=10, rings=6, smooth=False):
+    def sphere(self, mat_name, loc, radius, scale=(1, 1, 1), rot=(0, 0, 0), segments=10, rings=6, smooth=True):
         verts = bmesh.ops.create_uvsphere(self.bm, u_segments=segments, v_segments=rings, radius=1.0)["verts"]
         self._finish(verts, mat_name, trs(loc, rot, [radius * s for s in scale]), smooth)
 
@@ -93,7 +93,7 @@ class Builder:
         verts = bmesh.ops.create_cone(self.bm, cap_ends=True, segments=segments, radius1=r1, radius2=r2, depth=depth)["verts"]
         self._finish(verts, mat_name, trs(loc, rot, scale))
 
-    def torus(self, mat_name, loc, major, minor, rot=(0, 0, 0), segments=16, sides=6, arc=360.0, scale=(1, 1, 1)):
+    def torus(self, mat_name, loc, major, minor, rot=(0, 0, 0), segments=16, sides=6, arc=360.0, scale=(1, 1, 1), smooth=True):
         """Ring in the local XY plane. arc < 360 gives an open bend (used for the bow and the sword arc)."""
         rings = []
         closed = arc >= 360.0
@@ -115,7 +115,7 @@ class Builder:
         if not closed:
             self.bm.faces.new(rings[0][::-1])
             self.bm.faces.new(rings[-1])
-        self._finish([v for ring in rings for v in ring], mat_name, trs(loc, rot, scale))
+        self._finish([v for ring in rings for v in ring], mat_name, trs(loc, rot, scale), smooth)
 
     def build(self, collection):
         old = bpy.data.objects.get(self.name)

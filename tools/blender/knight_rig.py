@@ -96,6 +96,8 @@ def sphere(loc, radius, scale=(1, 1, 1)):
     def build(bm):
         verts = bmesh.ops.create_uvsphere(bm, u_segments=10, v_segments=6, radius=1.0)["verts"]
         bmesh.ops.transform(bm, matrix=trs(loc, (0, 0, 0), [radius * s for s in scale]), verts=verts)
+        for face in bm.faces:
+            face.smooth = True
     return build
 
 
