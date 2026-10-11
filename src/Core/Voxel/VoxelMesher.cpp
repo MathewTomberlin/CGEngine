@@ -158,7 +158,7 @@ namespace CGEngine {
 
 	namespace {
 		// The surface is where the density crosses this: a sample inside the solid blocks is above it.
-		const float SmoothIso = 0.5f;
+		const float SmoothIso = 0.3f;
 
 		// The 12 edges of a cell's cube, as pairs of corner indices (corner bit 0 is x, bit 1 is y, bit 2 is z).
 		const int CubeEdges[12][2] = { { 0, 1 }, { 2, 3 }, { 4, 5 }, { 6, 7 }, { 0, 2 }, { 1, 3 }, { 4, 6 }, { 5, 7 },
@@ -236,7 +236,8 @@ namespace CGEngine {
 		}
 	}
 
-	void buildSmoothMesh(const PaddedChunk& chunk, const std::array<glm::vec3, 256>& palette, int resolution, MeshArrays& out) {
+	void buildSmoothMesh(const PaddedChunk& chunk, const std::array<glm::vec3, 256>& palette, int resolution,
+		unsigned skirtSides, MeshArrays& out) {
 		out.vertices.clear();
 		out.indices.clear();
 		const int R = std::max(1, resolution);
@@ -350,6 +351,8 @@ namespace CGEngine {
 				const float lower = value(j);
 				const float upper = value(j + 1);
 				if (lower > SmoothIso && upper <= SmoothIso) {
+					// Only a surface with solid under it gets a skirt: over air, the strip would hang in the open.
+					if (j - R < -1 || value(j - R) <= SmoothIso) return false;
 					const float t = (lower - SmoothIso) / (lower - upper);
 					const float y0 = position(0, j, 0).y;
 					const float y1 = position(0, j + 1, 0).y;
@@ -380,6 +383,7 @@ namespace CGEngine {
 		const int last = S * R;
 		// The two sides at x = first and last sample, along z.
 		for (int side = 0; side < 2; ++side) {
+			if (!(skirtSides & (side == 0 ? 1u : 2u))) continue;
 			const int i = side == 0 ? 0 : last;
 			const float x = position(i, 0, 0).x;
 			for (int k = 0; k < last; ++k) {
@@ -394,6 +398,7 @@ namespace CGEngine {
 		}
 		// The two sides at z = first and last sample, along x.
 		for (int side = 0; side < 2; ++side) {
+			if (!(skirtSides & (side == 0 ? 4u : 8u))) continue;
 			const int k = side == 0 ? 0 : last;
 			const float z = position(0, 0, k).z;
 			for (int i = 0; i < last; ++i) {

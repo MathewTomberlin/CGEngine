@@ -124,6 +124,8 @@ namespace CGEngine {
 			if (wanted != chunk.resolution) {
 				chunk.resolution = wanted;
 				markDirty(entry.first.first, entry.first.second);
+				// The neighbours' seams with this chunk change, so they are meshed again too.
+				markNeighboursDirty(entry.first.first, entry.first.second);
 			}
 		}
 	}
@@ -376,17 +378,27 @@ namespace CGEngine {
 		dirtyKeys.erase(std::make_pair(cx, cz));
 		const int resolution = chunk.resolution;
 		PaddedChunk padded = snapshot(cx, cz, resolution > 0 ? 3 : 1);
+		// Skirts on the sides that meet a neighbour at another level of detail (bit 1: -x, 2: +x, 4: -z, 8: +z).
+		unsigned skirtSides = 0;
+		if (resolution > 0) {
+			const int dxs[4] = { -1, 1, 0, 0 };
+			const int dzs[4] = { 0, 0, -1, 1 };
+			for (int side = 0; side < 4; ++side) {
+				const Chunk* neighbour = findChunk(cx + dxs[side], cz + dzs[side]);
+				if (neighbour && neighbour->loaded && neighbour->resolution != resolution) skirtSides |= 1u << side;
+			}
+		}
 		const std::array<glm::vec3, 256> colours = palette;
 		const uint32_t generation = chunk.generation;
 		const uint32_t version = chunk.version;
-		enqueue([this, cx, cz, generation, version, resolution, padded = std::move(padded), colours]() mutable {
+		enqueue([this, cx, cz, generation, version, resolution, skirtSides, padded = std::move(padded), colours]() mutable {
 			MeshResult result;
 			result.cx = cx;
 			result.cz = cz;
 			result.generation = generation;
 			result.version = version;
 			if (resolution > 0) {
-				buildSmoothMesh(padded, colours, resolution, result.mesh);
+				buildSmoothMesh(padded, colours, resolution, skirtSides, result.mesh);
 			} else {
 				buildChunkMesh(padded, colours, result.mesh);
 			}
