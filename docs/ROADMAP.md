@@ -126,6 +126,11 @@ Goal: the world reads well at a human pace, and the engine's own state is easy t
 - [ ] **11.10** Player in water: water is not solid, so the player falls through it. A slower fall and buoyancy in liquid.
 - [x] **11.11** Falling blocks are drawn as smooth balls, not cubes (`buildBlob`, one mesh for all the blocks in flight, made
   in C++ each update). The settled blocks stay smooth-skinned as before.
+- [x] **11.12** Thin trunks read as vines, and skirts hung flat sheets over air. A one-sample surface pulls each vertex
+  toward the middle of its cell, which thins features one block wide; the surface now sits a little further out
+  (iso 0.3), so trunks are solid. Skirts only go where the neighbour is at another level of detail, and only over solid.
+- [ ] **11.13** Trees whose trunk is outside the loaded area leave crowns floating. Look at the far edge of the view, and
+  make the trunk part of the crown's chunk, or skip crowns whose trunk is missing.
 
 ## Tooling and quality
 - [x] CI build on Windows (`.github/workflows/build.yml`) with Mesa software OpenGL smoke run
