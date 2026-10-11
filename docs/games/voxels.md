@@ -60,6 +60,11 @@ Chunks are built in the background, so the frame never waits for terrain or mesh
 4. `update` uploads the finished meshes until its time budget (2 ms) is spent, at least one per call. The upload makes
    the chunk's body (`voxel_chunk_<cx>_<cz>`, a runtime mesh). The GPU copy is replaced in place when a chunk changes.
 
+The surface is a smooth skin by default (`VOXEL_SMOOTH`, samples per block, 1 by default; 0 draws cubes). The skin is
+surface nets (`buildSmoothMesh` in `src/Core/Voxel/VoxelMesher.cpp`): the blocks' occupancy, interpolated between block
+centres, is a density, and the surface is where it crosses one half. The blocks stay the truth for collision and editing;
+the skin is what is drawn. Each chunk's skin is a function of the blocks around it, so chunks join without cracks.
+
 Chunk vertices are 48 bytes, against 80 for an ordinary mesh vertex: they leave out the bone fields. Every attribute is a
 float, because the NVIDIA driver read byte attributes several times slower per draw.
 
@@ -117,6 +122,6 @@ the view's level and the worst frame.
 ## Limits
 
 - There are no shadows yet, and the hotbar has no picture on screen.
-- Water is opaque, and the terrain is blocky (see the smooth skin on the roadmap).
+- Water is opaque. The smooth skin has one level of detail for every chunk; a finer skin near the camera is on the roadmap.
 - Each chunk is one draw call. Region batching (several chunks in one mesh) is the next step if the draw count
   becomes the limit.

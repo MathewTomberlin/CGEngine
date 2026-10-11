@@ -70,6 +70,15 @@ namespace CGEngine {
 		palette[static_cast<size_t>(std::clamp(blockId, 0, 255))] = colour;
 	}
 
+	void VoxelWorld::setSmoothing(int resolution) {
+		const int next = std::max(0, resolution);
+		if (next == smoothResolution) return;
+		smoothResolution = next;
+		for (auto& entry : chunks) {
+			if (entry.second.loaded) markDirty(entry.first.first, entry.first.second);
+		}
+	}
+
 	int VoxelWorld::floorDiv(int a, int b) {
 		int q = a / b;
 		if ((a % b != 0) && ((a < 0) != (b < 0))) --q;
@@ -256,12 +265,13 @@ namespace CGEngine {
 		return true;
 	}
 
-	PaddedChunk VoxelWorld::snapshot(int cx, int cz) const {
+	PaddedChunk VoxelWorld::snapshot(int cx, int cz, int border) const {
 		PaddedChunk padded;
 		padded.size = size;
 		padded.height = height;
-		const int p = size + 2;
-		padded.blocks.assign(static_cast<size_t>(p) * p * (height + 2), 0);
+		padded.border = border;
+		const int p = size + 2 * border;
+		padded.blocks.assign(static_cast<size_t>(p) * p * (height + 2 * border), 0);
 
 		// The nine chunks around (cx, cz), indexed by the offset of the chunk from it: [dz + 1][dx + 1].
 		const Chunk* around[3][3];
@@ -271,15 +281,15 @@ namespace CGEngine {
 				around[dz + 1][dx + 1] = chunk && chunk->loaded ? chunk : nullptr;
 			}
 		}
-		for (int py = 0; py < height + 2; ++py) {
-			const int y = py - 1;
+		for (int py = 0; py < height + 2 * border; ++py) {
+			const int y = py - border;
 			if (y < 0 || y >= height) continue;
 			for (int pz = 0; pz < p; ++pz) {
-				const int lz = pz - 1;
+				const int lz = pz - border;
 				const int nz = lz < 0 ? -1 : (lz >= size ? 1 : 0);
 				const int inZ = lz - nz * size;
 				for (int px = 0; px < p; ++px) {
-					const int lx = px - 1;
+					const int lx = px - border;
 					const int nx = lx < 0 ? -1 : (lx >= size ? 1 : 0);
 					const int inX = lx - nx * size;
 					const Chunk* source = around[nz + 1][nx + 1];
@@ -294,17 +304,22 @@ namespace CGEngine {
 	void VoxelWorld::startMeshing(int cx, int cz, Chunk& chunk) {
 		chunk.dirty = false;
 		chunk.meshing = true;
-		PaddedChunk padded = snapshot(cx, cz);
+		const int resolution = smoothResolution;
+		PaddedChunk padded = snapshot(cx, cz, resolution > 0 ? 2 : 1);
 		const std::array<glm::vec3, 256> colours = palette;
 		const uint32_t generation = chunk.generation;
 		const uint32_t version = chunk.version;
-		enqueue([this, cx, cz, generation, version, padded = std::move(padded), colours]() mutable {
+		enqueue([this, cx, cz, generation, version, resolution, padded = std::move(padded), colours]() mutable {
 			MeshResult result;
 			result.cx = cx;
 			result.cz = cz;
 			result.generation = generation;
 			result.version = version;
-			buildChunkMesh(padded, colours, result.mesh);
+			if (resolution > 0) {
+				buildSmoothMesh(padded, colours, resolution, result.mesh);
+			} else {
+				buildChunkMesh(padded, colours, result.mesh);
+			}
 			result.quads = static_cast<int>(result.mesh.indices.size() / 6);
 			std::lock_guard<std::mutex> lock(resultMutex);
 			meshResults.push_back(std::move(result));

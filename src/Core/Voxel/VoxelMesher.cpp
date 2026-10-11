@@ -1,3 +1,4 @@
+#include <algorithm>
 #include "VoxelMesher.h"
 
 namespace CGEngine {
@@ -149,6 +150,189 @@ namespace CGEngine {
 							}
 							i += w;
 						}
+					}
+				}
+			}
+		}
+	}
+
+	namespace {
+		// The surface is where the density crosses this: a sample inside the solid blocks is above it.
+		const float SmoothIso = 0.5f;
+
+		// The 12 edges of a cell's cube, as pairs of corner indices (corner bit 0 is x, bit 1 is y, bit 2 is z).
+		const int CubeEdges[12][2] = { { 0, 1 }, { 2, 3 }, { 4, 5 }, { 6, 7 }, { 0, 2 }, { 1, 3 }, { 4, 6 }, { 5, 7 },
+			{ 0, 4 }, { 1, 5 }, { 2, 6 }, { 3, 7 } };
+
+		// Whether the block at (x, y, z) is solid. Outside the padded chunk it is air.
+		bool solidAt(const PaddedChunk& chunk, int x, int y, int z) {
+			const int b = chunk.border;
+			if (x < -b || y < -b || z < -b || x >= chunk.size + b || y >= chunk.height + b || z >= chunk.size + b) return false;
+			return chunk.at(x, y, z) != 0;
+		}
+
+		// The density at p (block units): the blocks' occupancy, interpolated between block centres (a block's centre is
+		// its corner + 0.5). It falls from 1 to 0 across each block face, so the iso-surface at 0.5 runs along the faces
+		// and rounds the convex edges and corners.
+		float densityAt(const PaddedChunk& chunk, glm::vec3 p) {
+			const glm::vec3 b = p - glm::vec3(0.5f);
+			const glm::vec3 base = glm::floor(b);
+			const glm::vec3 t = b - base;
+			const int x0 = static_cast<int>(base.x), y0 = static_cast<int>(base.y), z0 = static_cast<int>(base.z);
+			float value = 0.0f;
+			for (int c = 0; c < 8; ++c) {
+				const int dx = c & 1, dy = (c >> 1) & 1, dz = (c >> 2) & 1;
+				const float w = (dx ? t.x : 1.0f - t.x) * (dy ? t.y : 1.0f - t.y) * (dz ? t.z : 1.0f - t.z);
+				if (solidAt(chunk, x0 + dx, y0 + dy, z0 + dz)) value += w;
+			}
+			return value;
+		}
+
+		// The vertex at p (chunk block units): a normal from the density gradient, the colour of the solid block that
+		// weighs most there, darkened where the air beside it is walled in, and a texture coordinate from the normal's axis.
+		VoxelVertex smoothVertex(const PaddedChunk& chunk, const std::array<glm::vec3, 256>& palette, glm::vec3 p) {
+			const float h = 0.25f;
+			const glm::vec3 gradient(
+				densityAt(chunk, p + glm::vec3(h, 0, 0)) - densityAt(chunk, p - glm::vec3(h, 0, 0)),
+				densityAt(chunk, p + glm::vec3(0, h, 0)) - densityAt(chunk, p - glm::vec3(0, h, 0)),
+				densityAt(chunk, p + glm::vec3(0, 0, h)) - densityAt(chunk, p - glm::vec3(0, 0, h)));
+			const float length = glm::length(gradient);
+			const glm::vec3 normal = length > 1e-6f ? -gradient / length : glm::vec3(0.0f, 1.0f, 0.0f);
+
+			// The dominant solid block: the one whose centre weighs most at p.
+			const glm::vec3 b = p - glm::vec3(0.5f);
+			const glm::vec3 base = glm::floor(b);
+			const glm::vec3 t = b - base;
+			int block = 0;
+			float blockWeight = -1.0f;
+			for (int c = 0; c < 8; ++c) {
+				const int dx = c & 1, dy = (c >> 1) & 1, dz = (c >> 2) & 1;
+				const int x = static_cast<int>(base.x) + dx, y = static_cast<int>(base.y) + dy, z = static_cast<int>(base.z) + dz;
+				const float w = (dx ? t.x : 1.0f - t.x) * (dy ? t.y : 1.0f - t.y) * (dz ? t.z : 1.0f - t.z);
+				if (solidAt(chunk, x, y, z) && w > blockWeight) {
+					blockWeight = w;
+					block = chunk.at(x, y, z);
+				}
+			}
+			if (block == 0) block = 1;
+
+			// Ambient occlusion: the density a little way out along the normal. Walls close by darken the corner.
+			const float outside = densityAt(chunk, p + normal * 0.25f);
+			const float occlusion = std::clamp(1.0f - 0.6f * outside, 0.5f, 1.0f);
+
+			VoxelVertex vertex;
+			vertex.position = p;
+			vertex.normal = normal;
+			const glm::vec3 absolute = glm::abs(normal);
+			if (absolute.y >= absolute.x && absolute.y >= absolute.z) {
+				vertex.texCoord = glm::vec2(p.x, p.z);
+			} else if (absolute.x >= absolute.z) {
+				vertex.texCoord = glm::vec2(p.z, p.y);
+			} else {
+				vertex.texCoord = glm::vec2(p.x, p.y);
+			}
+			vertex.colour = palette[static_cast<size_t>(block)] * occlusion;
+			return vertex;
+		}
+	}
+
+	void buildSmoothMesh(const PaddedChunk& chunk, const std::array<glm::vec3, 256>& palette, int resolution, MeshArrays& out) {
+		out.vertices.clear();
+		out.indices.clear();
+		const int R = std::max(1, resolution);
+		const int S = chunk.size;
+		const int H = chunk.height;
+
+		// Density samples at i / R (x and z) and j / R (y), for i, k in [-1, S * R + 1] and j in [-1, H * R + 1].
+		// Array index = sample + 1.
+		const int sx = S * R + 3;
+		const int sy = H * R + 3;
+		std::vector<float> samples(static_cast<size_t>(sx) * sy * sx);
+		auto sampleIndex = [sx](int i, int j, int k) { return static_cast<size_t>(((j + 1) * sx + (k + 1)) * sx + (i + 1)); };
+		for (int j = -1; j <= H * R + 1; ++j) {
+			for (int k = -1; k <= S * R + 1; ++k) {
+				for (int i = -1; i <= S * R + 1; ++i) {
+					samples[sampleIndex(i, j, k)] = densityAt(chunk, glm::vec3(i, j, k) / static_cast<float>(R));
+				}
+			}
+		}
+		auto sample = [&](int i, int j, int k) { return samples[sampleIndex(i, j, k)]; };
+
+		// Cells: the cube whose lowest corner is sample (i, j, k), for i and k in [-1, S * R] and j in [-1, H * R]. A cell
+		// the surface crosses gets one vertex, at the average of its crossed edges.
+		const int cn = S * R + 2;
+		const int cyn = H * R + 2;
+		auto cellIndex = [cn](int i, int j, int k) { return static_cast<size_t>(((j + 1) * cn + (k + 1)) * cn + (i + 1)); };
+		std::vector<glm::vec3> cellPosition(static_cast<size_t>(cn) * cyn * cn);
+		for (int j = -1; j <= H * R; ++j) {
+			for (int k = -1; k <= S * R; ++k) {
+				for (int i = -1; i <= S * R; ++i) {
+					float value[8];
+					glm::vec3 corner[8];
+					int inside = 0;
+					for (int c = 0; c < 8; ++c) {
+						const int dx = c & 1, dy = (c >> 1) & 1, dz = (c >> 2) & 1;
+						value[c] = sample(i + dx, j + dy, k + dz);
+						corner[c] = glm::vec3(i + dx, j + dy, k + dz) / static_cast<float>(R);
+						if (value[c] > SmoothIso) ++inside;
+					}
+					if (inside == 0 || inside == 8) continue;
+					glm::vec3 sum(0.0f);
+					int crossings = 0;
+					for (const auto& edge : CubeEdges) {
+						const bool a = value[edge[0]] > SmoothIso;
+						const bool b = value[edge[1]] > SmoothIso;
+						if (a == b) continue;
+						const float t = (SmoothIso - value[edge[0]]) / (value[edge[1]] - value[edge[0]]);
+						sum += corner[edge[0]] + (corner[edge[1]] - corner[edge[0]]) * t;
+						++crossings;
+					}
+					cellPosition[cellIndex(i, j, k)] = sum / static_cast<float>(crossings);
+				}
+			}
+		}
+
+		// Each cell's vertex is emitted once, when a quad first uses it.
+		std::vector<int> emitted(cellPosition.size(), -1);
+		auto vertexOf = [&](int i, int j, int k) {
+			const size_t index = cellIndex(i, j, k);
+			if (emitted[index] < 0) {
+				emitted[index] = static_cast<int>(out.vertices.size());
+				out.vertices.push_back(smoothVertex(chunk, palette, cellPosition[index]));
+			}
+			return static_cast<unsigned int>(emitted[index]);
+		};
+		// A quad over the four cells around an edge, in counter-clockwise order seen from the edge's direction. An edge
+		// that starts inside runs out of the solid, so its normal points along the edge; the others are turned round.
+		auto emitQuad = [&](const int cells[4][3], bool startsInside) {
+			unsigned int v[4];
+			for (int n = 0; n < 4; ++n) v[n] = vertexOf(cells[n][0], cells[n][1], cells[n][2]);
+			if (startsInside) {
+				out.indices.insert(out.indices.end(), { v[0], v[1], v[2], v[0], v[2], v[3] });
+			} else {
+				out.indices.insert(out.indices.end(), { v[0], v[3], v[2], v[0], v[2], v[1] });
+			}
+		};
+
+		// Each edge belongs to the chunk that owns its lowest sample, so chunks share no quads.
+		for (int j = 0; j < H * R; ++j) {
+			for (int k = 0; k < S * R; ++k) {
+				for (int i = 0; i < S * R; ++i) {
+					const bool here = sample(i, j, k) > SmoothIso;
+					// x edge: the cells around it have lowest corners (i, j-1, k-1), (i, j, k-1), (i, j, k), (i, j-1, k).
+					if (here != (sample(i + 1, j, k) > SmoothIso)) {
+						const int cells[4][3] = { { i, j - 1, k - 1 }, { i, j, k - 1 }, { i, j, k }, { i, j - 1, k } };
+						emitQuad(cells, here);
+					}
+					// y edge: (i-1, j, k-1), (i-1, j, k), (i, j, k), (i, j, k-1).
+					if (here != (sample(i, j + 1, k) > SmoothIso)) {
+						const int cells[4][3] = { { i - 1, j, k - 1 }, { i - 1, j, k }, { i, j, k }, { i, j, k - 1 } };
+						emitQuad(cells, here);
+					}
+					// z edge: (i-1, j-1, k), (i, j-1, k), (i, j, k), (i-1, j, k).
+					if (here != (sample(i, j, k + 1) > SmoothIso)) {
+						const int cells[4][3] = { { i - 1, j - 1, k }, { i, j - 1, k }, { i, j, k }, { i - 1, j, k } };
+						emitQuad(cells, here);
 					}
 				}
 			}

@@ -48,6 +48,9 @@ void bindVoxel(py::module_& m) {
                 "dirty"_a = world.dirtyCount(), "meshing"_a = world.meshingCount(), "quads"_a = world.quadCount(),
                 "upload_ms"_a = world.lastUploadMs(), "edits"_a = world.editCount());
         }, "Counts of chunks by state, quads in the meshes, edited blocks, and how long the last update's uploads took.")
+        .def("set_smoothing", &VoxelWorld::setSmoothing, py::arg("resolution"),
+             "The surface style: 0 for cubes, or the number of samples per block for a smooth skin (1 for the block scale, 2 for half blocks). Loaded chunks are re-meshed.")
+        .def("smoothing", &VoxelWorld::smoothing, "The surface style set by set_smoothing: 0 for cubes, else the samples per block.")
         .def("save_edits", &VoxelWorld::saveEdits, py::arg("path"),
              "Write the edited blocks to a binary file. False if it cannot be written.")
         .def("load_edits", &VoxelWorld::loadEdits, py::arg("path"),

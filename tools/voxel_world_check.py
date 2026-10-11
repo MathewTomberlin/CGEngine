@@ -28,6 +28,18 @@ def load_chunks(world, chunks, timeout=60.0):
     return all(world.is_loaded(*c) for c in chunks)
 
 
+def wait_meshed(world, chunks, timeout=60.0):
+    """True once every chunk has a mesh that is up to date (none dirty or meshing)."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        world.update(5.0, 0, 0)
+        stats = world.stats()
+        if stats["dirty"] == 0 and stats["meshing"] == 0 and stats["loaded"] == len(chunks):
+            return True
+        time.sleep(0.005)
+    return False
+
+
 def count_caves(world, chunks):
     """Air below the surface, column by column: air between y = 2 and the top solid block minus 3."""
     air = 0
@@ -96,6 +108,13 @@ def run(out_path="cg_control/voxel_check.json"):
     results["check"]["load reads"] = world.load_edits(edit_file)
     results["check"]["edit count after load"] = world.edit_count() == 1
     results["check"]["loaded edit applies at once"] = world.get_block(3, 20, 3) == BLOCK_CHECK
+
+    # The smooth skin meshes the same chunks: every loaded chunk gets a mesh, and switching back to cubes works too.
+    world.set_smoothing(1)
+    results["check"]["smooth skin meshes"] = wait_meshed(world, chunks)
+    results["check"]["smooth skin has quads"] = world.stats()["quads"] > 0
+    world.set_smoothing(0)
+    results["check"]["cubes again"] = wait_meshed(world, chunks) and world.stats()["quads"] > 0
 
     results["ok"] = all(results["check"].values())
     tmp = out_path + ".tmp"

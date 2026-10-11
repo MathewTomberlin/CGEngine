@@ -35,6 +35,10 @@ namespace CGEngine {
 		int chunkHeight() const { return height; }
 
 		void setColour(int blockId, glm::vec3 colour);
+		// The surface style: 0 draws the blocks as cubes (greedy-merged faces); n >= 1 draws a smooth skin over them with n
+		// samples per block (see buildSmoothMesh). Changing it re-meshes every loaded chunk.
+		void setSmoothing(int resolution);
+		int smoothing() const { return smoothResolution; }
 		// The generator's settings. Chunks requested later use them; loaded chunks keep what they have.
 		void setTerrain(const VoxelTerrain& settings) { terrain = settings; }
 
@@ -104,6 +108,7 @@ namespace CGEngine {
 		std::string material;
 		std::array<glm::vec3, 256> palette;
 		VoxelTerrain terrain;
+		int smoothResolution = 0;
 		std::map<std::pair<int, int>, Chunk> chunks;
 		// Edited blocks: chunk (cx, cz) -> index in that chunk -> block id. See setBlock.
 		std::map<std::pair<int, int>, std::map<int, uint8_t>> edits;
@@ -135,7 +140,7 @@ namespace CGEngine {
 		void applyEdits(int cx, int cz, std::vector<uint8_t>& blocks) const;
 		void uploadMesh(MeshResult& result);
 		void startMeshing(int cx, int cz, Chunk& chunk);
-		PaddedChunk snapshot(int cx, int cz) const;
+		PaddedChunk snapshot(int cx, int cz, int border) const;
 		std::string bodyName(int cx, int cz) const;
 	};
 }

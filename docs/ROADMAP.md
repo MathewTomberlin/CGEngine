@@ -76,9 +76,11 @@ Goal: enormous worlds with no hitching while chunks load.
 
 ## Phase 10: smooth terrain, physics and the next voxel steps (from the voxel sample's growth)
 Goal: the terrain looks rounded and real, the blocks obey physics the scripts can change, and the far world stays cheap.
-- [ ] **10.1** Smooth skin: a rounded surface (surface nets) over the block data, so the ground and trees have rounded
-  shapes and finer detail than one face per block. Built per chunk from a padded copy, so chunks join without cracks;
-  shaded from the density gradient and the block colours. Level of detail: a coarser skin for far chunks.
+- [~] **10.1** Smooth skin: done. Surface nets over the blocks' occupancy (`buildSmoothMesh`, `set_smoothing`), so the
+  ground, hills and tree crowns are rounded and textured; shaded from the density gradient, coloured by the dominant
+  block, with occlusion. One sample per block: 1.08 million quads for 841 chunks, 655 frames a second in Release, load
+  1.7 s, 222 MB. Two samples per block gives half-block detail but 4.7 million quads, so it is not the default. Not yet:
+  a finer skin near the camera with a coarser one far away (the seams need skirts or matched edges).
 - [ ] **10.2** Block physics: block types with properties (solid, falls, liquid), and a cellular simulation that only
   ticks the active cells (falling sand and gravel, water that spreads and levels off). Changes re-mesh the chunks.
 - [ ] **10.3** Programmable rules: reaction rules as data (`grass + water -> dirt`) evaluated by the simulation, and
