@@ -1,6 +1,8 @@
 #include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
 #include <SFML/System/Vector3.hpp>
 #include "../Core/Voxel/VoxelWorld.h"
+#include "../Core/Voxel/VoxelBody.h"
 
 namespace py = pybind11;
 using namespace py::literals;
@@ -58,6 +60,21 @@ void bindVoxel(py::module_& m) {
            "Define a block id: its colour, whether it is solid (blocks movement), falls (sand-like, moves down into air or liquid) and liquid (flows, as water does).")
         .def("is_solid", &VoxelWorld::isSolid, py::arg("x"), py::arg("y"), py::arg("z"),
              "True if the block at these coordinates is solid. Air and liquids are not.")
+        .def("step_body", [](const VoxelWorld& world, std::array<double, 3> pos, std::array<double, 3> vel, double dt,
+                bool flying, double halfWidth, double height) {
+            VoxelBodyShape shape;
+            shape.halfWidth = halfWidth;
+            shape.height = height;
+            VoxelBodyState body;
+            body.pos = pos;
+            body.vel = vel;
+            const VoxelBodyState next = world.stepBody(body, shape, dt, flying);
+            return py::make_tuple(py::make_tuple(next.pos[0], next.pos[1], next.pos[2]),
+                py::make_tuple(next.vel[0], next.vel[1], next.vel[2]), next.onGround);
+        }, py::arg("pos"), py::arg("vel"), py::arg("dt"), py::arg("flying") = false, py::arg("half_width") = 0.3,
+           py::arg("height") = 1.8,
+           "Move a box with its feet at pos (x, y, z) and speed vel, for dt seconds, through the solid blocks, as VoxelPhysics.step "
+           "does. Returns (pos, vel, on_ground).")
         .def("simulate", &VoxelWorld::simulate, py::arg("dt"), py::arg("budget_ms") = 1.0,
              "Advance the block physics by dt seconds, within budget_ms of work. Returns the cells looked at.")
         .def("activate", [](VoxelWorld& world, int x, int y, int z) { world.physics().activate(x, y, z); },

@@ -6,6 +6,7 @@
 #include <deque>
 #include <functional>
 #include <map>
+#include <set>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -13,6 +14,7 @@
 #include <vector>
 #include <fstream>
 #include "VoxelBlocks.h"
+#include "VoxelBody.h"
 #include "VoxelMesher.h"
 #include "VoxelSimulation.h"
 #include "VoxelTerrain.h"
@@ -54,6 +56,8 @@ namespace CGEngine {
 		void defineBlock(int blockId, const BlockType& type);
 		const BlockType& blockType(int blockId) const { return types[static_cast<size_t>(std::clamp(blockId, 0, 255))]; }
 		bool isSolid(int x, int y, int z) const;
+		// Moves a box of this shape through the blocks (see VoxelBody.h). The C++ twin of VoxelPhysics.step.
+		VoxelBodyState stepBody(const VoxelBodyState& body, const VoxelBodyShape& shape, double dt, bool flying) const;
 		// Runs the simulation for dt seconds, within budgetMs of work (see VoxelSimulation). Returns the cells looked at.
 		int simulate(double dt, double budgetMs) { return simulation.simulate(*this, dt, budgetMs); }
 		VoxelSimulation& physics() { return simulation; }
@@ -125,6 +129,8 @@ namespace CGEngine {
 		VoxelTerrain terrain;
 		int smoothResolution = 0;
 		std::map<std::pair<int, int>, Chunk> chunks;
+		// The chunks whose mesh may be out of date, so update() finds them without scanning every chunk.
+		std::set<std::pair<int, int>> dirtyKeys;
 		// Edited blocks: chunk (cx, cz) -> index in that chunk -> block id. See setBlock.
 		std::map<std::pair<int, int>, std::map<int, uint8_t>> edits;
 		uint32_t nextGeneration = 1;

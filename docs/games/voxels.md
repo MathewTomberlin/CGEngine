@@ -140,7 +140,8 @@ the view's level and the worst frame.
 ## Limits
 
 - There are no shadows yet, and the hotbar has no picture on screen.
-- The simulation runs on the loaded chunks only, and the player's collision is still in Python.
+- The simulation runs on the loaded chunks only. The player's collision is in C++ (`world.step_body`), and the Python
+  version (`VoxelPhysics.step`) stays as the reference that the tests compare with.
 - Water is opaque. The smooth skin has one level of detail for every chunk; a finer skin near the camera is on the roadmap.
 - Each chunk is one draw call. Region batching (several chunks in one mesh) is the next step if the draw count
   becomes the limit.

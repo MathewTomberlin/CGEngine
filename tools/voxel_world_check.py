@@ -69,6 +69,25 @@ def surface_y(world, x, z):
     return -1
 
 
+def check_body_parity(world, checks):
+    """The engine's body mover (step_body) and resources/scripts/VoxelPhysics.step agree on random moves."""
+    import random
+    import VoxelPhysics as physics
+    rng = random.Random(7)
+    mismatches = 0
+    for _ in range(300):
+        pos = (rng.uniform(-6, 6), rng.uniform(12, 60), rng.uniform(-6, 6))
+        vel = (rng.uniform(-6, 6), rng.uniform(-30, 10), rng.uniform(-6, 6))
+        dt = rng.uniform(0.005, 0.05)
+        flying = rng.random() < 0.2
+        py_pos, py_vel, py_ground = physics.step(world.is_solid, pos, vel, dt, flying)
+        cpp_pos, cpp_vel, cpp_ground = world.step_body(pos, vel, dt, flying)
+        gap = max(abs(a - b) for a, b in zip(py_pos + py_vel, cpp_pos + cpp_vel))
+        if gap > 1e-9 or py_ground != cpp_ground:
+            mismatches += 1
+    checks["body physics matches the Python version"] = mismatches == 0
+
+
 def check_physics(world, checks):
     # Sand falls from the top of its column onto the first solid block.
     world.set_block(5, HEIGHT - 2, 5, SAND)
@@ -182,6 +201,7 @@ def run(out_path="cg_control/voxel_check.json"):
     results["check"]["cubes again"] = wait_meshed(world, chunks) and world.stats()["quads"] > 0
 
     # The block physics: falling sand, flowing water, a rule and a hook.
+    check_body_parity(world, results["check"])
     check_physics(world, results["check"])
 
     results["ok"] = all(results["check"].values())

@@ -166,7 +166,12 @@ namespace CGEngine {
 		if (Chunk* chunk = findChunk(cx, cz)) {
 			chunk->dirty = true;
 			++chunk->version;
+			dirtyKeys.insert(std::make_pair(cx, cz));
 		}
+	}
+
+	VoxelBodyState VoxelWorld::stepBody(const VoxelBodyState& body, const VoxelBodyShape& shape, double dt, bool flying) const {
+		return stepVoxelBody(*this, shape, body, dt, flying);
 	}
 
 	void VoxelWorld::markNeighboursDirty(int cx, int cz) {
@@ -209,6 +214,7 @@ namespace CGEngine {
 		if (it->second.body.first) {
 			if (Body* body = assets.get<Body>(it->second.body.second)) removeRuntimeMesh(body);
 		}
+		dirtyKeys.erase(std::make_pair(cx, cz));
 		chunks.erase(it);
 		markNeighboursDirty(cx, cz);
 	}
@@ -332,6 +338,7 @@ namespace CGEngine {
 	void VoxelWorld::startMeshing(int cx, int cz, Chunk& chunk) {
 		chunk.dirty = false;
 		chunk.meshing = true;
+		dirtyKeys.erase(std::make_pair(cx, cz));
 		const int resolution = smoothResolution;
 		PaddedChunk padded = snapshot(cx, cz, resolution > 0 ? 2 : 1);
 		const std::array<glm::vec3, 256> colours = palette;
@@ -413,12 +420,12 @@ namespace CGEngine {
 
 		// 3. Start meshing the dirty chunks nearest the focus first.
 		std::vector<std::pair<int, std::pair<int, int>>> candidates;
-		for (const auto& entry : chunks) {
-			const Chunk& chunk = entry.second;
-			if (!chunk.loaded || !chunk.dirty || chunk.meshing) continue;
-			const int dx = entry.first.first - focusX;
-			const int dz = entry.first.second - focusZ;
-			candidates.push_back({ dx * dx + dz * dz, entry.first });
+		for (const auto& key : dirtyKeys) {
+			const Chunk* chunk = findChunk(key.first, key.second);
+			if (!chunk || !chunk->loaded || !chunk->dirty || chunk->meshing) continue;
+			const int dx = key.first - focusX;
+			const int dz = key.second - focusZ;
+			candidates.push_back({ dx * dx + dz * dz, key });
 		}
 		std::sort(candidates.begin(), candidates.end());
 		const size_t starts = std::min(candidates.size(), static_cast<size_t>(MaxMeshStartsPerUpdate));
@@ -474,5 +481,6 @@ namespace CGEngine {
 			}
 		}
 		chunks.clear();
+		dirtyKeys.clear();
 	}
 }

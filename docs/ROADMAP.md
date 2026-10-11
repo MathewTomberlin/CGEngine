@@ -87,8 +87,9 @@ Goal: the terrain looks rounded and real, the blocks obey physics the scripts ca
 - [~] **10.3** Programmable rules: done are reaction rules as data (`add_rule`, a block touching a kind becomes another, with
   a chance) and a Python hook that sees each queued block per tick. The simulation runs only on loaded chunks. Not yet: a
   rule file format, and rules that move blocks other than by falling.
-- [ ] **10.4** Collision in C++: a box sweep against the blocks, so the player and many moving bodies can use the
-  same world queries, and collision is faster than the Python version. (`is_solid` already uses the block types.)
+- [x] **10.4** Collision in C++ (`VoxelBody.cpp`, `world.step_body`): the same mover as `VoxelPhysics.step`, on the block
+  types. The player uses it. `tools/voxel_world_check.py` checks 300 random moves against the Python version and they agree
+  to 1e-9. The world's dirty chunks are a set, so `update` no longer scans every chunk each frame.
 - [ ] **10.5** Shadows: a shadow map for the sun, covering the area near the camera.
 - [ ] **10.6** Region batching (9.5) once the smooth skin raises the draw and vertex counts.
 - [ ] **10.7** An on-screen hotbar (8.4).

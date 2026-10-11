@@ -217,7 +217,8 @@ class VoxelGame(PyScript):
 
         # Physics waits until the chunk under the player is in the world, so the player does not fall through air.
         if self.world.is_loaded(*self.chunk_under_player()):
-            pos, vel, self.on_ground = physics.step(self.solid, tuple(self.pos), tuple(self.vel), dt, self.flying)
+            # The engine's mover is the same as physics.step (tests check they agree), and it is faster.
+            pos, vel, self.on_ground = self.world.step_body(tuple(self.pos), tuple(self.vel), dt, self.flying)
             self.pos = list(pos)
             self.vel = list(vel)
         if self.pos[1] < RESPAWN_DEPTH:
