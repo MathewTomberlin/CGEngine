@@ -217,6 +217,13 @@ void bindGame(py::module_& m) {
         if (captured) sf::Mouse::setPosition(windowCentre(window), window);
     }, py::arg("captured"), "Capture the mouse for mouse look: the cursor is hidden and kept at the window's centre. False releases it.");
 
+    m.def("mouse_position", []() -> std::pair<int, int> {
+        const sf::Vector2i position = sf::Mouse::getPosition(gameWindow());
+        return { position.x, position.y };
+    }, "The mouse cursor's position in window pixels, from the top-left corner (it can be outside the window).");
+
+    m.def("quit", []() { gameWindow().close(); }, "Close the window. The game ends when the current frame is done.");
+
     m.def("mouse_delta", []() -> std::pair<float, float> {
         if (!mouseCaptured) return { 0.0f, 0.0f };
         RenderWindow& window = gameWindow();
@@ -267,6 +274,37 @@ void bindGame(py::module_& m) {
     }, py::arg("name"), py::arg("direction") = py::none(), py::arg("colour") = py::none(), py::arg("brightness") = py::none(),
     py::arg("ambiance") = py::none(),
     "Change a light made by the scene: direction (where the light travels, for a directional light), colour, brightness and ambiance. Arguments left out keep their value.");
+
+    // Text drawn over the scene, in window pixels from the top-left corner: a label for the game's HUD.
+    m.def("create_text_body", [](const std::string& name, const std::string& text, const std::string& fontName,
+        sf::Vector2f position, unsigned int size, sf::Color colour) {
+        FontResource* resource = assets.get<FontResource>(fontName);
+        if (!resource || !resource->getFont()) throw std::runtime_error("no font named '" + fontName + "' (load_font it first)");
+        sf::Text label(*resource->getFont(), text, size);
+        label.setFillColor(colour);
+        label.setPosition(position);
+        // The asset name is a cache key, so it carries a prefix; the body's own name is what findBodyByName finds.
+        auto body = assets.create<Body>("text:" + name, std::move(label));
+        if (!body.has_value()) throw std::runtime_error("could not create the text body '" + name + "'");
+        body.value().second->setName(name);
+        // Labels are drawn after the meshes: the renderer draws bodies in z order, and meshes are at 0.
+        body.value().second->zOrder = 1000;
+        return body.value().second;
+    }, py::arg("name"), py::arg("text"), py::arg("font"), py::arg("position"), py::arg("size") = 18,
+       py::arg("colour") = sf::Color::White,
+       "Make a text label at position (window pixels from the top-left) drawn over the scene. Use a font loaded with load_font.");
+
+    m.def("set_text_body", [](const std::string& name, const std::string& text) {
+        Body* body = findBodyByName(name);
+        sf::Text* label = body ? body->get<sf::Text*>() : nullptr;
+        if (!label) throw std::runtime_error("no text body named '" + name + "'");
+        label->setString(text);
+    }, py::arg("name"), py::arg("text"), "Change the text of a label made by create_text_body.");
+
+    m.def("window_size", []() {
+        const sf::Vector2u size = gameWindow().getSize();
+        return sf::Vector2f(static_cast<float>(size.x), static_cast<float>(size.y));
+    }, "The window's size in pixels.");
 
     m.def("camera_basis", []() {
         if (!renderer) throw std::runtime_error("the renderer is not running yet");

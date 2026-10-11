@@ -32,3 +32,8 @@ COLOURS = {
 for _block in range(FLOW_FIRST, FLOW_LAST + 1):
     COLOURS[_block] = COLOURS[WATER]
 
+NAMES = {AIR: "air", GRASS: "grass", DIRT: "dirt", STONE: "stone", SAND: "sand", WATER: "water", SNOW: "snow",
+         WOOD: "wood", LEAVES: "leaves", GRAVEL: "gravel"}
+for _block in range(FLOW_FIRST, FLOW_LAST + 1):
+    NAMES[_block] = "flowing water"
+

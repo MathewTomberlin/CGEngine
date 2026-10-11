@@ -444,6 +444,9 @@ namespace CGEngine {
                 }
                 ControlChannel::poll();
             }
+            // The window closed (the close button, Quit in the game, or endWorld): the game is over. Without this the outer
+            // loop would start the scene again on a closed window.
+            running = false;
         }
     }
 
