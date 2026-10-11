@@ -27,6 +27,15 @@ namespace CGEngine {
             return Vector3f(value[0].get<float>(), value[1].get<float>(), value[2].get<float>());
         }
 
+        // "environment": the sky colour and fog. A scene that replaces the world starts from the defaults first.
+        void readEnvironment(const json& obj, Environment& environment) {
+            if (!obj.is_object()) throw std::invalid_argument("'environment' must be an object");
+            environment.skyColour = readVec3(obj, "skyColour", environment.skyColour);
+            environment.fogColour = readVec3(obj, "fogColour", environment.fogColour);
+            environment.fogStart = obj.value("fogStart", environment.fogStart);
+            environment.fogEnd = obj.value("fogEnd", environment.fogEnd);
+        }
+
         std::string requireString(const json& obj, const char* key, const std::string& context) {
             if (!obj.contains(key) || !obj.at(key).is_string()) {
                 throw std::invalid_argument(context + ": '" + key + "' is required and must be a string");
@@ -148,6 +157,10 @@ namespace CGEngine {
             // "replaceWorld": true removes everything under the root first, so the scene is the whole level.
             if (scene.value("replaceWorld", false)) {
                 clearWorld();
+                if (renderer) renderer->environment = Environment();
+            }
+            if (renderer && scene.contains("environment")) {
+                readEnvironment(scene.at("environment"), renderer->environment);
             }
 
             // Clip files come first: a body may play any clip of its model.

@@ -16,17 +16,24 @@ namespace CGEngine {
 		static constexpr uint8_t Sand = 4;
 		static constexpr uint8_t Water = 5;
 		static constexpr uint8_t Snow = 6;
+		static constexpr uint8_t Wood = 7;
+		static constexpr uint8_t Leaves = 8;
 
 		uint32_t seed = 1;
 		int seaLevel = 14;      // columns below this are filled with water up to it
 		int baseHeight = 8;     // the lowest column is this high (in blocks)
 		int heightRange = 44;   // a column is at most baseHeight + heightRange high
 		int snowLevel = 40;     // columns at or above this are capped with snow
+		float treeChance = 0.01f; // the chance that a grass column grows a tree (about two or three a chunk)
 
 		// Height of the column at world (x, z), in blocks, from baseHeight up to baseHeight + heightRange.
 		int columnHeight(int x, int z) const;
 
 		// Fills blocks for chunk (cx, cz): size * size * height blocks, block (x, y, z) at (y * size + z) * size + x.
+		// Trees are drawn last, into air only; the trees rooted just outside the chunk reach in and are drawn here too.
 		void fillChunk(int cx, int cz, int size, int height, std::vector<uint8_t>& blocks) const;
+
+	private:
+		void placeTrees(int cx, int cz, int size, int height, std::vector<uint8_t>& blocks) const;
 	};
 }

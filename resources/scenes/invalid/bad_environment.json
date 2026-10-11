@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "environment": {
+    "fogStart": "near",
+    "fogEnd": 100
+  }
+}

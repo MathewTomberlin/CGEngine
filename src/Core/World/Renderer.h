@@ -21,6 +21,7 @@
 #include "../Importer/MeshImporter.h"
 #include "../Types/Types.h"
 #include "../Camera/Camera.h"
+#include "Environment.h"
 using sf::Transform;
 using sf::RenderTarget;
 #define MAX_BONE_INFLUENCE 4
@@ -212,6 +213,10 @@ namespace CGEngine {
 		void initializeOpenGL();
 		bool setGLWindowState(bool state);
 		bool clearGL(GLbitfield mask);
+
+		// The sky colour and fog for the frames drawn next. Scenes set it with "environment", scripts with cge.set_environment.
+		Environment environment;
+
 		void commitGL();
 		void pullGL();
 

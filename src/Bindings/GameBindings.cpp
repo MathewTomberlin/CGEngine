@@ -6,6 +6,8 @@
 #include <SFML/Graphics/RenderWindow.hpp>
 #include <SFML/System/Vector3.hpp>
 #include <map>
+#include <optional>
+#include "../Core/Light/Light.h"
 #include <cstring>
 #include <stdexcept>
 #include "../Core/Engine/Engine.h"
@@ -227,4 +229,38 @@ void bindGame(py::module_& m) {
         camera->setPosition(sf::Vector3f(position.x, -position.y, position.z), false);
         camera->lookAt(target);
     }, py::arg("position"), py::arg("target"), "Place the camera at position (world coordinates, y up) and aim it at target.");
+
+    m.def("set_environment", [](std::optional<sf::Vector3f> sky, std::optional<sf::Vector3f> fog, std::optional<float> fogStart, std::optional<float> fogEnd) {
+        if (!renderer) throw std::runtime_error("the renderer is not running yet");
+        Environment& environment = renderer->environment;
+        if (sky) environment.skyColour = *sky;
+        if (fog) environment.fogColour = *fog;
+        if (fogStart) environment.fogStart = *fogStart;
+        if (fogEnd) environment.fogEnd = *fogEnd;
+    }, py::arg("sky") = py::none(), py::arg("fog") = py::none(), py::arg("fog_start") = py::none(), py::arg("fog_end") = py::none(),
+    "Set the sky colour (what the screen is cleared to) and the distance fog, which fades from fog_start to fog_end blocks from the camera. Arguments left out keep their value. The fog is off while fog_end is not past fog_start.");
+
+    m.def("set_light", [](const std::string& name, std::optional<sf::Vector3f> direction, std::optional<sf::Vector3f> colour,
+        std::optional<float> brightness, std::optional<float> ambiance) {
+        Light* light = assets.get<Light>(name);
+        if (!light) throw std::runtime_error("no light named '" + name + "'");
+        // Renderer copies the parameters into the light buffer every frame, so the change applies at once.
+        if (direction) light->parameters.lightDirection = *direction;
+        if (colour) light->parameters.colorIntensities = *colour;
+        if (brightness) light->parameters.brightness = *brightness;
+        if (ambiance) light->parameters.ambiance = *ambiance;
+    }, py::arg("name"), py::arg("direction") = py::none(), py::arg("colour") = py::none(), py::arg("brightness") = py::none(),
+    py::arg("ambiance") = py::none(),
+    "Change a light made by the scene: direction (where the light travels, for a directional light), colour, brightness and ambiance. Arguments left out keep their value.");
+
+    m.def("camera_basis", []() {
+        if (!renderer) throw std::runtime_error("the renderer is not running yet");
+        Camera* camera = renderer->getCurrentCamera();
+        auto vec = [](glm::vec3 v) { return py::make_tuple(v.x, v.y, v.z); };
+        py::dict basis;
+        basis["forward"] = vec(camera->getForward());
+        basis["right"] = vec(camera->getRight());
+        basis["up"] = vec(camera->getUp());
+        return basis;
+    }, "The camera's forward, right and up directions in world coordinates. Right stays level (y = 0) however the view is turned.");
 }

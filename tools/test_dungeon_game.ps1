@@ -42,8 +42,9 @@ function Wait-Result($id, $timeoutSec = 20) {
 function Wait-Frames($target, $timeoutSec = 90) {
     $deadline = (Get-Date).AddSeconds($timeoutSec)
     $state = Read-State
+    # The engine runs at well over 1000 frames a second in Release, so poll often: a 100 ms poll would overshoot the target by hundreds of frames.
     while ((-not $state -or $state.frames -lt $target) -and (Get-Date) -lt $deadline) {
-        Start-Sleep -Milliseconds 100
+        Start-Sleep -Milliseconds 10
         $state = Read-State
     }
     return $state

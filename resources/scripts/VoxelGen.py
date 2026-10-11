@@ -9,8 +9,9 @@ CHUNK = 16          # blocks along x and z in a chunk
 HEIGHT = 64         # blocks up in the world
 SEA_LEVEL = 14      # water fills the low columns up to this
 SNOW_LEVEL = 40     # columns this high are snow-capped
+TREE_CHANCE = 0.01  # the chance that a grass column grows a tree
 
-AIR, GRASS, DIRT, STONE, SAND, WATER, SNOW = range(7)
+AIR, GRASS, DIRT, STONE, SAND, WATER, SNOW, WOOD, LEAVES = range(9)
 
 COLOURS = {
     GRASS: (0.36, 0.72, 0.26),
@@ -19,4 +20,6 @@ COLOURS = {
     SAND: (0.92, 0.86, 0.58),
     WATER: (0.22, 0.45, 0.92),
     SNOW: (0.96, 0.98, 1.00),
+    WOOD: (0.44, 0.29, 0.15),
+    LEAVES: (0.20, 0.50, 0.16),
 }

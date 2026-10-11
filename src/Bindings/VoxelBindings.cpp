@@ -16,16 +16,17 @@ void bindVoxel(py::module_& m) {
         .def("set_colour", [](VoxelWorld& world, int blockId, sf::Vector3f colour) {
             world.setColour(blockId, glm::vec3(colour.x, colour.y, colour.z));
         }, py::arg("block_id"), py::arg("colour"), "The tint of a block id, 0 to 1 per channel. Blocks without one are white.")
-        .def("set_terrain", [](VoxelWorld& world, uint32_t seed, int sea_level, int base_height, int height_range, int snow_level) {
+        .def("set_terrain", [](VoxelWorld& world, uint32_t seed, int sea_level, int base_height, int height_range, int snow_level, float tree_chance) {
             VoxelTerrain terrain;
             terrain.seed = seed;
             terrain.seaLevel = sea_level;
             terrain.baseHeight = base_height;
             terrain.heightRange = height_range;
             terrain.snowLevel = snow_level;
+            terrain.treeChance = tree_chance;
             world.setTerrain(terrain);
         }, py::arg("seed"), py::arg("sea_level") = 14, py::arg("base_height") = 8, py::arg("height_range") = 44,
-           py::arg("snow_level") = 40,
+           py::arg("snow_level") = 40, py::arg("tree_chance") = 0.01f,
            "The generator's settings. Chunks requested after this use them.")
         .def("get_block", &VoxelWorld::getBlock, py::arg("x"), py::arg("y"), py::arg("z"),
              "The block id at world coordinates, 0 (air) outside the world height or in chunks that are not loaded.")

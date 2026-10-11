@@ -4,6 +4,7 @@
   "materials": [
     { "name": "voxel", "diffuseTexture": "voxel_noise.png", "specular": 0, "repeat": true }
   ],
+  "environment": { "skyColour": [0.56, 0.76, 0.95], "fogColour": [0.56, 0.76, 0.95], "fogStart": 84, "fogEnd": 168 },
   "lights": [
     { "name": "sun", "directional": true, "direction": [0.4, -1, 0.3], "brightness": 0.9, "ambiance": 0.5, "color": [1, 1, 0.95] }
   ],

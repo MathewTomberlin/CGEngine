@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include "VoxelTerrain.h"
 
 namespace CGEngine {
@@ -72,6 +73,41 @@ namespace CGEngine {
 				fill(stoneTop, dirtTop, Dirt);
 				fill(dirtTop, top, surface);
 				if (top < seaLevel) fill(top, seaLevel, Water);
+			}
+		}
+		placeTrees(cx, cz, size, height, blocks);
+	}
+
+	// A tree stands on a grass column, and whether it does is a hash of the column, so every chunk that sees the tree draws
+	// the same one. A trunk of 4 to 6 blocks ends in a crown: two layers of radius 2 (corners cut), one of radius 1 around
+	// the trunk top, and a tip.
+	void VoxelTerrain::placeTrees(int cx, int cz, int size, int height, std::vector<uint8_t>& blocks) const {
+		// The crown reaches 2 blocks from the trunk, so the trees rooted up to 3 blocks outside the chunk can reach into it.
+		const int margin = 3;
+		auto place = [&](int wx, int y, int wz, uint8_t block) {
+			const int lx = wx - cx * size;
+			const int lz = wz - cz * size;
+			if (lx < 0 || lx >= size || lz < 0 || lz >= size || y < 0 || y >= height) return;
+			uint8_t& cell = blocks[(static_cast<size_t>(y) * size + lz) * size + lx];
+			if (cell == Air) cell = block;
+		};
+		for (int wz = cz * size - margin; wz < (cz + 1) * size + margin; ++wz) {
+			for (int wx = cx * size - margin; wx < (cx + 1) * size + margin; ++wx) {
+				if (latticeValue(wx, wz, seed + 9001u) >= treeChance) continue;
+				const int ground = columnHeight(wx, wz);
+				if (ground <= seaLevel + 1 || ground >= snowLevel - 2) continue;
+				const int trunk = 4 + static_cast<int>(latticeValue(wx, wz, seed + 9007u) * 2.999f);
+				const int topY = ground + trunk - 1;
+				for (int y = ground; y <= topY; ++y) place(wx, y, wz, Wood);
+				for (int dy = -2; dy <= 1; ++dy) {
+					const int radius = dy <= -1 ? 2 : (dy == 0 ? 1 : 0);
+					for (int dz = -radius; dz <= radius; ++dz) {
+						for (int dx = -radius; dx <= radius; ++dx) {
+							if (radius == 2 && std::abs(dx) == 2 && std::abs(dz) == 2) continue;
+							place(wx + dx, topY + dy, wz + dz, Leaves);
+						}
+					}
+				}
 			}
 		}
 	}
