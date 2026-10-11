@@ -472,6 +472,15 @@ class VoxelGame(PyScript):
             if self.pressed("Slot%d" % slot, bool(cge.key_down(str(slot + 1)))):
                 self.slot = slot
 
+    def snapshot_key(self):
+        """F12 saves a screenshot and the game state at that moment, for a bug that is hard to reproduce."""
+        if self.pressed("Snapshot", bool(cge.key_down("F12"))):
+            folder = os.path.abspath("cg_control/snapshots")
+            os.makedirs(folder, exist_ok=True)
+            stamp = time.strftime("%Y%m%d_%H%M%S")
+            cge.screenshot(os.path.join(folder, "shot_%s.png" % stamp))
+            self.write_state(os.path.join(folder, "state_%s.json" % stamp))
+
     def save_and_load(self):
         if self.pressed("Save", bool(cge.key_down("F5"))):
             os.makedirs("cg_control", exist_ok=True)
@@ -483,6 +492,7 @@ class VoxelGame(PyScript):
     def edit_blocks(self):
         self.choose_hotbar()
         self.save_and_load()
+        self.snapshot_key()
         break_down = self.mouse_captured and bool(cge.mouse_down("Left"))
         place_down = self.mouse_captured and bool(cge.mouse_down("Right"))
         breaking = self.pressed("Break", break_down or bool(cge.key_down("J")))
@@ -536,7 +546,7 @@ class VoxelGame(PyScript):
 
     # ----- state for tests and agents -----------------------------------------------------
 
-    def write_state(self):
+    def write_state(self, path="cg_control/voxel_state.json"):
         """Write the player and the world's counts to cg_control/voxel_state.json, so an agent can check them without a screenshot."""
         stats = self.world.stats()
         basis = cge.camera_basis()
@@ -556,7 +566,7 @@ class VoxelGame(PyScript):
                  "camera_up": [round(v, 6) for v in basis["up"]],
                  "target": None if self.target is None else list(self.target[0])}
         self.max_dt = 0.0
-        StateFile.write_json("cg_control/voxel_state.json", state)
+        StateFile.write_json(path, state)
 
 
 def create_instance():

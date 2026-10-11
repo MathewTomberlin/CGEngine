@@ -21,7 +21,8 @@ run the Release configuration.
   Quit (click it) closes the app. `VOXEL_MOUSE_SENSITIVITY` sets the look speed in degrees per pixel (0.00625 by default).
 - Without the mouse: the arrow keys turn and look, J breaks, K places.
 - Keys 1 to 9 choose the block to place (the hotbar: stone, dirt, grass, wood, leaves, sand, gravel, snow, water). Sand and
-  gravel fall, and water falls and flows. F5 saves the edited blocks to `cg_control/voxel_edits.bin`, and F9 loads them back.
+  gravel fall, and water falls and flows. F5 saves the edited blocks to `cg_control/voxel_edits.bin`, and F9 loads them back. F12 saves a screenshot and the
+  game state to `cg_control/snapshots/` (use it when something looks wrong).
 
 ## The look: day, night and fog
 

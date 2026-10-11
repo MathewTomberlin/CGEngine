@@ -39,7 +39,7 @@ namespace {
             {"1", sf::Keyboard::Scan::Num1}, {"2", sf::Keyboard::Scan::Num2}, {"3", sf::Keyboard::Scan::Num3},
             {"4", sf::Keyboard::Scan::Num4}, {"5", sf::Keyboard::Scan::Num5}, {"6", sf::Keyboard::Scan::Num6},
             {"7", sf::Keyboard::Scan::Num7}, {"8", sf::Keyboard::Scan::Num8}, {"9", sf::Keyboard::Scan::Num9},
-            {"F5", sf::Keyboard::Scan::F5}, {"F9", sf::Keyboard::Scan::F9},
+            {"F5", sf::Keyboard::Scan::F5}, {"F9", sf::Keyboard::Scan::F9}, {"F12", sf::Keyboard::Scan::F12},
         };
         return keys;
     }
@@ -223,6 +223,11 @@ void bindGame(py::module_& m) {
     }, "The mouse cursor's position in window pixels, from the top-left corner (it can be outside the window).");
 
     m.def("quit", []() { gameWindow().close(); }, "Close the window. The game ends when the current frame is done.");
+
+    m.def("screenshot", [](const std::string& path) {
+        if (!renderer) throw std::runtime_error("the renderer is not running yet");
+        renderer->requestScreenshot(path);
+    }, py::arg("path"), "Save the next frame as a PNG at path (absolute, or relative to the exe folder).");
 
     m.def("mouse_delta", []() -> std::pair<float, float> {
         if (!mouseCaptured) return { 0.0f, 0.0f };

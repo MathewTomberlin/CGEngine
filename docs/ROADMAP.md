@@ -129,6 +129,7 @@ Goal: the world reads well at a human pace, and the engine's own state is easy t
 - [x] **11.12** Thin trunks read as vines, and skirts hung flat sheets over air. A one-sample surface pulls each vertex
   toward the middle of its cell, which thins features one block wide; the surface now sits a little further out
   (iso 0.3), so trunks are solid. Skirts only go where the neighbour is at another level of detail, and only over solid.
+- [ ] **11.14** Intermittent square shadow on the terrain at high sun, with nothing casting it. Not reproduced yet. F12 now saves a screenshot and the game state together, so the next occurrence can be checked. The shadow edge now fades to lit at the map boundary, which may hide a square edge.
 - [ ] **11.13** Trees whose trunk is outside the loaded area leave crowns floating. Look at the far edge of the view, and
   make the trunk part of the crown's chunk, or skip crowns whose trunk is missing.
 

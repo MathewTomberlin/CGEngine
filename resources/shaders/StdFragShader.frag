@@ -106,6 +106,9 @@ float shadowAmount(vec3 pos, vec3 normal, vec3 towardsLight){
     vec4 lightSpace = shadowMatrix * vec4(pos + normal * 0.04, 1.0);
     vec3 uvz = lightSpace.xyz / lightSpace.w * 0.5 + 0.5;
     if(uvz.x < 0.0 || uvz.x > 1.0 || uvz.y < 0.0 || uvz.y > 1.0 || uvz.z > 1.0) return 1.0;
+    //Fade to lit over the last part of the map, so the map's square edge is not a hard line.
+    float edge = min(min(uvz.x, 1.0 - uvz.x), min(uvz.y, 1.0 - uvz.y));
+    float fade = smoothstep(0.0, 0.06, edge);
     float bias = max(0.0006 * (1.0 - dot(normal, towardsLight)), 0.0002);
     float lit = 0.0;
     for(int x = -1; x <= 1; ++x){
@@ -114,7 +117,7 @@ float shadowAmount(vec3 pos, vec3 normal, vec3 towardsLight){
             lit += (uvz.z - bias > depth) ? 0.0 : 1.0;
         }
     }
-    return lit / 9.0;
+    return mix(1.0, lit / 9.0, fade);
 }
 
 vec3 applyLight(Light light, vec3 surfColor, vec3 surfNormal, vec3 surfPos, vec3 surfViewDir, int mtl){
