@@ -187,13 +187,14 @@ class DungeonGame(PyScript):
     def setup(self):
         """Create the bodies that live for the whole game: the player, the sword and the hearts."""
         bodies = [
-            {"name": "dg_player", "model": PLAYER_MODEL, "position": [0, 0, 0]},
             model("dg_slash", "slash", (0, 0, 0)),
         ]
         bodies += [model(f"dg_heart_{i}", "heart", (0, 1.0, 0), scale=0.6) for i in range(MAX_HP)]
         cge.load_scene_json(json.dumps({"version": 1, "bodies": bodies}))
         for body in bodies:
             self.fixed[body["name"]] = cge.find_body(body["name"])
+        # The player comes from dungeon.json: a body made from Python during the update has no animator (see roadmap).
+        self.fixed["dg_player"] = cge.find_body("dg_player")
         self.fixed["dg_slash"].set_rendering_enabled(False)
 
     def start_level(self, seed):

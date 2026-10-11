@@ -74,6 +74,11 @@ try {
     $described = Wait-Result "00_describe"
     $foreign = @($described.result.bodies | Where-Object { $_.name -ne "Root" -and -not $_.name.StartsWith("dg_") })
     Check "replaceWorld leaves only the dungeon's bodies (found: $($foreign.name -join ', '))" ($described.ok -and $foreign.Count -eq 0)
+    # The player is the rigged knight: its clips must be loaded for the game to animate it.
+    Send-Command "00_anim" '{"command":"list_animations","params":{"name":"dg_player"}}'
+    $anims = Wait-Result "00_anim"
+    $names = @($anims.result.animations | ForEach-Object { $_.name })
+    Check "the player's model has the knight clips (idle, walk, attack)" ($anims.ok -and ("knight_idle" -in $names) -and ("knight_walk" -in $names) -and ("knight_attack" -in $names))
 
     # Replace key_down with a scripted sequence, measured from when the script runs:
     #   0.0 to 1.0 s: D (walk right, about 4 tiles)
