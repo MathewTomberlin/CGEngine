@@ -64,6 +64,7 @@ in vec2 texCoord;
 in vec3 vertNormal;
 in float materialId;
 in mat4 instanceMatrix;	//Read only when instanced is set (see Renderer::drawInstances)
+in vec3 vertColour;
 uniform bool instanced;
 in ivec4 boneIds;
 in vec4 weights;
@@ -72,6 +73,7 @@ out vec2 uv;
 out vec3 normal;
 out vec3 vertex;
 out float matId;
+out vec3 vertexColour;
 
 void main() {
     vec4 bonePosition = vec4(0.0f);
@@ -107,6 +109,7 @@ void main() {
 	normal = normalize(mat3(model * instanceTransform) * boneNormal);
 	vertex = worldPos.xyz;
 	matId = materialId;
+	vertexColour = vertColour;
 
 	gl_Position = camera * worldPos;
 }

@@ -50,8 +50,8 @@ Making real models showed where the engine misrepresents content. These come fir
 Goal: a world with thousands of objects, and procedurally made geometry, drawn in few calls.
 - [x] **7.1** Frustum culling. A mesh whose bounds (transformed by its body's matrix) lie outside the camera's view is not drawn. Skinned meshes are not culled (their bind pose does not bound the animation). `get_stats` reports `culledDraws`.
 - [x] **7.2** Instancing. A primitive body can list `"instances"` (position, rotation, scale each); one draw covers all of them, with the visible instances culled each frame. The dungeon's floors and walls use it.
-- [ ] **7.3** Runtime meshes from Python: `cge.create_mesh_body` and `cge.update_mesh_body` take vertex and index buffers. An update re-uploads the mesh to the GPU.
-- [ ] **7.4** Vertex colours and per-vertex ambient occlusion in the standard shader, for procedural geometry.
+- [x] **7.3** Runtime meshes from Python: `cge.create_mesh_body`, `update_mesh_body` and `remove_mesh_body` take flat arrays (array.array). An update re-uploads the mesh to the GPU before the next frame; removing a body frees its GPU buffers. Checked by `tools/runtime_mesh_check.py` in the control test.
+- [~] **7.4** Vertex colours: done. Each vertex has a colour that multiplies the surface colour (white by default, so existing meshes look the same). Still open: per-vertex ambient occlusion, which the voxel mesher (8.1) adds.
 
 ## Phase 8: voxel world sample (`docs/games/voxels.md`)
 A procedural block world with chunks, terrain, collision, block editing and a day/night cycle, built on Phase 7.

@@ -73,6 +73,7 @@ in vec2 uv;
 in vec3 normal;
 in vec3 vertex;
 in float matId;
+in vec3 vertexColour;
 
 out vec4 FragColor;
 
@@ -145,6 +146,7 @@ void main() {
         surfColor = texture(materialTextures[mtl].diffuseTexture, diffuseUV);
     }
     surfColor *=  diffuseColor;                                                                 //Modulate diffuse texture color with diffuse color
+    surfColor.rgb *= vertexColour;                                                              //Per-vertex tint (white unless the mesh sets it)
 
     //Material Opacity --   Calculated without lighting
     float opacity = clamp(materials[mtl].opacity,0.0,1.0);                                      //Normalize material opacity

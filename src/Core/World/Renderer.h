@@ -55,6 +55,8 @@ namespace CGEngine {
 		GLfloat materialId = 0;
 		int boneIds[MAX_BONE_INFLUENCE] = {-1,-1,-1,-1};
 		float weights[MAX_BONE_INFLUENCE] = {};
+		// Per-vertex tint, multiplied into the surface colour. White unless the mesh sets it (see create_mesh_body).
+		glm::vec3 colour = glm::vec3(1.0f);
 	};
 
 	struct NodeData {
@@ -95,6 +97,10 @@ namespace CGEngine {
 		glm::vec3 boundsMin = glm::vec3(0.0f);
 		glm::vec3 boundsMax = glm::vec3(0.0f);
 		bool boundsValid = false;
+		// Runtime meshes are made from Python (create_mesh_body). Only these may be changed after upload.
+		bool runtimeMesh = false;
+		// Set when vertices or indices change; the renderer re-uploads the buffers before the next draw.
+		bool gpuDirty = false;
 		void computeBounds() {
 			boundsMin = glm::vec3(std::numeric_limits<float>::max());
 			boundsMax = glm::vec3(-std::numeric_limits<float>::max());
@@ -197,6 +203,8 @@ namespace CGEngine {
 
 		void renderMesh(Mesh* mesh, MeshData* meshData, Transformation3D transform);
 		void getModelData(Mesh* mesh);
+		void uploadMeshData(MeshData* meshData);
+		void releaseMeshData(MeshData* meshData);
 		string getUniformArrayIndexName(string arrayName, int index);
 		string getUniformArrayPropertyName(string arrayName, int index, string propertyName);
 		string getUniformObjectPropertyName(string objectName, string propertyName);

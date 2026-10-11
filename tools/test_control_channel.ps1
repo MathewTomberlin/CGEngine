@@ -230,6 +230,21 @@ try {
     Send-Command "44_inst_stats" '{"command":"get_stats"}'
     $instStats = Wait-Result "44_inst_stats"
     Check "instances outside the view are culled one by one" ($instStats.ok -and $instStats.result.culledInstances -ge 2)
+    # Runtime meshes: a body made from arrays in Python is created, updated and removed, and bad input is rejected.
+    $runtimeScript = Join-Path $PSScriptRoot "runtime_mesh_check.py"
+    Send-Command "50_runtime_mesh" ('{"command":"run_script","params":{"path":"' + ($runtimeScript -replace '\\', '/') + '"}}')
+    $runtimeRan = Wait-Result "50_runtime_mesh"
+    Check "runtime mesh script runs" ($runtimeRan.ok)
+    $runtimeFile = Join-Path $control "runtime_mesh_result.json"
+    $runtimeDeadline = (Get-Date).AddSeconds(10)
+    while (-not (Test-Path $runtimeFile) -and (Get-Date) -lt $runtimeDeadline) { Start-Sleep -Milliseconds 100 }
+    $rm = Get-Content $runtimeFile -Raw | ConvertFrom-Json
+    Check "a runtime mesh body is created, updated and removed" ($rm.created -and $rm.updated -and $rm.remove_existing -and $rm.gone -and -not $rm.remove_missing)
+    Check "runtime mesh rejects a position array that is not whole vertices" ($rm.bad_positions -match "3 numbers per vertex")
+    Check "runtime mesh rejects an index past the last vertex" ($rm.bad_index -match "is outside the")
+    Check "runtime mesh rejects an unknown material" ($rm.unknown_material -match "unknown material")
+    Check "updating a body that is not a runtime mesh fails" ($rm.update_scene_mesh -match "no body named")
+
     Check "engine still running after commands" (-not $app.HasExited)
 }
 finally {

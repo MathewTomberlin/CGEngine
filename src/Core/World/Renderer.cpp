@@ -176,6 +176,17 @@ namespace CGEngine {
 			GL_CHECK(glVertexAttribPointer(program->attrib("materialId"), 1, GL_FLOAT, 
 				GL_FALSE, sizeof(VertexData), (void*)offsetof(VertexData, materialId)));
 
+			GL_CHECK(glEnableVertexAttribArray(program->attrib("materialId")));
+			GL_CHECK(glVertexAttribPointer(program->attrib("materialId"), 1, GL_FLOAT,
+				GL_FALSE, sizeof(VertexData), (void*)offsetof(VertexData, materialId)));
+
+			// Vertex colour. Shaders without the attribute get -1 and skip it.
+			if (program->attrib("vertColour") >= 0) {
+				GL_CHECK(glEnableVertexAttribArray(program->attrib("vertColour")));
+				GL_CHECK(glVertexAttribPointer(program->attrib("vertColour"), 3, GL_FLOAT,
+					GL_FALSE, sizeof(VertexData), (void*)offsetof(VertexData, colour)));
+			}
+
 			if (!meshData->bones.empty()) {
 				GL_CHECK(glEnableVertexAttribArray(program->attrib("boneIds")));
 				GL_CHECK(glVertexAttribIPointer(program->attrib("boneIds"), 4, GL_INT, 
@@ -187,6 +198,31 @@ namespace CGEngine {
 			}
 			glBindVertexArray(0);
 
+			setGLWindowState(false);
+		}
+	}
+
+	void Renderer::uploadMeshData(MeshData* meshData) {
+		// Buffers already exist (getModelData made them): replace their contents. The VAO keeps its attribute setup.
+		meshData->gpuDirty = false;
+		if (meshData->vao == 0U) return;
+		GL_CHECK(glBindVertexArray(meshData->vao));
+		GL_CHECK(glBindBuffer(GL_ARRAY_BUFFER, meshData->vbo));
+		GL_CHECK(glBufferData(GL_ARRAY_BUFFER, meshData->vertices.size() * sizeof(VertexData), meshData->vertices.data(), GL_DYNAMIC_DRAW));
+		if (!meshData->indices.empty()) {
+			// Binding the element buffer while the VAO is bound makes it part of the VAO, even if it had no indices before.
+			GL_CHECK(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, meshData->ebo));
+			GL_CHECK(glBufferData(GL_ELEMENT_ARRAY_BUFFER, meshData->indices.size() * sizeof(unsigned int), meshData->indices.data(), GL_DYNAMIC_DRAW));
+		}
+		GL_CHECK(glBindVertexArray(0));
+	}
+
+	void Renderer::releaseMeshData(MeshData* meshData) {
+		if (setGLWindowState(true)) {
+			if (meshData->vao != 0U) glDeleteVertexArrays(1, &meshData->vao);
+			if (meshData->vbo != 0U) glDeleteBuffers(1, &meshData->vbo);
+			if (meshData->ebo != 0U) glDeleteBuffers(1, &meshData->ebo);
+			meshData->vao = meshData->vbo = meshData->ebo = 0U;
 			setGLWindowState(false);
 		}
 	}
@@ -430,6 +466,8 @@ namespace CGEngine {
 				return;
 			}
 		}
+
+		if (meshData->gpuDirty) uploadMeshData(meshData);
 
 		// Only proceed with mesh rendering if we have mesh data
 		if (meshData && meshData->vertices.size() > 0) {
