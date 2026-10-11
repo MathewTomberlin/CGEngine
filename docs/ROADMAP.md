@@ -79,7 +79,8 @@ Goal: the terrain looks rounded and real, the blocks obey physics the scripts ca
 - [~] **10.1** Smooth skin: done. Surface nets over the blocks' occupancy (`buildSmoothMesh`, `set_smoothing`), so the
   ground, hills and tree crowns are rounded and textured; shaded from the density gradient, coloured by the dominant
   block, with occlusion. One sample per block: 1.08 million quads for 841 chunks, 655 frames a second in Release, load
-  1.7 s, 222 MB. Two samples per block gives half-block detail but 4.7 million quads, so it is not the default. Not yet:
+  1.4 s, 206 MB. Two samples per block gives half-block detail but 4.7 million quads, so it is not the default. Single-block
+  features keep their surface (the samples sit at block centres at one sample per block). Not yet:
   a finer skin near the camera with a coarser one far away (the seams need skirts or matched edges).
 - [x] **10.2** Block physics (`VoxelSimulation`, `VoxelBlocks.h`): block types (solid, falls, liquid). Sand and gravel
   fall, and swap down past water. Water is a full source with flowing levels 7 to 1, so it spreads and drains and stays
@@ -90,8 +91,11 @@ Goal: the terrain looks rounded and real, the blocks obey physics the scripts ca
 - [x] **10.4** Collision in C++ (`VoxelBody.cpp`, `world.step_body`): the same mover as `VoxelPhysics.step`, on the block
   types. The player uses it. `tools/voxel_world_check.py` checks 300 random moves against the Python version and they agree
   to 1e-9. The world's dirty chunks are a set, so `update` no longer scans every chunk each frame.
-- [ ] **10.5** Shadows: a shadow map for the sun, covering the area near the camera.
-- [ ] **10.6** Region batching (9.5) once the smooth skin raises the draw and vertex counts.
+- [x] **10.5** Shadows: the sun's shadow map (`renderShadowMap`), drawn from the sun around the camera with a 2048 map
+  and a 3 by 3 texel filter. Meshes draw into it with the standard shader, which stops early in that pass. Redrawn when the
+  camera moves, the sun turns or a tenth of a second passes; skipped while the sun is down. Release: 650 frames a second
+  with shadows on (about the same as without, after the caching).
+- [ ] **10.6** Region batching (9.5). Not needed yet: with the smooth skin, 841 chunks run at 650 frames a second in Release.
 - [ ] **10.7** An on-screen hotbar (8.4).
 
 ## Tooling and quality

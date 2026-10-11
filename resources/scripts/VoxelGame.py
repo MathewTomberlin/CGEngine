@@ -34,6 +34,8 @@ RESPAWN_DEPTH = -20.0       # below this the player is put back at the spawn hei
 # The blocks the number keys 1 to 7 choose from when placing (the hotbar), and the file the F5 and F9 keys save and load.
 HOTBAR = [VoxelGen.STONE, VoxelGen.DIRT, VoxelGen.GRASS, VoxelGen.WOOD, VoxelGen.LEAVES, VoxelGen.SAND, VoxelGen.GRAVEL,
           VoxelGen.SNOW, VoxelGen.WATER]
+SHADOWS = os.environ.get("VOXEL_SHADOWS", "1") != "0"   # the sun casts shadows (the map covers SHADOW_RADIUS around the camera)
+SHADOW_RADIUS = float(os.environ.get("VOXEL_SHADOW_RADIUS", "40"))
 SIM_BUDGET_MS = 1.5          # time per frame for the block physics (falling sand, flowing water)
 EDITS_FILE = "cg_control/voxel_edits.bin"
 STATE_INTERVAL = 0.25       # seconds between writes to cg_control/voxel_state.json
@@ -136,6 +138,7 @@ class VoxelGame(PyScript):
             self.world.define_block(block, cge.Vector3f(*rgb), solid=block not in VoxelGen.LIQUIDS,
                                     falls=block in VoxelGen.FALLS, liquid=block in VoxelGen.LIQUIDS)
         self.world.set_smoothing(SMOOTH_RESOLUTION)
+        cge.set_environment(shadows=SHADOWS, shadow_radius=SHADOW_RADIUS)
         self.world.set_terrain(self.seed, VoxelGen.SEA_LEVEL, 8, 44, VoxelGen.SNOW_LEVEL, VoxelGen.TREE_CHANCE,
                           VoxelGen.CAVE_WIDTH)
 

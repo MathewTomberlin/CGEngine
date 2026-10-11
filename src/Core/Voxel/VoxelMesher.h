@@ -8,7 +8,7 @@
 namespace CGEngine {
 	// A chunk's blocks with a border of blocks copied from its neighbours (air where a neighbour is not loaded). The
 	// mesher reads only from this, so it can run on any thread while the world changes. The block mesher needs a border
-	// of 1; the smooth mesher needs 2, because its density samples reach a block beyond the one-block border.
+	// of 1; the smooth mesher needs 3, because its density samples and their normals reach two blocks beyond the chunk.
 	struct PaddedChunk {
 		int size = 16;
 		int height = 64;
@@ -38,6 +38,6 @@ namespace CGEngine {
 	// chunk's own mesh is shaped to. Surface nets (one vertex per cell the surface crosses, quads across the crossed
 	// edges) on a density that is the blocks' occupancy, interpolated between block centres. resolution is the number of
 	// samples per block: 1 is the block scale, 2 gives half-block detail. Chunks join without cracks, since every vertex
-	// is a function of the blocks around it. The chunk needs a border of 2 (PaddedChunk::border).
+	// is a function of the blocks around it. The chunk needs a border of 3 (PaddedChunk::border).
 	void buildSmoothMesh(const PaddedChunk& chunk, const std::array<glm::vec3, 256>& palette, int resolution, MeshArrays& out);
 }

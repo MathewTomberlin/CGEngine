@@ -833,6 +833,8 @@ namespace CGEngine {
     }
 
     void Body::onDraw(RenderTarget& target, const Transform& transform) const {
+        // The shadow map takes meshes only: 2D drawables and bounds would draw into the wrong target.
+        if (renderer->isShadowPass() && !dynamic_cast<Mesh*>(entity.get())) return;
         if (bodyParams.boundsRendering && boundsRect != nullptr) {
             renderer->commitGL();
             target.draw(*boundsRect, transform);

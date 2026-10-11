@@ -72,6 +72,8 @@ For an outdoor or top-down scene, one directional light pointing down and slight
 | `sunDirection` | [x, y, z] | no    | `[0,1,0]`   | Direction towards the sun. Used by the sun's disc.             |
 | `sunColour` | [r, g, b] | no       | `[0,0,0]`   | The sun's disc and glow. Black (the default) hides it.         |
 | `sunSize`   | number    | no       | `1.5`       | The sun's angular radius, in degrees.                          |
+| `shadows`   | bool      | no       | `false`     | The sun casts shadows, from a map drawn around the camera. Costs a pass over the meshes when the sun is up. |
+| `shadowRadius` | number | no      | `48`        | Half the width of the shadowed area, in blocks. Beyond it, surfaces are lit. |
 
 Fog applies to every surface drawn with the standard shader, lit or not. With `replaceWorld`, the environment
 returns to the defaults before the file's own values are read. Scripts change it with `cge.set_environment(...)`.

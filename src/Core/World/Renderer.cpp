@@ -364,6 +364,7 @@ namespace CGEngine {
 				return false;
 			}
 			root->queueRendering();
+			if (environment.shadows) renderShadowMap(window);
 			drawSky();
 			//Sort and render Meshes and SFML entities
 			render(window);
@@ -553,6 +554,18 @@ namespace CGEngine {
 			// Static meshes do not enable the bone attributes, so those read defaults. Turning skinning off for them keeps
 			// them from being moved by whatever bone matrices an animated model left in the bone buffer.
 			program->setUniform("skinned", meshData->bones.empty() ? 0 : 1);
+			// The shadow map: in its own pass the fragment shader stops early; otherwise surfaces look the sun's shadow up.
+			program->setUniform("shadowPass", shadowPass ? 1 : 0);
+			program->setUniform("shadowsOn", (shadowsActive && !shadowPass) ? 1 : 0);
+			if (shadowsActive && !shadowPass) {
+				const GLint shadowUnit = 15;   // above the material textures' units
+				GL_CHECK(glActiveTexture(GL_TEXTURE0 + shadowUnit));
+				GL_CHECK(glBindTexture(GL_TEXTURE_2D, shadowDepthTexture));
+				GL_CHECK(glActiveTexture(GL_TEXTURE0));
+				program->setUniform("shadowMap", shadowUnit);
+				program->setUniform("shadowMatrix", shadowMatrix);
+				program->setUniform("shadowTexel", 1.0f / static_cast<float>(shadowResolution));
+			}
 
 			//Draw the MeshData by index, if available, or by vertices
 			++drawCallsThisFrame;
@@ -974,6 +987,84 @@ namespace CGEngine {
 		sort(renderOrder.begin(), renderOrder.end(), [](id_t a, id_t b) { return (assets.get<Body>(a)->zOrder < assets.get<Body>(b)->zOrder); });
 	}
 
+	void Renderer::ensureShadowMap() {
+		if (shadowFbo != 0) return;
+		GL_CHECK(glGenTextures(1, &shadowDepthTexture));
+		GL_CHECK(glBindTexture(GL_TEXTURE_2D, shadowDepthTexture));
+		GL_CHECK(glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, shadowResolution, shadowResolution, 0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr));
+		GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST));
+		GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST));
+		GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER));
+		GL_CHECK(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER));
+		const float lit[4] = { 1.0f, 1.0f, 1.0f, 1.0f };   // outside the map nothing is in shadow
+		GL_CHECK(glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, lit));
+		GL_CHECK(glGenFramebuffers(1, &shadowFbo));
+		GL_CHECK(glBindFramebuffer(GL_FRAMEBUFFER, shadowFbo));
+		GL_CHECK(glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadowDepthTexture, 0));
+		GL_CHECK(glDrawBuffer(GL_NONE));
+		GL_CHECK(glReadBuffer(GL_NONE));
+		if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+			log(this, LogError, "The shadow map framebuffer is incomplete");
+		}
+		GL_CHECK(glBindFramebuffer(GL_FRAMEBUFFER, 0));
+	}
+
+	// Draws every mesh from the sun's side into the shadow map. The map covers a square of shadowRadius on each side of the
+	// camera: shadows near the viewer are sharp, and the far ones are simply lit (the fog covers them).
+	void Renderer::renderShadowMap(RenderTarget* window) {
+		Light* sun = nullptr;
+		for (Light* light : assets.getAllResources<Light>()) {
+			if (light->position.w == 0.0f) {   // a directional light
+				sun = light;
+				break;
+			}
+		}
+		shadowsActive = false;
+		if (!sun || !currentCamera) return;
+		const glm::vec3 travel = glm::normalize(toGlm(sun->parameters.lightDirection));
+		// Below the horizon the sun lights nothing, so there is no map to draw.
+		if (travel.y > -0.02f) return;
+
+		const glm::vec3 focus = toGlm(currentCamera->getPosition());
+		const float radius = environment.shadowRadius;
+		const double now = time.getElapsedSec();
+		const bool moved = glm::distance(focus, shadowFocus) > radius * 0.05f;
+		const bool turned = glm::distance(travel, shadowTravel) > 0.002f;
+		const bool stale = now - shadowDrawnAt >= 0.1;
+		if (shadowsDrawn && shadowRadiusDrawn == radius && !moved && !turned && !stale) {
+			// The map still matches the matrix it was drawn with, which stays in shadowMatrix.
+			shadowsActive = true;
+			return;
+		}
+		ensureShadowMap();
+		shadowsActive = true;
+		shadowsDrawn = true;
+		shadowDrawnAt = now;
+		shadowFocus = focus;
+		shadowTravel = travel;
+		shadowRadiusDrawn = radius;
+
+		const glm::vec3 up = std::fabs(travel.y) > 0.99f ? glm::vec3(0.0f, 0.0f, 1.0f) : glm::vec3(0.0f, 1.0f, 0.0f);
+		const glm::mat4 view = glm::lookAt(focus - travel * radius * 2.0f, focus, up);
+		shadowMatrix = glm::ortho(-radius, radius, -radius, radius, 0.1f, radius * 4.0f) * view;
+
+		const glm::mat4 cameraSaved = cameraMatrix;
+		GL_CHECK(glBindFramebuffer(GL_FRAMEBUFFER, shadowFbo));
+		GL_CHECK(glViewport(0, 0, shadowResolution, shadowResolution));
+		GL_CHECK(glEnable(GL_DEPTH_TEST));
+		GL_CHECK(glDepthMask(GL_TRUE));
+		GL_CHECK(glClear(GL_DEPTH_BUFFER_BIT));
+		shadowPass = true;
+		cameraMatrix = shadowMatrix;   // the transform block carries the sun's matrix, and culling uses its frustum
+		updateFrustum();
+		render(window);
+		shadowPass = false;
+		cameraMatrix = cameraSaved;
+		GL_CHECK(glBindFramebuffer(GL_FRAMEBUFFER, 0));
+		const sf::Vector2u size = window->getSize();
+		GL_CHECK(glViewport(0, 0, static_cast<GLsizei>(size.x), static_cast<GLsizei>(size.y)));
+	}
+
 	void Renderer::drawSky() {
 		if (!skyProgram || !currentCamera || !environment.drawsSky()) return;
 		GL_CHECK(glDisable(GL_DEPTH_TEST));
@@ -999,7 +1090,7 @@ namespace CGEngine {
 
 	void Renderer::render(RenderTarget* window) {
 		//The camera does not move during a render pass, so its matrix is computed once here, not for every draw
-		if (currentCamera) cameraMatrix = currentCamera->getMatrix();
+		if (currentCamera && !shadowPass) cameraMatrix = currentCamera->getMatrix();
 		updateFrustum();
 
 		//Sort the renderOrder by zOrder if zSorting is enabled

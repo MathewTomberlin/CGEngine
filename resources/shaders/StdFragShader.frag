@@ -79,14 +79,38 @@ in vec3 vertexColour;
 
 out vec4 FragColor;
 
+//The sun's shadows: shadowPass is set while the shadow map is drawn, and shadowsOn while surfaces look it up.
+uniform int shadowPass;
+uniform int shadowsOn;
+uniform mat4 shadowMatrix;
+uniform float shadowTexel;
+uniform sampler2D shadowMap;
+
+//How much of the sun reaches a surface: 1 in the light, 0 in shadow, softened over a 3 by 3 block of map texels.
+float shadowAmount(vec3 pos, vec3 normal, vec3 towardsLight){
+    //Push the lookup off the surface along its normal, so a surface does not shadow itself.
+    vec4 lightSpace = shadowMatrix * vec4(pos + normal * 0.04, 1.0);
+    vec3 uvz = lightSpace.xyz / lightSpace.w * 0.5 + 0.5;
+    if(uvz.x < 0.0 || uvz.x > 1.0 || uvz.y < 0.0 || uvz.y > 1.0 || uvz.z > 1.0) return 1.0;
+    float bias = max(0.0006 * (1.0 - dot(normal, towardsLight)), 0.0002);
+    float lit = 0.0;
+    for(int x = -1; x <= 1; ++x){
+        for(int y = -1; y <= 1; ++y){
+            float depth = texture(shadowMap, uvz.xy + vec2(x, y) * shadowTexel).r;
+            lit += (uvz.z - bias > depth) ? 0.0 : 1.0;
+        }
+    }
+    return lit / 9.0;
+}
+
 vec3 applyLight(Light light, vec3 surfColor, vec3 surfNormal, vec3 surfPos, vec3 surfViewDir, int mtl){
     vec3 lightIntensities = light.intensities.xyz;
     vec3 surfLightDir;
     float lightPercentage = 1.0;
     if(light.position.w == 0.0) {
-        //Directional Light
+        //Directional Light: the sun, which the shadow map darkens where something stands in its way
         surfLightDir = normalize(-light.lightDirection.xyz);
-        lightPercentage = 1.0;
+        lightPercentage = shadowsOn != 0 ? shadowAmount(surfPos, surfNormal, surfLightDir) : 1.0;
     } else {
         //Point Light
         surfLightDir = light.position.xyz - surfPos;
@@ -133,6 +157,12 @@ vec3 applyLight(Light light, vec3 surfColor, vec3 surfNormal, vec3 surfPos, vec3
 }
 
 void main() {
+    //The shadow map pass only records depth: no colour is needed there
+    if(shadowPass != 0){
+        FragColor = vec4(0.0);
+        return;
+    }
+
     //World-space surface position and normal: the vertex shader already applied the model transform to both
     vec3 surfPos = vertex;
     vec4 surfColor = vec4(1.0);

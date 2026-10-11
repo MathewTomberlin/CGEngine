@@ -251,6 +251,8 @@ namespace CGEngine {
 		void setWindow(RenderWindow* window);
 		RenderWindow* getWindow() const { return window; }
 		Camera* getCurrentCamera();
+		// True while the shadow map is being drawn (see renderShadowMap). Bodies draw only their meshes then.
+		bool isShadowPass() const { return shadowPass; }
 		void setCurrentCamera(unique_ptr<Camera> camera);
 
 		void renderMesh(Mesh* mesh, MeshData* meshData, Transformation3D transform);
@@ -320,6 +322,22 @@ namespace CGEngine {
 		void drawSky();
 		std::unique_ptr<Program> skyProgram;
 		GLuint skyVao = 0;
+		// The sun's shadows: the meshes are drawn into a depth map from the sun, then the standard shader looks the map up
+		// (shadowMatrix, shadowMap). In the map's pass the fragment shader stops early (shadowPass).
+		void ensureShadowMap();
+		void renderShadowMap(RenderTarget* window);
+		bool shadowPass = false;
+		bool shadowsActive = false;   // the map is valid this frame: the sun is up (at night the map is skipped)
+		// The map is drawn again only when the camera has moved, the sun has turned, or a tenth of a second has passed.
+		bool shadowsDrawn = false;
+		double shadowDrawnAt = 0.0;
+		glm::vec3 shadowFocus = glm::vec3(0.0f);
+		glm::vec3 shadowTravel = glm::vec3(0.0f);
+		float shadowRadiusDrawn = 0.0f;
+		GLuint shadowFbo = 0;
+		GLuint shadowDepthTexture = 0;
+		int shadowResolution = 2048;
+		glm::mat4 shadowMatrix = glm::mat4(1.0f);
 
 		/// <summary>
 		/// The current render camera. This is set during OpenGL initialization and used to set the view matrix for the shader program.
