@@ -7,11 +7,15 @@
 #include "gtx/transform.hpp"
 #include "gtx/matrix_decompose.hpp"
 #include "SFML/OpenGL.hpp"
+#include <cstddef>
+#include <cstdint>
 #include <vector>
 #include <map>
 #include <string>
 #include <set>
 #include <unordered_map>
+#include <array>
+#include <limits>
 #include <iostream>
 #include "../Shader/UniformBuffers.h"
 #include "../Importer/MeshImporter.h"
@@ -53,6 +57,8 @@ namespace CGEngine {
 		GLfloat materialId = 0;
 		int boneIds[MAX_BONE_INFLUENCE] = {-1,-1,-1,-1};
 		float weights[MAX_BONE_INFLUENCE] = {};
+		// Per-vertex tint, multiplied into the surface colour. White unless the mesh sets it (see create_mesh_body).
+		glm::vec3 colour = glm::vec3(1.0f);
 	};
 
 	struct NodeData {
@@ -78,17 +84,60 @@ namespace CGEngine {
 		}
 	};
 
+	// A vertex of a voxel mesh: 48 bytes, against 80 for VertexData. It leaves out the bone fields, and every attribute
+	// is a float, since the driver reads byte attributes slowly. The shader sees the same attributes (see
+	// Renderer::createCompactMeshBuffers).
+	struct VoxelVertex {
+		glm::vec3 position = { 0,0,0 };
+		glm::vec2 texCoord = { 0,0 };
+		glm::vec3 normal = { 0,0,0 };
+		float materialId = 0.0f;
+		glm::vec3 colour = { 1,1,1 };
+	};
+
 	struct MeshData : public IResource {
 		MeshData(string meshName = "", vector<VertexData> vertices = {}, vector<unsigned int> indices = {}, map<string, BoneData> bones = {}) : meshName(meshName), vertices(vertices), indices(indices), vao(0U), vbo(0U), ebo(0U), bones(bones) {};
 		MeshData(vector<VertexData> vertices, vector<unsigned int> indices = {}, map<string, BoneData> bones = {}, string meshName = "") : meshName(meshName), vertices(vertices), indices(indices), vao(0U), vbo(0U), ebo(0U), bones(bones) {};
+		// A compact voxel mesh. The asset manager checks a resource when it is created, so its vertices are given here.
+		MeshData(vector<VoxelVertex> voxels, vector<unsigned int> indices) : voxelVertices(voxels), compact(true), indices(indices), vao(0U), vbo(0U), ebo(0U) {};
 		bool isValid() const {
-			return !vertices.empty() && !indices.empty();
+			return vertexCount() > 0 && !indices.empty();
+		}
+		// Voxel meshes keep their vertices in voxelVertices (compact), everything else in vertices.
+		size_t vertexCount() const {
+			return compact ? voxelVertices.size() : vertices.size();
 		}
 		string sourcePath = "";
 		string meshName = "";
 		vector<VertexData> vertices;
+		vector<VoxelVertex> voxelVertices;
+		bool compact = false;
 		vector<unsigned int> indices;
 		map<string, BoneData> bones;
+		// Box around the local-space positions, for culling. Recomputed when boundsValid is false.
+		glm::vec3 boundsMin = glm::vec3(0.0f);
+		glm::vec3 boundsMax = glm::vec3(0.0f);
+		bool boundsValid = false;
+		// Runtime meshes are made from Python (create_mesh_body). Only these may be changed after upload.
+		bool runtimeMesh = false;
+		// Set when vertices or indices change; the renderer re-uploads the buffers before the next draw.
+		bool gpuDirty = false;
+		void computeBounds() {
+			boundsMin = glm::vec3(std::numeric_limits<float>::max());
+			boundsMax = glm::vec3(-std::numeric_limits<float>::max());
+			if (compact) {
+				for (const VoxelVertex& vertex : voxelVertices) {
+					boundsMin = glm::min(boundsMin, vertex.position);
+					boundsMax = glm::max(boundsMax, vertex.position);
+				}
+			} else {
+				for (const VertexData& vertex : vertices) {
+					boundsMin = glm::min(boundsMin, vertex.position);
+					boundsMax = glm::max(boundsMax, vertex.position);
+				}
+			}
+			boundsValid = vertexCount() > 0;
+		}
 		GLuint vbo = 0U;
 		GLuint vao = 0U;
 		GLuint ebo = 0U;
@@ -169,15 +218,23 @@ namespace CGEngine {
 		bool processRender();
 		/// Number of glDraw calls issued in the last rendered frame.
 		unsigned int getLastFrameDrawCalls() const { return lastFrameDrawCalls; }
+		/// Meshes skipped in the last rendered frame because their bounds were outside the camera's view.
+		unsigned int getLastFrameCulledDraws() const { return lastFrameCulledDraws; }
+		/// Instances skipped in the last rendered frame because they were outside the view.
+		unsigned int getLastFrameCulledInstances() const { return lastFrameCulledInstances; }
 		void saveScreenshot(const std::string& path);
 		/// Save the next presented frame to a PNG at path. Taken before the buffer swap.
 		void requestScreenshot(const std::string& path) { pendingScreenshotPath = path; }
 		void setWindow(RenderWindow* window);
+		RenderWindow* getWindow() const { return window; }
 		Camera* getCurrentCamera();
 		void setCurrentCamera(unique_ptr<Camera> camera);
 
 		void renderMesh(Mesh* mesh, MeshData* meshData, Transformation3D transform);
 		void getModelData(Mesh* mesh);
+		void uploadMeshData(MeshData* meshData);
+		void createCompactMeshBuffers(MeshData* meshData, Program* program);
+		void releaseMeshData(MeshData* meshData);
 		string getUniformArrayIndexName(string arrayName, int index);
 		string getUniformArrayPropertyName(string arrayName, int index, string propertyName);
 		string getUniformObjectPropertyName(string objectName, string propertyName);
@@ -211,6 +268,18 @@ namespace CGEngine {
 		bool sfmlGLStatesActive = false;	//True while SFML's GL states are pushed (see commitGL/pullGL)
 		unsigned int drawCallsThisFrame = 0;
 		unsigned int lastFrameDrawCalls = 0;
+		unsigned int culledDrawsThisFrame = 0;
+		unsigned int lastFrameCulledDraws = 0;
+		unsigned int culledInstancesThisFrame = 0;
+		unsigned int lastFrameCulledInstances = 0;
+		// Instances of the mesh being drawn that are inside the view (filled by collectVisibleInstances).
+		vector<glm::mat4> visibleInstances;
+		void collectVisibleInstances(const glm::mat4& bodyMatrix, const MeshData* meshData, const vector<glm::mat4>& instances);
+		void drawInstances(Mesh* mesh, MeshData* meshData, Program* program);
+		// Planes of the view frustum (normal.xyz, distance w; points with dot(normal, p) + w >= 0 are inside), set each frame.
+		std::array<glm::vec4, 6> frustumPlanes{};
+		void updateFrustum();
+		bool isVisible(const glm::mat4& model, const glm::vec3& localMin, const glm::vec3& localMax) const;
 		/// <summary>
 		/// Clear the renderOrder and bodyTransform map
 		/// </summary>

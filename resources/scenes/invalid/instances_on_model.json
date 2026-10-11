@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "bodies": [
+    { "name": "bad_instanced_model", "model": "Mesh.obj", "instances": [ { "position": [0, 0, 0] } ] }
+  ]
+}

@@ -63,6 +63,10 @@ in vec3 position;
 in vec2 texCoord;
 in vec3 vertNormal;
 in float materialId;
+in mat4 instanceMatrix;	//Read only when instanced is set (see Renderer::drawInstances)
+in vec3 vertColour;
+uniform bool instanced;
+uniform bool skinned;	//Only meshes with bones read the bone attributes; others would read defaults (see Renderer::renderMesh)
 in ivec4 boneIds;
 in vec4 weights;
 
@@ -70,6 +74,7 @@ out vec2 uv;
 out vec3 normal;
 out vec3 vertex;
 out float matId;
+out vec3 vertexColour;
 
 void main() {
     vec4 bonePosition = vec4(0.0f);
@@ -77,7 +82,7 @@ void main() {
 	float totalWeight = 0.0f;
 
 	//Calculate bone transformation
-	for(int i = 0 ; i < MAX_BONE_INFLUENCE ; i++) {
+	for(int i = 0 ; i < MAX_BONE_INFLUENCE && skinned ; i++) {
         if(boneIds[i] == -1 || boneIds[i] >= MAX_BONES) continue;
 		float weight = weights[i];
 		totalWeight += weight;
@@ -98,12 +103,14 @@ void main() {
 	}
 
 	//Final transformations
-	vec4 worldPos = model * bonePosition;
+	mat4 instanceTransform = instanced ? instanceMatrix : mat4(1.0f);
+	vec4 worldPos = model * instanceTransform * bonePosition;
 
 	uv = texCoord;
-	normal = normalize(mat3(model) * boneNormal);
+	normal = normalize(mat3(model * instanceTransform) * boneNormal);
 	vertex = worldPos.xyz;
 	matId = materialId;
+	vertexColour = vertColour;
 
 	gl_Position = camera * worldPos;
 }

@@ -68,6 +68,7 @@ try {
         "13_version"  = @{ file = "scenes/invalid/bad_version.json";       error = "version" }
         "14_vector"   = @{ file = "scenes/invalid/bad_vector.json";        error = "3 numbers" }
         "22_anim"     = @{ file = "scenes/invalid/unknown_animation.json";  error = "unknown animation" }
+        "42_instances"= @{ file = "scenes/invalid/instances_on_model.json";  error = "only applies to primitive" }
     "23_specular" = @{ file = "scenes/invalid/bad_specular.json";       error = "specular must be between 0 and 1" }
     }
     foreach ($id in ($invalid.Keys | Sort-Object)) {
@@ -214,6 +215,36 @@ try {
     $hitDeadline = (Get-Date).AddSeconds(10)
     while (-not (Test-Path $hitLog) -and (Get-Date) -lt $hitDeadline) { Start-Sleep -Milliseconds 200 }
     Check "attached script runs each update and sees its body" ((Test-Path $hitLog) -and ((Get-Content $hitLog -Raw) -match "caveman"))
+    # Frustum culling: a cube 100000 units away is outside the view, so the renderer skips it and counts it.
+    Send-Command "40_cull_load" '{"command":"load_scene","params":{"path":"scenes/culling_test.json"}}'
+    $cullLoad = Wait-Result "40_cull_load"
+    Check "culling scene loads" ($cullLoad.ok)
+    Send-Command "41_cull_stats" '{"command":"get_stats"}'
+    $cullStats = Wait-Result "41_cull_stats"
+    Check "a body outside the view is culled, not drawn" ($cullStats.ok -and $cullStats.result.culledDraws -ge 1 -and $cullStats.result.drawCalls -ge 1)
+
+    # Instancing: both instances of this body are far outside the view, so each is culled on its own.
+    Send-Command "43_inst_load" '{"command":"load_scene","params":{"path":"scenes/instancing_test.json"}}'
+    $instLoad = Wait-Result "43_inst_load"
+    Check "instanced scene loads" ($instLoad.ok)
+    Send-Command "44_inst_stats" '{"command":"get_stats"}'
+    $instStats = Wait-Result "44_inst_stats"
+    Check "instances outside the view are culled one by one" ($instStats.ok -and $instStats.result.culledInstances -ge 2)
+    # Runtime meshes: a body made from arrays in Python is created, updated and removed, and bad input is rejected.
+    $runtimeScript = Join-Path $PSScriptRoot "runtime_mesh_check.py"
+    Send-Command "50_runtime_mesh" ('{"command":"run_script","params":{"path":"' + ($runtimeScript -replace '\\', '/') + '"}}')
+    $runtimeRan = Wait-Result "50_runtime_mesh"
+    Check "runtime mesh script runs" ($runtimeRan.ok)
+    $runtimeFile = Join-Path $control "runtime_mesh_result.json"
+    $runtimeDeadline = (Get-Date).AddSeconds(10)
+    while (-not (Test-Path $runtimeFile) -and (Get-Date) -lt $runtimeDeadline) { Start-Sleep -Milliseconds 100 }
+    $rm = Get-Content $runtimeFile -Raw | ConvertFrom-Json
+    Check "a runtime mesh body is created, updated and removed" ($rm.created -and $rm.updated -and $rm.remove_existing -and $rm.gone -and -not $rm.remove_missing)
+    Check "runtime mesh rejects a position array that is not whole vertices" ($rm.bad_positions -match "3 numbers per vertex")
+    Check "runtime mesh rejects an index past the last vertex" ($rm.bad_index -match "is outside the")
+    Check "runtime mesh rejects an unknown material" ($rm.unknown_material -match "unknown material")
+    Check "updating a body that is not a runtime mesh fails" ($rm.update_scene_mesh -match "no body named")
+
     Check "engine still running after commands" (-not $app.HasExited)
 }
 finally {

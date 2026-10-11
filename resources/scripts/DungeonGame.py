@@ -18,6 +18,10 @@ import cg_engine_bindings as cge
 from PyScript import PyScript
 import DungeonGen
 
+# DUNGEON_FIXED_STEP (seconds) makes every frame advance the same amount of game time. Scripted tests set it, so their
+# walk checks do not depend on the frame rate. Unset, the step is the real time since the last frame (capped).
+FIXED_STEP = float(os.environ["DUNGEON_FIXED_STEP"]) if os.environ.get("DUNGEON_FIXED_STEP") else None
+
 PLAYER_SPEED = 4.0          # tiles per second
 PLAYER_RADIUS = 0.3
 CONTACT_DISTANCE = 0.7      # an enemy this close (plus its extra size) hurts the player
@@ -76,11 +80,17 @@ def place(body, x, y, z, yaw=None):
         mesh.set_rotation(cge.Vector3f(0.0, yaw, 0.0))
 
 
-def floor_tile(name, gx, gy):
-    # A plane primitive is a square at local z = size, facing +Z (docs/ai/scene-format.md). Turned to lie flat,
-    # its surface is at position.y + size, so it is placed at -size to put the floor surface at y = 0.
-    return {"name": name, "primitive": "plane", "size": 0.5, "position": [gx, -0.5, gy],
-            "rotation": [-90, 0, 0], "material": "floor"}
+def floor_tiles(name, tiles):
+    # One instanced body for every floor tile of a room (docs/ai/scene-format.md, "instances").
+    # A plane primitive is a square at local z = size, facing +Z. Turned to lie flat, its surface is at
+    # position.y + size, so it is placed at -size to put the floor surface at y = 0.
+    return {"name": name, "primitive": "plane", "size": 0.5, "material": "floor",
+            "instances": [{"position": [gx, -0.5, gy], "rotation": [-90, 0, 0]} for gx, gy in tiles]}
+
+
+def wall_cubes(name, tiles):
+    return {"name": name, "primitive": "cube", "size": 0.5, "material": "wall",
+            "instances": [{"position": [gx, 0.5, gy]} for gx, gy in tiles]}
 
 
 def near(ax, az, bx, bz, distance):
@@ -118,6 +128,7 @@ class DungeonGame(PyScript):
         self.setup_done = False
         self.broken = False
         self.state_timer = 0.0
+        self.frames = 0             # frames run so far; the state file reports it, so tests can wait for a frame count
         self.slime_clip_started = False   # the shared slime model has started its hop
         self.anim = None            # clip the player is playing; None forces the next choice to start
         self.attack_time = 0.0      # seconds left of the attack clip
@@ -138,7 +149,10 @@ class DungeonGame(PyScript):
     def frame(self):
         now = time.perf_counter()
         dt = 0.0 if self.last is None else min(0.05, now - self.last)
+        if FIXED_STEP is not None:
+            dt = 0.0 if self.last is None else FIXED_STEP
         self.last = now
+        self.frames += 1
         self.clock += dt
         if not self.setup_done:
             self.setup()
@@ -175,7 +189,8 @@ class DungeonGame(PyScript):
         state = {"level": self.level_no, "seed": self.level_seed, "hp": self.hp,
                  "room": list(self.room) if self.room else None, "goal_room": list(self.level.goal_room),
                  "player": [round(self.px, 3), round(self.pz, 3)], "enemies": enemies, "enemy_kinds": kinds,
-                 "items": sum(len(v) for v in self.items.values()), "bolts": len(self.bolts), "coins": self.coins}
+                 "items": sum(len(v) for v in self.items.values()), "bolts": len(self.bolts), "coins": self.coins,
+                 "frames": self.frames}
         os.makedirs("cg_control", exist_ok=True)
         tmp = "cg_control/dungeon_state.json.tmp"
         with open(tmp, "w") as f:
@@ -223,8 +238,12 @@ class DungeonGame(PyScript):
         self.unload_room()
         self.room = room
         floors, walls = self.level.room_tiles(room)
-        bodies = [floor_tile(f"dg_f_{gx}_{gy}", gx, gy) for gx, gy in floors]
-        bodies += [cube(f"dg_w_{gx}_{gy}", 0.5, (gx, 0.5, gy), "wall") for gx, gy in walls]
+        # Floors and walls are one instanced body each, so a room costs two draws instead of one per tile.
+        bodies = []
+        if floors:
+            bodies.append(floor_tiles("dg_floors", floors))
+        if walls:
+            bodies.append(wall_cubes("dg_walls", walls))
         if room == self.level.goal_room:
             gx, gy = self.level.goal
             bodies.append(model("dg_goal", "goal", (gx, 0.0, gy)))

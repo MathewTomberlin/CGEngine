@@ -142,6 +142,12 @@ namespace CGEngine {
 				return;
 			}
 
+			if (meshData->compact) {
+				createCompactMeshBuffers(meshData, program);
+				setGLWindowState(false);
+				return;
+			}
+
 			GL_CHECK(glGenBuffers(1, & meshData->vbo));
 			GL_CHECK(glGenBuffers(1, &meshData->ebo));
 			GL_CHECK(glGenVertexArrays(1, &meshData->vao));
@@ -176,6 +182,17 @@ namespace CGEngine {
 			GL_CHECK(glVertexAttribPointer(program->attrib("materialId"), 1, GL_FLOAT, 
 				GL_FALSE, sizeof(VertexData), (void*)offsetof(VertexData, materialId)));
 
+			GL_CHECK(glEnableVertexAttribArray(program->attrib("materialId")));
+			GL_CHECK(glVertexAttribPointer(program->attrib("materialId"), 1, GL_FLOAT,
+				GL_FALSE, sizeof(VertexData), (void*)offsetof(VertexData, materialId)));
+
+			// Vertex colour. Shaders without the attribute get -1 and skip it.
+			if (program->attrib("vertColour") >= 0) {
+				GL_CHECK(glEnableVertexAttribArray(program->attrib("vertColour")));
+				GL_CHECK(glVertexAttribPointer(program->attrib("vertColour"), 3, GL_FLOAT,
+					GL_FALSE, sizeof(VertexData), (void*)offsetof(VertexData, colour)));
+			}
+
 			if (!meshData->bones.empty()) {
 				GL_CHECK(glEnableVertexAttribArray(program->attrib("boneIds")));
 				GL_CHECK(glVertexAttribIPointer(program->attrib("boneIds"), 4, GL_INT, 
@@ -187,6 +204,62 @@ namespace CGEngine {
 			}
 			glBindVertexArray(0);
 
+			setGLWindowState(false);
+		}
+	}
+
+	void Renderer::uploadMeshData(MeshData* meshData) {
+		// Buffers already exist (getModelData made them): replace their contents. The VAO keeps its attribute setup.
+		meshData->gpuDirty = false;
+		if (meshData->vao == 0U) return;
+		GL_CHECK(glBindVertexArray(meshData->vao));
+		GL_CHECK(glBindBuffer(GL_ARRAY_BUFFER, meshData->vbo));
+		if (meshData->compact) {
+			GL_CHECK(glBufferData(GL_ARRAY_BUFFER, meshData->voxelVertices.size() * sizeof(VoxelVertex), meshData->voxelVertices.data(), GL_DYNAMIC_DRAW));
+		} else {
+			GL_CHECK(glBufferData(GL_ARRAY_BUFFER, meshData->vertices.size() * sizeof(VertexData), meshData->vertices.data(), GL_DYNAMIC_DRAW));
+		}
+		if (!meshData->indices.empty()) {
+			// Binding the element buffer while the VAO is bound makes it part of the VAO, even if it had no indices before.
+			GL_CHECK(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, meshData->ebo));
+			GL_CHECK(glBufferData(GL_ELEMENT_ARRAY_BUFFER, meshData->indices.size() * sizeof(unsigned int), meshData->indices.data(), GL_DYNAMIC_DRAW));
+		}
+		GL_CHECK(glBindVertexArray(0));
+	}
+
+	void Renderer::createCompactMeshBuffers(MeshData* meshData, Program* program) {
+		GL_CHECK(glGenBuffers(1, &meshData->vbo));
+		GL_CHECK(glGenBuffers(1, &meshData->ebo));
+		GL_CHECK(glGenVertexArrays(1, &meshData->vao));
+		GL_CHECK(glBindVertexArray(meshData->vao));
+		GL_CHECK(glBindBuffer(GL_ARRAY_BUFFER, meshData->vbo));
+		GL_CHECK(glBufferData(GL_ARRAY_BUFFER, meshData->voxelVertices.size() * sizeof(VoxelVertex), meshData->voxelVertices.data(), GL_STATIC_DRAW));
+		if (!meshData->indices.empty()) {
+			GL_CHECK(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, meshData->ebo));
+			GL_CHECK(glBufferData(GL_ELEMENT_ARRAY_BUFFER, meshData->indices.size() * sizeof(unsigned int), meshData->indices.data(), GL_STATIC_DRAW));
+		}
+		// Every voxel attribute is a float: byte attributes, even normalised, made each draw several times slower on
+		// the NVIDIA driver (measured in the voxel sample).
+		auto bind = [&](const char* name, GLint size, GLenum type, GLboolean normalized, size_t offset) {
+			const GLint location = program->attrib(name);
+			if (location < 0) return;
+			GL_CHECK(glEnableVertexAttribArray(location));
+			GL_CHECK(glVertexAttribPointer(location, size, type, normalized, sizeof(VoxelVertex), (void*)offset));
+		};
+		bind("position", 3, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, position));
+		bind("texCoord", 2, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, texCoord));
+		bind("vertNormal", 3, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, normal));
+		bind("materialId", 1, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, materialId));
+		bind("vertColour", 3, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, colour));
+		GL_CHECK(glBindVertexArray(0));
+	}
+
+	void Renderer::releaseMeshData(MeshData* meshData) {
+		if (setGLWindowState(true)) {
+			if (meshData->vao != 0U) glDeleteVertexArrays(1, &meshData->vao);
+			if (meshData->vbo != 0U) glDeleteBuffers(1, &meshData->vbo);
+			if (meshData->ebo != 0U) glDeleteBuffers(1, &meshData->ebo);
+			meshData->vao = meshData->vbo = meshData->ebo = 0U;
 			setGLWindowState(false);
 		}
 	}
@@ -325,8 +398,86 @@ namespace CGEngine {
 		}
 	}
 
+	void Renderer::updateFrustum() {
+		// Gribb-Hartmann: each plane is the last row of the clip matrix plus or minus another row.
+		auto row = [this](int r) { return glm::vec4(cameraMatrix[0][r], cameraMatrix[1][r], cameraMatrix[2][r], cameraMatrix[3][r]); };
+		const glm::vec4 last = row(3);
+		frustumPlanes[0] = last + row(0);
+		frustumPlanes[1] = last - row(0);
+		frustumPlanes[2] = last + row(1);
+		frustumPlanes[3] = last - row(1);
+		frustumPlanes[4] = last + row(2);
+		frustumPlanes[5] = last - row(2);
+		for (glm::vec4& plane : frustumPlanes) {
+			plane /= glm::length(glm::vec3(plane));
+		}
+	}
+
+	void Renderer::collectVisibleInstances(const glm::mat4& bodyMatrix, const MeshData* meshData, const vector<glm::mat4>& instances) {
+		visibleInstances.clear();
+		for (const glm::mat4& instance : instances) {
+			if (isVisible(bodyMatrix * instance, meshData->boundsMin, meshData->boundsMax)) {
+				visibleInstances.push_back(instance);
+			}
+		}
+		culledInstancesThisFrame += static_cast<unsigned int>(instances.size() - visibleInstances.size());
+	}
+
+	void Renderer::drawInstances(Mesh* mesh, MeshData* meshData, Program* program) {
+		// One matrix per instance in a buffer, read as a per-instance attribute (divisor 1) on the mesh's own VAO.
+		if (mesh->instanceBuffer == 0U) {
+			GL_CHECK(glGenBuffers(1, &mesh->instanceBuffer));
+		}
+		GL_CHECK(glBindBuffer(GL_ARRAY_BUFFER, mesh->instanceBuffer));
+		GL_CHECK(glBufferData(GL_ARRAY_BUFFER, visibleInstances.size() * sizeof(glm::mat4), visibleInstances.data(), GL_STREAM_DRAW));
+
+		// A mat4 attribute takes four consecutive locations, one per column. A shader without it gets -1 and skips this.
+		const GLint location = program->attrib("instanceMatrix");
+		if (location >= 0) {
+			for (GLint column = 0; column < 4; ++column) {
+				GL_CHECK(glEnableVertexAttribArray(location + column));
+				GL_CHECK(glVertexAttribPointer(location + column, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4), (void*)(sizeof(glm::vec4) * column)));
+				GL_CHECK(glVertexAttribDivisor(location + column, 1));
+			}
+		}
+
+		const GLsizei count = static_cast<GLsizei>(visibleInstances.size());
+		if (meshData->indices.size()) {
+			GL_CHECK(glDrawElementsInstanced(GL_TRIANGLES, meshData->indices.size(), GL_UNSIGNED_INT, 0, count));
+		} else {
+			GL_CHECK(glDrawArraysInstanced(GL_TRIANGLES, 0, meshData->vertexCount(), count));
+		}
+
+		// Put the attribute back the way the mesh's own draws expect it: no array, no divisor.
+		if (location >= 0) {
+			for (GLint column = 0; column < 4; ++column) {
+				GL_CHECK(glDisableVertexAttribArray(location + column));
+				GL_CHECK(glVertexAttribDivisor(location + column, 0));
+			}
+		}
+		GL_CHECK(glBindBuffer(GL_ARRAY_BUFFER, 0));
+	}
+
+	bool Renderer::isVisible(const glm::mat4& model, const glm::vec3& localMin, const glm::vec3& localMax) const {
+		// Bounds of the transformed box. For a rotated box this is larger than the box itself, so the test is conservative.
+		glm::vec3 worldMin(std::numeric_limits<float>::max());
+		glm::vec3 worldMax(-std::numeric_limits<float>::max());
+		for (int corner = 0; corner < 8; ++corner) {
+			glm::vec3 local((corner & 1) ? localMax.x : localMin.x, (corner & 2) ? localMax.y : localMin.y, (corner & 4) ? localMax.z : localMin.z);
+			glm::vec3 world = glm::vec3(model * glm::vec4(local, 1.0f));
+			worldMin = glm::min(worldMin, world);
+			worldMax = glm::max(worldMax, world);
+		}
+		for (const glm::vec4& plane : frustumPlanes) {
+			// The corner furthest along the plane's normal. If it is behind the plane, the whole box is outside.
+			glm::vec3 farthest((plane.x >= 0.0f) ? worldMax.x : worldMin.x, (plane.y >= 0.0f) ? worldMax.y : worldMin.y, (plane.z >= 0.0f) ? worldMax.z : worldMin.z);
+			if (glm::dot(glm::vec3(plane), farthest) + plane.w < 0.0f) return false;
+		}
+		return true;
+	}
+
 	void Renderer::renderMesh(Mesh* mesh, MeshData* meshData, Transformation3D transform) {
-		if (!meshData || meshData->vertices.empty()) return;	//Don;t log, null MeshData Meshes are empty Bodies
+		if (!meshData || meshData->vertexCount() == 0) return;	//Don;t log, null MeshData Meshes are empty Bodies
 		if (!mesh) {
 			log(this, LogError, "Mesh is invalid");
 			return;
@@ -336,8 +487,27 @@ namespace CGEngine {
 			return;
 		}
 
+		// Skinned meshes are never culled or instanced: their bind-pose bounds do not cover the animated pose.
+		const glm::mat4 bodyMatrix = getBodyGlobalTransform(mesh->getBodyId());
+		const bool instanced = meshData->bones.empty() && !mesh->getInstances().empty();
+		if (meshData->bones.empty()) {
+			if (!meshData->boundsValid) meshData->computeBounds();
+			if (instanced) {
+				collectVisibleInstances(bodyMatrix, meshData, mesh->getInstances());
+				if (visibleInstances.empty()) {
+					++culledDrawsThisFrame;
+					return;
+				}
+			} else if (!isVisible(bodyMatrix, meshData->boundsMin, meshData->boundsMax)) {
+				++culledDrawsThisFrame;
+				return;
+			}
+		}
+
+		if (meshData->gpuDirty) uploadMeshData(meshData);
+
 		// Only proceed with mesh rendering if we have mesh data
-		if (meshData && meshData->vertices.size() > 0) {
+		if (meshData && meshData->vertexCount() > 0) {
 			GL_CHECK(glBindVertexArray(meshData->vao));
 			boundTextures = 0;
 			
@@ -362,7 +532,7 @@ namespace CGEngine {
 			LightUBO lightUBOData = LightUBO();
 			setLightUBOData(lightUBOData);
 			TransformUBO transformUBOData = TransformUBO();
-			setTransformUBOData(transformUBOData, getBodyGlobalTransform(mesh->getBodyId()));
+			setTransformUBOData(transformUBOData, bodyMatrix);
 			//If the mesh has bones, set the bone uniform values
 			if (animator) {
 				BoneUBO boneUBOData = BoneUBO();
@@ -370,13 +540,19 @@ namespace CGEngine {
 			}
 			program->setUniform("cameraPosition", toGlm(currentCamera->getPosition()));
 			program->setUniform("timeSec", time.getElapsedSec());
+			program->setUniform("instanced", instanced ? 1 : 0);
+			// Static meshes do not enable the bone attributes, so those read defaults. Turning skinning off for them keeps
+			// them from being moved by whatever bone matrices an animated model left in the bone buffer.
+			program->setUniform("skinned", meshData->bones.empty() ? 0 : 1);
 
 			//Draw the MeshData by index, if available, or by vertices
 			++drawCallsThisFrame;
-			if (meshData->indices.size()) {
+			if (instanced) {
+				drawInstances(mesh, meshData, program);
+			} else if (meshData->indices.size()) {
 				GL_CHECK(glDrawElements(GL_TRIANGLES, meshData->indices.size(), GL_UNSIGNED_INT, 0));
 			} else {
-				GL_CHECK(glDrawArrays(GL_TRIANGLES, 0, meshData->vertices.size() / 5));
+				GL_CHECK(glDrawArrays(GL_TRIANGLES, 0, meshData->vertexCount()));
 			}
 
 			// Unbind varray, shaders, and texture
@@ -779,6 +955,10 @@ namespace CGEngine {
 		materialFrameCache.clear();
 		lastFrameDrawCalls = drawCallsThisFrame;
 		drawCallsThisFrame = 0;
+		lastFrameCulledDraws = culledDrawsThisFrame;
+		culledDrawsThisFrame = 0;
+		lastFrameCulledInstances = culledInstancesThisFrame;
+		culledInstancesThisFrame = 0;
 	}
 	
 	void Renderer::sortZ() {
@@ -788,6 +968,7 @@ namespace CGEngine {
 	void Renderer::render(RenderTarget* window) {
 		//The camera does not move during a render pass, so its matrix is computed once here, not for every draw
 		if (currentCamera) cameraMatrix = currentCamera->getMatrix();
+		updateFrustum();
 
 		//Sort the renderOrder by zOrder if zSorting is enabled
 		if (zSortingEnabled) {

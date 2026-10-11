@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "bodies": [
+    { "name": "inst_far", "primitive": "cube", "instances": [ { "position": [0, 0, 100000] }, { "position": [0, 0, 100010] } ] }
+  ]
+}

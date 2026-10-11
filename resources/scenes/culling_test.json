@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "bodies": [
+    { "name": "cull_far_cube", "primitive": "cube", "position": [0, 0, 100000] }
+  ]
+}

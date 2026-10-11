@@ -43,6 +43,10 @@ namespace CGEngine {
 		void setBodyId(optional<id_t> body) { this->bodyId = body; }
 		// Add new method to get combined transform
 		glm::mat4 getModelMatrix() const {
+			return modelMatrixOf(transformation);
+		}
+		// Position, then rotation in degrees (Z * Y * X), then scale. Also used for instance transforms.
+		static glm::mat4 modelMatrixOf(const Transformation3D& transformation) {
 			glm::mat4 modelPos = glm::translate(glm::vec3(transformation.position.x, transformation.position.y, transformation.position.z));
 			glm::mat4 modelRotX = glm::rotate(degrees(transformation.rotation.x).asRadians(), glm::vec3(1.f, 0.f, 0.f));
 			glm::mat4 modelRotY = glm::rotate(degrees(transformation.rotation.y).asRadians(), glm::vec3(0.f, 1.f, 0.f));
@@ -51,11 +55,17 @@ namespace CGEngine {
 			glm::mat4 modelScale = glm::scale(glm::vec3(transformation.scale.x, transformation.scale.y, transformation.scale.z));
 			return modelPos * modelRotation * modelScale;
 		}
+		// Instancing: when set, the mesh is drawn once per matrix, each relative to its body, and the matrices are culled per frame.
+		void setInstances(vector<glm::mat4> matrices) { instances = std::move(matrices); }
+		const vector<glm::mat4>& getInstances() const { return instances; }
+		// GL buffer that holds the visible instance matrices for a draw. Created by the renderer on first use.
+		GLuint instanceBuffer = 0U;
 		bool isValid() const override {
-			return meshData != nullptr && !meshData->vertices.empty();
+			return meshData != nullptr && meshData->vertexCount() > 0;
 		}
 	private:
 		string importPath;
+		vector<glm::mat4> instances;
 		optional<id_t> modelId;
 		optional<id_t> bodyId;
 		MeshData* meshData;

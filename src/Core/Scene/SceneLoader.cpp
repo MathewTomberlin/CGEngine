@@ -34,6 +34,25 @@ namespace CGEngine {
             return obj.at(key).get<std::string>();
         }
 
+        // Each entry of "instances" is a transform relative to the body: position, rotation (degrees) and scale, all optional.
+        std::vector<glm::mat4> readInstances(const json& b, const std::string& name) {
+            std::vector<glm::mat4> matrices;
+            if (!b.contains("instances")) return matrices;
+            const json& list = b.at("instances");
+            if (!list.is_array()) {
+                throw std::invalid_argument("body '" + name + "': 'instances' must be an array");
+            }
+            for (const json& entry : list) {
+                if (!entry.is_object()) {
+                    throw std::invalid_argument("body '" + name + "': each instance must be an object");
+                }
+                Transformation3D transform(readVec3(entry, "position", Vector3f(0, 0, 0)),
+                    readVec3(entry, "rotation", Vector3f(0, 0, 0)), readVec3(entry, "scale", Vector3f(1, 1, 1)));
+                matrices.push_back(Mesh::modelMatrixOf(transform));
+            }
+            return matrices;
+        }
+
         // Cube or plane generated in code. Meshes are cached per size, so bodies can share them.
         void createPrimitiveBody(const json& b, const std::string& name, const Transformation3D& transform, const std::vector<id_t>& overrides) {
             std::string primitive = requireString(b, "primitive", "body '" + name + "'");
@@ -53,6 +72,7 @@ namespace CGEngine {
 
             id_t materialId = overrides.empty() ? assets.getDefaultId<Material>().value_or(0) : overrides.front();
             Mesh mesh(meshData.value().second, transform, { materialId });
+            mesh.setInstances(readInstances(b, name));
             // Body asset names are cache keys. A new key per load stops a reloaded scene returning the old body with its old transform.
             static size_t primitiveCount = 0;
             auto body = assets.create<Body>("body:" + name + "#" + std::to_string(++primitiveCount), mesh);
@@ -151,6 +171,7 @@ namespace CGEngine {
                         throw std::invalid_argument("material '" + name + "': specular must be between 0 and 1");
                     }
                     std::uint8_t specularByte = static_cast<std::uint8_t>(std::lround(specular * 255.0f));
+                    bool repeat = m.value("repeat", false);
                     // The texture scale is a Vector2f; a bare float would land in the colour intensity instead.
                     auto created = assets.create<Material>(name,
                         SurfaceParameters(SurfaceDomain(texture, Vector2f(uvScale, uvScale)),
@@ -158,6 +179,13 @@ namespace CGEngine {
                         assets.get<Program>(assets.defaultProgramName));
                     if (!created.has_value()) {
                         throw std::runtime_error("failed to create material '" + name + "'");
+                    }
+                    // Texture coordinates past 1 (a merged voxel quad spans many blocks) wrap only if the texture repeats.
+                    // The texture file is shared, so every material that uses it repeats too.
+                    if (repeat) {
+                        if (Texture* diffuse = created.value().second->getParameterPtr<Texture>("diffuseTexture")) {
+                            diffuse->setRepeated(true);
+                        }
                     }
                     result.materials++;
                 }
@@ -210,6 +238,9 @@ namespace CGEngine {
                         continue;
                     }
 
+                    if (b.contains("instances")) {
+                        throw std::invalid_argument("body '" + name + "': \"instances\" only applies to primitive bodies");
+                    }
                     std::string modelPath = requireString(b, "model", "body '" + name + "'");
                     auto model = assets.load<Model>(modelPath);
                     if (!model.has_value()) {
