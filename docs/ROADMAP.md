@@ -51,12 +51,12 @@ Goal: a world with thousands of objects, and procedurally made geometry, drawn i
 - [x] **7.1** Frustum culling. A mesh whose bounds (transformed by its body's matrix) lie outside the camera's view is not drawn. Skinned meshes are not culled (their bind pose does not bound the animation). `get_stats` reports `culledDraws`.
 - [x] **7.2** Instancing. A primitive body can list `"instances"` (position, rotation, scale each); one draw covers all of them, with the visible instances culled each frame. The dungeon's floors and walls use it.
 - [x] **7.3** Runtime meshes from Python: `cge.create_mesh_body`, `update_mesh_body` and `remove_mesh_body` take flat arrays (array.array). An update re-uploads the mesh to the GPU before the next frame; removing a body frees its GPU buffers. Checked by `tools/runtime_mesh_check.py` in the control test.
-- [~] **7.4** Vertex colours: done. Each vertex has a colour that multiplies the surface colour (white by default, so existing meshes look the same). Still open: per-vertex ambient occlusion, which the voxel mesher (8.1) adds.
+- [x] **7.4** Vertex colours and per-vertex ambient occlusion. Each vertex has a colour that multiplies the surface colour (white by default). The voxel mesher (8.1) darkens face corners next to solid blocks.
 
 ## Phase 8: voxel world sample (`docs/games/voxels.md`)
 A procedural block world with chunks, terrain, collision, block editing and a day/night cycle, built on Phase 7.
-- [ ] **8.1** C++ voxel mesher: a chunk of block ids becomes a mesh with face culling across chunk borders, per-vertex ambient occlusion, and one material per block type. Checked by a script run through the control channel.
-- [ ] **8.2** Terrain: a noise function from the engine (`cge.noise2`), height and biome per column, trees, and chunks streamed around the player.
+- [x] **8.1** C++ voxel mesher (`cge.VoxelWorld`, `src/Core/Voxel/`): chunks of block ids meshed into runtime meshes, with per-face culling across chunk borders, per-vertex ambient occlusion, and per-block colours. Dirty chunks are re-meshed on demand. Checked offline for the terrain (`tools/test_voxel_gen.py`) and by a screenshot. Not yet: greedy meshing, a transparent water block.
+- [~] **8.2** Terrain: done are the noise (pure Python, `VoxelGen.py`), height and sand, grass, stone, snow and water per column, and chunks streamed around the camera (81 chunks, about 110 FPS in Debug). Not yet: trees, caves, and a biome map beyond height.
 - [ ] **8.3** Player: gravity and jumping, collision with the voxels, a ray cast to pick the block in view, and break and place. An edited chunk is re-meshed.
 - [ ] **8.4** Day and night: the sun's direction and the ambient light change over time from a script. A hotbar of block types.
 - [ ] **8.5** Save and load of the edited blocks.

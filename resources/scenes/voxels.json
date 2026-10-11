@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "replaceWorld": true,
+  "materials": [
+    { "name": "voxel", "diffuseTexture": "voxel_noise.png", "specular": 0 }
+  ],
+  "lights": [
+    { "name": "sun", "directional": true, "direction": [0.4, -1, 0.3], "brightness": 0.9, "ambiance": 0.5, "color": [1, 1, 0.95] }
+  ],
+  "bodies": [],
+  "scripts": [
+    { "body": "Root", "module": "VoxelGame", "domain": "update" }
+  ]
+}
