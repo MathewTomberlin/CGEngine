@@ -57,7 +57,7 @@ Goal: a world with thousands of objects, and procedurally made geometry, drawn i
 A procedural block world with chunks, terrain, collision, block editing and a day/night cycle, built on Phase 7.
 - [x] **8.1** C++ voxel mesher (`cge.VoxelWorld`, `src/Core/Voxel/`): chunks of block ids meshed into runtime meshes, with per-face culling across chunk borders, per-vertex ambient occlusion, and per-block colours. Dirty chunks are re-meshed on demand. Checked offline for the terrain (`tools/test_voxel_gen.py`) and by a screenshot. Not yet: greedy meshing, a transparent water block.
 - [~] **8.2** Terrain: done are the noise (pure Python, `VoxelGen.py`), height and sand, grass, stone, snow and water per column, and chunks streamed around the camera (81 chunks, about 110 FPS in Debug). Not yet: trees, caves, and a biome map beyond height.
-- [ ] **8.3** Player: gravity and jumping, collision with the voxels, a ray cast to pick the block in view, and break and place. An edited chunk is re-meshed.
+- [x] **8.3** Player: gravity, jumping and collision with the blocks (\`VoxelPhysics.py\`, pure Python and tested offline), a ray cast to pick the block in view, and break (J) and place (K). Edited chunks are re-meshed. Flying (Enter) for exploring.
 - [ ] **8.4** Day and night: the sun's direction and the ambient light change over time from a script. A hotbar of block types.
 - [ ] **8.5** Save and load of the edited blocks.
 

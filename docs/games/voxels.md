@@ -8,7 +8,8 @@ set VOXEL_SEED=1
 $env:CGENGINE_SCENE = "scenes/voxels.json"; .\main.exe
 ```
 
-`VOXEL_SEED` picks the world. Controls: W A S D move, the arrow keys turn and look, Space rises, R falls.
+`VOXEL_SEED` picks the world. Controls: W A S D walk, Space jumps, the arrow keys turn and look. Enter toggles flying
+(then Space rises and R falls). J breaks the block under the crosshair, and K places a stone block against it.
 
 ## Files
 
@@ -17,6 +18,8 @@ $env:CGENGINE_SCENE = "scenes/voxels.json"; .\main.exe
   `cg_control/voxel_state.json` (chunks, quads, dirty chunks, frames, camera) four times a second.
 - `resources/scripts/VoxelGen.py`: the terrain, in pure Python: noise, column heights, and the block runs of a column.
   It has no engine imports, so it runs on its own: `python -I tools/test_voxel_gen.py`.
+- `resources/scripts/VoxelPhysics.py`: gravity, jumping, collision of the player's box with the blocks, and block
+  picking (a ray walk through the grid). Pure Python too: `python -I tools/test_voxel_physics.py`.
 - `resources/voxel_noise.png`: the base texture, a light grey noise. Block colours are tints (`VoxelGen.COLOURS`).
   `python -I tools/make_voxel_texture.py` writes it again.
 
@@ -57,8 +60,15 @@ cge.remove_mesh_body("tri")        # removes the body and frees its GPU buffers
 
 Only bodies made this way can be updated. Each vertex's colour multiplies the surface colour, so colours tint a texture.
 
+## The player
+
+The player is a box 0.6 wide and 1.8 tall, with its feet at `pos`. `VoxelPhysics.step` moves it one axis at a time, in
+steps of at most 0.1 blocks, and sets it flush against any block it runs into, so it stands on the ground without
+hovering. Gravity is 28 blocks per second squared; a jump is 9 blocks per second. The eye is 1.6 above the feet. The
+block picked is the first solid one along the view, within 6 blocks. A block is not placed where the player stands.
+
 ## Limits
 
-- Water is opaque, and there are no trees, caves or lighting yet. Each chunk is one draw call; there is no
-  greedy meshing, so a chunk of this terrain is about 900 quads.
-- Nothing stops the camera from passing through blocks. Collision, block picking and day and night are next.
+- Water is opaque, and there are no trees, caves, lighting or day and night yet. Each chunk is one draw call. There
+  is no greedy meshing, so a chunk of this terrain is about 900 quads.
+- Only stone is placed, and there is no inventory or save yet.
