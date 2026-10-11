@@ -207,6 +207,7 @@ namespace CGEngine {
 		RenderWindow* window = nullptr;
 		string pendingScreenshotPath;
 		bool glWindowActive = false;
+		bool sfmlGLStatesActive = false;	//True while SFML's GL states are pushed (see commitGL/pullGL)
 		unsigned int drawCallsThisFrame = 0;
 		unsigned int lastFrameDrawCalls = 0;
 		/// <summary>

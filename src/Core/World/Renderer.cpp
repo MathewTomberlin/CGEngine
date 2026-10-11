@@ -241,11 +241,16 @@ namespace CGEngine {
 	}
 
 	void Renderer::commitGL() {
+		// Each push and pop saves or restores every GL state, so only switch when the mode changes.
+		if (sfmlGLStatesActive) return;
 		window->pushGLStates();
+		sfmlGLStatesActive = true;
 	}
 
 	void Renderer::pullGL() {
+		if (!sfmlGLStatesActive) return;
 		window->popGLStates();
+		sfmlGLStatesActive = false;
 	}
 
 	void Renderer::saveScreenshot(const std::string& path) {

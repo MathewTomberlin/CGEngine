@@ -834,6 +834,7 @@ namespace CGEngine {
 
     void Body::onDraw(RenderTarget& target, const Transform& transform) const {
         if (bodyParams.boundsRendering && boundsRect != nullptr) {
+            renderer->commitGL();
             target.draw(*boundsRect, transform);
         }
         if (bodyParams.rendering && entity != nullptr) {
@@ -841,6 +842,7 @@ namespace CGEngine {
                 // Pull OpenGL State
                 mesh->render(transform);
             } else {
+                renderer->commitGL();
                 target.draw(*(Shape*)entity.get(), transform);
             }
         }
