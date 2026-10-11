@@ -23,6 +23,8 @@ namespace CGEngine {
 		glm::vec3 getForward();
 		glm::vec3 getUp();
 		glm::vec3 getRight();
+		float getFov() const { return fov; }
+		float getAspect() const { return aspect; }
 		glm::mat4 getMatrix() const;
 		glm::mat4 getProjection() const;
 		glm::mat4 getTransform() const;

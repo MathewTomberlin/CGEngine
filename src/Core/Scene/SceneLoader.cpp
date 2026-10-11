@@ -34,6 +34,10 @@ namespace CGEngine {
             environment.fogColour = readVec3(obj, "fogColour", environment.fogColour);
             environment.fogStart = obj.value("fogStart", environment.fogStart);
             environment.fogEnd = obj.value("fogEnd", environment.fogEnd);
+            if (obj.contains("zenithColour")) environment.zenithColour = readVec3(obj, "zenithColour", Vector3f());
+            environment.sunDirection = readVec3(obj, "sunDirection", environment.sunDirection);
+            environment.sunColour = readVec3(obj, "sunColour", environment.sunColour);
+            environment.sunSize = obj.value("sunSize", environment.sunSize);
         }
 
         std::string requireString(const json& obj, const char* key, const std::string& context) {

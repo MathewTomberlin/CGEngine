@@ -18,6 +18,7 @@
 #include <limits>
 #include <iostream>
 #include "../Shader/UniformBuffers.h"
+#include "../Shader/Program.h"
 #include "../Importer/MeshImporter.h"
 #include "../Types/Types.h"
 #include "../Camera/Camera.h"
@@ -102,17 +103,34 @@ namespace CGEngine {
 		// A compact voxel mesh. The asset manager checks a resource when it is created, so its vertices are given here.
 		MeshData(vector<VoxelVertex> voxels, vector<unsigned int> indices) : voxelVertices(voxels), compact(true), indices(indices), vao(0U), vbo(0U), ebo(0U) {};
 		bool isValid() const {
-			return vertexCount() > 0 && !indices.empty();
+			return vertexCount() > 0 && indexCount() > 0;
 		}
-		// Voxel meshes keep their vertices in voxelVertices (compact), everything else in vertices.
+		// Voxel meshes keep their vertices in voxelVertices (compact), everything else in vertices. Once a runtime voxel mesh
+		// is on the GPU its arrays are freed (releaseCpuCopy), and the counts it had are kept.
 		size_t vertexCount() const {
-			return compact ? voxelVertices.size() : vertices.size();
+			if (!compact) return vertices.size();
+			return arraysFreed ? gpuVertexCount : voxelVertices.size();
+		}
+		size_t indexCount() const {
+			return arraysFreed ? gpuIndexCount : indices.size();
+		}
+		void releaseCpuCopy() {
+			if (!compact || !runtimeMesh || arraysFreed) return;
+			if (!boundsValid) computeBounds();
+			gpuVertexCount = voxelVertices.size();
+			gpuIndexCount = indices.size();
+			vector<VoxelVertex>().swap(voxelVertices);
+			vector<unsigned int>().swap(indices);
+			arraysFreed = true;
 		}
 		string sourcePath = "";
 		string meshName = "";
 		vector<VertexData> vertices;
 		vector<VoxelVertex> voxelVertices;
 		bool compact = false;
+		bool arraysFreed = false;       // the arrays were released after upload; see releaseCpuCopy
+		size_t gpuVertexCount = 0;
+		size_t gpuIndexCount = 0;
 		vector<unsigned int> indices;
 		map<string, BoneData> bones;
 		// Box around the local-space positions, for culling. Recomputed when boundsValid is false.
@@ -298,6 +316,10 @@ namespace CGEngine {
 		/// </summary>
 		/// <param name="window">The RenderTarget to draw the Body in</param>
 		void render(RenderTarget* window);
+		/// Draws the sky behind everything: a gradient from the horizon to the zenith, and the sun's disc. Drawn after the clear and before the bodies.
+		void drawSky();
+		std::unique_ptr<Program> skyProgram;
+		GLuint skyVao = 0;
 
 		/// <summary>
 		/// The current render camera. This is set during OpenGL initialization and used to set the view matrix for the shader program.

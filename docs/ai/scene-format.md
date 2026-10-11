@@ -68,6 +68,10 @@ For an outdoor or top-down scene, one directional light pointing down and slight
 | `fogColour` | [r, g, b] | no       | `[0,0,0]`   | The colour distant surfaces fade into. Use the sky colour, so the horizon blends into the sky. |
 | `fogStart`  | number    | no       | `0`         | Distance from the camera, in units, where the fog begins.      |
 | `fogEnd`    | number    | no       | `0`         | Distance where the fog is complete. The fog is off unless `fogEnd` is past `fogStart`. |
+| `zenithColour` | [r, g, b] | no    | unset       | The sky straight up. Unset, the sky is one colour (`skyColour`). Otherwise a gradient from `skyColour` at the horizon. |
+| `sunDirection` | [x, y, z] | no    | `[0,1,0]`   | Direction towards the sun. Used by the sun's disc.             |
+| `sunColour` | [r, g, b] | no       | `[0,0,0]`   | The sun's disc and glow. Black (the default) hides it.         |
+| `sunSize`   | number    | no       | `1.5`       | The sun's angular radius, in degrees.                          |
 
 Fog applies to every surface drawn with the standard shader, lit or not. With `replaceWorld`, the environment
 returns to the defaults before the file's own values are read. Scripts change it with `cge.set_environment(...)`.

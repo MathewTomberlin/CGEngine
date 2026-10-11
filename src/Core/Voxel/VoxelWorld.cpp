@@ -99,11 +99,14 @@ namespace CGEngine {
 		if (y < 0 || y >= height) return;
 		const int cx = floorDiv(x, size);
 		const int cz = floorDiv(z, size);
-		Chunk* chunk = findChunk(cx, cz);
-		if (!chunk || !chunk->loaded) return;
 		const int lx = x - cx * size;
 		const int lz = z - cz * size;
-		chunk->blocks[localIndex(lx, y, lz)] = static_cast<uint8_t>(std::clamp(blockId, 0, 255));
+		const uint8_t block = static_cast<uint8_t>(std::clamp(blockId, 0, 255));
+		// The edit is recorded even if the chunk is not loaded, so it is in place when the chunk loads.
+		edits[std::make_pair(cx, cz)][localIndex(lx, y, lz)] = block;
+		Chunk* chunk = findChunk(cx, cz);
+		if (!chunk || !chunk->loaded) return;
+		chunk->blocks[localIndex(lx, y, lz)] = block;
 		// A block on a chunk border is seen from the neighbour too, and a corner from the three diagonal chunks.
 		for (int dx = -1; dx <= 1; ++dx) {
 			for (int dz = -1; dz <= 1; ++dz) {
@@ -178,10 +181,79 @@ namespace CGEngine {
 		if (it == chunks.end() || it->second.generation != result.generation || it->second.loaded) return;
 		Chunk& chunk = it->second;
 		chunk.blocks = std::move(result.blocks);
+		applyEdits(result.cx, result.cz, chunk.blocks);
 		chunk.loaded = true;
 		// The chunk's faces, and those of the neighbours that face it, are meshed from the new blocks.
 		markDirty(result.cx, result.cz);
 		markNeighboursDirty(result.cx, result.cz);
+	}
+
+	void VoxelWorld::applyEdits(int cx, int cz, std::vector<uint8_t>& blocks) const {
+		auto it = edits.find(std::make_pair(cx, cz));
+		if (it == edits.end()) return;
+		for (const auto& edit : it->second) blocks[static_cast<size_t>(edit.first)] = edit.second;
+	}
+
+	int VoxelWorld::editCount() const {
+		int count = 0;
+		for (const auto& chunkEdits : edits) count += static_cast<int>(chunkEdits.second.size());
+		return count;
+	}
+
+	bool VoxelWorld::saveEdits(const std::string& path) const {
+		std::ofstream out(path, std::ios::binary | std::ios::trunc);
+		if (!out) return false;
+		const auto put32 = [&out](uint32_t v) { out.write(reinterpret_cast<const char*>(&v), 4); };
+		out.write("CGVE", 4);
+		put32(1);
+		put32(static_cast<uint32_t>(editCount()));
+		for (const auto& chunkEdits : edits) {
+			const int cx = chunkEdits.first.first;
+			const int cz = chunkEdits.first.second;
+			for (const auto& edit : chunkEdits.second) {
+				const int y = edit.first / (size * size);
+				const int lz = (edit.first % (size * size)) / size;
+				const int lx = edit.first % size;
+				put32(static_cast<uint32_t>(cx * size + lx));
+				put32(static_cast<uint32_t>(y));
+				put32(static_cast<uint32_t>(cz * size + lz));
+				out.put(static_cast<char>(edit.second));
+			}
+		}
+		return static_cast<bool>(out);
+	}
+
+	bool VoxelWorld::loadEdits(const std::string& path) {
+		std::ifstream in(path, std::ios::binary);
+		if (!in) return false;
+		const auto get32 = [&in](uint32_t& v) { in.read(reinterpret_cast<char*>(&v), 4); return static_cast<bool>(in); };
+		char magic[4] = {};
+		uint32_t version = 0;
+		uint32_t count = 0;
+		in.read(magic, 4);
+		if (!in || std::string(magic, 4) != "CGVE" || !get32(version) || version != 1 || !get32(count)) return false;
+		for (uint32_t i = 0; i < count; ++i) {
+			uint32_t x = 0, y = 0, z = 0;
+			if (!get32(x) || !get32(y) || !get32(z)) return false;
+			const int block = in.get();
+			if (block == std::char_traits<char>::eof()) return false;
+			const int wx = static_cast<int>(x);
+			const int wy = static_cast<int>(y);
+			const int wz = static_cast<int>(z);
+			if (wy < 0 || wy >= height) continue;
+			const int cx = floorDiv(wx, size);
+			const int cz = floorDiv(wz, size);
+			edits[std::make_pair(cx, cz)][localIndex(wx - cx * size, wy, wz - cz * size)] = static_cast<uint8_t>(block);
+		}
+		// Loaded chunks take the edits now; the rest take them when they load.
+		for (const auto& chunkEdits : edits) {
+			Chunk* chunk = findChunk(chunkEdits.first.first, chunkEdits.first.second);
+			if (!chunk || !chunk->loaded) continue;
+			applyEdits(chunkEdits.first.first, chunkEdits.first.second, chunk->blocks);
+			markDirty(chunkEdits.first.first, chunkEdits.first.second);
+			markNeighboursDirty(chunkEdits.first.first, chunkEdits.first.second);
+		}
+		return true;
 	}
 
 	PaddedChunk VoxelWorld::snapshot(int cx, int cz) const {

@@ -70,6 +70,7 @@ namespace CGEngine {
 		if (!meshData) return false;
 		meshData->voxelVertices = std::move(vertices);
 		meshData->indices = std::move(indices);
+		meshData->arraysFreed = false;
 		meshData->boundsValid = false;
 		meshData->gpuDirty = true;
 		return true;

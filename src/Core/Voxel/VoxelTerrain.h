@@ -25,6 +25,7 @@ namespace CGEngine {
 		int heightRange = 44;   // a column is at most baseHeight + heightRange high
 		int snowLevel = 40;     // columns at or above this are capped with snow
 		float treeChance = 0.01f; // the chance that a grass column grows a tree (about two or three a chunk)
+		float caveWidth = 0.07f;  // how wide the tunnels are, as a band of the noise (0 turns caves off); rooms come with them
 
 		// Height of the column at world (x, z), in blocks, from baseHeight up to baseHeight + heightRange.
 		int columnHeight(int x, int z) const;
@@ -35,5 +36,8 @@ namespace CGEngine {
 
 	private:
 		void placeTrees(int cx, int cz, int size, int height, std::vector<uint8_t>& blocks) const;
+		// Whether the block at world (x, y, z) is carved out as cave: a tunnel where two noise fields are both near their middle,
+		// or a room where a third is high.
+		bool isCave(int wx, int wy, int wz) const;
 	};
 }

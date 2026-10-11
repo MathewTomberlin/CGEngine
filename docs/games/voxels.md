@@ -18,6 +18,8 @@ run the Release configuration.
 - Mouse: left-click captures the mouse. Move it to look. Left-click breaks the block under the crosshair, right-click
   places stone against it, and Escape releases the mouse.
 - Without the mouse: the arrow keys turn and look, J breaks, K places.
+- Keys 1 to 7 choose the block to place (the hotbar: stone, dirt, grass, wood, leaves, sand, snow). F5 saves the
+  edited blocks to `cg_control/voxel_edits.bin`, and F9 loads them back.
 
 ## The look: day, night and fog
 
@@ -27,6 +29,8 @@ run the Release configuration.
   rather than ending in a line.
 - Trees grow on grass, about one column in a hundred. A tree's leaves can reach into the next chunk, and each chunk
   draws the parts of the trees that reach it, so the trees have no seams.
+- Caves are tunnels and rooms carved out of the stone, below the surface, from two 3D noise fields. The sky is a
+  gradient from the horizon to the zenith, with the sun's disc and glow, and the fog takes the horizon colour.
 
 ## Files
 
@@ -112,8 +116,7 @@ the view's level and the worst frame.
 
 ## Limits
 
-- Water is opaque. There are no caves and no shadows yet.
-- The sky is one colour: no gradient and no sun disc.
-- Only stone is placed, and there is no inventory or save yet.
+- There are no shadows yet, and the hotbar has no picture on screen.
+- Water is opaque, and the terrain is blocky (see the smooth skin on the roadmap).
 - Each chunk is one draw call. Region batching (several chunks in one mesh) is the next step if the draw count
   becomes the limit.

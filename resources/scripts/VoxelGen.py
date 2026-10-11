@@ -10,6 +10,7 @@ HEIGHT = 64         # blocks up in the world
 SEA_LEVEL = 14      # water fills the low columns up to this
 SNOW_LEVEL = 40     # columns this high are snow-capped
 TREE_CHANCE = 0.01  # the chance that a grass column grows a tree
+CAVE_WIDTH = 0.05   # how wide the tunnels are (0 turns caves off)
 
 AIR, GRASS, DIRT, STONE, SAND, WATER, SNOW, WOOD, LEAVES = range(9)
 

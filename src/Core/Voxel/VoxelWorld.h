@@ -11,6 +11,7 @@
 #include <thread>
 #include <utility>
 #include <vector>
+#include <fstream>
 #include "VoxelMesher.h"
 #include "VoxelTerrain.h"
 
@@ -59,8 +60,16 @@ namespace CGEngine {
 		int meshingCount() const;       // chunks being meshed on a worker
 		int quadCount() const;          // quads in the loaded chunks' meshes, as last uploaded
 		double lastUploadMs() const { return uploadMs; }
-		// Removes every chunk and its body. Work still on the workers is dropped when it finishes.
+		// Removes every chunk and its body. Work still on the workers is dropped when it finishes. The edits stay.
 		void clear();
+
+		// Block edits are kept apart from the chunks, so they survive unloading and are applied again when a chunk loads.
+		// The file is binary: "CGVE", a version (1), a count, then per edit the int32 x, y, z and the uint8 block id.
+		bool saveEdits(const std::string& path) const;
+		// Adds the file's edits to the world's (a block edited in both takes the file's value). False if the file is unreadable.
+		bool loadEdits(const std::string& path);
+		int editCount() const;
+		void clearEdits() { edits.clear(); }
 
 	private:
 		struct Chunk {
@@ -96,6 +105,8 @@ namespace CGEngine {
 		std::array<glm::vec3, 256> palette;
 		VoxelTerrain terrain;
 		std::map<std::pair<int, int>, Chunk> chunks;
+		// Edited blocks: chunk (cx, cz) -> index in that chunk -> block id. See setBlock.
+		std::map<std::pair<int, int>, std::map<int, uint8_t>> edits;
 		uint32_t nextGeneration = 1;
 		double uploadMs = 0.0;
 
@@ -121,6 +132,7 @@ namespace CGEngine {
 		void markDirty(int cx, int cz);
 		void markNeighboursDirty(int cx, int cz);
 		void installTerrain(TerrainResult& result);
+		void applyEdits(int cx, int cz, std::vector<uint8_t>& blocks) const;
 		void uploadMesh(MeshResult& result);
 		void startMeshing(int cx, int cz, Chunk& chunk);
 		PaddedChunk snapshot(int cx, int cz) const;

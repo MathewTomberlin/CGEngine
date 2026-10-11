@@ -16,7 +16,7 @@ void bindVoxel(py::module_& m) {
         .def("set_colour", [](VoxelWorld& world, int blockId, sf::Vector3f colour) {
             world.setColour(blockId, glm::vec3(colour.x, colour.y, colour.z));
         }, py::arg("block_id"), py::arg("colour"), "The tint of a block id, 0 to 1 per channel. Blocks without one are white.")
-        .def("set_terrain", [](VoxelWorld& world, uint32_t seed, int sea_level, int base_height, int height_range, int snow_level, float tree_chance) {
+        .def("set_terrain", [](VoxelWorld& world, uint32_t seed, int sea_level, int base_height, int height_range, int snow_level, float tree_chance, float cave_width) {
             VoxelTerrain terrain;
             terrain.seed = seed;
             terrain.seaLevel = sea_level;
@@ -24,9 +24,10 @@ void bindVoxel(py::module_& m) {
             terrain.heightRange = height_range;
             terrain.snowLevel = snow_level;
             terrain.treeChance = tree_chance;
+            terrain.caveWidth = cave_width;
             world.setTerrain(terrain);
         }, py::arg("seed"), py::arg("sea_level") = 14, py::arg("base_height") = 8, py::arg("height_range") = 44,
-           py::arg("snow_level") = 40, py::arg("tree_chance") = 0.01f,
+           py::arg("snow_level") = 40, py::arg("tree_chance") = 0.01f, py::arg("cave_width") = 0.07f,
            "The generator's settings. Chunks requested after this use them.")
         .def("get_block", &VoxelWorld::getBlock, py::arg("x"), py::arg("y"), py::arg("z"),
              "The block id at world coordinates, 0 (air) outside the world height or in chunks that are not loaded.")
@@ -45,7 +46,13 @@ void bindVoxel(py::module_& m) {
         .def("stats", [](const VoxelWorld& world) {
             return py::dict("chunks"_a = world.chunkCount(), "loaded"_a = world.loadedCount(), "pending"_a = world.pendingCount(),
                 "dirty"_a = world.dirtyCount(), "meshing"_a = world.meshingCount(), "quads"_a = world.quadCount(),
-                "upload_ms"_a = world.lastUploadMs());
-        }, "Counts of chunks by state, quads in the meshes, and how long the last update's uploads took.")
+                "upload_ms"_a = world.lastUploadMs(), "edits"_a = world.editCount());
+        }, "Counts of chunks by state, quads in the meshes, edited blocks, and how long the last update's uploads took.")
+        .def("save_edits", &VoxelWorld::saveEdits, py::arg("path"),
+             "Write the edited blocks to a binary file. False if it cannot be written.")
+        .def("load_edits", &VoxelWorld::loadEdits, py::arg("path"),
+             "Add the edits from a file written by save_edits. Loaded chunks change at once. False if the file is unreadable.")
+        .def("edit_count", &VoxelWorld::editCount, "How many blocks differ from what the player has edited (all edits, loaded or not).")
+        .def("clear_edits", &VoxelWorld::clearEdits, "Forget every edit. Loaded chunks keep their current blocks until they are unloaded or changed.")
         .def("clear", &VoxelWorld::clear, "Remove every chunk and its body. Call this before dropping the world.");
 }
