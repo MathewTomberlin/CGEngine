@@ -325,6 +325,39 @@ namespace CGEngine {
 		}
 	}
 
+	void Renderer::updateFrustum() {
+		// Gribb-Hartmann: each plane is the last row of the clip matrix plus or minus another row.
+		auto row = [this](int r) { return glm::vec4(cameraMatrix[0][r], cameraMatrix[1][r], cameraMatrix[2][r], cameraMatrix[3][r]); };
+		const glm::vec4 last = row(3);
+		frustumPlanes[0] = last + row(0);
+		frustumPlanes[1] = last - row(0);
+		frustumPlanes[2] = last + row(1);
+		frustumPlanes[3] = last - row(1);
+		frustumPlanes[4] = last + row(2);
+		frustumPlanes[5] = last - row(2);
+		for (glm::vec4& plane : frustumPlanes) {
+			plane /= glm::length(glm::vec3(plane));
+		}
+	}
+
+	bool Renderer::isVisible(const glm::mat4& model, const glm::vec3& localMin, const glm::vec3& localMax) const {
+		// Bounds of the transformed box. For a rotated box this is larger than the box itself, so the test is conservative.
+		glm::vec3 worldMin(std::numeric_limits<float>::max());
+		glm::vec3 worldMax(-std::numeric_limits<float>::max());
+		for (int corner = 0; corner < 8; ++corner) {
+			glm::vec3 local((corner & 1) ? localMax.x : localMin.x, (corner & 2) ? localMax.y : localMin.y, (corner & 4) ? localMax.z : localMin.z);
+			glm::vec3 world = glm::vec3(model * glm::vec4(local, 1.0f));
+			worldMin = glm::min(worldMin, world);
+			worldMax = glm::max(worldMax, world);
+		}
+		for (const glm::vec4& plane : frustumPlanes) {
+			// The corner furthest along the plane's normal. If it is behind the plane, the whole box is outside.
+			glm::vec3 farthest((plane.x >= 0.0f) ? worldMax.x : worldMin.x, (plane.y >= 0.0f) ? worldMax.y : worldMin.y, (plane.z >= 0.0f) ? worldMax.z : worldMin.z);
+			if (glm::dot(glm::vec3(plane), farthest) + plane.w < 0.0f) return false;
+		}
+		return true;
+	}
+
 	void Renderer::renderMesh(Mesh* mesh, MeshData* meshData, Transformation3D transform) {
 		if (!meshData || meshData->vertices.empty()) return;	//Don;t log, null MeshData Meshes are empty Bodies
 		if (!mesh) {
@@ -334,6 +367,15 @@ namespace CGEngine {
 		if (!mesh->getBodyId().has_value()) {
 			log(this, LogError, "Mesh Body ID is empty in renderMesh");
 			return;
+		}
+
+		// Skinned meshes are skipped: their bind-pose bounds do not cover the animated pose.
+		if (meshData->bones.empty()) {
+			if (!meshData->boundsValid) meshData->computeBounds();
+			if (!isVisible(getBodyGlobalTransform(mesh->getBodyId()), meshData->boundsMin, meshData->boundsMax)) {
+				++culledDrawsThisFrame;
+				return;
+			}
 		}
 
 		// Only proceed with mesh rendering if we have mesh data
@@ -779,6 +821,8 @@ namespace CGEngine {
 		materialFrameCache.clear();
 		lastFrameDrawCalls = drawCallsThisFrame;
 		drawCallsThisFrame = 0;
+		lastFrameCulledDraws = culledDrawsThisFrame;
+		culledDrawsThisFrame = 0;
 	}
 	
 	void Renderer::sortZ() {
@@ -788,6 +832,7 @@ namespace CGEngine {
 	void Renderer::render(RenderTarget* window) {
 		//The camera does not move during a render pass, so its matrix is computed once here, not for every draw
 		if (currentCamera) cameraMatrix = currentCamera->getMatrix();
+		updateFrustum();
 
 		//Sort the renderOrder by zOrder if zSorting is enabled
 		if (zSortingEnabled) {

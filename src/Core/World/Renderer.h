@@ -12,6 +12,8 @@
 #include <string>
 #include <set>
 #include <unordered_map>
+#include <array>
+#include <limits>
 #include <iostream>
 #include "../Shader/UniformBuffers.h"
 #include "../Importer/MeshImporter.h"
@@ -89,6 +91,19 @@ namespace CGEngine {
 		vector<VertexData> vertices;
 		vector<unsigned int> indices;
 		map<string, BoneData> bones;
+		// Box around the local-space positions, for culling. Recomputed when boundsValid is false.
+		glm::vec3 boundsMin = glm::vec3(0.0f);
+		glm::vec3 boundsMax = glm::vec3(0.0f);
+		bool boundsValid = false;
+		void computeBounds() {
+			boundsMin = glm::vec3(std::numeric_limits<float>::max());
+			boundsMax = glm::vec3(-std::numeric_limits<float>::max());
+			for (const VertexData& vertex : vertices) {
+				boundsMin = glm::min(boundsMin, vertex.position);
+				boundsMax = glm::max(boundsMax, vertex.position);
+			}
+			boundsValid = !vertices.empty();
+		}
 		GLuint vbo = 0U;
 		GLuint vao = 0U;
 		GLuint ebo = 0U;
@@ -169,6 +184,8 @@ namespace CGEngine {
 		bool processRender();
 		/// Number of glDraw calls issued in the last rendered frame.
 		unsigned int getLastFrameDrawCalls() const { return lastFrameDrawCalls; }
+		/// Meshes skipped in the last rendered frame because their bounds were outside the camera's view.
+		unsigned int getLastFrameCulledDraws() const { return lastFrameCulledDraws; }
 		void saveScreenshot(const std::string& path);
 		/// Save the next presented frame to a PNG at path. Taken before the buffer swap.
 		void requestScreenshot(const std::string& path) { pendingScreenshotPath = path; }
@@ -211,6 +228,12 @@ namespace CGEngine {
 		bool sfmlGLStatesActive = false;	//True while SFML's GL states are pushed (see commitGL/pullGL)
 		unsigned int drawCallsThisFrame = 0;
 		unsigned int lastFrameDrawCalls = 0;
+		unsigned int culledDrawsThisFrame = 0;
+		unsigned int lastFrameCulledDraws = 0;
+		// Planes of the view frustum (normal.xyz, distance w; points with dot(normal, p) + w >= 0 are inside), set each frame.
+		std::array<glm::vec4, 6> frustumPlanes{};
+		void updateFrustum();
+		bool isVisible(const glm::mat4& model, const glm::vec3& localMin, const glm::vec3& localMax) const;
 		/// <summary>
 		/// Clear the renderOrder and bodyTransform map
 		/// </summary>

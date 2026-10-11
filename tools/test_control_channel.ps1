@@ -214,6 +214,13 @@ try {
     $hitDeadline = (Get-Date).AddSeconds(10)
     while (-not (Test-Path $hitLog) -and (Get-Date) -lt $hitDeadline) { Start-Sleep -Milliseconds 200 }
     Check "attached script runs each update and sees its body" ((Test-Path $hitLog) -and ((Get-Content $hitLog -Raw) -match "caveman"))
+    # Frustum culling: a cube 100000 units away is outside the view, so the renderer skips it and counts it.
+    Send-Command "40_cull_load" '{"command":"load_scene","params":{"path":"scenes/culling_test.json"}}'
+    $cullLoad = Wait-Result "40_cull_load"
+    Check "culling scene loads" ($cullLoad.ok)
+    Send-Command "41_cull_stats" '{"command":"get_stats"}'
+    $cullStats = Wait-Result "41_cull_stats"
+    Check "a body outside the view is culled, not drawn" ($cullStats.ok -and $cullStats.result.culledDraws -ge 1 -and $cullStats.result.drawCalls -ge 1)
     Check "engine still running after commands" (-not $app.HasExited)
 }
 finally {

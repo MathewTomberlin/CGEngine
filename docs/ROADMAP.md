@@ -46,6 +46,21 @@ Making real models showed where the engine misrepresents content. These come fir
 - [ ] **6.4** The dungeon's test depends on real-time frame pacing: movement uses a capped frame delta, so a slow frame rate fails the walk checks. Add a fixed-step mode (a control command or environment variable) so the test runs the same at any frame rate.
 - [ ] **6.5** Archers and brutes are still static OBJ models. Rig them like the knight and the slime; give the archer a bow-draw clip for its shots.
 - [ ] **6.6** The game process exited twice between tool calls with no crash record. Watch for it; if it recurs, capture a dump.
+## Phase 7: rendering at scale (engine)
+Goal: a world with thousands of objects, and procedurally made geometry, drawn in few calls.
+- [x] **7.1** Frustum culling. A mesh whose bounds (transformed by its body's matrix) lie outside the camera's view is not drawn. Skinned meshes are not culled (their bind pose does not bound the animation). `get_stats` reports `culledDraws`.
+- [ ] **7.2** Instancing. A primitive body can list `"instances"` (position, rotation, scale each); one draw covers all of them, with the visible instances culled each frame. The dungeon's floors and walls use it.
+- [ ] **7.3** Runtime meshes from Python: `cge.create_mesh_body` and `cge.update_mesh_body` take vertex and index buffers. An update re-uploads the mesh to the GPU.
+- [ ] **7.4** Vertex colours and per-vertex ambient occlusion in the standard shader, for procedural geometry.
+
+## Phase 8: voxel world sample (`docs/games/voxels.md`)
+A procedural block world with chunks, terrain, collision, block editing and a day/night cycle, built on Phase 7.
+- [ ] **8.1** C++ voxel mesher: a chunk of block ids becomes a mesh with face culling across chunk borders, per-vertex ambient occlusion, and one material per block type. Checked by a script run through the control channel.
+- [ ] **8.2** Terrain: a noise function from the engine (`cge.noise2`), height and biome per column, trees, and chunks streamed around the player.
+- [ ] **8.3** Player: gravity and jumping, collision with the voxels, a ray cast to pick the block in view, and break and place. An edited chunk is re-meshed.
+- [ ] **8.4** Day and night: the sun's direction and the ambient light change over time from a script. A hotbar of block types.
+- [ ] **8.5** Save and load of the edited blocks.
+
 ## Tooling and quality
 - [x] CI build on Windows (`.github/workflows/build.yml`) with Mesa software OpenGL smoke run
 - [~] Unit tests for pure logic runnable without a GPU. Done for the dungeon generator (`python -I tools/test_dungeon_gen.py`) and for the scene format and command list (`python -I tools/test_scene_format.py`: example scenes, invalid fixtures, documented commands). The C++ parsers in `SceneLoader` and `ControlChannel` are still covered only by the GPU integration test.
