@@ -46,10 +46,20 @@ namespace CGEngine {
 		glm::vec3 pos(position.x, position.y, position.z);
 		assert(pos != this->position);
 		glm::vec3 direction = glm::normalize(pos - this->position);
-		// Angles are in degrees and the orientation is Rz * Ry * Rx (see getOrientation), so the forward
-		// vector is Rx(-angleX) * Ry(-angleY) * (0, 0, -1). Solving for the forward vector gives these.
-		angleY = glm::degrees(asinf(direction.x));
-		angleX = glm::degrees(atan2f(-direction.y, -direction.z));
+		// The orientation is Rz * Ry * Rx (see getOrientation). With roll Z = 0 the view direction it gives is
+		//   (sin Y, -cos Y * sin X, -cos Y * cos X)
+		// asin alone only reaches yaw in [-90, 90], where cos Y is positive. Past that, cos Y is negative: the same
+		// view comes from Y' = 180 - Y with the pitch read from the other branch, so the camera does not flip upside down.
+		const float side = direction.z > 0.0f ? -1.0f : 1.0f;   // the sign of cos Y
+		const float yaw = asinf(direction.x);
+		angleY = glm::degrees(side > 0.0f ? yaw : glm::pi<float>() - yaw);
+		// Straight up or down, or looking exactly sideways, the pitch is not determined by the direction: keep it level.
+		const float horizontal = sqrtf(direction.y * direction.y + direction.z * direction.z);
+		if (horizontal < 1e-6f) {
+			angleX = 0.0f;
+		} else {
+			angleX = glm::degrees(atan2f(-direction.y * side, -direction.z * side));
+		}
 		normalizeAngles();
 	}
 
