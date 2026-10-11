@@ -309,6 +309,7 @@ namespace CGEngine {
 	}
 
 	bool Renderer::clearGL(GLbitfield mask) {
+		GL_CHECK(glClearColor(environment.skyColour.x, environment.skyColour.y, environment.skyColour.z, 1.0f));
 		GL_CHECK(glClear(mask));
 		return true;
 	}
@@ -540,6 +541,8 @@ namespace CGEngine {
 			}
 			program->setUniform("cameraPosition", toGlm(currentCamera->getPosition()));
 			program->setUniform("timeSec", time.getElapsedSec());
+			program->setUniform("fogColour", toGlm(environment.fogColour));
+			program->setUniform("fogRange", glm::vec2(environment.fogStart, environment.fogEnd));
 			program->setUniform("instanced", instanced ? 1 : 0);
 			// Static meshes do not enable the bone attributes, so those read defaults. Turning skinning off for them keeps
 			// them from being moved by whatever bone matrices an animated model left in the bone buffer.

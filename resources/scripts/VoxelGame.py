@@ -9,7 +9,6 @@ Controls: W A S D walk, Space jumps, Enter toggles flying (then Space rises and 
 the mouse; move it to look, left-click breaks the block under the crosshair, right-click places stone against it, and
 Escape releases the mouse. Without the mouse: arrow keys turn and look, J breaks, K places. VOXEL_SEED chooses a world.
 """
-import json
 import math
 import os
 import time
@@ -17,11 +16,12 @@ import traceback
 
 import cg_engine_bindings as cge
 from PyScript import PyScript
+import StateFile
 import VoxelGen
 import VoxelPhysics as physics
 
-VIEW_RADIUS = 6             # chunks requested around the player, in each direction
-UNLOAD_RADIUS = 8           # chunks farther than this are unloaded
+VIEW_RADIUS = 14            # chunks requested around the player in each direction: (2 * 14 + 1)^2 = 841 chunks
+UNLOAD_RADIUS = 16          # chunks farther than this are unloaded
 UPLOAD_BUDGET_MS = 2.0      # time per frame spent uploading finished meshes
 WALK_SPEED = 5.0            # blocks per second
 FLY_SPEED = 14.0
@@ -33,6 +33,23 @@ SPAWN_HEIGHT = 60.0         # above the tallest column, so the player drops onto
 RESPAWN_DEPTH = -20.0       # below this the player is put back at the spawn height
 PLACED_BLOCK = VoxelGen.STONE
 STATE_INTERVAL = 0.25       # seconds between writes to cg_control/voxel_state.json
+DAY_SECONDS = float(os.environ.get("VOXEL_DAY_SECONDS", "240"))   # real seconds for one day and night
+START_TIME = float(os.environ.get("VOXEL_TIME", "0.3"))           # time of day at the start: 0 sunrise, 0.25 noon, 0.5 sunset
+FOG_END_CHUNKS = VIEW_RADIUS + 0.5   # the fog is complete at the edge of the loaded chunks, so their edge never shows
+FOG_START_FRACTION = 0.5             # the fog starts at this fraction of its end distance
+
+# Colours of the sky, the fog and the light, blended by the sun's height.
+DAY_SKY = (0.56, 0.76, 0.95)
+NIGHT_SKY = (0.03, 0.04, 0.10)
+DUSK_SKY = (0.95, 0.56, 0.36)
+SUN_LIGHT = (1.0, 0.97, 0.90)
+DUSK_LIGHT = (1.0, 0.60, 0.38)
+MOON_LIGHT = (0.45, 0.55, 0.85)
+
+
+def mix(a, b, t):
+    """Colour a moved t of the way from a to b (t in 0 to 1)."""
+    return tuple(x + (y - x) * t for x, y in zip(a, b))
 
 
 class VoxelGame(PyScript):
@@ -56,6 +73,9 @@ class VoxelGame(PyScript):
         self.max_dt = 0.0              # longest frame since the last state write, in seconds
         self.state_timer = 0.0
         self.broken = False
+        self.clock = START_TIME % 1.0   # fraction of a day
+        self.sun = (0.0, -1.0, 0.0)     # the direction the sun's light travels
+        self.fog = (0.0, 0.0)           # fog start and end distances, in blocks
 
     # ----- engine entry point -------------------------------------------------------------
 
@@ -90,6 +110,7 @@ class VoxelGame(PyScript):
         self.update_player(dt)
         self.update_target()
         self.edit_blocks()
+        self.update_sky(dt)
         self.place_camera()
 
         self.state_timer -= dt
@@ -103,7 +124,7 @@ class VoxelGame(PyScript):
         self.world = cge.VoxelWorld(VoxelGen.CHUNK, VoxelGen.HEIGHT, "voxel")
         for block, rgb in VoxelGen.COLOURS.items():
             self.world.set_colour(block, cge.Vector3f(*rgb))
-        self.world.set_terrain(self.seed, VoxelGen.SEA_LEVEL, 8, 44, VoxelGen.SNOW_LEVEL)
+        self.world.set_terrain(self.seed, VoxelGen.SEA_LEVEL, 8, 44, VoxelGen.SNOW_LEVEL, VoxelGen.TREE_CHANCE)
 
     def request_chunks(self, centre):
         """Ask for every chunk in the view that is not requested yet, nearest first. Unload the far ones."""
@@ -219,6 +240,31 @@ class VoxelGame(PyScript):
             if not physics.cell_in_player(cell, self.pos):
                 self.world.set_block(cell[0], cell[1], cell[2], PLACED_BLOCK)
 
+    # ----- sky ----------------------------------------------------------------------------
+
+    def update_sky(self, dt):
+        """The sun crosses the sky in DAY_SECONDS. The light, the sky and the fog follow it: at night the sky is dark and
+        the moon gives a dim blue light; at sunrise and sunset the light and the sky turn orange."""
+        self.clock = (self.clock + dt / DAY_SECONDS) % 1.0
+        angle = 2.0 * math.pi * self.clock
+        height = math.sin(angle)                  # -1 at midnight, 0 at sunrise and sunset, 1 at noon
+        toward_sun = (0.45 * math.cos(angle), height, 0.3 * math.cos(angle))
+        length = math.sqrt(sum(v * v for v in toward_sun))
+        travel = [-v / length for v in toward_sun]   # a directional light travels from the sun
+
+        day = min(1.0, max(0.0, height * 3.0))     # 0 at night, full once the sun is 20 degrees up
+        dusk = max(0.0, 1.0 - abs(height) * 6.0)   # strongest at the horizon
+        light = mix(mix(MOON_LIGHT, SUN_LIGHT, day), DUSK_LIGHT, dusk * 0.7)
+        sky = mix(mix(NIGHT_SKY, DAY_SKY, day), DUSK_SKY, dusk * 0.8)
+
+        fog_end = FOG_END_CHUNKS * VoxelGen.CHUNK
+        cge.set_light("sun", direction=cge.Vector3f(*travel), colour=cge.Vector3f(*light),
+                      brightness=0.45 + 0.55 * day)
+        cge.set_environment(sky=cge.Vector3f(*sky), fog=cge.Vector3f(*sky),
+                            fog_start=fog_end * FOG_START_FRACTION, fog_end=fog_end)
+        self.sun = travel
+        self.fog = (fog_end * FOG_START_FRACTION, fog_end)
+
     def place_camera(self):
         eye = self.eye()
         look = self.look_direction()
@@ -230,19 +276,22 @@ class VoxelGame(PyScript):
     def write_state(self):
         """Write the player and the world's counts to cg_control/voxel_state.json, so an agent can check them without a screenshot."""
         stats = self.world.stats()
+        basis = cge.camera_basis()
         state = {"chunks": stats["chunks"], "loaded": stats["loaded"], "pending": stats["pending"],
                  "dirty": stats["dirty"], "meshing": stats["meshing"], "quads": stats["quads"],
                  "upload_ms": round(stats["upload_ms"], 3), "seed": self.seed, "frames": self.frames,
                  "player": [round(v, 3) for v in self.pos], "on_ground": self.on_ground, "flying": self.flying,
                  "mouse_captured": self.mouse_captured, "yaw": round(self.yaw, 3), "pitch": round(self.pitch, 3),
                  "max_frame_ms": round(self.max_dt * 1000.0, 2),
+                 "time_of_day": round(self.clock, 5), "sun": [round(v, 5) for v in self.sun],
+                 "fog": [round(v, 3) for v in self.fog],
+                 "look": [round(v, 6) for v in self.look_direction()],
+                 "camera_forward": [round(v, 6) for v in basis["forward"]],
+                 "camera_right": [round(v, 6) for v in basis["right"]],
+                 "camera_up": [round(v, 6) for v in basis["up"]],
                  "target": None if self.target is None else list(self.target[0])}
         self.max_dt = 0.0
-        os.makedirs("cg_control", exist_ok=True)
-        tmp = "cg_control/voxel_state.json.tmp"
-        with open(tmp, "w") as f:
-            json.dump(state, f)
-        os.replace(tmp, "cg_control/voxel_state.json")
+        StateFile.write_json("cg_control/voxel_state.json", state)
 
 
 def create_instance():

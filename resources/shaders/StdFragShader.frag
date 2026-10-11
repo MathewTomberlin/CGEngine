@@ -61,6 +61,8 @@ layout(std140, binding = 4) uniform LightBlock {
 //Input
 uniform vec3 cameraPosition;
 uniform float timeSec;
+uniform vec3 fogColour;
+uniform vec2 fogRange;   //distance where the fog starts and where it is complete; off unless the end is past the start
 
 struct MaterialTextures {
     sampler2D diffuseTexture;
@@ -193,5 +195,11 @@ void main() {
         }
     }
     
+    //Distance fog: fades the surface into the fog colour between the start and end distances
+    if(fogRange.y > fogRange.x){
+        float fogAmount = clamp((length(surfPos - cameraPosition) - fogRange.x) / (fogRange.y - fogRange.x), 0.0, 1.0);
+        fragColor = mix(fragColor, fogColour, fogAmount);
+    }
+
     FragColor = vec4(fragColor, surfOpacity);
 }

@@ -24,6 +24,7 @@ Failures are reported with a message; a bad scene never silently produces a part
 `version` must be `1`. Every list is optional. Order matters only for references: clips are loaded first, then materials, lights, bodies, and finally scripts, so a body can name any material in the file, and a script can name any body in the file or one loaded earlier.
 
 - `replaceWorld` (default `false`): when `true`, every body under the world root and every light is removed before the file loads, so the file brings its own lights. Use it when the file describes the whole level. Without it, the file is added to what is already in the world.
+- `environment`: the sky and the distance fog. See below.
 - `scripts`: attaches a Python script module to a named body. Each entry is `{ "body": name, "module": name, "domain": "update" }`. `domain` is `start`, `update` (default) or `delete`. The module must be in the `scripts` folder and define `create_instance()`. See `docs/ai/script-hooks.md`.
 
 ## materials
@@ -58,6 +59,22 @@ given, so a dark colour stays dark.
 For an outdoor or top-down scene, one directional light pointing down and slightly away from the camera, with
 `brightness` near `1` and `ambiance` near `0.35`, lights every part of a large level evenly (see
 `resources/scenes/dungeon.json`). Point lights fade with distance, so far parts of a big level get dark.
+
+## environment
+
+| field       | type      | required | default     | notes                                                          |
+|-------------|-----------|----------|-------------|----------------------------------------------------------------|
+| `skyColour` | [r, g, b] | no       | `[0,0,0]`   | What the screen is cleared to, so it is the sky seen past the scenery. 0 to 1 per channel. |
+| `fogColour` | [r, g, b] | no       | `[0,0,0]`   | The colour distant surfaces fade into. Use the sky colour, so the horizon blends into the sky. |
+| `fogStart`  | number    | no       | `0`         | Distance from the camera, in units, where the fog begins.      |
+| `fogEnd`    | number    | no       | `0`         | Distance where the fog is complete. The fog is off unless `fogEnd` is past `fogStart`. |
+
+Fog applies to every surface drawn with the standard shader, lit or not. With `replaceWorld`, the environment
+returns to the defaults before the file's own values are read. Scripts change it with `cge.set_environment(...)`.
+
+```json
+"environment": { "skyColour": [0.56, 0.76, 0.95], "fogColour": [0.56, 0.76, 0.95], "fogStart": 84, "fogEnd": 168 }
+```
 
 ## bodies
 

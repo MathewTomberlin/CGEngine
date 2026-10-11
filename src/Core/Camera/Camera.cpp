@@ -27,11 +27,14 @@ namespace CGEngine {
 		}
 	}
 
+	// The view turns in this order: yaw about the world up axis, then pitch about the turned camera's own X axis, then roll
+	// about its view axis. Pitch therefore always tilts the view up or down, whatever the yaw, and the horizon stays level.
+	// (With pitch applied first, the horizon tilts by the pitch at any yaw except 0 and 180 degrees.)
 	glm::mat4 Camera::getOrientation() const {
 		glm::mat4 orientation;
 		orientation = glm::rotate(glm::radians(angleZ), glm::vec3(0, 0, 1));
-		orientation *= glm::rotate(glm::radians(angleY), glm::vec3(0, 1, 0));
 		orientation *= glm::rotate(glm::radians(angleX), glm::vec3(1, 0, 0));
+		orientation *= glm::rotate(glm::radians(angleY), glm::vec3(0, 1, 0));
 		return orientation;
 	}
 
@@ -46,19 +49,12 @@ namespace CGEngine {
 		glm::vec3 pos(position.x, position.y, position.z);
 		assert(pos != this->position);
 		glm::vec3 direction = glm::normalize(pos - this->position);
-		// The orientation is Rz * Ry * Rx (see getOrientation). With roll Z = 0 the view direction it gives is
-		//   (sin Y, -cos Y * sin X, -cos Y * cos X)
-		// asin alone only reaches yaw in [-90, 90], where cos Y is positive. Past that, cos Y is negative: the same
-		// view comes from Y' = 180 - Y with the pitch read from the other branch, so the camera does not flip upside down.
-		const float side = direction.z > 0.0f ? -1.0f : 1.0f;   // the sign of cos Y
-		const float yaw = asinf(direction.x);
-		angleY = glm::degrees(side > 0.0f ? yaw : glm::pi<float>() - yaw);
-		// Straight up or down, or looking exactly sideways, the pitch is not determined by the direction: keep it level.
-		const float horizontal = sqrtf(direction.y * direction.y + direction.z * direction.z);
-		if (horizontal < 1e-6f) {
-			angleX = 0.0f;
-		} else {
-			angleX = glm::degrees(atan2f(-direction.y * side, -direction.z * side));
+		// The view direction getOrientation gives is (sin Y cos X, -sin X, -cos Y cos X), so the angles follow from the
+		// direction with no ambiguity. Straight up or down the yaw is not determined: keep the current one.
+		angleX = glm::degrees(asinf(glm::clamp(-direction.y, -1.0f, 1.0f)));
+		const float horizontal = sqrtf(direction.x * direction.x + direction.z * direction.z);
+		if (horizontal > 1e-6f) {
+			angleY = glm::degrees(atan2f(direction.x, -direction.z));
 		}
 		normalizeAngles();
 	}

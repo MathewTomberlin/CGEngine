@@ -101,11 +101,19 @@ cge.mouse_delta = lambda: (0.0, 0.0)
 
     $worst = 0.0
     $samples = 0
+    $tilt = 0.0
+    $aim = 0.0
     $end = (Get-Date).AddSeconds(11)
     while ((Get-Date) -lt $end) {
         Start-Sleep -Milliseconds 250
         $s = Read-State
-        if ($s) { $worst = [math]::Max($worst, [double]$s.max_frame_ms); $samples++ }
+        if ($s) {
+            $worst = [math]::Max($worst, [double]$s.max_frame_ms); $samples++
+            # The right vector must stay level (y = 0) however the view turns, and the camera must look where the player does.
+            $tilt = [math]::Max($tilt, [math]::Abs([double]$s.camera_right[1]))
+            $f = $s.camera_forward; $l = $s.look
+            $aim = [math]::Max($aim, 1.0 - ([double]$f[0] * $l[0] + [double]$f[1] * $l[1] + [double]$f[2] * $l[2]))
+        }
     }
     $after = Read-State
 
@@ -114,6 +122,11 @@ cge.mouse_delta = lambda: (0.0, 0.0)
     Check "the walk and turn ran (yaw changed by about 180 degrees)" $turned
     Write-Host "      yaw $($before.yaw) -> $($after.yaw), pitch $($before.pitch) -> $($after.pitch), mouse captured: $($after.mouse_captured)"
     Check "turning keeps the pitch fixed (the camera does not tilt)" ([math]::Abs($after.pitch - $before.pitch) -lt 0.5)
+    Check "the view stays level while turning (the right vector has no height; worst $([math]::Round($tilt, 4)))" ($samples -gt 0 -and $tilt -lt 0.005)
+    Check "the camera looks where the player's yaw and pitch point (worst error $([math]::Round($aim, 6)))" ($samples -gt 0 -and $aim -lt 1e-4)
+    Check "the day runs: the time of day moves while the game runs" ($after.time_of_day -ne $before.time_of_day)
+    Check "the sun is up at the start (its light travels downwards)" ($before.sun[1] -lt -0.5)
+    Check "the fog is on and ends past the loaded chunks (fog $($after.fog[0]) to $($after.fog[1]))" ($after.fog[0] -gt 0 -and $after.fog[1] -gt $after.fog[0] -and $after.fog[1] -ge 100)
     Check "the player moved forward" (($after.player[2] - $before.player[2]) -ne 0 -or ($after.player[0] - $before.player[0]) -ne 0)
     Check "the worst frame while walking and turning is under $MaxFrameMs ms (was $([math]::Round($worst, 1)) ms)" ($samples -gt 0 -and $worst -lt $MaxFrameMs)
     Check "the chunks stay loaded while walking" ($after.loaded -ge 169)

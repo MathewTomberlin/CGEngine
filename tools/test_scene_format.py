@@ -43,6 +43,8 @@ EXPECTED_INVALID = {
     "unknown_primitive.json": "unknown primitive",
     "unknown_animation.json": None,
     "bad_specular.json": "specular must be between 0 and 1",
+    "bad_environment.json": "'fogStart' must be a number",
+    "instances_on_model.json": None,
 }
 
 
@@ -83,6 +85,15 @@ def check_scene(scene):
         raise SceneError("scene must be an object with \"version\": 1")
     if "replaceWorld" in scene and not isinstance(scene["replaceWorld"], bool):
         raise SceneError("'replaceWorld' must be true or false")
+    if "environment" in scene:
+        env = scene["environment"]
+        if not isinstance(env, dict):
+            raise SceneError("'environment' must be an object")
+        for key in ("skyColour", "fogColour"):
+            check_vec3(env, key, "environment")
+        for key in ("fogStart", "fogEnd"):
+            if key in env and not is_number(env[key]):
+                raise SceneError(f"environment '{key}' must be a number")
 
     lists = {}
     for key in LIST_KEYS:

@@ -97,6 +97,9 @@ set, so there is no physics engine involved.
 | `load_scene_json(text)` | Add bodies to the world from JSON text, in the scene-file format |
 | `remove_body(name)` | Remove a body and its children |
 | `set_camera(position, target)` | Place the camera in world coordinates and aim it |
+| `camera_basis()` | The camera's `forward`, `right` and `up` in world coordinates (`right` stays level) |
+| `set_environment(sky, fog, fog_start, fog_end)` | The sky colour and distance fog (see `docs/ai/scene-format.md`) |
+| `set_light(name, direction, colour, brightness, ambiance)` | Change a scene light while the game runs |
 
 ## Observing a running game
 

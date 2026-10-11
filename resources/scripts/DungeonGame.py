@@ -17,6 +17,7 @@ import traceback
 import cg_engine_bindings as cge
 from PyScript import PyScript
 import DungeonGen
+import StateFile
 
 # DUNGEON_FIXED_STEP (seconds) makes every frame advance the same amount of game time. Scripted tests set it, so their
 # walk checks do not depend on the frame rate. Unset, the step is the real time since the last frame (capped).
@@ -191,11 +192,7 @@ class DungeonGame(PyScript):
                  "player": [round(self.px, 3), round(self.pz, 3)], "enemies": enemies, "enemy_kinds": kinds,
                  "items": sum(len(v) for v in self.items.values()), "bolts": len(self.bolts), "coins": self.coins,
                  "frames": self.frames}
-        os.makedirs("cg_control", exist_ok=True)
-        tmp = "cg_control/dungeon_state.json.tmp"
-        with open(tmp, "w") as f:
-            json.dump(state, f)
-        os.replace(tmp, "cg_control/dungeon_state.json")
+        StateFile.write_json("cg_control/dungeon_state.json", state)
 
     # ----- setup and levels ---------------------------------------------------------------
 
