@@ -79,6 +79,20 @@ in vec3 vertexColour;
 
 out vec4 FragColor;
 
+//Voxel meshes set triplanar: the diffuse texture is projected along the three world axes and blended by how square the
+//surface faces each axis. One texel is then one block on every face, so slopes and walls are not stretched the way a single
+//planar projection stretches them.
+uniform int triplanar;
+
+vec4 triplanarSample(sampler2D tex, vec3 pos, vec3 n){
+    vec3 weights = pow(abs(n), vec3(4.0));
+    weights /= weights.x + weights.y + weights.z + 1e-6;
+    vec4 alongX = texture(tex, pos.zy);
+    vec4 alongY = texture(tex, pos.xz);
+    vec4 alongZ = texture(tex, pos.xy);
+    return alongX * weights.x + alongY * weights.y + alongZ * weights.z;
+}
+
 //The sun's shadows: shadowPass is set while the shadow map is drawn, and shadowsOn while surfaces look it up.
 uniform int shadowPass;
 uniform int shadowsOn;
@@ -175,7 +189,11 @@ void main() {
         vec2 diffuseUV = (uv * materials[mtl].diffuseTextureUVScale);
         diffuseUV += (materials[mtl].diffuseTextureScrollSpeed*timeSec);
         diffuseUV += materials[mtl].diffuseTextureOffset;
-        surfColor = texture(materialTextures[mtl].diffuseTexture, diffuseUV);
+        if(triplanar != 0){
+            surfColor = triplanarSample(materialTextures[mtl].diffuseTexture, surfPos, normalize(normal));
+        } else {
+            surfColor = texture(materialTextures[mtl].diffuseTexture, diffuseUV);
+        }
     }
     surfColor *=  diffuseColor;                                                                 //Modulate diffuse texture color with diffuse color
     surfColor.rgb *= vertexColour;                                                              //Per-vertex tint (white unless the mesh sets it)

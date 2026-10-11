@@ -88,6 +88,25 @@ def check_body_parity(world, checks):
     checks["body physics matches the Python version"] = mismatches == 0
 
 
+def check_motion(world, checks):
+    """A falling block takes time: it is in flight for a while, then lands in the world."""
+    world.set_move_seconds(0.4)
+    world.set_block(-10, HEIGHT - 2, 10, SAND)
+    run_simulation(world, 0.3)
+    moving = [move for move in world.moving_blocks() if move[0] == SAND]
+    checks["sand is in flight while it falls"] = len(moving) == 1
+    if moving:
+        _, src, dst, progress = moving[0]
+        checks["the cell it leaves is empty, and the move is part way"] = (
+            world.get_block(src[0], src[1], src[2]) == 0 and 0.0 <= progress < 1.0 and dst[1] == src[1] - 1)
+    run_simulation(world, 3.0)
+    checks["the sand lands in the world"] = world.get_block(-10, HEIGHT - 2, 10) == 0 and any(
+        world.get_block(-10, y, 10) == SAND for y in range(HEIGHT))
+    world.settle_moves()
+    checks["settling leaves nothing in flight"] = len(world.moving_blocks()) == 0
+    world.set_move_seconds(0.0)
+
+
 def check_physics(world, checks):
     # Sand falls from the top of its column onto the first solid block.
     world.set_block(5, HEIGHT - 2, 5, SAND)
@@ -203,6 +222,7 @@ def run(out_path="cg_control/voxel_check.json"):
     # The block physics: falling sand, flowing water, a rule and a hook.
     check_body_parity(world, results["check"])
     check_physics(world, results["check"])
+    check_motion(world, results["check"])
 
     results["ok"] = all(results["check"].values())
     tmp = out_path + ".tmp"

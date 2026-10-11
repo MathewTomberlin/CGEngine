@@ -59,7 +59,14 @@ namespace CGEngine {
 		// Moves a box of this shape through the blocks (see VoxelBody.h). The C++ twin of VoxelPhysics.step.
 		VoxelBodyState stepBody(const VoxelBodyState& body, const VoxelBodyShape& shape, double dt, bool flying) const;
 		// Runs the simulation for dt seconds, within budgetMs of work (see VoxelSimulation). Returns the cells looked at.
-		int simulate(double dt, double budgetMs) { return simulation.simulate(*this, dt, budgetMs); }
+		int simulate(double dt, double budgetMs, double tickSeconds = 0.1) {
+			return simulation.simulate(*this, dt, budgetMs, tickSeconds);
+		}
+		// Falling blocks take this long to move one cell (0 for instant moves). They are drawn by the game while in flight.
+		void setMoveSeconds(double seconds) { simulation.setMoveSeconds(seconds); }
+		const std::vector<VoxelSimulation::Move>& movingBlocks() const { return simulation.inFlight(); }
+		// Lands every block in flight now, so the world is complete (before it is saved, for example).
+		void settleMoves() { simulation.settleMoves(*this); }
 		VoxelSimulation& physics() { return simulation; }
 		// Sets the blocks from yFrom (inclusive) to yTo (exclusive), clipped to the world height.
 		void fillColumn(int x, int z, int yFrom, int yTo, int blockId);

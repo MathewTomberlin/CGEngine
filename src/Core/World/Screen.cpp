@@ -1,5 +1,7 @@
 #include "Screen.h"
 #include "../Engine/Engine.h"
+#include <cstdlib>
+#include <string>
 
 namespace CGEngine {
     Screen::Screen(Vector2i size, string title, bool fullscreen) : windowTitle(title) {
@@ -80,7 +82,16 @@ namespace CGEngine {
     }
 
     RenderWindow* Screen::createWindow() {
-        window = make_unique<RenderWindow>(VideoMode(size), windowTitle);
+        // CGENGINE_FULLSCREEN=1 opens the window full screen at the desktop's resolution. It is read once, at start-up:
+        // changing the mode later would recreate the window and its GL context.
+        const char* fullscreenSetting = std::getenv("CGENGINE_FULLSCREEN");
+        if (fullscreenSetting && std::string(fullscreenSetting) == "1") {
+            const VideoMode desktop = VideoMode::getDesktopMode();
+            setSize(Vector2i(static_cast<int>(desktop.size.x), static_cast<int>(desktop.size.y)));
+            window = make_unique<RenderWindow>(desktop, windowTitle, Style::Default, State::Fullscreen);
+        } else {
+            window = make_unique<RenderWindow>(VideoMode(size), windowTitle);
+        }
         initView();
         return window.get();
     }

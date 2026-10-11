@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <SFML/System/Vector3.hpp>
@@ -75,8 +76,21 @@ void bindVoxel(py::module_& m) {
            py::arg("height") = 1.8,
            "Move a box with its feet at pos (x, y, z) and speed vel, for dt seconds, through the solid blocks, as VoxelPhysics.step "
            "does. Returns (pos, vel, on_ground).")
-        .def("simulate", &VoxelWorld::simulate, py::arg("dt"), py::arg("budget_ms") = 1.0,
-             "Advance the block physics by dt seconds, within budget_ms of work. Returns the cells looked at.")
+        .def("simulate", &VoxelWorld::simulate, py::arg("dt"), py::arg("budget_ms") = 1.0, py::arg("tick_seconds") = 0.1,
+             "Advance the block physics by dt seconds, within budget_ms of work. Ticks run every tick_seconds. Returns the cells looked at.")
+        .def("set_move_seconds", &VoxelWorld::setMoveSeconds, py::arg("seconds"),
+             "How long a falling block takes to move one cell (0 for instant moves). A block in flight is not in the world until it lands.")
+        .def("moving_blocks", [](const VoxelWorld& world) {
+            py::list result;
+            for (const VoxelSimulation::Move& move : world.movingBlocks()) {
+                const double progress = move.duration > 0.0 ? std::min(1.0, move.elapsed / move.duration) : 1.0;
+                result.append(py::make_tuple(static_cast<int>(move.block),
+                    py::make_tuple(move.from[0], move.from[1], move.from[2]),
+                    py::make_tuple(move.to[0], move.to[1], move.to[2]), progress));
+            }
+            return result;
+        }, "The blocks in flight: a list of (block, from, to, progress) with progress from 0 to 1.")
+        .def("settle_moves", &VoxelWorld::settleMoves, "Land every block in flight now.")
         .def("activate", [](VoxelWorld& world, int x, int y, int z) { world.physics().activate(x, y, z); },
              py::arg("x"), py::arg("y"), py::arg("z"), "Queue a cell for the simulation, so it is looked at on the next tick.")
         .def("active_count", [](VoxelWorld& world) { return world.physics().activeCount(); },

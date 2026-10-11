@@ -5,7 +5,7 @@ A procedural block world in chunks, with trees, a day and night cycle and distan
 ```
 cd build/bin/Release
 set VOXEL_SEED=1
-$env:CGENGINE_SCENE = "scenes/voxels.json"; .\main.exe
+$env:CGENGINE_SCENE = "scenes/voxels.json"; $env:CGENGINE_FULLSCREEN = "1"; .\main.exe
 ```
 
 `VOXEL_SEED` picks the world. `VOXEL_TIME` sets the time of day at the start: 0 is sunrise, 0.25 noon, 0.5 sunset and
@@ -16,7 +16,9 @@ run the Release configuration.
 
 - W A S D walk, Space jumps, Enter toggles flying (then Space rises and R falls).
 - Mouse: left-click captures the mouse. Move it to look. Left-click breaks the block under the crosshair, right-click
-  places stone against it, and Escape releases the mouse.
+  places the selected block against it.
+- Escape opens the pause menu: the mouse is freed, the world stands still, and Resume (click it) locks the mouse again.
+  Quit (click it) closes the app. `VOXEL_MOUSE_SENSITIVITY` sets the look speed in degrees per pixel (0.00625 by default).
 - Without the mouse: the arrow keys turn and look, J breaks, K places.
 - Keys 1 to 9 choose the block to place (the hotbar: stone, dirt, grass, wood, leaves, sand, gravel, snow, water). Sand and
   gravel fall, and water falls and flows. F5 saves the edited blocks to `cg_control/voxel_edits.bin`, and F9 loads them back.

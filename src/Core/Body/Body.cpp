@@ -845,7 +845,19 @@ namespace CGEngine {
                 mesh->render(transform);
             } else {
                 renderer->commitGL();
-                target.draw(*(Shape*)entity.get(), transform);
+                // Text is an overlay: drawn over the scene whatever its depth, and in window pixels (the screen's own view is a
+                // square in the middle of the window, which would clip a label that runs past it).
+                const bool overlay = dynamic_cast<sf::Text*>(entity.get()) != nullptr;
+                if (overlay) {
+                    const sf::View scene = target.getView();
+                    glDisable(GL_DEPTH_TEST);
+                    target.setView(target.getDefaultView());
+                    target.draw(*(Shape*)entity.get(), transform);
+                    target.setView(scene);
+                    glEnable(GL_DEPTH_TEST);
+                } else {
+                    target.draw(*(Shape*)entity.get(), transform);
+                }
             }
         }
     }

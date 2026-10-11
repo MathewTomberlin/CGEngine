@@ -15,6 +15,10 @@ namespace CGEngine {
 	// Python hook may replace the block. A change queues the cells around it, so a change spreads only as far as it
 	// causes one. Unloaded chunks are not simulated, and a quiet world costs nothing: that is what keeps far, idle chunks
 	// free. Ticks run every tickSeconds; a budget bounds the work in one call.
+	//
+	// A falling block moves over moveSeconds rather than at once: its source is cleared when the move starts and its
+	// destination is written when the move ends, and in between it is "in flight", drawn by the game (see inFlight).
+	// With moveSeconds at 0, moves are instant.
 	class VoxelSimulation {
 	public:
 		// A reaction: a block that has a neighbour of the given kind becomes another block, with a chance per tick.
@@ -25,6 +29,15 @@ namespace CGEngine {
 			float chance;
 		};
 
+		// A block on its way from one cell to the cell below (or any neighbour). Progress runs from 0 to 1.
+		struct Move {
+			int from[3];
+			int to[3];
+			uint8_t block;
+			double elapsed;
+			double duration;
+		};
+
 		// The hook sees a queued block once per tick and returns the block it becomes, or -1 to leave it.
 		using Hook = std::function<int(int x, int y, int z, int block)>;
 
@@ -32,9 +45,16 @@ namespace CGEngine {
 		void addRule(const Rule& rule) { rules.push_back(rule); }
 		void clearRules() { rules.clear(); }
 		void setHook(Hook newHook) { hook = std::move(newHook); }
-		// Accumulates dt and runs the ticks that are due, each within budgetMs of the call. Returns the cells looked at.
+		// How long a falling block takes to move one cell (0 for an instant move).
+		void setMoveSeconds(double seconds) { moveDuration = seconds; }
+		double moveSeconds() const { return moveDuration; }
+		// Accumulates dt, advances the blocks in flight, and runs the ticks that are due, each within budgetMs of the call.
+		// Returns the cells looked at.
 		int simulate(VoxelWorld& world, double dt, double budgetMs, double tickSeconds = 0.1);
 		int activeCount() const { return static_cast<int>(queue.size()); }
+		const std::vector<Move>& inFlight() const { return moves; }
+		// Ends every move now: the blocks land where they were going.
+		void settleMoves(VoxelWorld& world);
 
 	private:
 		std::vector<int64_t> queue;
@@ -43,12 +63,18 @@ namespace CGEngine {
 		Hook hook;
 		double accumulator = 0.0;
 		uint32_t randomState = 0x9E3779B9u;
+		double moveDuration = 0.0;
+		std::vector<Move> moves;
+		std::unordered_set<int64_t> reserved;   // destinations of moves in flight, which no other block may take
 
 		static int64_t keyOf(int x, int y, int z);
 		static void unkey(int64_t key, int& x, int& y, int& z);
 		float nextRandom();
-		// Looks at one cell: returns the cells it changed or queued through the world, and whether it changed anything.
+		// Looks at one cell and changes what is there, through the world.
 		void tickCell(VoxelWorld& world, int x, int y, int z);
 		void set(VoxelWorld& world, int x, int y, int z, uint8_t block);
+		// Starts a move: the source is cleared now, and the block is written at the destination when the move ends.
+		void beginMove(VoxelWorld& world, int fromX, int fromY, int fromZ, int toX, int toY, int toZ, uint8_t block);
+		void advanceMoves(VoxelWorld& world, double dt);
 	};
 }

@@ -44,6 +44,48 @@ namespace CGEngine {
 		world.setBlock(x, y, z, block);
 	}
 
+	void VoxelSimulation::beginMove(VoxelWorld& world, int fromX, int fromY, int fromZ, int toX, int toY, int toZ, uint8_t block) {
+		Move move;
+		move.from[0] = fromX;
+		move.from[1] = fromY;
+		move.from[2] = fromZ;
+		move.to[0] = toX;
+		move.to[1] = toY;
+		move.to[2] = toZ;
+		move.block = block;
+		move.elapsed = 0.0;
+		move.duration = moveDuration;
+		reserved.insert(keyOf(toX, toY, toZ));
+		moves.push_back(move);
+		// The source is cleared now, so the block is drawn leaving it rather than in two places.
+		set(world, fromX, fromY, fromZ, 0);
+	}
+
+	void VoxelSimulation::advanceMoves(VoxelWorld& world, double dt) {
+		for (size_t i = 0; i < moves.size();) {
+			moves[i].elapsed += dt;
+			if (moves[i].elapsed < moves[i].duration) {
+				++i;
+				continue;
+			}
+			// The move ends: the block lands at its destination, and the cell is free for others again.
+			const Move landed = moves[i];
+			moves[i] = moves.back();
+			moves.pop_back();
+			reserved.erase(keyOf(landed.to[0], landed.to[1], landed.to[2]));
+			set(world, landed.to[0], landed.to[1], landed.to[2], landed.block);
+		}
+	}
+
+	void VoxelSimulation::settleMoves(VoxelWorld& world) {
+		while (!moves.empty()) {
+			const Move landed = moves.back();
+			moves.pop_back();
+			reserved.erase(keyOf(landed.to[0], landed.to[1], landed.to[2]));
+			set(world, landed.to[0], landed.to[1], landed.to[2], landed.block);
+		}
+	}
+
 	void VoxelSimulation::tickCell(VoxelWorld& world, int x, int y, int z) {
 		const uint8_t block = static_cast<uint8_t>(world.getBlock(x, y, z));
 		if (block == 0 || !world.loadedAt(x, z)) return;
@@ -73,14 +115,18 @@ namespace CGEngine {
 
 		const BlockType& type = world.blockType(block);
 		if (type.falls && y > 0) {
-			// Falling: into air, or swapping down past a liquid.
+			// Falling: into air (a move in flight if the game animates it, else at once), or swapping down past a liquid.
 			const uint8_t below = static_cast<uint8_t>(world.getBlock(x, y - 1, z));
-			if (below == 0) {
-				set(world, x, y - 1, z, block);
-				set(world, x, y, z, 0);
+			if (below == 0 && !reserved.count(keyOf(x, y - 1, z))) {
+				if (moveDuration > 0.0) {
+					beginMove(world, x, y, z, x, y - 1, z, block);
+				} else {
+					set(world, x, y - 1, z, block);
+					set(world, x, y, z, 0);
+				}
 				return;
 			}
-			if (world.blockType(below).liquid) {
+			if (below != 0 && world.blockType(below).liquid) {
 				set(world, x, y - 1, z, block);
 				set(world, x, y, z, below);
 				return;
@@ -112,6 +158,7 @@ namespace CGEngine {
 	}
 
 	int VoxelSimulation::simulate(VoxelWorld& world, double dt, double budgetMs, double tickSeconds) {
+		advanceMoves(world, dt);
 		accumulator += dt;
 		int looked = 0;
 		const auto start = std::chrono::steady_clock::now();
