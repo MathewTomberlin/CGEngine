@@ -18,6 +18,8 @@ run the Release configuration.
 - Mouse: left-click captures the mouse. Move it to look. Left-click breaks the block under the crosshair, right-click
   places stone against it, and Escape releases the mouse.
 - Without the mouse: the arrow keys turn and look, J breaks, K places.
+- Keys 1 to 7 choose the block to place (the hotbar: stone, dirt, grass, wood, leaves, sand, snow). F5 saves the
+  edited blocks to `cg_control/voxel_edits.bin`, and F9 loads them back.
 
 ## The look: day, night and fog
 
@@ -27,6 +29,8 @@ run the Release configuration.
   rather than ending in a line.
 - Trees grow on grass, about one column in a hundred. A tree's leaves can reach into the next chunk, and each chunk
   draws the parts of the trees that reach it, so the trees have no seams.
+- Caves are tunnels and rooms carved out of the stone, below the surface, from two 3D noise fields. The sky is a
+  gradient from the horizon to the zenith, with the sun's disc and glow, and the fog takes the horizon colour.
 
 ## Files
 
@@ -55,6 +59,11 @@ Chunks are built in the background, so the frame never waits for terrain or mesh
    quad (greedy meshing), and darkens corners next to solid blocks (ambient occlusion).
 4. `update` uploads the finished meshes until its time budget (2 ms) is spent, at least one per call. The upload makes
    the chunk's body (`voxel_chunk_<cx>_<cz>`, a runtime mesh). The GPU copy is replaced in place when a chunk changes.
+
+The surface is a smooth skin by default (`VOXEL_SMOOTH`, samples per block, 1 by default; 0 draws cubes). The skin is
+surface nets (`buildSmoothMesh` in `src/Core/Voxel/VoxelMesher.cpp`): the blocks' occupancy, interpolated between block
+centres, is a density, and the surface is where it crosses one half. The blocks stay the truth for collision and editing;
+the skin is what is drawn. Each chunk's skin is a function of the blocks around it, so chunks join without cracks.
 
 Chunk vertices are 48 bytes, against 80 for an ordinary mesh vertex: they leave out the bone fields. Every attribute is a
 float, because the NVIDIA driver read byte attributes several times slower per draw.
@@ -112,8 +121,7 @@ the view's level and the worst frame.
 
 ## Limits
 
-- Water is opaque. There are no caves and no shadows yet.
-- The sky is one colour: no gradient and no sun disc.
-- Only stone is placed, and there is no inventory or save yet.
+- There are no shadows yet, and the hotbar has no picture on screen.
+- Water is opaque. The smooth skin has one level of detail for every chunk; a finer skin near the camera is on the roadmap.
 - Each chunk is one draw call. Region batching (several chunks in one mesh) is the next step if the draw count
   becomes the limit.

@@ -56,10 +56,10 @@ Goal: a world with thousands of objects, and procedurally made geometry, drawn i
 ## Phase 8: voxel world sample (`docs/games/voxels.md`)
 A procedural block world with chunks, terrain, collision, block editing and a day/night cycle, built on Phase 7.
 - [x] **8.1** C++ voxel mesher (`cge.VoxelWorld`, `src/Core/Voxel/`): chunks of block ids meshed into runtime meshes, with per-face culling across chunk borders, per-vertex ambient occlusion, and per-block colours. Dirty chunks are re-meshed on demand. Checked offline for the terrain (`tools/test_voxel_gen.py`) and by a screenshot. Not yet: greedy meshing, a transparent water block.
-- [~] **8.2** Terrain: done are the noise, height and sand, grass, stone, snow and water per column (C++, on worker threads), chunks streamed around the camera, and trees (one column in a hundred, drawn across chunk borders). Not yet: caves, and a biome map beyond height.
+- [~] **8.2** Terrain: done are the noise, height and sand, grass, stone, snow and water per column (C++, on worker threads), chunks streamed around the camera, trees (one column in a hundred, drawn across chunk borders), and caves (tunnels and rooms carved by 3D noise, `cave_width`). Not yet: a biome map beyond height.
 - [x] **8.3** Player: gravity, jumping and collision with the blocks (`VoxelPhysics.py`, pure Python and tested offline), a ray cast to pick the block in view, and break (J) and place (K). Edited chunks are re-meshed. Flying (Enter) for exploring.
-- [~] **8.4** Day and night: done. The sun's direction and light, the ambient fill, the sky and the fog change over `VOXEL_DAY_SECONDS`, from the script (`cge.set_light`, `cge.set_environment`). Not yet: a hotbar of block types.
-- [ ] **8.5** Save and load of the edited blocks.
+- [~] **8.4** Day and night: done. The sun's direction and light, the ambient fill, the sky and the fog change over `VOXEL_DAY_SECONDS`, from the script (`cge.set_light`, `cge.set_environment`). A hotbar of seven block types (keys 1 to 7). Not yet: an on-screen hotbar.
+- [x] **8.5** Save and load of the edited blocks. `VoxelWorld` keeps every edit apart from its chunks, so an edit survives the chunk unloading and is applied when it loads again. `save_edits` and `load_edits` write a binary file; F5 and F9 use it in the sample. Checked by `tools/voxel_world_check.py` from `tools/test_voxels.ps1`.
 
 ## Phase 9: voxel performance and scale (from walking the voxel world)
 Goal: enormous worlds with no hitching while chunks load.
@@ -69,10 +69,27 @@ Goal: enormous worlds with no hitching while chunks load.
 - [x] **9.4** Mouse look. The arrow keys' turn past 90 degrees flipped the camera upside down (`Camera::lookAt` only reached yaw in [-90, 90]); fixed. Static meshes no longer skin with the bone matrices an animated model left behind (a `skinned` uniform).
 - [ ] **9.5** Region batching (several chunks in one mesh, fewer draws). Deferred: at 700 chunks in view the Release build still runs at about 630 frames a second with a 3.5 ms worst frame, so it is not needed yet. Revisit when there are many more draws per chunk.
 - [x] **9.6** Measured and tested. Release, 169 chunks: loaded in 1.2 s, about 1100 frames a second when still, worst frame 8 ms while walking and turning. Debug: about 100 frames a second, worst frame about 15 ms. Release, 700 chunks: about 630 frames a second. `tools/test_voxels.ps1` loads the world, walks and turns with scripted keys, and checks the chunks, the pitch and the worst frame.
-- [ ] **9.7** Caves, a sky gradient with a sun disc, and shadows for the voxel world. Done: trees, distance fog and the sky colour (`environment` in scenes, `cge.set_environment`), and the day and night light.
+- [~] **9.7** Lighting and atmosphere for the voxel world. Done: trees, caves, distance fog, a sky gradient from the horizon colour to the zenith colour, a sun disc with glow (`environment` zenith and sun in scenes, `cge.set_environment`), and the day and night light. Not yet: shadows.
 - [x] **9.8** The camera turns level at any yaw. The view applied the pitch before the yaw, so once the yaw passed 90 degrees the horizon tilted by the pitch; and the script's look direction (pitch after yaw) disagreed with `Camera::lookAt` off yaw 0. Now the orientation is Rz * Rx * Ry, and `lookAt` reads the angles back in that order. `tools/test_voxels.ps1` checks that the right vector stays level and that the camera looks where the player does.
 - [x] **9.9** View radius 14: 841 chunks, about 460,000 quads. Release: all loaded in 1.3 s, about 580 frames a second still, worst frame about 5 ms while walking. The fog ends at the edge of the loaded area, so the edge does not show.
-- [ ] **9.10** Each chunk's mesh stays in memory after its upload (about 200 MB at 841 chunks). Free it after the upload once nothing reads it: the bounds are computed from it when a mesh is marked invalid.
+- [x] **9.10** A runtime voxel mesh's arrays are freed once they are on the GPU. Its bounds are computed first, and its counts are kept. At 841 chunks (about 717,000 quads with the caves) the process holds about 295 MB.
+
+## Phase 10: smooth terrain, physics and the next voxel steps (from the voxel sample's growth)
+Goal: the terrain looks rounded and real, the blocks obey physics the scripts can change, and the far world stays cheap.
+- [~] **10.1** Smooth skin: done. Surface nets over the blocks' occupancy (`buildSmoothMesh`, `set_smoothing`), so the
+  ground, hills and tree crowns are rounded and textured; shaded from the density gradient, coloured by the dominant
+  block, with occlusion. One sample per block: 1.08 million quads for 841 chunks, 655 frames a second in Release, load
+  1.7 s, 222 MB. Two samples per block gives half-block detail but 4.7 million quads, so it is not the default. Not yet:
+  a finer skin near the camera with a coarser one far away (the seams need skirts or matched edges).
+- [ ] **10.2** Block physics: block types with properties (solid, falls, liquid), and a cellular simulation that only
+  ticks the active cells (falling sand and gravel, water that spreads and levels off). Changes re-mesh the chunks.
+- [ ] **10.3** Programmable rules: reaction rules as data (`grass + water -> dirt`) evaluated by the simulation, and
+  Python callbacks for the rest. The simulation runs only in the loaded area near the player.
+- [ ] **10.4** Collision in C++: a box sweep against the blocks, so the player and many moving bodies can use the
+  same world queries, and collision is faster than the Python version.
+- [ ] **10.5** Shadows: a shadow map for the sun, covering the area near the camera.
+- [ ] **10.6** Region batching (9.5) once the smooth skin raises the draw and vertex counts.
+- [ ] **10.7** An on-screen hotbar (8.4).
 
 ## Tooling and quality
 - [x] CI build on Windows (`.github/workflows/build.yml`) with Mesa software OpenGL smoke run

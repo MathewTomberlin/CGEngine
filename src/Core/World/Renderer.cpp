@@ -112,6 +112,9 @@ namespace CGEngine {
 		glBufferData(GL_UNIFORM_BUFFER, sizeof(TransformUBO), nullptr, GL_STATIC_DRAW);
 		glBindBufferBase(GL_UNIFORM_BUFFER, 2, transformUBO);
 
+		skyProgram = make_unique<Program>(ShaderProgramPath("shaders/Sky.vert", "shaders/Sky.frag"), "sky");
+		glGenVertexArrays(1, &skyVao);
+
 		// Check for any OpenGL errors that may have occurred during initialization
 		checkGLError("initializeOpenGL", __FILE__, __LINE__);
 
@@ -144,6 +147,7 @@ namespace CGEngine {
 
 			if (meshData->compact) {
 				createCompactMeshBuffers(meshData, program);
+				meshData->releaseCpuCopy();
 				setGLWindowState(false);
 				return;
 			}
@@ -225,6 +229,7 @@ namespace CGEngine {
 			GL_CHECK(glBufferData(GL_ELEMENT_ARRAY_BUFFER, meshData->indices.size() * sizeof(unsigned int), meshData->indices.data(), GL_DYNAMIC_DRAW));
 		}
 		GL_CHECK(glBindVertexArray(0));
+		meshData->releaseCpuCopy();
 	}
 
 	void Renderer::createCompactMeshBuffers(MeshData* meshData, Program* program) {
@@ -359,6 +364,7 @@ namespace CGEngine {
 				return false;
 			}
 			root->queueRendering();
+			drawSky();
 			//Sort and render Meshes and SFML entities
 			render(window);
 			endFrame();
@@ -443,8 +449,8 @@ namespace CGEngine {
 		}
 
 		const GLsizei count = static_cast<GLsizei>(visibleInstances.size());
-		if (meshData->indices.size()) {
-			GL_CHECK(glDrawElementsInstanced(GL_TRIANGLES, meshData->indices.size(), GL_UNSIGNED_INT, 0, count));
+		if (meshData->indexCount()) {
+			GL_CHECK(glDrawElementsInstanced(GL_TRIANGLES, meshData->indexCount(), GL_UNSIGNED_INT, 0, count));
 		} else {
 			GL_CHECK(glDrawArraysInstanced(GL_TRIANGLES, 0, meshData->vertexCount(), count));
 		}
@@ -552,8 +558,8 @@ namespace CGEngine {
 			++drawCallsThisFrame;
 			if (instanced) {
 				drawInstances(mesh, meshData, program);
-			} else if (meshData->indices.size()) {
-				GL_CHECK(glDrawElements(GL_TRIANGLES, meshData->indices.size(), GL_UNSIGNED_INT, 0));
+			} else if (meshData->indexCount()) {
+				GL_CHECK(glDrawElements(GL_TRIANGLES, meshData->indexCount(), GL_UNSIGNED_INT, 0));
 			} else {
 				GL_CHECK(glDrawArrays(GL_TRIANGLES, 0, meshData->vertexCount()));
 			}
@@ -966,6 +972,29 @@ namespace CGEngine {
 	
 	void Renderer::sortZ() {
 		sort(renderOrder.begin(), renderOrder.end(), [](id_t a, id_t b) { return (assets.get<Body>(a)->zOrder < assets.get<Body>(b)->zOrder); });
+	}
+
+	void Renderer::drawSky() {
+		if (!skyProgram || !currentCamera || !environment.drawsSky()) return;
+		GL_CHECK(glDisable(GL_DEPTH_TEST));
+		GL_CHECK(glDepthMask(GL_FALSE));
+		GL_CHECK(glUseProgram(skyProgram->getObjectId()));
+		skyProgram->setUniform("camForward", currentCamera->getForward());
+		skyProgram->setUniform("camRight", currentCamera->getRight());
+		skyProgram->setUniform("camUp", currentCamera->getUp());
+		skyProgram->setUniform("tanHalfFov", tanf(glm::radians(currentCamera->getFov()) * 0.5f));
+		skyProgram->setUniform("aspect", currentCamera->getAspect());
+		skyProgram->setUniform("horizonColour", toGlm(environment.skyColour));
+		skyProgram->setUniform("zenithColour", toGlm(environment.zenithColour.value_or(environment.skyColour)));
+		skyProgram->setUniform("sunDirection", glm::normalize(toGlm(environment.sunDirection)));
+		skyProgram->setUniform("sunColour", toGlm(environment.sunColour));
+		skyProgram->setUniform("sunCos", cosf(glm::radians(environment.sunSize)));
+		GL_CHECK(glBindVertexArray(skyVao));
+		GL_CHECK(glDrawArrays(GL_TRIANGLES, 0, 3));
+		GL_CHECK(glBindVertexArray(0));
+		GL_CHECK(glUseProgram(0));
+		GL_CHECK(glDepthMask(GL_TRUE));
+		GL_CHECK(glEnable(GL_DEPTH_TEST));
 	}
 
 	void Renderer::render(RenderTarget* window) {

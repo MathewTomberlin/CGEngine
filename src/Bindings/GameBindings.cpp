@@ -36,6 +36,10 @@ namespace {
             {"Up", sf::Keyboard::Scan::Up}, {"Down", sf::Keyboard::Scan::Down}, {"Left", sf::Keyboard::Scan::Left}, {"Right", sf::Keyboard::Scan::Right},
             {"J", sf::Keyboard::Scan::J}, {"K", sf::Keyboard::Scan::K}, {"Space", sf::Keyboard::Scan::Space}, {"Enter", sf::Keyboard::Scan::Enter},
             {"R", sf::Keyboard::Scan::R}, {"Escape", sf::Keyboard::Scan::Escape},
+            {"1", sf::Keyboard::Scan::Num1}, {"2", sf::Keyboard::Scan::Num2}, {"3", sf::Keyboard::Scan::Num3},
+            {"4", sf::Keyboard::Scan::Num4}, {"5", sf::Keyboard::Scan::Num5}, {"6", sf::Keyboard::Scan::Num6},
+            {"7", sf::Keyboard::Scan::Num7}, {"8", sf::Keyboard::Scan::Num8}, {"9", sf::Keyboard::Scan::Num9},
+            {"F5", sf::Keyboard::Scan::F5}, {"F9", sf::Keyboard::Scan::F9},
         };
         return keys;
     }
@@ -124,7 +128,7 @@ void bindGame(py::module_& m) {
         auto it = gameKeys().find(name);
         if (it == gameKeys().end()) throw std::invalid_argument("unknown key '" + name + "'");
         return sf::Keyboard::isKeyPressed(it->second);
-    }, py::arg("name"), "True while the named key is held. Names: W A S D Up Down Left Right J K Space Enter R Escape.");
+    }, py::arg("name"), "True while the named key is held. Names: W A S D Up Down Left Right J K Space Enter R Escape, 1 to 9, F5, F9.");
 
     m.def("find_body", [](const std::string& name) -> Body* {
         return findBody(name);
@@ -230,15 +234,23 @@ void bindGame(py::module_& m) {
         camera->lookAt(target);
     }, py::arg("position"), py::arg("target"), "Place the camera at position (world coordinates, y up) and aim it at target.");
 
-    m.def("set_environment", [](std::optional<sf::Vector3f> sky, std::optional<sf::Vector3f> fog, std::optional<float> fogStart, std::optional<float> fogEnd) {
+    m.def("set_environment", [](std::optional<sf::Vector3f> sky, std::optional<sf::Vector3f> fog, std::optional<float> fogStart,
+        std::optional<float> fogEnd, std::optional<sf::Vector3f> zenith, std::optional<sf::Vector3f> sunDirection,
+        std::optional<sf::Vector3f> sunColour, std::optional<float> sunSize) {
         if (!renderer) throw std::runtime_error("the renderer is not running yet");
         Environment& environment = renderer->environment;
         if (sky) environment.skyColour = *sky;
         if (fog) environment.fogColour = *fog;
         if (fogStart) environment.fogStart = *fogStart;
         if (fogEnd) environment.fogEnd = *fogEnd;
+        if (zenith) environment.zenithColour = *zenith;
+        if (sunDirection) environment.sunDirection = *sunDirection;
+        if (sunColour) environment.sunColour = *sunColour;
+        if (sunSize) environment.sunSize = *sunSize;
     }, py::arg("sky") = py::none(), py::arg("fog") = py::none(), py::arg("fog_start") = py::none(), py::arg("fog_end") = py::none(),
-    "Set the sky colour (what the screen is cleared to) and the distance fog, which fades from fog_start to fog_end blocks from the camera. Arguments left out keep their value. The fog is off while fog_end is not past fog_start.");
+    py::arg("zenith") = py::none(), py::arg("sun_direction") = py::none(), py::arg("sun_colour") = py::none(),
+    py::arg("sun_size") = py::none(),
+    "The sky and fog. sky is the colour at the horizon, zenith the colour straight up (left out, the sky is one colour). fog fades from fog_start to fog_end blocks away; the fog is off while fog_end is not past fog_start. sun_direction points towards the sun, sun_colour draws its disc (black hides it) and sun_size is its angular radius in degrees. Arguments left out keep their value.");
 
     m.def("set_light", [](const std::string& name, std::optional<sf::Vector3f> direction, std::optional<sf::Vector3f> colour,
         std::optional<float> brightness, std::optional<float> ambiance) {

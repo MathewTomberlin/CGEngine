@@ -31,8 +31,11 @@ MOUSE_SENSITIVITY = 0.12    # degrees per pixel
 MAX_PITCH = 85.0            # the engine's camera stops at this angle
 SPAWN_HEIGHT = 60.0         # above the tallest column, so the player drops onto the terrain
 RESPAWN_DEPTH = -20.0       # below this the player is put back at the spawn height
-PLACED_BLOCK = VoxelGen.STONE
+# The blocks the number keys 1 to 7 choose from when placing (the hotbar), and the file the F5 and F9 keys save and load.
+HOTBAR = [VoxelGen.STONE, VoxelGen.DIRT, VoxelGen.GRASS, VoxelGen.WOOD, VoxelGen.LEAVES, VoxelGen.SAND, VoxelGen.SNOW]
+EDITS_FILE = "cg_control/voxel_edits.bin"
 STATE_INTERVAL = 0.25       # seconds between writes to cg_control/voxel_state.json
+SMOOTH_RESOLUTION = int(os.environ.get("VOXEL_SMOOTH", "1"))   # samples per block for the smooth skin; 0 draws cubes
 DAY_SECONDS = float(os.environ.get("VOXEL_DAY_SECONDS", "240"))   # real seconds for one day and night
 START_TIME = float(os.environ.get("VOXEL_TIME", "0.3"))           # time of day at the start: 0 sunrise, 0.25 noon, 0.5 sunset
 FOG_END_CHUNKS = VIEW_RADIUS + 0.5   # the fog is complete at the edge of the loaded chunks, so their edge never shows
@@ -44,6 +47,9 @@ NIGHT_SKY = (0.03, 0.04, 0.10)
 DUSK_SKY = (0.95, 0.56, 0.36)
 SUN_LIGHT = (1.0, 0.97, 0.90)
 DUSK_LIGHT = (1.0, 0.60, 0.38)
+DAY_ZENITH = (0.22, 0.48, 0.90)
+NIGHT_ZENITH = (0.01, 0.015, 0.05)
+DUSK_ZENITH = (0.30, 0.30, 0.52)
 MOON_LIGHT = (0.45, 0.55, 0.85)
 
 
@@ -65,7 +71,7 @@ class VoxelGame(PyScript):
         self.flying = False
         self.mouse_captured = False
         self.yaw = 0.0                  # degrees; 0 looks down -z
-        self.pitch = -25.0              # degrees; negative looks down
+        self.pitch = float(os.environ.get("VOXEL_PITCH", "-25"))   # degrees; negative looks down
         self.target = None              # (block, normal) under the crosshair, or None
         self.keys_was = {}              # previous state of the one-shot keys and buttons
         self.last = None
@@ -73,6 +79,7 @@ class VoxelGame(PyScript):
         self.max_dt = 0.0              # longest frame since the last state write, in seconds
         self.state_timer = 0.0
         self.broken = False
+        self.slot = 0                   # the hotbar slot placing uses
         self.clock = START_TIME % 1.0   # fraction of a day
         self.sun = (0.0, -1.0, 0.0)     # the direction the sun's light travels
         self.fog = (0.0, 0.0)           # fog start and end distances, in blocks
@@ -124,7 +131,9 @@ class VoxelGame(PyScript):
         self.world = cge.VoxelWorld(VoxelGen.CHUNK, VoxelGen.HEIGHT, "voxel")
         for block, rgb in VoxelGen.COLOURS.items():
             self.world.set_colour(block, cge.Vector3f(*rgb))
-        self.world.set_terrain(self.seed, VoxelGen.SEA_LEVEL, 8, 44, VoxelGen.SNOW_LEVEL, VoxelGen.TREE_CHANCE)
+        self.world.set_smoothing(SMOOTH_RESOLUTION)
+        self.world.set_terrain(self.seed, VoxelGen.SEA_LEVEL, 8, 44, VoxelGen.SNOW_LEVEL, VoxelGen.TREE_CHANCE,
+                          VoxelGen.CAVE_WIDTH)
 
     def request_chunks(self, centre):
         """Ask for every chunk in the view that is not requested yet, nearest first. Unload the far ones."""
@@ -225,7 +234,21 @@ class VoxelGame(PyScript):
     def update_target(self):
         self.target = physics.raycast(self.solid, tuple(self.eye()), self.look_direction())
 
+    def choose_hotbar(self):
+        for slot in range(len(HOTBAR)):
+            if self.pressed("Slot%d" % slot, bool(cge.key_down(str(slot + 1)))):
+                self.slot = slot
+
+    def save_and_load(self):
+        if self.pressed("Save", bool(cge.key_down("F5"))):
+            os.makedirs("cg_control", exist_ok=True)
+            self.world.save_edits(EDITS_FILE)
+        if self.pressed("Load", bool(cge.key_down("F9"))):
+            self.world.load_edits(EDITS_FILE)
+
     def edit_blocks(self):
+        self.choose_hotbar()
+        self.save_and_load()
         break_down = self.mouse_captured and bool(cge.mouse_down("Left"))
         place_down = self.mouse_captured and bool(cge.mouse_down("Right"))
         breaking = self.pressed("Break", break_down or bool(cge.key_down("J")))
@@ -238,7 +261,7 @@ class VoxelGame(PyScript):
         elif placing:
             cell = (block[0] + normal[0], block[1] + normal[1], block[2] + normal[2])
             if not physics.cell_in_player(cell, self.pos):
-                self.world.set_block(cell[0], cell[1], cell[2], PLACED_BLOCK)
+                self.world.set_block(cell[0], cell[1], cell[2], HOTBAR[self.slot])
 
     # ----- sky ----------------------------------------------------------------------------
 
@@ -250,18 +273,24 @@ class VoxelGame(PyScript):
         height = math.sin(angle)                  # -1 at midnight, 0 at sunrise and sunset, 1 at noon
         toward_sun = (0.45 * math.cos(angle), height, 0.3 * math.cos(angle))
         length = math.sqrt(sum(v * v for v in toward_sun))
-        travel = [-v / length for v in toward_sun]   # a directional light travels from the sun
+        toward_sun = [v / length for v in toward_sun]
+        travel = [-v for v in toward_sun]            # a directional light travels from the sun
 
         day = min(1.0, max(0.0, height * 3.0))     # 0 at night, full once the sun is 20 degrees up
         dusk = max(0.0, 1.0 - abs(height) * 6.0)   # strongest at the horizon
         light = mix(mix(MOON_LIGHT, SUN_LIGHT, day), DUSK_LIGHT, dusk * 0.7)
         sky = mix(mix(NIGHT_SKY, DAY_SKY, day), DUSK_SKY, dusk * 0.8)
+        zenith = mix(mix(NIGHT_ZENITH, DAY_ZENITH, day), DUSK_ZENITH, dusk * 0.5)
+        sun_disc = light if height > 0.0 else (0.0, 0.0, 0.0)   # the disc shows only above the horizon
+        sun_disc = mix((0.0, 0.0, 0.0), sun_disc, min(1.0, max(0.0, height * 12.0)))
 
         fog_end = FOG_END_CHUNKS * VoxelGen.CHUNK
         cge.set_light("sun", direction=cge.Vector3f(*travel), colour=cge.Vector3f(*light),
                       brightness=0.45 + 0.55 * day)
-        cge.set_environment(sky=cge.Vector3f(*sky), fog=cge.Vector3f(*sky),
-                            fog_start=fog_end * FOG_START_FRACTION, fog_end=fog_end)
+        cge.set_environment(sky=cge.Vector3f(*sky), zenith=cge.Vector3f(*zenith), fog=cge.Vector3f(*sky),
+                            fog_start=fog_end * FOG_START_FRACTION, fog_end=fog_end,
+                            sun_direction=cge.Vector3f(*toward_sun), sun_colour=cge.Vector3f(*sun_disc),
+                            sun_size=1.6)
         self.sun = travel
         self.fog = (fog_end * FOG_START_FRACTION, fog_end)
 
@@ -279,7 +308,9 @@ class VoxelGame(PyScript):
         basis = cge.camera_basis()
         state = {"chunks": stats["chunks"], "loaded": stats["loaded"], "pending": stats["pending"],
                  "dirty": stats["dirty"], "meshing": stats["meshing"], "quads": stats["quads"],
-                 "upload_ms": round(stats["upload_ms"], 3), "seed": self.seed, "frames": self.frames,
+                 "upload_ms": round(stats["upload_ms"], 3), "edits": stats["edits"], "slot": self.slot,
+                 "smoothing": self.world.smoothing(),
+                 "seed": self.seed, "frames": self.frames,
                  "player": [round(v, 3) for v in self.pos], "on_ground": self.on_ground, "flying": self.flying,
                  "mouse_captured": self.mouse_captured, "yaw": round(self.yaw, 3), "pitch": round(self.pitch, 3),
                  "max_frame_ms": round(self.max_dt * 1000.0, 2),

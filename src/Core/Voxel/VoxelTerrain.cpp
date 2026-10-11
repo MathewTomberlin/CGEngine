@@ -29,6 +29,28 @@ namespace CGEngine {
 			return top + (bottom - top) * tz;
 		}
 
+		// Three-dimensional value noise in [0, 1], trilinear between lattice points with smoothstep weights.
+		float latticeValue3(int32_t ix, int32_t iy, int32_t iz, uint32_t seed) {
+			uint32_t h = static_cast<uint32_t>(ix) * 374761393u + static_cast<uint32_t>(iy) * 2246822519u
+				+ static_cast<uint32_t>(iz) * 668265263u + seed * 1442695041u;
+			h = (h ^ (h >> 13)) * 1274126177u;
+			return static_cast<float>((h ^ (h >> 16)) & 0xFFFFu) / 65535.0f;
+		}
+
+		float valueNoise3(float x, float y, float z, uint32_t seed) {
+			const float fx = std::floor(x), fy = std::floor(y), fz = std::floor(z);
+			const int32_t x0 = static_cast<int32_t>(fx), y0 = static_cast<int32_t>(fy), z0 = static_cast<int32_t>(fz);
+			const float tx = (x - fx) * (x - fx) * (3.0f - 2.0f * (x - fx));
+			const float ty = (y - fy) * (y - fy) * (3.0f - 2.0f * (y - fy));
+			const float tz = (z - fz) * (z - fz) * (3.0f - 2.0f * (z - fz));
+			auto lerp = [](float a, float b, float t) { return a + (b - a) * t; };
+			const float c00 = lerp(latticeValue3(x0, y0, z0, seed), latticeValue3(x0 + 1, y0, z0, seed), tx);
+			const float c10 = lerp(latticeValue3(x0, y0 + 1, z0, seed), latticeValue3(x0 + 1, y0 + 1, z0, seed), tx);
+			const float c01 = lerp(latticeValue3(x0, y0, z0 + 1, seed), latticeValue3(x0 + 1, y0, z0 + 1, seed), tx);
+			const float c11 = lerp(latticeValue3(x0, y0 + 1, z0 + 1, seed), latticeValue3(x0 + 1, y0 + 1, z0 + 1, seed), tx);
+			return lerp(lerp(c00, c10, ty), lerp(c01, c11, ty), tz);
+		}
+
 		// Four octaves of value noise, each at half the scale and amplitude of the last. In [0, 1].
 		float fractalNoise(float x, float z, uint32_t seed) {
 			float total = 0.0f;
@@ -73,9 +95,26 @@ namespace CGEngine {
 				fill(stoneTop, dirtTop, Dirt);
 				fill(dirtTop, top, surface);
 				if (top < seaLevel) fill(top, seaLevel, Water);
+
+				// Caves are carved below the surface, which stays whole, so they open out only where the noise reaches it.
+				if (caveWidth > 0.0f) {
+					for (int y = 1; y < std::min(height, top - 2); ++y) {
+						if (isCave(cx * size + lx, y, cz * size + lz)) blocks[(static_cast<size_t>(y) * size + lz) * size + lx] = Air;
+					}
+				}
 			}
 		}
 		placeTrees(cx, cz, size, height, blocks);
+	}
+
+	bool VoxelTerrain::isCave(int wx, int wy, int wz) const {
+		// Tunnels: the band where two noise fields are both near 0.5 is a network of winding passages. Rooms: rare spots
+		// where a coarser field is high.
+		const float x = wx / 22.0f, y = wy / 16.0f, z = wz / 22.0f;
+		const float a = valueNoise3(x, y, z, seed + 5003u) - 0.5f;
+		const float b = valueNoise3(x + 17.3f, y + 9.1f, z + 4.7f, seed + 7019u) - 0.5f;
+		if (std::fabs(a) < caveWidth && std::fabs(b) < caveWidth) return true;
+		return valueNoise3(wx / 40.0f, wy / 30.0f, wz / 40.0f, seed + 9011u) > 0.80f;
 	}
 
 	// A tree stands on a grass column, and whether it does is a hash of the column, so every chunk that sees the tree draws

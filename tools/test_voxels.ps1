@@ -75,6 +75,15 @@ try {
     Check "the view's chunks load (169 or more, none pending)" ($loaded -and $loaded.loaded -ge 169)
     Check "the loaded chunks are meshed (quads, nothing dirty)" ($loaded -and $loaded.quads -gt 0 -and $loaded.dirty -eq 0)
 
+    # The generator's caves and the block edits, checked inside the engine by tools/voxel_world_check.py.
+    $checkFile = (Resolve-Path "tools/voxel_world_check.py").Path -replace '\\', '/'
+    Send-Command "00_world_check" ('{"command":"run_script","params":{"path":"' + $checkFile + '"}}')
+    $ranCheck = Wait-Result "00_world_check" 120
+    Check "the world check script runs" ($ranCheck -and $ranCheck.ok)
+    $worldCheck = Get-Content (Join-Path $control "voxel_check.json") -Raw | ConvertFrom-Json
+    $worldCheck.check.PSObject.Properties | ForEach-Object { Check ("world: " + $_.Name) ([bool]$_.Value) }
+    Write-Host ("      caves: {0} of {1} underground blocks are air" -f $worldCheck.caveAir, $worldCheck.underground)
+
     # Walk forward for 4 seconds, then turn right for 2 seconds: 90 degrees a second is 180 degrees of turn.
     # Mouse input is scripted to nothing so that the real mouse cannot turn the view during the test.
     $keys = @'
