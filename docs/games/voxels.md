@@ -18,8 +18,8 @@ run the Release configuration.
 - Mouse: left-click captures the mouse. Move it to look. Left-click breaks the block under the crosshair, right-click
   places stone against it, and Escape releases the mouse.
 - Without the mouse: the arrow keys turn and look, J breaks, K places.
-- Keys 1 to 7 choose the block to place (the hotbar: stone, dirt, grass, wood, leaves, sand, snow). F5 saves the
-  edited blocks to `cg_control/voxel_edits.bin`, and F9 loads them back.
+- Keys 1 to 9 choose the block to place (the hotbar: stone, dirt, grass, wood, leaves, sand, gravel, snow, water). Sand and
+  gravel fall, and water falls and flows. F5 saves the edited blocks to `cg_control/voxel_edits.bin`, and F9 loads them back.
 
 ## The look: day, night and fog
 
@@ -31,6 +31,24 @@ run the Release configuration.
   draws the parts of the trees that reach it, so the trees have no seams.
 - Caves are tunnels and rooms carved out of the stone, below the surface, from two 3D noise fields. The sky is a
   gradient from the horizon to the zenith, with the sun's disc and glow, and the fog takes the horizon colour.
+
+## Block physics
+
+Each block id has a type (`define_block`): solid (it blocks movement), falls (sand and gravel move down into air, or
+swap down past water), and liquid (water flows). Water is a full source, block 5, and flows as levels 7 to 1 (blocks 9
+to 15): a flow spreads one level at a time, and drains when nothing feeds it, so it stays finite.
+
+The simulation only looks at cells that changed: a block set, or a block that moved, queues its cell and its neighbours.
+A quiet world queues nothing and costs nothing, and a far chunk that nothing touches is never looked at.
+
+```python
+world.define_block(9, cge.Vector3f(0.5, 0.5, 0.5), solid=False, falls=False, liquid=True)
+world.simulate(dt, 1.5)                  # run the due ticks within 1.5 ms of work (ticks every 0.1 s)
+world.add_rule(1, 5, 2, 0.5)             # grass touching water becomes dirt, half the time per tick
+world.set_tick_hook(lambda x, y, z, block: 7 if block == 3 and y > 60 else None)   # any Python rule
+world.is_solid(x, y, z)                  # collision queries use the types too
+world.active_count()                     # cells queued: 0 when everything has settled
+```
 
 ## Files
 
@@ -122,6 +140,7 @@ the view's level and the worst frame.
 ## Limits
 
 - There are no shadows yet, and the hotbar has no picture on screen.
+- The simulation runs on the loaded chunks only, and the player's collision is still in Python.
 - Water is opaque. The smooth skin has one level of detail for every chunk; a finer skin near the camera is on the roadmap.
 - Each chunk is one draw call. Region batching (several chunks in one mesh) is the next step if the draw count
   becomes the limit.

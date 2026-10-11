@@ -15,7 +15,27 @@ namespace CGEngine {
 	VoxelWorld::VoxelWorld(int chunkSize, int chunkHeight, const std::string& materialName)
 		: size(chunkSize), height(chunkHeight), material(materialName) {
 		palette.fill(glm::vec3(1.0f));
+		// The terrain's own blocks: sand falls, and water is a liquid that is not solid. Air is not solid either.
+		types.fill(BlockType());
+		types[0].solid = false;
+		types[VoxelTerrain::Sand].falls = true;
+		types[Water::Source] = BlockType{ false, false, true };
+		for (int id = Water::FlowFirst; id <= Water::FlowLast; ++id) types[static_cast<size_t>(id)] = BlockType{ false, false, true };
 		startWorkers();
+	}
+
+	void VoxelWorld::defineBlock(int blockId, const BlockType& type) {
+		types[static_cast<size_t>(std::clamp(blockId, 0, 255))] = type;
+	}
+
+	bool VoxelWorld::isSolid(int x, int y, int z) const {
+		const int block = getBlock(x, y, z);
+		return block != 0 && types[static_cast<size_t>(block)].solid;
+	}
+
+	bool VoxelWorld::loadedAt(int x, int z) const {
+		const Chunk* chunk = findChunk(floorDiv(x, size), floorDiv(z, size));
+		return chunk && chunk->loaded;
 	}
 
 	VoxelWorld::~VoxelWorld() {
@@ -126,6 +146,14 @@ namespace CGEngine {
 				markDirty(cx + dx, cz + dz);
 			}
 		}
+		// The simulation looks at the block and its neighbours next tick (a falling block, the water beside it, a rule).
+		simulation.activate(x, y, z);
+		simulation.activate(x + 1, y, z);
+		simulation.activate(x - 1, y, z);
+		simulation.activate(x, y + 1, z);
+		simulation.activate(x, y - 1, z);
+		simulation.activate(x, y, z + 1);
+		simulation.activate(x, y, z - 1);
 	}
 
 	void VoxelWorld::fillColumn(int x, int z, int yFrom, int yTo, int blockId) {

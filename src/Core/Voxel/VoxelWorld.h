@@ -12,7 +12,9 @@
 #include <utility>
 #include <vector>
 #include <fstream>
+#include "VoxelBlocks.h"
 #include "VoxelMesher.h"
+#include "VoxelSimulation.h"
 #include "VoxelTerrain.h"
 
 namespace CGEngine {
@@ -43,7 +45,18 @@ namespace CGEngine {
 		void setTerrain(const VoxelTerrain& settings) { terrain = settings; }
 
 		int getBlock(int x, int y, int z) const;
+		// Sets a block, and queues it and its neighbours for the simulation. Unloaded chunks keep the edit for later.
 		void setBlock(int x, int y, int z, int blockId);
+		// True if the column at (x, z) is in a loaded chunk, so its blocks are real.
+		bool loadedAt(int x, int z) const;
+
+		// What the blocks do (see VoxelBlocks.h): solid for collision, falling, or liquid. Set it for any id, once.
+		void defineBlock(int blockId, const BlockType& type);
+		const BlockType& blockType(int blockId) const { return types[static_cast<size_t>(std::clamp(blockId, 0, 255))]; }
+		bool isSolid(int x, int y, int z) const;
+		// Runs the simulation for dt seconds, within budgetMs of work (see VoxelSimulation). Returns the cells looked at.
+		int simulate(double dt, double budgetMs) { return simulation.simulate(*this, dt, budgetMs); }
+		VoxelSimulation& physics() { return simulation; }
 		// Sets the blocks from yFrom (inclusive) to yTo (exclusive), clipped to the world height.
 		void fillColumn(int x, int z, int yFrom, int yTo, int blockId);
 
@@ -107,6 +120,8 @@ namespace CGEngine {
 		int height;
 		std::string material;
 		std::array<glm::vec3, 256> palette;
+		std::array<BlockType, 256> types;
+		VoxelSimulation simulation;
 		VoxelTerrain terrain;
 		int smoothResolution = 0;
 		std::map<std::pair<int, int>, Chunk> chunks;

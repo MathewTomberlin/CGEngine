@@ -51,6 +51,37 @@ void bindVoxel(py::module_& m) {
         .def("set_smoothing", &VoxelWorld::setSmoothing, py::arg("resolution"),
              "The surface style: 0 for cubes, or the number of samples per block for a smooth skin (1 for the block scale, 2 for half blocks). Loaded chunks are re-meshed.")
         .def("smoothing", &VoxelWorld::smoothing, "The surface style set by set_smoothing: 0 for cubes, else the samples per block.")
+        .def("define_block", [](VoxelWorld& world, int block_id, sf::Vector3f colour, bool solid, bool falls, bool liquid) {
+            world.setColour(block_id, glm::vec3(colour.x, colour.y, colour.z));
+            world.defineBlock(block_id, BlockType{ solid, falls, liquid });
+        }, py::arg("block_id"), py::arg("colour"), py::arg("solid") = true, py::arg("falls") = false, py::arg("liquid") = false,
+           "Define a block id: its colour, whether it is solid (blocks movement), falls (sand-like, moves down into air or liquid) and liquid (flows, as water does).")
+        .def("is_solid", &VoxelWorld::isSolid, py::arg("x"), py::arg("y"), py::arg("z"),
+             "True if the block at these coordinates is solid. Air and liquids are not.")
+        .def("simulate", &VoxelWorld::simulate, py::arg("dt"), py::arg("budget_ms") = 1.0,
+             "Advance the block physics by dt seconds, within budget_ms of work. Returns the cells looked at.")
+        .def("activate", [](VoxelWorld& world, int x, int y, int z) { world.physics().activate(x, y, z); },
+             py::arg("x"), py::arg("y"), py::arg("z"), "Queue a cell for the simulation, so it is looked at on the next tick.")
+        .def("active_count", [](VoxelWorld& world) { return world.physics().activeCount(); },
+             "Cells queued for the simulation. A world with nothing moving has none.")
+        .def("add_rule", [](VoxelWorld& world, int block, int neighbour, int becomes, float chance) {
+            world.physics().addRule(VoxelSimulation::Rule{ static_cast<uint8_t>(block), static_cast<uint8_t>(neighbour),
+                static_cast<uint8_t>(becomes), chance });
+        }, py::arg("block"), py::arg("neighbour"), py::arg("becomes"), py::arg("chance") = 1.0f,
+           "A reaction: a block that touches the neighbour kind becomes the other block, with this chance per tick.")
+        .def("clear_rules", [](VoxelWorld& world) { world.physics().clearRules(); }, "Remove every reaction rule.")
+        .def("set_tick_hook", [](VoxelWorld& world, py::object fn) {
+            if (fn.is_none()) {
+                world.physics().setHook(nullptr);
+                return;
+            }
+            // Called once per queued block per tick, from the main thread (the GIL is held). Return a block id to replace
+            // the block, or None to leave it.
+            world.physics().setHook([fn](int x, int y, int z, int block) {
+                py::object result = fn(x, y, z, block);
+                return result.is_none() ? -1 : result.cast<int>();
+            });
+        }, py::arg("fn"), "A Python function (x, y, z, block) -> block id or None, run on every queued block each tick. None removes it.")
         .def("save_edits", &VoxelWorld::saveEdits, py::arg("path"),
              "Write the edited blocks to a binary file. False if it cannot be written.")
         .def("load_edits", &VoxelWorld::loadEdits, py::arg("path"),

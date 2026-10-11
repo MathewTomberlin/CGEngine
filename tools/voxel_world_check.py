@@ -40,6 +40,71 @@ def wait_meshed(world, chunks, timeout=60.0):
     return False
 
 
+SAND = 4
+GRASS = 1
+DIRT = 2
+STONE = 3
+WATER = 5
+WOOD_ID = 7
+FLOW_IDS = range(9, 16)
+
+
+def run_simulation(world, seconds):
+    """Advance the block physics by the given seconds, a frame at a time."""
+    for _ in range(int(seconds / 0.05)):
+        world.simulate(0.05, 20.0)
+
+
+def liquid_count(world, x0, x1, z0, z1):
+    liquids = set([WATER]) | set(FLOW_IDS)
+    return sum(1 for x in range(x0, x1) for z in range(z0, z1) for y in range(HEIGHT)
+               if world.get_block(x, y, z) in liquids)
+
+
+def surface_y(world, x, z):
+    """The height of the highest solid block in the column, or -1."""
+    for y in range(HEIGHT - 1, -1, -1):
+        if world.is_solid(x, y, z):
+            return y
+    return -1
+
+
+def check_physics(world, checks):
+    # Sand falls from the top of its column onto the first solid block.
+    world.set_block(5, HEIGHT - 2, 5, SAND)
+    run_simulation(world, 4.0)
+    sand = [y for y in range(HEIGHT) if world.get_block(5, y, 5) == SAND]
+    checks["sand falls to the ground"] = (len(sand) == 1 and sand[0] < 40 and
+                                          (sand[0] == 0 or world.is_solid(5, sand[0] - 1, 5)))
+
+    # Water poured from a source falls, then spreads and stops.
+    world.set_block(7, HEIGHT - 2, 7, WATER)
+    run_simulation(world, 4.0)
+    after_four = liquid_count(world, 5, 10, 5, 10)
+    checks["water falls and spreads"] = after_four > 5
+    run_simulation(world, 10.0)
+    checks["water settles"] = liquid_count(world, 5, 10, 5, 10) <= after_four + 2
+
+    # A reaction rule: grass with water beside it becomes dirt.
+    world.add_rule(GRASS, WATER, DIRT, 1.0)
+    world.set_block(-6, 62, -6, GRASS)
+    world.set_block(-6, 63, -6, WATER)
+    run_simulation(world, 1.0)
+    checks["rule turns grass to dirt"] = world.get_block(-6, 62, -6) == DIRT
+    world.clear_rules()
+
+    # The hook replaces a stone it is shown.
+    world.set_tick_hook(lambda x, y, z, block: WOOD_ID if (x, y, z) == (-9, 62, -9) and block == STONE else None)
+    world.set_block(-9, 62, -9, STONE)
+    run_simulation(world, 0.5)
+    checks["hook replaces a block"] = world.get_block(-9, 62, -9) == WOOD_ID
+    world.set_tick_hook(None)
+
+    # With everything settled, nothing is queued: a quiet world costs nothing.
+    run_simulation(world, 2.0)
+    checks["quiet world queues nothing"] = world.active_count() == 0
+
+
 def count_caves(world, chunks):
     """Air below the surface, column by column: air between y = 2 and the top solid block minus 3."""
     air = 0
@@ -115,6 +180,9 @@ def run(out_path="cg_control/voxel_check.json"):
     results["check"]["smooth skin has quads"] = world.stats()["quads"] > 0
     world.set_smoothing(0)
     results["check"]["cubes again"] = wait_meshed(world, chunks) and world.stats()["quads"] > 0
+
+    # The block physics: falling sand, flowing water, a rule and a hook.
+    check_physics(world, results["check"])
 
     results["ok"] = all(results["check"].values())
     tmp = out_path + ".tmp"
