@@ -229,6 +229,7 @@ namespace CGEngine {
 		/// The current render camera. This is set during OpenGL initialization and used to set the view matrix for the shader program.
 		/// </summary>
 		unique_ptr<Camera> currentCamera = nullptr;
+		glm::mat4 cameraMatrix = glm::mat4(1.0f);	//currentCamera's matrix for the frame being rendered
 		/// <summary>
 		/// The order in which to draw bodies, with Bodies further back in the vector drawn on top of other Bodies. This is cleared and re-calculated each frame
 		/// </summary>

@@ -589,7 +589,7 @@ namespace CGEngine {
 
 	void Renderer::setTransformUBOData(TransformUBO transformUBOData, glm::mat4 combinedTransform) {
 		transformUBOData.model = combinedTransform;
-		transformUBOData.camera = currentCamera->getMatrix();
+		transformUBOData.camera = cameraMatrix;
 		updateTransformUBO(transformUBOData);
 	}
 
@@ -786,6 +786,9 @@ namespace CGEngine {
 	}
 
 	void Renderer::render(RenderTarget* window) {
+		//The camera does not move during a render pass, so its matrix is computed once here, not for every draw
+		if (currentCamera) cameraMatrix = currentCamera->getMatrix();
+
 		//Sort the renderOrder by zOrder if zSorting is enabled
 		if (zSortingEnabled) {
 			sortZ();
