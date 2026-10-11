@@ -31,6 +31,9 @@ run the Release configuration.
   draws the parts of the trees that reach it, so the trees have no seams.
 - Caves are tunnels and rooms carved out of the stone, below the surface, from two 3D noise fields. The sky is a
   gradient from the horizon to the zenith, with the sun's disc and glow, and the fog takes the horizon colour.
+- The sun casts shadows (`VOXEL_SHADOWS=0` turns them off; `VOXEL_SHADOW_RADIUS`, 40 blocks by default, sets how far
+  they reach). The map is drawn again when the camera moves, the sun turns, or a tenth of a second passes, and not at
+  all while the sun is down.
 
 ## Block physics
 
@@ -139,7 +142,7 @@ the view's level and the worst frame.
 
 ## Limits
 
-- There are no shadows yet, and the hotbar has no picture on screen.
+- The hotbar has no picture on screen, and the shadows are hard-edged only where the map is sharp (near the camera).
 - The simulation runs on the loaded chunks only. The player's collision is in C++ (`world.step_body`), and the Python
   version (`VoxelPhysics.step`) stays as the reference that the tests compare with.
 - Water is opaque. The smooth skin has one level of detail for every chunk; a finer skin near the camera is on the roadmap.

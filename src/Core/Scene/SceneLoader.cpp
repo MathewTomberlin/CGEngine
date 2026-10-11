@@ -38,6 +38,8 @@ namespace CGEngine {
             environment.sunDirection = readVec3(obj, "sunDirection", environment.sunDirection);
             environment.sunColour = readVec3(obj, "sunColour", environment.sunColour);
             environment.sunSize = obj.value("sunSize", environment.sunSize);
+            environment.shadows = obj.value("shadows", environment.shadows);
+            environment.shadowRadius = obj.value("shadowRadius", environment.shadowRadius);
         }
 
         std::string requireString(const json& obj, const char* key, const std::string& context) {

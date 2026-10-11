@@ -243,8 +243,13 @@ namespace CGEngine {
 		const int S = chunk.size;
 		const int H = chunk.height;
 
-		// Density samples at i / R (x and z) and j / R (y), for i, k in [-1, S * R + 1] and j in [-1, H * R + 1].
-		// Array index = sample + 1.
+		// Density samples, for i, k in [-1, S * R + 1] and j in [-1, H * R + 1]; array index = sample + 1. With one sample a
+		// block, the samples sit at block centres, so a block one wide (a tree trunk) keeps its surface. With more, they sit at
+		// i / R, which puts samples on block faces too and rounds the edges further.
+		auto position = [R](int i, int j, int k) {
+			const glm::vec3 p = glm::vec3(i, j, k);
+			return R == 1 ? p + glm::vec3(0.5f) : p / static_cast<float>(R);
+		};
 		const int sx = S * R + 3;
 		const int sy = H * R + 3;
 		std::vector<float> samples(static_cast<size_t>(sx) * sy * sx);
@@ -252,7 +257,7 @@ namespace CGEngine {
 		for (int j = -1; j <= H * R + 1; ++j) {
 			for (int k = -1; k <= S * R + 1; ++k) {
 				for (int i = -1; i <= S * R + 1; ++i) {
-					samples[sampleIndex(i, j, k)] = densityAt(chunk, glm::vec3(i, j, k) / static_cast<float>(R));
+					samples[sampleIndex(i, j, k)] = densityAt(chunk, position(i, j, k));
 				}
 			}
 		}
@@ -273,7 +278,7 @@ namespace CGEngine {
 					for (int c = 0; c < 8; ++c) {
 						const int dx = c & 1, dy = (c >> 1) & 1, dz = (c >> 2) & 1;
 						value[c] = sample(i + dx, j + dy, k + dz);
-						corner[c] = glm::vec3(i + dx, j + dy, k + dz) / static_cast<float>(R);
+						corner[c] = position(i + dx, j + dy, k + dz);
 						if (value[c] > SmoothIso) ++inside;
 					}
 					if (inside == 0 || inside == 8) continue;

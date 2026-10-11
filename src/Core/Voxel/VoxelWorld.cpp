@@ -340,7 +340,7 @@ namespace CGEngine {
 		chunk.meshing = true;
 		dirtyKeys.erase(std::make_pair(cx, cz));
 		const int resolution = smoothResolution;
-		PaddedChunk padded = snapshot(cx, cz, resolution > 0 ? 2 : 1);
+		PaddedChunk padded = snapshot(cx, cz, resolution > 0 ? 3 : 1);
 		const std::array<glm::vec3, 256> colours = palette;
 		const uint32_t generation = chunk.generation;
 		const uint32_t version = chunk.version;
