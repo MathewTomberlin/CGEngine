@@ -7,6 +7,8 @@
 #include "gtx/transform.hpp"
 #include "gtx/matrix_decompose.hpp"
 #include "SFML/OpenGL.hpp"
+#include <cstddef>
+#include <cstdint>
 #include <vector>
 #include <map>
 #include <string>
@@ -82,15 +84,34 @@ namespace CGEngine {
 		}
 	};
 
+	// A vertex of a voxel mesh: 48 bytes, against 80 for VertexData. It leaves out the bone fields, and every attribute
+	// is a float, since the driver reads byte attributes slowly. The shader sees the same attributes (see
+	// Renderer::createCompactMeshBuffers).
+	struct VoxelVertex {
+		glm::vec3 position = { 0,0,0 };
+		glm::vec2 texCoord = { 0,0 };
+		glm::vec3 normal = { 0,0,0 };
+		float materialId = 0.0f;
+		glm::vec3 colour = { 1,1,1 };
+	};
+
 	struct MeshData : public IResource {
 		MeshData(string meshName = "", vector<VertexData> vertices = {}, vector<unsigned int> indices = {}, map<string, BoneData> bones = {}) : meshName(meshName), vertices(vertices), indices(indices), vao(0U), vbo(0U), ebo(0U), bones(bones) {};
 		MeshData(vector<VertexData> vertices, vector<unsigned int> indices = {}, map<string, BoneData> bones = {}, string meshName = "") : meshName(meshName), vertices(vertices), indices(indices), vao(0U), vbo(0U), ebo(0U), bones(bones) {};
+		// A compact voxel mesh. The asset manager checks a resource when it is created, so its vertices are given here.
+		MeshData(vector<VoxelVertex> voxels, vector<unsigned int> indices) : voxelVertices(voxels), compact(true), indices(indices), vao(0U), vbo(0U), ebo(0U) {};
 		bool isValid() const {
-			return !vertices.empty() && !indices.empty();
+			return vertexCount() > 0 && !indices.empty();
+		}
+		// Voxel meshes keep their vertices in voxelVertices (compact), everything else in vertices.
+		size_t vertexCount() const {
+			return compact ? voxelVertices.size() : vertices.size();
 		}
 		string sourcePath = "";
 		string meshName = "";
 		vector<VertexData> vertices;
+		vector<VoxelVertex> voxelVertices;
+		bool compact = false;
 		vector<unsigned int> indices;
 		map<string, BoneData> bones;
 		// Box around the local-space positions, for culling. Recomputed when boundsValid is false.
@@ -104,11 +125,18 @@ namespace CGEngine {
 		void computeBounds() {
 			boundsMin = glm::vec3(std::numeric_limits<float>::max());
 			boundsMax = glm::vec3(-std::numeric_limits<float>::max());
-			for (const VertexData& vertex : vertices) {
-				boundsMin = glm::min(boundsMin, vertex.position);
-				boundsMax = glm::max(boundsMax, vertex.position);
+			if (compact) {
+				for (const VoxelVertex& vertex : voxelVertices) {
+					boundsMin = glm::min(boundsMin, vertex.position);
+					boundsMax = glm::max(boundsMax, vertex.position);
+				}
+			} else {
+				for (const VertexData& vertex : vertices) {
+					boundsMin = glm::min(boundsMin, vertex.position);
+					boundsMax = glm::max(boundsMax, vertex.position);
+				}
 			}
-			boundsValid = !vertices.empty();
+			boundsValid = vertexCount() > 0;
 		}
 		GLuint vbo = 0U;
 		GLuint vao = 0U;
@@ -198,12 +226,14 @@ namespace CGEngine {
 		/// Save the next presented frame to a PNG at path. Taken before the buffer swap.
 		void requestScreenshot(const std::string& path) { pendingScreenshotPath = path; }
 		void setWindow(RenderWindow* window);
+		RenderWindow* getWindow() const { return window; }
 		Camera* getCurrentCamera();
 		void setCurrentCamera(unique_ptr<Camera> camera);
 
 		void renderMesh(Mesh* mesh, MeshData* meshData, Transformation3D transform);
 		void getModelData(Mesh* mesh);
 		void uploadMeshData(MeshData* meshData);
+		void createCompactMeshBuffers(MeshData* meshData, Program* program);
 		void releaseMeshData(MeshData* meshData);
 		string getUniformArrayIndexName(string arrayName, int index);
 		string getUniformArrayPropertyName(string arrayName, int index, string propertyName);

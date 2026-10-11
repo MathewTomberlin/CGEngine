@@ -61,6 +61,16 @@ A procedural block world with chunks, terrain, collision, block editing and a da
 - [ ] **8.4** Day and night: the sun's direction and the ambient light change over time from a script. A hotbar of block types.
 - [ ] **8.5** Save and load of the edited blocks.
 
+## Phase 9: voxel performance and scale (from walking the voxel world)
+Goal: enormous worlds with no hitching while chunks load.
+- [x] **9.1** Terrain and meshing run on worker threads. `update` installs finished chunks and uploads meshes within a 2 ms budget, at least one per call. The frame no longer waits for terrain (it was Python, about 30 ms a chunk) or for meshing.
+- [x] **9.2** Greedy meshing on a padded copy of the chunk: no world lookup per face, and coplanar faces merge. About 2.3 times fewer quads than per-face meshing.
+- [x] **9.3** Compact voxel vertices, 48 bytes against 80. Byte attributes, even normalised, made each draw several times slower on the NVIDIA driver, so every attribute is a float (measured: render 50 ms to 5 ms with only the position enabled).
+- [x] **9.4** Mouse look. The arrow keys' turn past 90 degrees flipped the camera upside down (`Camera::lookAt` only reached yaw in [-90, 90]); fixed. Static meshes no longer skin with the bone matrices an animated model left behind (a `skinned` uniform).
+- [ ] **9.5** Region batching: several chunks in one mesh, so fewer draws. Measure with `culledDraws` and `drawCalls` in `get_stats`.
+- [ ] **9.6** Release-build numbers for the voxel sample, and an in-engine test (`tools/test_voxels.ps1`) that walks, waits for the chunks, and checks the worst frame.
+- [ ] **9.7** Trees, caves, sky and lighting for the voxel world.
+
 ## Tooling and quality
 - [x] CI build on Windows (`.github/workflows/build.yml`) with Mesa software OpenGL smoke run
 - [~] Unit tests for pure logic runnable without a GPU. Done for the dungeon generator (`python -I tools/test_dungeon_gen.py`) and for the scene format and command list (`python -I tools/test_scene_format.py`: example scenes, invalid fixtures, documented commands). The C++ parsers in `SceneLoader` and `ControlChannel` are still covered only by the GPU integration test.

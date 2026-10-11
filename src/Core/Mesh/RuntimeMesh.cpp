@@ -4,6 +4,24 @@
 #include "Mesh.h"
 
 namespace CGEngine {
+	namespace {
+		// Adds a body with this mesh data. The body's name is unique per call, because asset names are cache keys.
+		Body* attachMesh(const std::string& name, MeshData* meshData, const std::vector<id_t>& materials, Vector3f position) {
+			Mesh mesh(meshData, Transformation3D(position), materials);
+			static size_t runtimeBodyCount = 0;
+			auto body = assets.create<Body>("body:" + name + "#" + std::to_string(++runtimeBodyCount), mesh);
+			if (!body.has_value()) return nullptr;
+			body.value().second->setName(name);
+			return body.value().second;
+		}
+
+		// A runtime mesh's data has its own asset name, so no two bodies share it.
+		std::string runtimeMeshName(const std::string& name) {
+			static size_t runtimeMeshCount = 0;
+			return "runtime:" + name + "#" + std::to_string(++runtimeMeshCount);
+		}
+	}
+
 	Body* findBodyByName(const std::string& name) {
 		for (Body* body : assets.getAllResources<Body>()) {
 			if (body->getName() == name) return body;
@@ -13,26 +31,33 @@ namespace CGEngine {
 
 	Body* createRuntimeMeshBody(const std::string& name, std::vector<VertexData> vertices, std::vector<unsigned int> indices,
 		const std::vector<id_t>& materials, Vector3f position) {
-		// Each runtime mesh gets its own data under a unique asset name, so no two bodies share it.
-		static size_t runtimeMeshCount = 0;
-		auto meshData = assets.create<MeshData>("runtime:" + name + "#" + std::to_string(++runtimeMeshCount),
-			std::move(vertices), std::move(indices));
+		auto meshData = assets.create<MeshData>(runtimeMeshName(name), std::move(vertices), std::move(indices));
 		if (!meshData.has_value()) return nullptr;
 		meshData.value().second->runtimeMesh = true;
+		return attachMesh(name, meshData.value().second, materials, position);
+	}
 
-		Mesh mesh(meshData.value().second, Transformation3D(position), materials);
-		// Body asset names are cache keys. A unique key per body stops a re-created body returning an old one.
-		static size_t runtimeBodyCount = 0;
-		auto body = assets.create<Body>("body:" + name + "#" + std::to_string(++runtimeBodyCount), mesh);
-		if (!body.has_value()) return nullptr;
-		body.value().second->setName(name);
-		return body.value().second;
+	Body* createCompactMeshBody(const std::string& name, std::vector<VoxelVertex> vertices, std::vector<unsigned int> indices,
+		const std::vector<id_t>& materials, Vector3f position) {
+		auto meshData = assets.create<MeshData>(runtimeMeshName(name), std::move(vertices), std::move(indices));
+		if (!meshData.has_value()) return nullptr;
+		meshData.value().second->runtimeMesh = true;
+		return attachMesh(name, meshData.value().second, materials, position);
+	}
+
+	namespace {
+		// The runtime mesh of a body, if it has one of the given layout. The layout is fixed when the mesh is made, since
+		// the GPU's attribute setup depends on it.
+		MeshData* runtimeMeshOf(Body* body, bool compact) {
+			Mesh* mesh = body ? body->get<Mesh*>() : nullptr;
+			MeshData* meshData = mesh ? mesh->getMeshData() : nullptr;
+			return meshData && meshData->runtimeMesh && meshData->compact == compact ? meshData : nullptr;
+		}
 	}
 
 	bool updateRuntimeMeshBody(Body* body, std::vector<VertexData> vertices, std::vector<unsigned int> indices) {
-		Mesh* mesh = body ? body->get<Mesh*>() : nullptr;
-		MeshData* meshData = mesh ? mesh->getMeshData() : nullptr;
-		if (!meshData || !meshData->runtimeMesh) return false;
+		MeshData* meshData = runtimeMeshOf(body, false);
+		if (!meshData) return false;
 		meshData->vertices = std::move(vertices);
 		meshData->indices = std::move(indices);
 		meshData->boundsValid = false;
@@ -40,8 +65,21 @@ namespace CGEngine {
 		return true;
 	}
 
+	bool updateCompactMeshBody(Body* body, std::vector<VoxelVertex> vertices, std::vector<unsigned int> indices) {
+		MeshData* meshData = runtimeMeshOf(body, true);
+		if (!meshData) return false;
+		meshData->voxelVertices = std::move(vertices);
+		meshData->indices = std::move(indices);
+		meshData->boundsValid = false;
+		meshData->gpuDirty = true;
+		return true;
+	}
+
 	bool removeRuntimeMeshBody(const std::string& name) {
-		Body* body = findBodyByName(name);
+		return removeRuntimeMesh(findBodyByName(name));
+	}
+
+	bool removeRuntimeMesh(Body* body) {
 		if (!body || body == world->getRoot()) return false;
 		Mesh* mesh = body->get<Mesh*>();
 		MeshData* meshData = mesh ? mesh->getMeshData() : nullptr;

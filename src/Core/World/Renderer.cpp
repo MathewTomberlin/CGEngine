@@ -142,6 +142,12 @@ namespace CGEngine {
 				return;
 			}
 
+			if (meshData->compact) {
+				createCompactMeshBuffers(meshData, program);
+				setGLWindowState(false);
+				return;
+			}
+
 			GL_CHECK(glGenBuffers(1, & meshData->vbo));
 			GL_CHECK(glGenBuffers(1, &meshData->ebo));
 			GL_CHECK(glGenVertexArrays(1, &meshData->vao));
@@ -208,12 +214,43 @@ namespace CGEngine {
 		if (meshData->vao == 0U) return;
 		GL_CHECK(glBindVertexArray(meshData->vao));
 		GL_CHECK(glBindBuffer(GL_ARRAY_BUFFER, meshData->vbo));
-		GL_CHECK(glBufferData(GL_ARRAY_BUFFER, meshData->vertices.size() * sizeof(VertexData), meshData->vertices.data(), GL_DYNAMIC_DRAW));
+		if (meshData->compact) {
+			GL_CHECK(glBufferData(GL_ARRAY_BUFFER, meshData->voxelVertices.size() * sizeof(VoxelVertex), meshData->voxelVertices.data(), GL_DYNAMIC_DRAW));
+		} else {
+			GL_CHECK(glBufferData(GL_ARRAY_BUFFER, meshData->vertices.size() * sizeof(VertexData), meshData->vertices.data(), GL_DYNAMIC_DRAW));
+		}
 		if (!meshData->indices.empty()) {
 			// Binding the element buffer while the VAO is bound makes it part of the VAO, even if it had no indices before.
 			GL_CHECK(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, meshData->ebo));
 			GL_CHECK(glBufferData(GL_ELEMENT_ARRAY_BUFFER, meshData->indices.size() * sizeof(unsigned int), meshData->indices.data(), GL_DYNAMIC_DRAW));
 		}
+		GL_CHECK(glBindVertexArray(0));
+	}
+
+	void Renderer::createCompactMeshBuffers(MeshData* meshData, Program* program) {
+		GL_CHECK(glGenBuffers(1, &meshData->vbo));
+		GL_CHECK(glGenBuffers(1, &meshData->ebo));
+		GL_CHECK(glGenVertexArrays(1, &meshData->vao));
+		GL_CHECK(glBindVertexArray(meshData->vao));
+		GL_CHECK(glBindBuffer(GL_ARRAY_BUFFER, meshData->vbo));
+		GL_CHECK(glBufferData(GL_ARRAY_BUFFER, meshData->voxelVertices.size() * sizeof(VoxelVertex), meshData->voxelVertices.data(), GL_STATIC_DRAW));
+		if (!meshData->indices.empty()) {
+			GL_CHECK(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, meshData->ebo));
+			GL_CHECK(glBufferData(GL_ELEMENT_ARRAY_BUFFER, meshData->indices.size() * sizeof(unsigned int), meshData->indices.data(), GL_STATIC_DRAW));
+		}
+		// Every voxel attribute is a float: byte attributes, even normalised, made each draw several times slower on
+		// the NVIDIA driver (measured in the voxel sample).
+		auto bind = [&](const char* name, GLint size, GLenum type, GLboolean normalized, size_t offset) {
+			const GLint location = program->attrib(name);
+			if (location < 0) return;
+			GL_CHECK(glEnableVertexAttribArray(location));
+			GL_CHECK(glVertexAttribPointer(location, size, type, normalized, sizeof(VoxelVertex), (void*)offset));
+		};
+		bind("position", 3, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, position));
+		bind("texCoord", 2, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, texCoord));
+		bind("vertNormal", 3, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, normal));
+		bind("materialId", 1, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, materialId));
+		bind("vertColour", 3, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, colour));
 		GL_CHECK(glBindVertexArray(0));
 	}
 
@@ -408,7 +445,7 @@ namespace CGEngine {
 		if (meshData->indices.size()) {
 			GL_CHECK(glDrawElementsInstanced(GL_TRIANGLES, meshData->indices.size(), GL_UNSIGNED_INT, 0, count));
 		} else {
-			GL_CHECK(glDrawArraysInstanced(GL_TRIANGLES, 0, meshData->vertices.size(), count));
+			GL_CHECK(glDrawArraysInstanced(GL_TRIANGLES, 0, meshData->vertexCount(), count));
 		}
 
 		// Put the attribute back the way the mesh's own draws expect it: no array, no divisor.
@@ -440,7 +477,7 @@ namespace CGEngine {
 	}
 
 	void Renderer::renderMesh(Mesh* mesh, MeshData* meshData, Transformation3D transform) {
-		if (!meshData || meshData->vertices.empty()) return;	//Don;t log, null MeshData Meshes are empty Bodies
+		if (!meshData || meshData->vertexCount() == 0) return;	//Don;t log, null MeshData Meshes are empty Bodies
 		if (!mesh) {
 			log(this, LogError, "Mesh is invalid");
 			return;
@@ -470,7 +507,7 @@ namespace CGEngine {
 		if (meshData->gpuDirty) uploadMeshData(meshData);
 
 		// Only proceed with mesh rendering if we have mesh data
-		if (meshData && meshData->vertices.size() > 0) {
+		if (meshData && meshData->vertexCount() > 0) {
 			GL_CHECK(glBindVertexArray(meshData->vao));
 			boundTextures = 0;
 			
@@ -504,6 +541,9 @@ namespace CGEngine {
 			program->setUniform("cameraPosition", toGlm(currentCamera->getPosition()));
 			program->setUniform("timeSec", time.getElapsedSec());
 			program->setUniform("instanced", instanced ? 1 : 0);
+			// Static meshes do not enable the bone attributes, so those read defaults. Turning skinning off for them keeps
+			// them from being moved by whatever bone matrices an animated model left in the bone buffer.
+			program->setUniform("skinned", meshData->bones.empty() ? 0 : 1);
 
 			//Draw the MeshData by index, if available, or by vertices
 			++drawCallsThisFrame;
@@ -512,7 +552,7 @@ namespace CGEngine {
 			} else if (meshData->indices.size()) {
 				GL_CHECK(glDrawElements(GL_TRIANGLES, meshData->indices.size(), GL_UNSIGNED_INT, 0));
 			} else {
-				GL_CHECK(glDrawArrays(GL_TRIANGLES, 0, meshData->vertices.size()));
+				GL_CHECK(glDrawArrays(GL_TRIANGLES, 0, meshData->vertexCount()));
 			}
 
 			// Unbind varray, shaders, and texture

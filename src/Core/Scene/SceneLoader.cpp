@@ -171,6 +171,7 @@ namespace CGEngine {
                         throw std::invalid_argument("material '" + name + "': specular must be between 0 and 1");
                     }
                     std::uint8_t specularByte = static_cast<std::uint8_t>(std::lround(specular * 255.0f));
+                    bool repeat = m.value("repeat", false);
                     // The texture scale is a Vector2f; a bare float would land in the colour intensity instead.
                     auto created = assets.create<Material>(name,
                         SurfaceParameters(SurfaceDomain(texture, Vector2f(uvScale, uvScale)),
@@ -178,6 +179,13 @@ namespace CGEngine {
                         assets.get<Program>(assets.defaultProgramName));
                     if (!created.has_value()) {
                         throw std::runtime_error("failed to create material '" + name + "'");
+                    }
+                    // Texture coordinates past 1 (a merged voxel quad spans many blocks) wrap only if the texture repeats.
+                    // The texture file is shared, so every material that uses it repeats too.
+                    if (repeat) {
+                        if (Texture* diffuse = created.value().second->getParameterPtr<Texture>("diffuseTexture")) {
+                            diffuse->setRepeated(true);
+                        }
                     }
                     result.materials++;
                 }

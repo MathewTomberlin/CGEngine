@@ -2,6 +2,8 @@
 #include <pybind11/stl.h>
 #include <nlohmann/json.hpp>
 #include <SFML/Window/Keyboard.hpp>
+#include <SFML/Window/Mouse.hpp>
+#include <SFML/Graphics/RenderWindow.hpp>
 #include <SFML/System/Vector3.hpp>
 #include <map>
 #include <cstring>
@@ -34,6 +36,20 @@ namespace {
             {"R", sf::Keyboard::Scan::R}, {"Escape", sf::Keyboard::Scan::Escape},
         };
         return keys;
+    }
+
+    // Mouse look: while captured, the cursor is hidden and kept at the window's centre, and mouse_delta reports how far
+    // it moved since the last call.
+    bool mouseCaptured = false;
+
+    RenderWindow& gameWindow() {
+        if (!renderer || !renderer->getWindow()) throw std::runtime_error("the window is not open yet");
+        return *renderer->getWindow();
+    }
+
+    sf::Vector2i windowCentre(const RenderWindow& window) {
+        const sf::Vector2u size = window.getSize();
+        return sf::Vector2i(static_cast<int>(size.x / 2), static_cast<int>(size.y / 2));
     }
 
     Body* findBody(const std::string& name) {
@@ -180,6 +196,29 @@ void bindGame(py::module_& m) {
     m.def("remove_mesh_body", [](const std::string& name) {
         return removeRuntimeMeshBody(name);
     }, py::arg("name"), "Remove a body made by create_mesh_body, and free its mesh. Returns False if there is no such body.");
+
+    m.def("mouse_down", [](const std::string& name) {
+        if (name == "Left") return sf::Mouse::isButtonPressed(sf::Mouse::Button::Left);
+        if (name == "Right") return sf::Mouse::isButtonPressed(sf::Mouse::Button::Right);
+        if (name == "Middle") return sf::Mouse::isButtonPressed(sf::Mouse::Button::Middle);
+        throw std::invalid_argument("unknown mouse button '" + name + "' (use Left, Right or Middle)");
+    }, py::arg("name"), "True while the named mouse button is held. Names: Left Right Middle.");
+
+    m.def("set_mouse_captured", [](bool captured) {
+        RenderWindow& window = gameWindow();
+        mouseCaptured = captured;
+        window.setMouseCursorVisible(!captured);
+        if (captured) sf::Mouse::setPosition(windowCentre(window), window);
+    }, py::arg("captured"), "Capture the mouse for mouse look: the cursor is hidden and kept at the window's centre. False releases it.");
+
+    m.def("mouse_delta", []() -> std::pair<float, float> {
+        if (!mouseCaptured) return { 0.0f, 0.0f };
+        RenderWindow& window = gameWindow();
+        const sf::Vector2i centre = windowCentre(window);
+        const sf::Vector2i now = sf::Mouse::getPosition(window);
+        sf::Mouse::setPosition(centre, window);
+        return { static_cast<float>(now.x - centre.x), static_cast<float>(now.y - centre.y) };
+    }, "How far the mouse moved since the last call, in pixels (x right, y down), while the mouse is captured. Otherwise (0, 0).");
 
     m.def("set_camera", [](sf::Vector3f position, sf::Vector3f target) {
         if (!renderer) throw std::runtime_error("the renderer is not running yet");

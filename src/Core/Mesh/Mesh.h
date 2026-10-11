@@ -61,7 +61,7 @@ namespace CGEngine {
 		// GL buffer that holds the visible instance matrices for a draw. Created by the renderer on first use.
 		GLuint instanceBuffer = 0U;
 		bool isValid() const override {
-			return meshData != nullptr && !meshData->vertices.empty();
+			return meshData != nullptr && meshData->vertexCount() > 0;
 		}
 	private:
 		string importPath;
