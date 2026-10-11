@@ -24,6 +24,8 @@ CONTACT_DISTANCE = 0.7      # an enemy this close (plus its extra size) hurts th
 INVULNERABLE_TIME = 1.0     # seconds of protection after a hit
 MAX_HP = 3
 ATTACK_COOLDOWN = 0.35
+ATTACK_ANIM_TIME = 0.45     # length of the knight_attack clip
+PLAYER_MODEL = "models/dungeon/knight_rig.fbx"   # rigged knight; clips come from dungeon.json
 SLASH_TIME = 0.18
 SLASH_REACH = 0.9           # how far in front of the player the swing lands
 SLASH_RADIUS = 0.85
@@ -115,6 +117,8 @@ class DungeonGame(PyScript):
         self.setup_done = False
         self.broken = False
         self.state_timer = 0.0
+        self.anim = None            # clip the player is playing; None forces the next choice to start
+        self.attack_time = 0.0      # seconds left of the attack clip
 
     # ----- engine entry point -------------------------------------------------------------
 
@@ -141,7 +145,7 @@ class DungeonGame(PyScript):
 
         self.cooldown = max(0.0, self.cooldown - dt)
         self.invulnerable = max(0.0, self.invulnerable - dt)
-        self.move_player(dt)
+        moved = self.move_player(dt)
         self.enter_room_under_player()
         if self.reached_goal():
             return
@@ -151,6 +155,7 @@ class DungeonGame(PyScript):
         if self.update_enemies(dt):
             return
         self.update_sword(dt)
+        self.update_player_animation(dt, moved)
         self.update_hud()
         self.update_props()
         self.update_camera()
@@ -179,7 +184,7 @@ class DungeonGame(PyScript):
     def setup(self):
         """Create the bodies that live for the whole game: the player, the sword and the hearts."""
         bodies = [
-            model("dg_player", "knight", (0, 0, 0)),
+            {"name": "dg_player", "model": PLAYER_MODEL, "position": [0, 0, 0]},
             model("dg_slash", "slash", (0, 0, 0)),
         ]
         bodies += [model(f"dg_heart_{i}", "heart", (0, 1.0, 0), scale=0.6) for i in range(MAX_HP)]
@@ -289,6 +294,20 @@ class DungeonGame(PyScript):
             if self.free(self.px, self.pz + dz * step, PLAYER_RADIUS):
                 self.pz += dz * step
         place(self.fixed["dg_player"], self.px, 0.0, self.pz, yaw_towards(*self.facing))
+        return bool(dx or dz)
+
+    def update_player_animation(self, dt, moved):
+        """Choose the clip: attack while swinging, walk while moving, otherwise idle. Only changes are sent to the engine."""
+        self.attack_time = max(0.0, self.attack_time - dt)
+        if self.attack_time > 0.0:
+            want = "knight_attack"
+        elif moved:
+            want = "knight_walk"
+        else:
+            want = "knight_idle"
+        if want != self.anim:
+            cge.play_clip("dg_player", want, want != "knight_attack")
+            self.anim = want
 
     def free(self, x, z, radius):
         """True if a box of this radius around (x, z) lies only on passable tiles."""
@@ -397,6 +416,8 @@ class DungeonGame(PyScript):
         self.attack_was_down = attack
         if pressed and self.cooldown <= 0.0:
             self.cooldown = ATTACK_COOLDOWN
+            self.attack_time = ATTACK_ANIM_TIME
+            self.anim = None            # replay the attack clip from its start
             self.slash_time = SLASH_TIME
             self.slash_hits = set()
             fx, fz = self.facing

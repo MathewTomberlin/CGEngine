@@ -27,6 +27,8 @@ OUT_DIR = globals().get("OUT_DIR", os.path.join(os.path.dirname(bpy.data.filepat
 FILE = "knight_rig.fbx"
 BAKE_SPACE = globals().get("BAKE_SPACE", False)
 ARM_NODETYPE = globals().get("ARM_NODETYPE", "NULL")
+AXIS_FORWARD = globals().get("AXIS_FORWARD", "-Z")
+AXIS_UP = globals().get("AXIS_UP", "Y")
 COLLECTION = bpy.context.scene.collection
 
 PALETTE = {
@@ -147,6 +149,25 @@ make_part("KnightRigSwordGrip", "ArmR", "dg_gold", box((-0.26, -0.18, 0.31), (0.
 make_part("KnightRigShield", "ArmL", "dg_shield", cone((0.31, -0.03, 0.4), 0.17, 0.17, 0.04, rot=(0, 90, 0), segments=10), arm_obj)
 make_part("KnightRigShieldBoss", "ArmL", "dg_gold", sphere((0.34, -0.03, 0.4), 0.05), arm_obj)
 
+# ----- orient for the engine: Y up -----
+# Blender builds the rig Z-up. The FBX exporter then puts a -90 degree X rotation on the armature node, which the
+# engine does not apply to skinned meshes, so the knight would lie on its side. Rotating the geometry and the bones
+# into Y-up (front, -Y, becomes +Z, as in the static knight OBJ) makes the rig stand without any node rotation.
+ORIENT = Matrix.Rotation(math.radians(-90), 4, "X")
+for obj in list(COLLECTION.objects):
+    if obj.name.startswith("KnightRig") and obj.type == "MESH":
+        obj.data.transform(ORIENT)
+bpy.context.view_layer.objects.active = arm_obj
+bpy.ops.object.mode_set(mode="EDIT")
+for bone in arm_data.edit_bones:
+    bone.head = ORIENT.to_3x3() @ bone.head
+    bone.tail = ORIENT.to_3x3() @ bone.tail
+bpy.ops.object.mode_set(mode="OBJECT")
+# The exporter rotates every object by -90 degrees about X (Z-up to Y-up). Turning the armature object +90 cancels
+# that, so the exported node transforms are identity and the bind matrices match the bone rest poses. (Without it
+# every bone carries a -90 degree rotation at rest and the rig lies on its side in the engine.)
+arm_obj.rotation_euler = (math.radians(90), 0, 0)
+
 # ----- rest pose action (the FBX animation the importer needs) -----
 arm_obj.animation_data_create()
 action = bpy.data.actions.new("KnightRigIdle")
@@ -168,5 +189,6 @@ bpy.ops.export_scene.fbx(filepath=path, use_selection=True, object_types={"ARMAT
                          add_leaf_bones=False, bake_anim=True, bake_anim_use_all_bones=True,
                          bake_anim_use_nla_strips=False, bake_anim_use_all_actions=False,
                          bake_anim_force_startend_keying=True, apply_scale_options="FBX_SCALE_ALL",
-                         bake_space_transform=BAKE_SPACE, armature_nodetype=ARM_NODETYPE)
+                         bake_space_transform=BAKE_SPACE, armature_nodetype=ARM_NODETYPE,
+                         axis_forward=AXIS_FORWARD, axis_up=AXIS_UP)
 print("exported", path, "bones", [b.name for b in arm_data.bones])

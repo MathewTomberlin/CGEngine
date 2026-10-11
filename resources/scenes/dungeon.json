@@ -1,6 +1,7 @@
 {
   "version": 1,
   "replaceWorld": true,
+  "clips": [ "clips/knight_idle.json", "clips/knight_walk.json", "clips/knight_attack.json" ],
   "materials": [
     { "name": "floor", "diffuseTexture": "grass_tile.png", "specular": 0.05 },
     { "name": "wall", "diffuseTexture": "brick_tile.png", "specular": 0.1 }

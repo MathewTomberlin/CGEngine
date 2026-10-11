@@ -9,6 +9,9 @@
 #include "../Core/Body/Body.h"
 #include "../Core/Camera/Camera.h"
 #include "../Core/Mesh/Mesh.h"
+#include "../Core/Mesh/Model.h"
+#include "../Core/Animation/Animator.h"
+#include <algorithm>
 #include "../Core/Scene/SceneLoader.h"
 #include "../Core/World/Renderer.h"
 
@@ -62,6 +65,26 @@ void bindGame(py::module_& m) {
         return true;
     }, py::arg("name"), "Remove a body and its children. Returns False if there is no such body.");
 
+    m.def("play_clip", [](const std::string& name, const std::string& clip, bool looping, float speed) {
+        Body* body = findBody(name);
+        if (!body) throw std::runtime_error("no body named '" + name + "'");
+        Model* model = nullptr;
+        body->apply([&model](Body* b) {
+            if (model) return;
+            if (Mesh* mesh = b->get<Mesh*>()) {
+                if (mesh->getModelId().has_value()) model = assets.get<Model>(mesh->getModelId().value());
+            }
+        });
+        Animator* animator = model ? model->getAnimator() : nullptr;
+        if (!animator) throw std::runtime_error("body '" + name + "' is not part of a model with animation clips");
+        const auto& clips = model->getAnimationNames();
+        if (std::find(clips.begin(), clips.end(), clip) == clips.end()) throw std::invalid_argument("no clip named '" + clip + "' on body '" + name + "'");
+        animator->playAnimation(clip);
+        animator->setSpeed(speed);
+        animator->setLooping(looping);
+        animator->setPaused(false);
+    }, py::arg("name"), py::arg("clip"), py::arg("looping") = true, py::arg("speed") = 1.0f,
+        "Start a clip on the model that a body belongs to. Restarts the clip if it is already playing.");
     m.def("set_camera", [](sf::Vector3f position, sf::Vector3f target) {
         if (!renderer) throw std::runtime_error("the renderer is not running yet");
         Camera* camera = renderer->getCurrentCamera();
