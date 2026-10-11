@@ -419,6 +419,12 @@ class VoxelGame(PyScript):
             self.pos = list(pos)
             self.vel = list(vel)
         if self.pos[1] < RESPAWN_DEPTH:
+            # Keep the state from the moment of the fall: where the player was, and whether the chunk under them was loaded.
+            folder = os.path.abspath("cg_control/snapshots")
+            os.makedirs(folder, exist_ok=True)
+            stamp = time.strftime("%Y%m%d_%H%M%S")
+            self.write_state(os.path.join(folder, "fell_%s.json" % stamp))
+            print("[voxel] fell below the kill zone at %s (state saved)" % [round(v, 2) for v in self.pos])
             self.pos = [self.pos[0], SPAWN_HEIGHT, self.pos[2]]
             self.vel = [0.0, 0.0, 0.0]
 
