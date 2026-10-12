@@ -33,6 +33,13 @@ void bindVoxel(py::module_& m) {
         }, py::arg("seed"), py::arg("sea_level") = 14, py::arg("base_height") = 8, py::arg("height_range") = 44,
            py::arg("snow_level") = 40, py::arg("tree_chance") = 0.01f, py::arg("cave_width") = 0.07f,
            "The generator's settings. Chunks requested after this use them.")
+        .def("set_prop", &VoxelWorld::setProp, py::arg("x"), py::arg("y"), py::arg("z"), py::arg("dir"),
+             "Place a torch in the air cell (x, y, z), leaning on the block in direction dir (0 +x, 1 -x, 2 +y, 3 -y, 4 +z, 5 -z). "
+             "False if the cell is a block or its chunk is not loaded.")
+        .def("remove_prop", &VoxelWorld::removeProp, py::arg("x"), py::arg("y"), py::arg("z"), "Remove the torch in a cell, if any.")
+        .def("prop_at", &VoxelWorld::propAt, py::arg("x"), py::arg("y"), py::arg("z"),
+             "The direction of the torch in a cell (see set_prop), or -1 for none.")
+        .def("props", &VoxelWorld::props, "Every torch as a list of (x, y, z, dir).")
         .def("get_block", &VoxelWorld::getBlock, py::arg("x"), py::arg("y"), py::arg("z"),
              "The block id at world coordinates, 0 (air) outside the world height or in chunks that are not loaded.")
         .def("set_block", &VoxelWorld::setBlock, py::arg("x"), py::arg("y"), py::arg("z"), py::arg("block_id"),

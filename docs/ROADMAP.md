@@ -226,10 +226,13 @@ full block, and light blocks (full cells that give light) are wanted too.
   cell and falls 0.8 a block through air, for 8 blocks, the same walk as sky light; each cell takes the brighter of the two.
   The lamp is a solid block drawn as a cube, so it is placed like any block. `check_lamp` in `voxel_world_check.py` checks
   a sealed pocket: the sky floor before the lamp, 0.8 one block away, 0.8 cubed three blocks away. Not on the hotbar yet.
-- [ ] **14.2** Small torch as an item, not a block: a torch is a prop on one face of a block, drawn as a thin mesh, so it
-  takes a fraction of a block and the grid does not change. Its cell stays air for collision, meshing and the walk, and the
-  torch enters the light pass as an emitter at that cell, from a sparse per-chunk list (no block id). Placed from the hotbar
-  on a face, broken by hitting it; the chunks within reach are re-lit as for a block edit.
+- [x] **14.2** Small torch as an item, not a block: a torch is a prop on one face of a block (`VoxelWorld::setProp`), drawn as
+  a thin stick with a flame (`buildPropMesh`), so it takes a fraction of a block and the grid does not change. Its cell stays
+  air for collision, meshing and the walk. It enters the light pass as an emitter at that cell (0.8 of full light, `VoxelTorchLight`),
+  from a sparse list per chunk. Placed from the hotbar (`=`) on a block's face, broken by aiming at it (nearer than the block
+  behind it), and torches leaning on a block that is broken are broken with it. Chunks in reach are re-lit as for a block edit.
+  Limits: torches are kept with the edits in the world but not written to the save file (F5), and the outline is not drawn
+  on a torch. Checked by `check_props` (light in the cell and beside it, air to collision, geometry, removal).
 - [ ] **14.3** Held torch: a point light that follows the camera and lights the walls around the player, with a key to
   light or put it out. It is a shader light, so it needs no re-mesh and stays separate from the baked light of 14.1 and 14.2.
 - [ ] **14.4** The light colour is warm, and a torch flickers a little (cosmetic, per torch).

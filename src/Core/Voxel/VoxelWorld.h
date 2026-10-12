@@ -59,6 +59,14 @@ namespace CGEngine {
 		int getBlock(int x, int y, int z) const;
 		// Sets a block, and queues it and its neighbours for the simulation. Unloaded chunks keep the edit for later.
 		void setBlock(int x, int y, int z, int blockId);
+		// A torch: a prop in the air cell (x, y, z), leaning on the block in direction dir (VoxelMesher.h PropDirs, 0 to 5). It
+		// gives light and is drawn, but it is not a block. False if the cell is a block or its chunk is not loaded.
+		bool setProp(int x, int y, int z, int dir);
+		void removeProp(int x, int y, int z);
+		// The dir of the prop at (x, y, z), or -1 for none.
+		int propAt(int x, int y, int z) const;
+		// Every prop as (x, y, z, dir). Props are kept with the edits, so a chunk that unloads keeps them.
+		std::vector<std::array<int, 4>> props() const;
 		// True if the column at (x, z) is in a loaded chunk, so its blocks are real.
 		bool loadedAt(int x, int z) const;
 
@@ -193,6 +201,8 @@ namespace CGEngine {
 		std::set<std::pair<int, int>> dirtyKeys;
 		// Edited blocks: chunk (cx, cz) -> index in that chunk -> block id. See setBlock.
 		std::map<std::pair<int, int>, std::map<int, uint8_t>> edits;
+		// Props (torches) by chunk: local index -> dir. See setProp.
+		std::map<std::pair<int, int>, std::map<int, uint8_t>> propsByChunk;
 		uint32_t nextGeneration = 1;
 		double uploadMs = 0.0;
 
@@ -220,6 +230,8 @@ namespace CGEngine {
 		Chunk* findChunk(int cx, int cz);
 		void markDirty(int cx, int cz);
 		void markNeighboursDirty(int cx, int cz);
+		// Marks the chunks that see the light of the cell at local (lx, lz) in chunk (cx, cz), as setBlock does.
+		void markLight(int cx, int cz, int lx, int lz);
 		void installTerrain(TerrainResult& result);
 		void applyEdits(int cx, int cz, std::vector<uint8_t>& blocks) const;
 		void uploadMesh(MeshResult& result);

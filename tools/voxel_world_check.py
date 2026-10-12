@@ -353,6 +353,39 @@ def check_skin_surface(world, checks):
     checks["the view meets the drawn skin (about 0.2 of a block above the top block)"] = total > 0 and good >= 0.9 * total
 
 
+def check_props(world, checks, chunks):
+    """A torch is a prop in an air cell: it lights its cell (0.8 of full light) and the air next to it (0.8 of that), it stays
+    air for collision, it adds geometry to its chunk's terrain mesh, and removing it puts the light out. Tested in a sealed
+    pocket, which is put back afterwards."""
+    cx, cy, cz = 10, 22, 10
+    saved = {}
+    for x in range(cx - 2, cx + 3):
+        for y in range(cy - 2, cy + 3):
+            for z in range(cz - 2, cz + 3):
+                saved[(x, y, z)] = world.get_block(x, y, z)
+                inside = max(abs(x - cx), abs(y - cy), abs(z - cz)) <= 1
+                world.set_block(x, y, z, 0 if inside else VOXEL_STONE)
+    wait_meshed(world, chunks)
+    dark = world.light_at(cx + 1, cy, cz)
+    quads_before = world.chunk_group_quads(0, 0).get(0, 0)
+    placed = world.set_prop(cx + 1, cy, cz, 0)
+    wait_meshed(world, chunks)
+    torch_light = world.light_at(cx + 1, cy, cz)
+    next_light = world.light_at(cx, cy, cz)
+    checks["a sealed pocket has no light before the torch"] = dark == 0
+    checks["a torch is placed in an air cell, and listed"] = placed and world.prop_at(cx + 1, cy, cz) == 0         and (cx + 1, cy, cz, 0) in [tuple(p) for p in world.props()]
+    checks["a torch gives 0.8 of full light in its cell"] = abs(torch_light - 204) <= 2
+    checks["the air beside a torch gets 0.8 of that"] = abs(next_light - 163) <= 2
+    checks["a torch cell stays air to collision"] = world.skin_at(cx + 1, cy, cz) == 0
+    checks["a torch adds geometry to its chunk's terrain mesh"] = world.chunk_group_quads(0, 0).get(0, 0) > quads_before
+    world.remove_prop(cx + 1, cy, cz)
+    checks["removing a torch removes it and its light"] = world.prop_at(cx + 1, cy, cz) == -1         and world.light_at(cx + 1, cy, cz) == 0
+    for (x, y, z), block in saved.items():
+        world.set_block(x, y, z, block)
+    world.clear_edits()
+    wait_meshed(world, chunks)
+
+
 def check_lamp(world, checks):
     """A light block lights the air round it: full at its cell, and 0.8 less for each block walked through air. Tested in a
     sealed pocket of stone, which the sky cannot reach, so the air has no sky light until the lamp is placed. The
@@ -419,6 +452,7 @@ def run(out_path="cg_control/voxel_check.json"):
     check_walkers(world, results["check"], results)
     check_skin_surface(world, results["check"])
     check_lamp(world, results["check"])
+    check_props(world, results["check"], chunks)
     check_groups(results["check"])
     biomes ={world.biome_at(x, z) for x in range(-200, 200, 10) for z in range(-200, 200, 10)}
     results["check"]["biomes vary: plains, forest and desert occur"] = biomes == {"plains", "forest", "desert"}

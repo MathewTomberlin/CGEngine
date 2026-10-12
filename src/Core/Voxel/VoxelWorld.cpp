@@ -324,6 +324,66 @@ namespace CGEngine {
 		simulation.activate(x, y, z - 1);
 	}
 
+	bool VoxelWorld::setProp(int x, int y, int z, int dir) {
+		if (y < 0 || y >= height || dir < 0 || dir > 5 || !loadedAt(x, z) || getBlock(x, y, z) != 0) return false;
+		const int cx = floorDiv(x, size);
+		const int cz = floorDiv(z, size);
+		const int lx = x - cx * size;
+		const int lz = z - cz * size;
+		propsByChunk[std::make_pair(cx, cz)][localIndex(lx, y, lz)] = static_cast<uint8_t>(dir);
+		markLight(cx, cz, lx, lz);
+		return true;
+	}
+
+	void VoxelWorld::removeProp(int x, int y, int z) {
+		if (y < 0 || y >= height) return;
+		const int cx = floorDiv(x, size);
+		const int cz = floorDiv(z, size);
+		auto chunk = propsByChunk.find(std::make_pair(cx, cz));
+		if (chunk == propsByChunk.end()) return;
+		const int lx = x - cx * size;
+		const int lz = z - cz * size;
+		if (chunk->second.erase(localIndex(lx, y, lz)) == 0) return;
+		if (chunk->second.empty()) propsByChunk.erase(chunk);
+		markLight(cx, cz, lx, lz);
+	}
+
+	int VoxelWorld::propAt(int x, int y, int z) const {
+		if (y < 0 || y >= height) return -1;
+		const int cx = floorDiv(x, size);
+		const int cz = floorDiv(z, size);
+		auto chunk = propsByChunk.find(std::make_pair(cx, cz));
+		if (chunk == propsByChunk.end()) return -1;
+		auto entry = chunk->second.find(localIndex(x - cx * size, y, z - cz * size));
+		return entry == chunk->second.end() ? -1 : entry->second;
+	}
+
+	std::vector<std::array<int, 4>> VoxelWorld::props() const {
+		std::vector<std::array<int, 4>> list;
+		for (const auto& chunk : propsByChunk) {
+			for (const auto& entry : chunk.second) {
+				const int lx = entry.first % size;
+				const int lz = (entry.first / size) % size;
+				const int y = entry.first / (size * size);
+				list.push_back({ chunk.first.first * size + lx, y, chunk.first.second * size + lz, entry.second });
+			}
+		}
+		return list;
+	}
+
+	void VoxelWorld::markLight(int cx, int cz, int lx, int lz) {
+		// The same neighbours as setBlock: a cell's light reaches VoxelLightReach blocks, so the chunks it is that close to.
+		for (int dx = -1; dx <= 1; ++dx) {
+			for (int dz = -1; dz <= 1; ++dz) {
+				if (dx == -1 && lx >= VoxelLightReach) continue;
+				if (dx == 1 && lx < size - VoxelLightReach) continue;
+				if (dz == -1 && lz >= VoxelLightReach) continue;
+				if (dz == 1 && lz < size - VoxelLightReach) continue;
+				markDirty(cx + dx, cz + dz);
+			}
+		}
+	}
+
 	void VoxelWorld::fillColumn(int x, int z, int yFrom, int yTo, int blockId) {
 		for (int y = std::max(0, yFrom); y < std::min(height, yTo); ++y) {
 			setBlock(x, y, z, blockId);
@@ -506,6 +566,20 @@ namespace CGEngine {
 				}
 			}
 		}
+		// The torches of the chunk and its neighbours that reach into the padded area (PaddedChunk::props).
+		for (int dz = -1; dz <= 1; ++dz) {
+			for (int dx = -1; dx <= 1; ++dx) {
+				auto chunk = propsByChunk.find(std::make_pair(cx + dx, cz + dz));
+				if (chunk == propsByChunk.end()) continue;
+				for (const auto& entry : chunk->second) {
+					const int px = dx * size + entry.first % size;
+					const int pz = dz * size + (entry.first / size) % size;
+					const int py = entry.first / (size * size);
+					if (px < -border || px >= size + border || pz < -border || pz >= size + border) continue;
+					padded.props.push_back({ px, py, pz, entry.second });
+				}
+			}
+		}
 		for (size_t id = 0; id < 256; ++id) {
 			padded.emission[id] = types[id].emits;
 			padded.rule[id].group = meshGroup(types[id], static_cast<uint8_t>(id));
@@ -563,6 +637,8 @@ namespace CGEngine {
 				} else {
 					buildSmoothMesh(padded, colours, resolution, skirtSides, group, part.mesh);
 				}
+				// The torches are drawn with the terrain (their cells are air to it, so they are not part of any block's mesh).
+				if (group == 0) buildPropMesh(padded, part.mesh);
 				part.quads = static_cast<int>(part.mesh.indices.size() / 6);
 				result.groups.push_back(std::move(part));
 			}

@@ -16,6 +16,8 @@ AIR, GRASS, DIRT, STONE, SAND, WATER, SNOW, WOOD, LEAVES = range(9)
 GRAVEL = 16
 LAMP = 17                           # a full block that gives off light (the same id as VoxelTerrain::Lamp)
 BRICK = 18                          # a cube block: it never merges with its neighbours, so it keeps sharp edges
+TORCH = 19                          # a torch: a prop on a block's face (VoxelWorld.set_prop), not a block; only the hotbar names it
+DIRECTIONS = ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1))   # a prop's dir, to the block it leans on (PropDirs)
 FLOW_FIRST, FLOW_LAST = 9, 15       # flowing water, levels 7 to 1 (the block id is 16 - level); WATER is the full source
 LIQUIDS = (WATER,) + tuple(range(FLOW_FIRST, FLOW_LAST + 1))
 FALLS = (SAND, GRAVEL)              # blocks that fall into air or liquid
@@ -41,13 +43,14 @@ COLOURS = {
     LEAVES: (0.20, 0.50, 0.16),
     GRAVEL: (0.52, 0.50, 0.47),
     LAMP: (1.00, 0.80, 0.42),
+    TORCH: (1.00, 0.62, 0.25),
     BRICK: (0.66, 0.30, 0.22),
 }
 for _block in range(FLOW_FIRST, FLOW_LAST + 1):
     COLOURS[_block] = COLOURS[WATER]
 
 NAMES = {AIR: "air", GRASS: "grass", DIRT: "dirt", STONE: "stone", SAND: "sand", WATER: "water", SNOW: "snow",
-         WOOD: "wood", LEAVES: "leaves", GRAVEL: "gravel", LAMP: "lamp", BRICK: "brick"}
+         WOOD: "wood", LEAVES: "leaves", GRAVEL: "gravel", LAMP: "lamp", BRICK: "brick", TORCH: "torch"}
 for _block in range(FLOW_FIRST, FLOW_LAST + 1):
     NAMES[_block] = "flowing water"
 

@@ -31,7 +31,8 @@ rate, build and run the Release configuration.
   and `VOXEL_SETTINGS` moves the settings file.
 - Without the mouse: the arrow keys turn and look, J breaks, K places.
 - Keys 1 to 9, 0, - and = choose the block to place (the hotbar: stone, dirt, grass, wood, leaves, sand, gravel, snow, water,
-  the lamp (0, a light block), and brick (-)). Sand and gravel fall, and water falls and flows. F5 saves the edited blocks to `cg_control/voxel_edits.bin`, and F9 loads them back. F12 saves a screenshot and the
+  the lamp (0, a light block), brick (-), and a torch (=)). A torch goes on the face of a block you aim at; aim at it to break
+  it. Sand and gravel fall, and water falls and flows. F5 saves the edited blocks to `cg_control/voxel_edits.bin`, and F9 loads them back. F12 saves a screenshot and the
   game state to `cg_control/snapshots/` (use it when something looks wrong).
 
 ## The look: day, night and fog

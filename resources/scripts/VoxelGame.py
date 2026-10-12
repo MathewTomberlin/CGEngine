@@ -53,8 +53,29 @@ RESPAWN_DEPTH = -20.0       # below this the player is put back at the spawn hei
 # The blocks the keys choose from when placing (the hotbar: 1 to 9, then 0, - and = for the tenth to twelfth), and the file the
 # F5 and F9 keys save and load.
 HOTBAR = [VoxelGen.STONE, VoxelGen.DIRT, VoxelGen.GRASS, VoxelGen.WOOD, VoxelGen.LEAVES, VoxelGen.SAND, VoxelGen.GRAVEL,
-          VoxelGen.SNOW, VoxelGen.WATER, VoxelGen.LAMP, VoxelGen.BRICK]
+          VoxelGen.SNOW, VoxelGen.WATER, VoxelGen.LAMP, VoxelGen.BRICK, VoxelGen.TORCH]
+DIRECTION_INDEX = {d: i for i, d in enumerate(VoxelGen.DIRECTIONS)}   # a direction to the dir that a prop uses for it
 HOTBAR_KEYS = "1234567890-="
+
+
+def ray_box(origin, direction, centre, half):
+    """The distance along a ray (unit direction) where it enters a box, or None if it misses the box or the box is behind."""
+    near, far = -math.inf, math.inf
+    for axis in range(3):
+        lo = centre[axis] - half[axis]
+        hi = centre[axis] + half[axis]
+        d = direction[axis]
+        if abs(d) < 1e-12:
+            if origin[axis] < lo or origin[axis] > hi:
+                return None
+            continue
+        t1 = (lo - origin[axis]) / d
+        t2 = (hi - origin[axis]) / d
+        near = max(near, min(t1, t2))
+        far = min(far, max(t1, t2))
+    if near > far or far < 0.0:
+        return None
+    return max(near, 0.0)
 
 
 def hotbar_key(slot):
@@ -145,6 +166,7 @@ class VoxelGame(PyScript):
         self.yaw = 0.0                  # degrees; 0 looks down -z
         self.pitch = float(os.environ.get("VOXEL_PITCH", "-25"))   # degrees; negative looks down
         self.target = None              # (block, normal) under the crosshair, or None
+        self.torch_target = None        # (distance, cell) of the torch under the crosshair, or None
         self.keys_was = {}              # previous state of the one-shot keys and buttons
         self.last = None
         self.frames = 0
@@ -570,12 +592,34 @@ class VoxelGame(PyScript):
         skin, then the blocks are walked from half a block in front of it, so the outline is on the ground that is drawn."""
         eye = tuple(self.eye())
         look = self.look_direction()
+        self.torch_target = self.torch_under_aim(eye, look)
         surface = self.world.skin_surface(eye, look, physics.REACH)
         if surface is None:
             self.target = physics.raycast(self.solid, eye, look)
             return
         start = tuple(surface[i] - look[i] * 0.5 for i in range(3))
         self.target = physics.raycast(self.solid, start, look, max_distance=physics.REACH + 0.5)
+
+    def torch_under_aim(self, eye, look):
+        """The nearest torch the look ray meets within reach, as (distance, cell), or None. A torch is its stick and its flame,
+        in the same place VoxelMesher.cpp (buildPropMesh) draws them."""
+        best = None
+        for x, y, z, dir in self.world.props():
+            wall = VoxelGen.DIRECTIONS[dir]
+            base = (x + 0.5 + 0.36 * wall[0], y + 0.5 + 0.36 * wall[1] - 0.1, z + 0.5 + 0.36 * wall[2])
+            for centre, half in (((base[0], base[1] + 0.4, base[2]), (0.06, 0.25, 0.06)),
+                                 ((base[0], base[1] + 0.78, base[2]), (0.1, 0.08, 0.1))):
+                t = ray_box(eye, look, centre, half)
+                if t is not None and t <= physics.REACH and (best is None or t < best[0]):
+                    best = (t, (x, y, z))
+        return best
+
+    def drop_torches_on(self, block):
+        """Torches leaning on a block that is broken are broken too: each one is in a cell beside it, pointing at it."""
+        for dir, d in enumerate(VoxelGen.DIRECTIONS):
+            cell = (block[0] + d[0], block[1] + d[1], block[2] + d[2])
+            if self.world.prop_at(*cell) == DIRECTION_INDEX[(-d[0], -d[1], -d[2])]:
+                self.world.remove_prop(*cell)
 
     def show_outline(self, name, box, colour):
         """Show the outline of box (lo, hi) in colour as the runtime mesh called name, or hide it when box is None."""
@@ -638,14 +682,32 @@ class VoxelGame(PyScript):
         place_down = self.mouse_captured and bool(cge.mouse_down("Right"))
         breaking = self.pressed("Break", break_down or bool(cge.key_down("J")))
         placing = self.pressed("Place", place_down or bool(cge.key_down("K")))
+        torch = self.torch_target
+        if breaking and torch is not None:
+            # A torch the crosshair is on, nearer than the block behind it, is the one broken.
+            block_distance = None
+            if self.target is not None:
+                eye = self.eye()
+                block = self.target[0]
+                block_distance = math.dist(eye, (block[0] + 0.5, block[1] + 0.5, block[2] + 0.5))
+            if block_distance is None or torch[0] < block_distance:
+                self.world.remove_prop(*torch[1])
+                return
         if self.target is None or not (breaking or placing):
             return
         block, normal = self.target
         if breaking:
             self.world.set_block(block[0], block[1], block[2], VoxelGen.AIR)
+            self.drop_torches_on(block)
         elif placing:
             cell = (block[0] + normal[0], block[1] + normal[1], block[2] + normal[2])
-            if not physics.cell_in_player(cell, self.pos):
+            if physics.cell_in_player(cell, self.pos):
+                return
+            if HOTBAR[self.slot] == VoxelGen.TORCH:
+                # A torch goes on a face: into the air cell in front of a solid block, leaning on it.
+                if self.world.is_solid(block[0], block[1], block[2]) and self.world.get_block(cell[0], cell[1], cell[2]) == VoxelGen.AIR:
+                    self.world.set_prop(cell[0], cell[1], cell[2], DIRECTION_INDEX[(-normal[0], -normal[1], -normal[2])])
+            else:
                 self.world.set_block(cell[0], cell[1], cell[2], HOTBAR[self.slot])
 
     # ----- sky ----------------------------------------------------------------------------

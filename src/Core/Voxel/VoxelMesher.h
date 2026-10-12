@@ -23,6 +23,13 @@ namespace CGEngine {
 	// the open it is 1, so sunlit ground is not washed out.
 	constexpr float VoxelLampLight = 2.0f;
 
+	// The light a torch gives at its own cell (0 to 1). A torch is a prop, not a block: it lights the air around it the way a
+	// light block does, but less.
+	constexpr float VoxelTorchLight = 0.8f;
+
+	// The direction from a prop to the block it leans on, by its dir (VoxelWorld::setProp): +x, -x, +y, -y, +z, -z.
+	constexpr int PropDirs[6][3] = { { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 }, { 0, 0, 1 }, { 0, 0, -1 } };
+
 	// A chunk's blocks with a border of blocks copied from its neighbours (air where a neighbour is not loaded). The
 	// mesher reads only from this, so it can run on any thread while the world changes. The block mesher needs a border
 	// of 1; the smooth mesher needs 3, because its density samples and their normals reach two blocks beyond the chunk.
@@ -52,6 +59,13 @@ namespace CGEngine {
 			std::bitset<256> joinBelow;   // the blocks below that make this block join the terrain (BlockType::joinBelow)
 		};
 		std::array<MeshRule, 256> rule{};
+		// The props (torches) in the chunk and its border, in chunk coordinates. A prop's cell is air: it gives light there, and
+		// the terrain mesh draws it (buildPropMesh), but it is not a block, so collision and the faces around it do not change.
+		struct Prop {
+			int x, y, z;
+			uint8_t dir;
+		};
+		std::vector<Prop> props;
 
 		size_t index(int x, int y, int z) const {
 			const int p = size + 2 * border;
@@ -100,4 +114,8 @@ namespace CGEngine {
 
 	// A round ball of a block's colour, centred at centre and appended to out. The moving blocks are drawn with it.
 	void buildBlob(const std::array<glm::vec3, 256>& palette, uint8_t block, glm::vec3 centre, float radius, MeshArrays& out);
+
+	// The geometry of the chunk's props (torches): a stick leaning on its block and a flame on top, for the props in the chunk
+	// itself (not its border, which the neighbour draws). Appended to out, which is the terrain mesh.
+	void buildPropMesh(const PaddedChunk& chunk, MeshArrays& out);
 }
