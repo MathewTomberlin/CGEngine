@@ -50,7 +50,9 @@ Making real models showed where the engine misrepresents content. These come fir
   control commands use the body's instance. `cge.animation_time(name)` reads the clock; two slimes started a second apart
   read different times. Instances made from one model still share its clip data.
 - [x] **6.4** Frame-rate independent test. `DUNGEON_FIXED_STEP` (seconds) makes every frame advance the same game time, and the state file reports `frames`. `tools/test_dungeon_game.ps1` counts its scripted keys in frames and waits on the frame count, so the walk checks hold at any frame rate. Found while doing it: the old checks only passed on slow frames, because the dungeon caps the frame delta.
-- [ ] **6.5** Archers and brutes are still static OBJ models. Rig them like the knight and the slime; give the archer a bow-draw clip for its shots.
+- [x] **6.5** Archers are rigged: `tools/blender/archer_rig.py` (bones Torso, Head and Arm, rigid parts) and
+  `tools/clips/archer_clips.py` (archer_idle, archer_walk, and archer_draw for each shot, which holds its last pose). The
+  dungeon animates every enemy from its state, one animator per enemy (6.3). Brutes are still static.
 - [ ] **6.6** The game process exited twice between tool calls with no crash record. Watch for it; if it recurs, capture a dump.
 ## Phase 7: rendering at scale (engine)
 Goal: a world with thousands of objects, and procedurally made geometry, drawn in few calls.

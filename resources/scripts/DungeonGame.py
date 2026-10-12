@@ -46,11 +46,12 @@ MODEL_DIR = "models/dungeon/"
 # radius is used for wall collision.
 ENEMY_STATS = {
     "slime":  {"speed": 1.6, "hp": 2, "size": 0.35, "radius": 0.35, "model": "slime_rig.fbx"},
-    "archer": {"speed": 1.3, "hp": 1, "size": 0.3,  "radius": 0.3,  "model": "archer"},
+    "archer": {"speed": 1.3, "hp": 1, "size": 0.3,  "radius": 0.3,  "model": "archer_rig.fbx"},
     "brute":  {"speed": 0.9, "hp": 4, "size": 0.5,  "radius": 0.45, "model": "brute"},
 }
 ARCHER_RANGE = (3.0, 5.0)   # an archer backs off inside the first distance and closes in beyond the second
 ARCHER_SHOT_TIME = 2.0      # seconds between shots
+ARCHER_DRAW_TIME = 0.6      # seconds an archer draws its bow for a shot (the archer_draw clip)
 ARCHER_SIGHT = 7.0          # an archer only shoots at a player this close
 BOLT_SPEED = 5.0
 BOLT_HIT_DISTANCE = 0.4
@@ -130,7 +131,6 @@ class DungeonGame(PyScript):
         self.broken = False
         self.state_timer = 0.0
         self.frames = 0             # frames run so far; the state file reports it, so tests can wait for a frame count
-        self.slime_clip_started = False   # the shared slime model has started its hop
         self.anim = None            # clip the player is playing; None forces the next choice to start
         self.attack_time = 0.0      # seconds left of the attack clip
 
@@ -175,7 +175,6 @@ class DungeonGame(PyScript):
         self.update_player_animation(dt, moved)
         self.update_hud()
         self.update_props()
-        self.start_slime_clip()
         self.update_camera()
         self.state_timer -= dt
         if self.state_timer <= 0.0:
@@ -244,6 +243,7 @@ class DungeonGame(PyScript):
             gx, gy = self.level.goal
             bodies.append(model("dg_goal", "goal", (gx, 0.0, gy)))
         for enemy in self.enemies.get(room, []):
+            enemy["clip"] = None   # the new body starts its clip again
             bodies.append(self.enemy_body(enemy))
         for item in self.items.get(room, []):
             bodies.append(self.item_body(item))
@@ -352,6 +352,7 @@ class DungeonGame(PyScript):
             distance = math.hypot(dx, dz)
             # Slimes and brutes walk straight at the player. Archers keep to a band of distances and shoot.
             direction = 1.0
+            enemy["drawing"] = max(0.0, enemy.get("drawing", 0.0) - dt)
             if enemy["kind"] == "archer":
                 if distance < ARCHER_RANGE[0]:
                     direction = -1.0
@@ -360,7 +361,10 @@ class DungeonGame(PyScript):
                 enemy["shot"] -= dt
                 if enemy["shot"] <= 0.0 and 0.01 < distance < ARCHER_SIGHT:
                     enemy["shot"] = ARCHER_SHOT_TIME
+                    enemy["drawing"] = ARCHER_DRAW_TIME
+                    enemy["clip"] = None   # so the draw starts again even if the last one is still in its pose
                     self.fire_bolt(enemy["x"], enemy["z"], dx / distance, dz / distance)
+            moving = distance > 0.01 and direction != 0.0
             if distance > 0.01 and direction:
                 step = stats["speed"] * dt * direction
                 nx = enemy["x"] + dx / distance * step
@@ -372,6 +376,7 @@ class DungeonGame(PyScript):
             body = self.room_handles.get(self.enemy_name(enemy))
             if body is not None:
                 place(body, enemy["x"], 0.0, enemy["z"], yaw_towards(dx, dz) if distance > 0.01 else None)
+                self.animate_enemy(enemy, self.enemy_name(enemy), moving)
             reach = CONTACT_DISTANCE + stats["size"] - ENEMY_STATS["slime"]["size"]
             if distance < reach and self.invulnerable <= 0.0:
                 if self.hurt():
@@ -473,19 +478,22 @@ class DungeonGame(PyScript):
             heart.set_rendering_enabled(i < self.hp)
             place(heart, self.px - 0.25 + 0.25 * i, 1.05, self.pz - 0.1)
 
-    def start_slime_clip(self):
-        """Slimes share one model, so one animator: start its hop once, when the first slime body is in the room."""
-        if self.slime_clip_started or not any(name.startswith("dg_enemy_") and self.enemy_kind_of(name) == "slime" for name in self.room_handles):
+    def animate_enemy(self, enemy, name, moving):
+        """Play the clip the enemy's state calls for, once per change. Each enemy has its own animator (a model instance),
+        so the slimes hop out of step and an archer draws its bow when it shoots."""
+        if enemy["kind"] == "slime":
+            clip, looping = "slime_hop", True
+        elif enemy["kind"] == "archer":
+            if enemy.get("drawing", 0.0) > 0.0:
+                clip, looping = "archer_draw", False
+            else:
+                clip, looping = ("archer_walk", True) if moving else ("archer_idle", True)
+        else:
+            return  # brutes are still models with no clips
+        if enemy.get("clip") == clip:
             return
-        self.slime_clip_started = True
-        slime = next(name for name in self.room_handles if self.enemy_kind_of(name) == "slime")
-        cge.play_clip(slime, "slime_hop", True)
-
-    def enemy_kind_of(self, name):
-        for enemy in self.enemies.get(self.room, []):
-            if self.enemy_name(enemy) == name:
-                return enemy["kind"]
-        return None
+        enemy["clip"] = clip
+        cge.play_clip(name, clip, looping)
 
     def update_props(self):
         """Idle motion: coins and the goal crystal spin, hearts on the floor bob."""
