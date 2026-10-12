@@ -902,6 +902,9 @@ class VoxelGame(PyScript):
             return
         for item in self.drops.take_in_reach(self.pos, self.inventory):
             self.notify("Picked up a %s" % VoxelGen.NAMES[item])
+        blocked = self.drops.blocked_in_reach(self.pos, self.inventory)
+        if blocked is not None:
+            self.notify("Inventory full: no room for the %s" % VoxelGen.NAMES[blocked])
 
     def spend(self):
         """Placing takes one from the selected slot. Creative mode takes nothing."""

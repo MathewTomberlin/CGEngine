@@ -76,6 +76,13 @@ class Drops:
                 taken.append(drop.item)
         return taken
 
+    def blocked_in_reach(self, pos, inventory):
+        """The item of the first drop in reach that the inventory has no room for, or None. The drop is left where it is."""
+        for drop in self.live:
+            if in_reach(drop.feet, pos) and not inventory.fits(drop.item):
+                return drop.item
+        return None
+
     def clear(self):
         for drop in self.live:
             drop.remove()

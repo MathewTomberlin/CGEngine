@@ -323,8 +323,8 @@ Goal: blocks and creatures take several hits, and what the player has hit looks 
   item's colour, one mesh body each. Walking within 1.2 blocks of it (and no more than a floor away) takes it, when the inventory
   has room; a full inventory leaves it there. Drops are saved with the inventory (F5 and F9), and creative mode takes none and
   leaves them where they are. A hide dropped in the air falls to the first solid block under it. Checked by
-  `tools/test_voxel_drops.py` (no GPU) and `voxel_game_check.py`. Not yet: a full inventory gives no message, and each drop
-  rebuilds its mesh every frame.
+  `tools/test_voxel_drops.py` (no GPU) and `voxel_game_check.py`. Not yet: each drop
+  rebuilds its mesh every frame. Standing on a drop the inventory has no room for says so on the HUD.
 ## Phase 17: inventory and a real hotbar (from playtesting: the hotbar is a line of text)
 Goal: items have quantities, the inventory is a grid the player can see and change, and the hotbar is a UI, not text.
 - [x] **17.1** An item model: an item is a block id (a torch is one too, though it is a prop), held in a slot with a count up to

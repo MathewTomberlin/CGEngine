@@ -73,6 +73,15 @@ d.add(HIDE, COLOUR, GROUND)
 check("a full inventory leaves the drop on the ground", d.take_in_reach(near, full) == [] and len(d.live) == 1)
 full.take(0, inv.STACK_LIMIT)
 check("the drop is taken once a slot is free", d.take_in_reach(near, full) == [HIDE] and d.live == [])
+packed = inv.Inventory()
+for slot in range(inv.SLOTS):
+    packed.add(3, inv.STACK_LIMIT)
+d = drops.Drops()
+d.add(HIDE, COLOUR, GROUND)
+check("a drop in reach that does not fit is reported", d.blocked_in_reach(near, packed) == HIDE)
+check("a drop out of reach is not reported", d.blocked_in_reach(far, packed) is None)
+check("a drop that fits is not reported", d.blocked_in_reach(near, inv.Inventory()) is None)
+check("a reported drop stays on the ground", len(d.live) == 1)
 
 # Several drops in reach are all taken, in the order they were dropped.
 i = inv.Inventory()
