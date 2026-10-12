@@ -281,8 +281,11 @@ Goal: the player chooses how far they can see, and a long view stays cheap enoug
   today, so this round's HUD and game script cost about 10%. Still open: memory per step (the step list is chosen from these
   numbers, so the memory is the next measurement).
 - [ ] **15.5** Draw calls at a long view: each chunk is one body with its own draws, so at 40 there are 6,561 chunk bodies a frame
-  and the frame rate is 27 whatever the quads are. Merge the far chunks into a few bodies (say, 4 by 4 chunks, rebuilt when one of
-  them changes), or cull them earlier, and measure with 15.3.
+  and the frame rate is 27 whatever the quads are. Analysis (not built): merging 4 by 4 chunks into one body per group means
+  the region's mesh is rebuilt from every chunk's CPU copy when one chunk changes, and those copies are not kept now. At 40 the
+  vertices alone are about 2 GB of GPU memory, so keeping the copies roughly doubles the memory. Either keep the copies in a
+  compact form, or rebuild a region from the chunks' blocks (the mesher is fast: a chunk takes a few ms). Decide before building.
+  Until then "Unlimited" stays at 40.
 - [x] **15.4** Memory on a long walk at 40 (`VOXEL_SEED=1`, Release): the player was moved round a wide circle 40 times, 90 blocks
   a hop, so the chunks behind unloaded and the ones ahead loaded (about 6,750 to 6,880 chunks held throughout). The working
   set went from 624 MB to a peak of 1,064 MB around the 24th hop, then fell back to 675 MB by the end. So the churn does not
@@ -341,9 +344,12 @@ Goal: items have quantities, the inventory is a grid the player can see and chan
   ore is quicker to mine with it. Not yet: no crafting, no other tools, and no wear.
 ## Phase 18: multi-user interaction (long-term goal; multiplayer voxel is the first stretch goal)
 Goal: several people (or an AI and a person) work in one CG Engine world at the same time.
-- [ ] **18.1** Engine assumptions to change first: the engine is single-process by design. The globals (`world`, `renderer`,
-  `assets`, the Python interpreter) are process singletons, and the control channel is one file inbox. A second player needs
-  the world state to be separable from the presentation: a state that can be sent, and a view that draws a state it did not make.
+- [~] **18.1** Engine assumptions to change first: the engine is single-process by design. The globals (`world`, `renderer`,
+  `assets`, the Python interpreter) are process singletons, and the control channel is one file inbox. Found by building 18.2:
+  two processes do not need the singletons changed, because each one is a separate game (a loopback link is enough). A server
+  in the same process would need them changed. A headless server (18.3) also needs the engine to start without a window, which
+  it does not yet: `World::startWorld` makes the window. Still open: the window-free start, and the state that a presentation
+  draws from (the world is drawn straight from `VoxelWorld`).
 - [x] **18.2** A transport, as a loopback test: `VoxelNet.py` links two game processes over TCP, JSON lines, non-blocking and polled
   once a frame. One process listens (`VOXEL_NET=listen:7790`), the other connects (`VOXEL_NET=connect:127.0.0.1:7790`), and both
   run the same `VOXEL_SEED`, since each generates the terrain itself. The messages are block, prop, hit (the damage stage) and
@@ -356,9 +362,10 @@ Goal: several people (or an AI and a person) work in one CG Engine world at the 
   its own inventory and health, so the inventory per player is in place by construction. Not yet: a name, the creatures (each
   process has its own, so a creature hit in one is not seen in the other), the other player's damage on a player, and a server
   that owns the world (18.3): right now each process is an equal peer, and the edits race if both edit the same cell at once.
-- [ ] **18.5** Shared authoring: the control channel (Phase 2) works per server, so an AI and a person can change the same
-  world through the same messages a client sends. This is the original goal of the roadmap, reached through 18.3.
-
+- [~] **18.5** Shared authoring: an AI and a person can change the same world, through the same messages a second player sends.
+  In the loopback this is a script run through the control channel (`run_script`) that calls `game.net_send` after an edit, as
+  `tools/test_voxel_net.ps1` does. Not yet a documented control command (a `voxel_block` message in the inbox would be the
+  next step), and the other process applies an edit only if its chunk is loaded.
 ## Tooling and quality
 - [x] CI build on Windows (`.github/workflows/build.yml`) with Mesa software OpenGL smoke run
 - [~] Unit tests for pure logic runnable without a GPU. Done for the dungeon generator (`python -I tools/test_dungeon_gen.py`) and for the scene format and command list (`python -I tools/test_scene_format.py`: example scenes, invalid fixtures, documented commands). The C++ parsers in `SceneLoader` and `ControlChannel` are still covered only by the GPU integration test.
@@ -382,6 +389,12 @@ Goal: several people (or an AI and a person) work in one CG Engine world at the 
 - A wrong value can hide behind another wrong value. Hue-only colours, an always-on unlit base and a light under the floor each made the others look plausible; fixing one at a time looked worse until all three were fixed. Compare screenshots of every shipped scene before and after any rendering change.
 - Look at the scene before trusting it. The dungeon floor sat half a tile above y = 0 for its whole life, because a plane primitive's surface is offset by its size. Cubes hid it; the first real models sank to the waist. Screenshots through the control channel caught it.
 - Remaining big-ticket items: Phase 5, batching draws by material (3.2 continuation), and the dungeon's next steps (an inventory, a shop for coins, and sound).
+- Voxel notes, overnight round: the two checks that failed first were the test's own state (a stale creature target, a full
+  inventory left behind), not the game. Three looks were wrong before they were right: the boulders at a first density were
+  about six a chunk and read as a wall of rock (cut eight-fold); the cracks from a value noise read as blotches until the mask
+  was a Voronoi border; and the fragment's crack spread over a triangle's whole span until it was weighted by damage. The
+  "650 frames a second at 841 chunks" in these notes did not reproduce: the build from before the round gives about 200 on the
+  same machine, so the number was from a different condition, and the frame rates in 15.3 are the ones to keep.
 - Voxel notes, inventory round: the first in-game check failed three times, and each failure was the check's own state, not the
   game's. A check that changes shared state (a full inventory, a held stack) has to put it back before the next check reads it.
   The HUD's boxes are overlay rectangles in the engine now, so a HUD element can be a box and a swatch without a texture.
