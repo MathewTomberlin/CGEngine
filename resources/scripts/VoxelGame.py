@@ -204,6 +204,10 @@ class VoxelGame(PyScript):
                              outline_thickness=HUD_OUTLINE)
         cge.create_text_body("hud_hotbar", "", "hud", cge.Vector2f(14, cge.window_size().y - 34), 16,
                              outline_thickness=HUD_OUTLINE)
+        # A small cross at the middle of the window: the block the crosshair is on is outlined, and this shows where the aim is.
+        size = cge.window_size()
+        cge.create_text_body("hud_cross", "+", "hud", cge.Vector2f(size.x / 2 - 6, size.y / 2 - 13), 22,
+                             outline_thickness=HUD_OUTLINE)
         self.target_text = ""
         self.hotbar_text = ""
         # The pause menu: a title and two items, drawn only while the game is paused (their text is empty otherwise).
@@ -284,15 +288,16 @@ class VoxelGame(PyScript):
     def update_hud(self):
         if not self.hud_ready:
             return
+        biome = self.world.biome_at(math.floor(self.pos[0]), math.floor(self.pos[2])).capitalize()
         if self.paused:
             self.set_target_text("")
         elif not self.mouse_captured:
-            self.set_target_text("Click the game to capture the mouse")
+            self.set_target_text("%s.  Click the game to capture the mouse" % biome)
         elif self.target is None:
-            self.set_target_text("Looking at: nothing in reach")
+            self.set_target_text("%s.  Looking at: nothing in reach" % biome)
         else:
             block, normal = self.target
-            text = "Looking at: %s" % VoxelGen.NAMES.get(self.world.get_block(*block), "?")
+            text = "%s.  Looking at: %s" % (biome, VoxelGen.NAMES.get(self.world.get_block(*block), "?"))
             cell = (block[0] + normal[0], block[1] + normal[1], block[2] + normal[2])
             if normal != (0, 0, 0) and not physics.cell_in_player(cell, self.pos):
                 text += "   (right click: %s)" % VoxelGen.NAMES[HOTBAR[self.slot]]
