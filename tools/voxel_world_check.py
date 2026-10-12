@@ -88,6 +88,31 @@ def check_body_parity(world, checks):
     checks["body physics matches the Python version"] = mismatches == 0
 
 
+def check_detail(checks):
+    """The smooth skin is finer near the focus: the chunks within one of it have twice the samples per block, so more quads."""
+    world = cge.VoxelWorld(SIZE, HEIGHT, "voxel")
+    world.set_terrain(seed=5, sea_level=14, base_height=8, height_range=44, snow_level=40,
+                      tree_chance=0.01, cave_width=0.05)
+    world.set_smoothing(1)
+    world.set_detail(1, 2)
+    chunks = [(x, z) for x in range(-3, 3) for z in range(-3, 3)]
+    for chunk in chunks:
+        world.request_chunk(*chunk)
+    deadline = time.time() + 120.0
+    while time.time() < deadline:
+        world.update(5.0, 0, 0)
+        stats = world.stats()
+        if stats["loaded"] == len(chunks) and stats["dirty"] == 0 and stats["meshing"] == 0:
+            break
+        time.sleep(0.005)
+    near = [world.chunk_quads(x, z) for x in (-1, 0, 1) for z in (-1, 0, 1)]
+    far = [world.chunk_quads(-3, -3), world.chunk_quads(2, 2)]
+    checks["near chunks have finer skins than far ones (near %d, far %d quads)" % (
+        sum(near) // len(near), sum(far) // len(far))] = (
+        all(q > 0 for q in near + far) and sum(near) / len(near) > 1.5 * sum(far) / len(far))
+    world.clear()
+
+
 def check_motion(world, checks):
     """A falling block takes time: it is in flight for a while, then lands in the world."""
     world.set_move_seconds(0.4)
@@ -223,6 +248,7 @@ def run(out_path="cg_control/voxel_check.json"):
     check_body_parity(world, results["check"])
     check_physics(world, results["check"])
     check_motion(world, results["check"])
+    check_detail(results["check"])
 
     results["ok"] = all(results["check"].values())
     tmp = out_path + ".tmp"

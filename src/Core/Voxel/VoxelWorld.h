@@ -43,6 +43,12 @@ namespace CGEngine {
 		// samples per block (see buildSmoothMesh). Changing it re-meshes every loaded chunk.
 		void setSmoothing(int resolution);
 		int smoothing() const { return smoothResolution; }
+		// Level of detail for the smooth skin: the chunks within nearChunks of the focus (see update) use nearSamples per
+		// block, the rest use the smoothing resolution. nearChunks 0 turns it off.
+		void setDetail(int nearChunks, int nearSamples);
+		int resolutionFor(int cx, int cz) const;
+		// The quads in a loaded chunk's mesh as last uploaded (0 if it has none).
+		int chunkQuads(int cx, int cz) const;
 		// The generator's settings. Chunks requested later use them; loaded chunks keep what they have.
 		void setTerrain(const VoxelTerrain& settings) { terrain = settings; }
 
@@ -108,6 +114,7 @@ namespace CGEngine {
 			bool meshing = false;           // a mesh for the current version is on a worker
 			uint32_t version = 0;           // bumped by each change to the blocks or their neighbours
 			int quads = 0;
+			int resolution = 0;             // the smooth skin's samples per block for this chunk (0: cubes); see resolutionFor
 			std::pair<bool, id_t> body = { false, 0 };   // the body's asset id, once uploaded
 		};
 
@@ -135,6 +142,14 @@ namespace CGEngine {
 		VoxelSimulation simulation;
 		VoxelTerrain terrain;
 		int smoothResolution = 0;
+		int nearRadius = 0;
+		int nearResolution = 2;
+		int focusCx = 0;
+		int focusCz = 0;
+		bool focusKnown = false;
+		// The blocks in flight, drawn as one mesh of balls (see updateMovingBlocks).
+		std::pair<bool, id_t> movingBody = { false, 0 };
+		bool movingShown = false;
 		std::map<std::pair<int, int>, Chunk> chunks;
 		// The chunks whose mesh may be out of date, so update() finds them without scanning every chunk.
 		std::set<std::pair<int, int>> dirtyKeys;
@@ -154,6 +169,9 @@ namespace CGEngine {
 		std::deque<MeshResult> meshResults;
 
 		void startWorkers();
+		// Re-reads the detail of every loaded chunk for a new focus; a chunk whose level changed is meshed again.
+		void refreshResolutions(int focusX, int focusZ, bool force);
+		void updateMovingBlocks();
 		void stopWorkers();
 		void workerLoop();
 		void enqueue(std::function<void()> job);

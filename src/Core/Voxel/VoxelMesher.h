@@ -39,5 +39,9 @@ namespace CGEngine {
 	// edges) on a density that is the blocks' occupancy, interpolated between block centres. resolution is the number of
 	// samples per block: 1 is the block scale, 2 gives half-block detail. Chunks join without cracks, since every vertex
 	// is a function of the blocks around it. The chunk needs a border of 3 (PaddedChunk::border).
-	void buildSmoothMesh(const PaddedChunk& chunk, const std::array<glm::vec3, 256>& palette, int resolution, MeshArrays& out);
+	void buildSmoothMesh(const PaddedChunk& chunk, const std::array<glm::vec3, 256>& palette, int resolution,
+		unsigned skirtSides, MeshArrays& out);
+
+	// A round ball of a block's colour, centred at centre and appended to out. The moving blocks are drawn with it.
+	void buildBlob(const std::array<glm::vec3, 256>& palette, uint8_t block, glm::vec3 centre, float radius, MeshArrays& out);
 }

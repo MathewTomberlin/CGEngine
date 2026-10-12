@@ -114,14 +114,24 @@ Goal: the world reads well at a human pace, and the engine's own state is easy t
   walls keep the block's texture shape instead of stretching.
 - [ ] **11.6** Light for caves: propagate sky and torch light through the blocks so caves and overhangs are dark. Without
   it the shadow map is the only sense of depth underground.
-- [ ] **11.7** LOD for the smooth skin: two samples a block near the camera and one far away, with the seams matched or
-  skirted. Two samples everywhere is 4.7 million quads for 841 chunks.
+- [x] **11.7** Level of detail for the smooth skin: the chunks within 3 of the player (`VOXEL_NEAR_RADIUS`) use two samples a
+  block (`VOXEL_NEAR_SAMPLES`), the rest one. Seams between the levels are hidden by skirts: a strip a block deep runs down
+  each chunk's side from the surface. Measured: near chunks have about 2.7 times the quads of far ones. Release: 841 chunks
+  at about 1.2 million quads, 559 frames a second, 239 MB.
 - [ ] **11.8** Frame rate: the labels and outlines together cut the Release rate from about 650 to about 360 frames a second
   (measured after the HUD landed). Find out which part costs it (the per-frame text state switch, or the outline uploads)
   before anything else is optimised.
 - [ ] **11.9** Entities: the player's box mover is C++ (`step_body`), but other bodies have no collision. A body component
   that uses the same mover, so scripts can make many walking or falling bodies.
 - [ ] **11.10** Player in water: water is not solid, so the player falls through it. A slower fall and buoyancy in liquid.
+- [x] **11.11** Falling blocks are drawn as smooth balls, not cubes (`buildBlob`, one mesh for all the blocks in flight, made
+  in C++ each update). The settled blocks stay smooth-skinned as before.
+- [x] **11.12** Thin trunks read as vines, and skirts hung flat sheets over air. A one-sample surface pulls each vertex
+  toward the middle of its cell, which thins features one block wide; the surface now sits a little further out
+  (iso 0.3), so trunks are solid. Skirts only go where the neighbour is at another level of detail, and only over solid.
+- [ ] **11.14** Intermittent square shadow on the terrain at high sun, with nothing casting it. Not reproduced yet. F12 now saves a screenshot and the game state together, so the next occurrence can be checked. The shadow edge now fades to lit at the map boundary, which may hide a square edge.
+- [ ] **11.13** Trees whose trunk is outside the loaded area leave crowns floating. Look at the far edge of the view, and
+  make the trunk part of the crown's chunk, or skip crowns whose trunk is missing.
 
 ## Tooling and quality
 - [x] CI build on Windows (`.github/workflows/build.yml`) with Mesa software OpenGL smoke run
