@@ -228,11 +228,15 @@ namespace CGEngine {
     }
 
     V2f Body::getLocalCenter()  const {
-        return ((Shape*)entity.get())->getGeometricCenter();
+        if (const Shape* shape = dynamic_cast<const Shape*>(entity.get())) return shape->getGeometricCenter();
+        return getLocalBounds().getCenter();
     }
 
     V2f Body::getGlobalCenter()  const {
-        return getGlobalTransform().transformPoint(((Shape*)entity.get())->getGeometricCenter());
+        if (const Shape* shape = dynamic_cast<const Shape*>(entity.get())) {
+            return getGlobalTransform().transformPoint(shape->getGeometricCenter());
+        }
+        return getGlobalTransform().transformPoint(getLocalBounds().getCenter());
     }
 
     V2f Body::getGlobalPosition() const {
@@ -843,20 +847,21 @@ namespace CGEngine {
             if (Mesh* mesh = dynamic_cast<Mesh*>(entity.get())) {
                 // Pull OpenGL State
                 mesh->render(transform);
-            } else {
+            } else if (const sf::Drawable* drawable = dynamic_cast<const sf::Drawable*>(entity.get())) {
+                // Shapes, text and sprites are drawn through their Drawable base, whatever their concrete type.
                 renderer->commitGL();
                 // Text is an overlay: drawn over the scene whatever its depth, and in window pixels (the screen's own view is a
                 // square in the middle of the window, which would clip a label that runs past it).
-                const bool overlay = dynamic_cast<sf::Text*>(entity.get()) != nullptr;
+                const bool overlay = dynamic_cast<const sf::Text*>(entity.get()) != nullptr;
                 if (overlay) {
                     const sf::View scene = target.getView();
                     glDisable(GL_DEPTH_TEST);
                     target.setView(target.getDefaultView());
-                    target.draw(*(Shape*)entity.get(), transform);
+                    target.draw(*drawable, transform);
                     target.setView(scene);
                     glEnable(GL_DEPTH_TEST);
                 } else {
-                    target.draw(*(Shape*)entity.get(), transform);
+                    target.draw(*drawable, transform);
                 }
             }
         }
