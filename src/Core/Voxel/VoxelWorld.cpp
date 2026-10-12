@@ -458,6 +458,7 @@ namespace CGEngine {
 				}
 			}
 		}
+		for (size_t id = 0; id < 256; ++id) padded.emission[id] = types[id].emits;
 		return padded;
 	}
 

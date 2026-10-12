@@ -210,16 +210,26 @@ collision leaves the feet 0.2 blocks inside the visible ground and the eye close
   one. The difference is up to half a block near the player; a finer collision field is possible if it shows.
 
 ## Phase 14: light you carry and place (from playtesting: the caves are too dark to explore)
-Goal: torches light caves and the player can carry one. Light is what lets a player read a cave; the sky cannot reach
-underground, so the sky floor (0.2) is all a cave gets today.
-- [ ] **14.1** Torch block: a block type that emits light (full at its cell, falling 0.8 a block through air, the same walk
-  as sky light and within the same 8-block reach). It is not solid, so it does not block movement.
-- [ ] **14.2** Placed torches: a torch goes on the hotbar and is placed like any block. Its light is baked into the chunks
-  around it, which are re-meshed when it is placed or broken (the neighbours within reach are already re-meshed).
+Goal: light blocks and carried torches light caves. Light is what lets a player read a cave; the sky cannot reach
+underground, so the sky floor (0.2) is all a cave gets today. Steering from playtesting: the torch is a small item, not a
+full block, and light blocks (full cells that give light) are wanted too.
+- [x] **14.1** Light blocks: a block gives off light (`BlockType::emits`; the lamp, id 17, gives 255). Its light is full at its
+  cell and falls 0.8 a block through air, for 8 blocks, the same walk as sky light; each cell takes the brighter of the two.
+  The lamp is a solid block drawn as a cube, so it is placed like any block. `check_lamp` in `voxel_world_check.py` checks
+  a sealed pocket: the sky floor before the lamp, 0.8 one block away, 0.8 cubed three blocks away. Not on the hotbar yet.
+- [ ] **14.2** Small torch as an item, not a block: a torch is a prop on one face of a block, drawn as a thin mesh, so it
+  takes a fraction of a block and the grid does not change. Its cell stays air for collision, meshing and the walk, and the
+  torch enters the light pass as an emitter at that cell, from a sparse per-chunk list (no block id). Placed from the hotbar
+  on a face, broken by hitting it; the chunks within reach are re-lit as for a block edit.
 - [ ] **14.3** Held torch: a point light that follows the camera and lights the walls around the player, with a key to
-  light or put it out. It is a shader light, so it needs no re-mesh.
+  light or put it out. It is a shader light, so it needs no re-mesh and stays separate from the baked light of 14.1 and 14.2.
 - [ ] **14.4** The light colour is warm, and a torch flickers a little (cosmetic, per torch).
-- [ ] **14.5** Measured: the cost of the torch channel in the mesher and of a re-mesh after a placement, in Release.
+- [ ] **14.5** Measured: the cost of the light pass in the mesher (a chunk with and without a light block) and of a re-mesh
+  after a placement, in Release.
+- [ ] **14.6** Spike: a prop finer than a block. Can a block cell hold a finer grid where a prop needs one, without finer blocks
+  everywhere? Plan: a sparse 4×4×4 micro-grid per block cell, stored only where set, meshed with the same greedy mesher at
+  micro scale and lit from its cell. Whole-world subdivision is not the route: it multiplies the cells the mesher, the light
+  walk and the collision sample by 4 per axis (64 times the cells). Decide after 14.2 whether a prop needs micro collision.
 - Interim (not on the roadmap as a fix): the cave floor (0.2 of the sky) could be raised to make caves readable before the
   torches land. Decide after 14.1 if they are still too dark.
 

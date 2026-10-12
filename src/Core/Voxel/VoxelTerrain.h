@@ -18,6 +18,7 @@ namespace CGEngine {
 		static constexpr uint8_t Snow = 6;
 		static constexpr uint8_t Wood = 7;
 		static constexpr uint8_t Leaves = 8;
+		static constexpr uint8_t Lamp = 17;     // a full block that gives off light (see BlockType::emits); defined in VoxelGen.py
 
 		uint32_t seed = 1;
 		int seaLevel = 14;      // columns below this are filled with water up to it

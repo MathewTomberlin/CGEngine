@@ -54,11 +54,13 @@ void bindVoxel(py::module_& m) {
         .def("set_smoothing", &VoxelWorld::setSmoothing, py::arg("resolution"),
              "The surface style: 0 for cubes, or the number of samples per block for a smooth skin (1 for the block scale, 2 for half blocks). Loaded chunks are re-meshed.")
         .def("smoothing", &VoxelWorld::smoothing, "The surface style set by set_smoothing: 0 for cubes, else the samples per block.")
-        .def("define_block", [](VoxelWorld& world, int block_id, sf::Vector3f colour, bool solid, bool falls, bool liquid) {
+        .def("define_block", [](VoxelWorld& world, int block_id, sf::Vector3f colour, bool solid, bool falls, bool liquid, int emits) {
             world.setColour(block_id, glm::vec3(colour.x, colour.y, colour.z));
-            world.defineBlock(block_id, BlockType{ solid, falls, liquid });
+            world.defineBlock(block_id, BlockType{ solid, falls, liquid, static_cast<uint8_t>(std::clamp(emits, 0, 255)) });
         }, py::arg("block_id"), py::arg("colour"), py::arg("solid") = true, py::arg("falls") = false, py::arg("liquid") = false,
-           "Define a block id: its colour, whether it is solid (blocks movement), falls (sand-like, moves down into air or liquid) and liquid (flows, as water does).")
+           py::arg("emits") = 0,
+           "Define a block id: its colour, whether it is solid (blocks movement), falls (sand-like, moves down into air or liquid), "
+           "liquid (flows, as water does) and emits (the light it gives off at its own cell, 0 to 255; a lamp is 255).")
         .def("is_solid", &VoxelWorld::isSolid, py::arg("x"), py::arg("y"), py::arg("z"),
              "True if the block at these coordinates is solid. Air and liquids are not.")
         .def("biome_at", &VoxelWorld::biomeName, py::arg("x"), py::arg("z"),
@@ -71,7 +73,7 @@ void bindVoxel(py::module_& m) {
         }, py::arg("origin"), py::arg("direction"), py::arg("max_distance"),
            "The first point where the drawn terrain surface is along the ray (a unit direction), within max_distance, or None.")
         .def("light_at", &VoxelWorld::lightAt, py::arg("x"), py::arg("y"), py::arg("z"),
-             "The sky light at a block, 0 to 255, as the mesh shades it (255 is open to the sky, dark caves are low).")
+             "The light at a block, 0 to 255, as the mesh shades it: the sky's (255 is open to the sky, dark caves are low), or a light block's, whichever is brighter.")
         .def("step_body", [](const VoxelWorld& world, std::array<double, 3> pos, std::array<double, 3> vel, double dt,
                 bool flying, double halfWidth, double height, bool onGround) {
             VoxelBodyShape shape;

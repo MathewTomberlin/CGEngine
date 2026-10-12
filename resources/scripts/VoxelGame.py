@@ -231,7 +231,8 @@ class VoxelGame(PyScript):
         self.world = cge.VoxelWorld(VoxelGen.CHUNK, VoxelGen.HEIGHT, "voxel")
         for block, rgb in VoxelGen.COLOURS.items():
             self.world.define_block(block, cge.Vector3f(*rgb), solid=block not in VoxelGen.LIQUIDS,
-                                    falls=block in VoxelGen.FALLS, liquid=block in VoxelGen.LIQUIDS)
+                                    falls=block in VoxelGen.FALLS, liquid=block in VoxelGen.LIQUIDS,
+                                    emits=VoxelGen.EMITS.get(block, 0))
         self.world.set_smoothing(SMOOTH_RESOLUTION)
         self.world.set_move_seconds(SIM_TICK * 0.9)   # a falling block lands just before the next tick
         # Smooth skin nearest the camera is finer: NEAR_SAMPLES per block within NEAR_RADIUS chunks.

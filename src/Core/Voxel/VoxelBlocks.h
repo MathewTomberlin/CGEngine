@@ -8,6 +8,7 @@ namespace CGEngine {
 		bool solid = true;      // blocks movement (collision and occupancy); a liquid is not solid
 		bool falls = false;     // moves down into air, or swaps down with a liquid (sand, gravel)
 		bool liquid = false;    // flows (water); see the water levels below
+		uint8_t emits = 0;      // light the block gives off at its own cell, 0 to 255 (a lamp is 255); it falls off through air
 	};
 
 	// Water: block 5 is a full source. Flowing water has a level from 7 down to 1, kept as block ids 9 to 15 (id = 16 -

@@ -17,6 +17,8 @@ HEIGHT = 64
 BLOCK_CHECK = 7   # wood: an id that the terrain never makes next to the edited block
 VOXEL_WOOD = 7
 VOXEL_LEAVES = 8
+VOXEL_STONE = 3
+VOXEL_LAMP = 17   # VoxelGen.LAMP
 
 
 def load_chunks(world, chunks, timeout=60.0):
@@ -271,6 +273,33 @@ def check_skin_surface(world, checks):
     checks["the view meets the drawn skin (about 0.2 of a block above the top block)"] = total > 0 and good >= 0.9 * total
 
 
+def check_lamp(world, checks):
+    """A light block lights the air round it: full at its cell, and 0.8 less for each block walked through air. Tested in a
+    sealed pocket of stone, which the sky cannot reach, so the air is at the sky floor (0.2) until the lamp is placed. The
+    pocket is put back afterwards, so the checks after it see the same world."""
+    world.define_block(VOXEL_LAMP, cge.Vector3f(1.0, 0.8, 0.42), solid=True, emits=255)
+    cx, cy, cz = 4, 20, 4
+    saved = {}
+    for x in range(cx - 2, cx + 3):
+        for y in range(cy - 2, cy + 3):
+            for z in range(cz - 2, cz + 3):
+                saved[(x, y, z)] = world.get_block(x, y, z)
+                inside = max(abs(x - cx), abs(y - cy), abs(z - cz)) <= 1
+                world.set_block(x, y, z, 0 if inside else VOXEL_STONE)
+    dark = world.light_at(cx, cy, cz)
+    world.set_block(cx, cy, cz, VOXEL_LAMP)
+    near = world.light_at(cx + 1, cy, cz)            # one block through air: 0.8
+    far = world.light_at(cx + 1, cy + 1, cz + 1)     # three blocks through air: 0.8 cubed, about 0.5
+    checks["a sealed pocket is at the sky floor before the lamp"] = abs(dark - 51) <= 2
+    checks["a lamp is a block, and it is not walkable air"] = world.get_block(cx, cy, cz) == VOXEL_LAMP and world.is_solid(cx, cy, cz)
+    checks["one block from a lamp is 0.8 of full light"] = abs(near - 204) <= 2
+    checks["three blocks from a lamp, through air, is 0.8 cubed"] = abs(far - 131) <= 2
+    for (x, y, z), block in saved.items():
+        world.set_block(x, y, z, block)
+    # Putting the pocket back is recorded as edits too; forget them, so the edit checks below see only their own.
+    world.clear_edits()
+
+
 def count_floating_leaves(world, chunks):
     """Leaves with no wood under them in their column, away from the loaded edge (a tree's trunk is in its own chunk, so
     a leaf next to the edge may have its trunk outside the loaded area)."""
@@ -309,7 +338,8 @@ def run(out_path="cg_control/voxel_check.json"):
     check_light(world, results["check"], chunks, results)
     check_walkers(world, results["check"], results)
     check_skin_surface(world, results["check"])
-    biomes = {world.biome_at(x, z) for x in range(-200, 200, 10) for z in range(-200, 200, 10)}
+    check_lamp(world, results["check"])
+    biomes ={world.biome_at(x, z) for x in range(-200, 200, 10) for z in range(-200, 200, 10)}
     results["check"]["biomes vary: plains, forest and desert occur"] = biomes == {"plains", "forest", "desert"}
     results["biomes"] = sorted(biomes)
 

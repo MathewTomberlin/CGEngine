@@ -134,6 +134,39 @@ namespace CGEngine {
 			frontier.swap(next);
 		}
 
+		// Light from the light blocks: full at the block, and each block walked through air (or any block that is not opaque)
+		// multiplies it by LightPerStep, for VoxelLightReach rounds. A cell keeps the brightest that reaches it. Nothing is
+		// done when the chunk has no light block, which is most of the time.
+		std::vector<float> emitted;
+		std::vector<Cell> sources;
+		for (int z = lo; z < hi; ++z) {
+			for (int x = lo; x < hi; ++x) {
+				for (int y = 0; y < h; ++y) {
+					const uint8_t level = chunk.emission[chunk.at(x, y, z)];
+					if (level == 0) continue;
+					if (emitted.empty()) emitted.assign(chunk.blocks.size(), 0.0f);
+					emitted[chunk.index(x, y, z)] = level / 255.0f;
+					sources.push_back({ x, y, z });
+				}
+			}
+		}
+		for (int round = 0; round < VoxelLightReach && !sources.empty(); ++round) {
+			next.clear();
+			for (const Cell& cell : sources) {
+				const float carried = emitted[chunk.index(cell.x, cell.y, cell.z)] * LightPerStep;
+				for (const auto& d : Directions) {
+					const int x = cell.x + d[0], y = cell.y + d[1], z = cell.z + d[2];
+					if (x < lo || x >= hi || z < lo || z >= hi || y < 0 || y >= h) continue;
+					const size_t i = chunk.index(x, y, z);
+					if (chunk.blocks[i] != 0 && chunk.emission[chunk.blocks[i]] == 0) continue;
+					if (carried <= emitted[i]) continue;
+					emitted[i] = carried;
+					next.push_back({ x, y, z });
+				}
+			}
+			sources.swap(next);
+		}
+
 		float byStep[VoxelLightReach + 1];
 		for (int s = 0; s <= VoxelLightReach; ++s) {
 			byStep[s] = std::max(LightFloor, std::pow(LightPerStep, static_cast<float>(s)));
@@ -150,6 +183,7 @@ namespace CGEngine {
 					} else if (y >= 0 && chunk.blocks[i] == 0) {
 						level = steps[i] == 0xFF ? LightFloor : byStep[steps[i]];
 					}
+					if (!emitted.empty()) level = std::max(level, emitted[i]);
 					chunk.light[i] = static_cast<uint8_t>(std::lround(level * 255.0f));
 				}
 			}
