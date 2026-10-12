@@ -72,6 +72,14 @@ namespace CGEngine {
 		return baseHeight + static_cast<int>(std::pow(n, 1.6f) * static_cast<float>(heightRange));
 	}
 
+	VoxelTerrain::Biome VoxelTerrain::biomeAt(int x, int z) const {
+		// One noise field over about 90 blocks: the regions are large, so a desert or a forest is a place to walk through.
+		const float n = valueNoise(static_cast<float>(x) / 90.0f, static_cast<float>(z) / 90.0f, seed + 4241u);
+		if (n > 0.7f) return Biome::Desert;
+		if (n < 0.3f) return Biome::Forest;
+		return Biome::Plains;
+	}
+
 	void VoxelTerrain::fillChunk(int cx, int cz, int size, int height, std::vector<uint8_t>& blocks) const {
 		blocks.assign(static_cast<size_t>(size) * size * height, Air);
 		for (int lz = 0; lz < size; ++lz) {
@@ -82,6 +90,7 @@ namespace CGEngine {
 				uint8_t surface = Grass;
 				if (top <= seaLevel + 1) surface = Sand;
 				else if (top >= snowLevel) surface = Snow;
+				else if (biomeAt(wx, wz) == Biome::Desert) surface = Sand;
 
 				// Runs bottom to top: stone, dirt, the surface block, and water above a low column.
 				const int stoneTop = std::max(0, top - 4);
@@ -132,7 +141,11 @@ namespace CGEngine {
 		};
 		for (int wz = cz * size - margin; wz < (cz + 1) * size + margin; ++wz) {
 			for (int wx = cx * size - margin; wx < (cx + 1) * size + margin; ++wx) {
-				if (latticeValue(wx, wz, seed + 9001u) >= treeChance) continue;
+				// Forests grow about three times the trees of the plains, and deserts none.
+				const Biome biome = biomeAt(wx, wz);
+				if (biome == Biome::Desert) continue;
+				const float chance = biome == Biome::Forest ? treeChance * 3.0f : treeChance;
+				if (latticeValue(wx, wz, seed + 9001u) >= chance) continue;
 				const int ground = columnHeight(wx, wz);
 				if (ground <= seaLevel + 1 || ground >= snowLevel - 2) continue;
 				const int trunk = 4 + static_cast<int>(latticeValue(wx, wz, seed + 9007u) * 2.999f);

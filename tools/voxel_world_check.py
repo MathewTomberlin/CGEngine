@@ -297,6 +297,9 @@ def run(out_path="cg_control/voxel_check.json"):
     results["check"]["caves carved"] = air > underground * 0.01
     check_light(world, results["check"], chunks, results)
     check_walkers(world, results["check"])
+    biomes = {world.biome_at(x, z) for x in range(-200, 200, 10) for z in range(-200, 200, 10)}
+    results["check"]["biomes vary: plains, forest and desert occur"] = biomes == {"plains", "forest", "desert"}
+    results["biomes"] = sorted(biomes)
 
     # An edit survives an unload of its chunk, and a save and load round trip.
     world.set_block(3, 20, 3, BLOCK_CHECK)

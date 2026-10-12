@@ -30,6 +30,10 @@ namespace CGEngine {
 		// Height of the column at world (x, z), in blocks, from baseHeight up to baseHeight + heightRange.
 		int columnHeight(int x, int z) const;
 
+		// The biome of column (x, z): slow noise picks desert (sand on top, no trees), forest (many trees) or plains.
+		enum class Biome { Plains, Forest, Desert };
+		Biome biomeAt(int x, int z) const;
+
 		// Fills blocks for chunk (cx, cz): size * size * height blocks, block (x, y, z) at (y * size + z) * size + x.
 		// Trees are drawn last, into air only; the trees rooted just outside the chunk reach in and are drawn here too.
 		void fillChunk(int cx, int cz, int size, int height, std::vector<uint8_t>& blocks) const;

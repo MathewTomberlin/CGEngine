@@ -282,11 +282,14 @@ void bindGame(py::module_& m) {
 
     // Text drawn over the scene, in window pixels from the top-left corner: a label for the game's HUD.
     m.def("create_text_body", [](const std::string& name, const std::string& text, const std::string& fontName,
-        sf::Vector2f position, unsigned int size, sf::Color colour) {
+        sf::Vector2f position, unsigned int size, sf::Color colour, sf::Color outlineColour, float outlineThickness) {
         FontResource* resource = assets.get<FontResource>(fontName);
         if (!resource || !resource->getFont()) throw std::runtime_error("no font named '" + fontName + "' (load_font it first)");
         sf::Text label(*resource->getFont(), text, size);
         label.setFillColor(colour);
+        // An outline keeps a label readable over any background; 0 draws the plain text.
+        label.setOutlineColor(outlineColour);
+        label.setOutlineThickness(outlineThickness);
         label.setPosition(position);
         // The asset name is a cache key, so it carries a prefix; the body's own name is what findBodyByName finds.
         auto body = assets.create<Body>("text:" + name, std::move(label));
@@ -296,8 +299,9 @@ void bindGame(py::module_& m) {
         body.value().second->zOrder = 1000;
         return body.value().second;
     }, py::arg("name"), py::arg("text"), py::arg("font"), py::arg("position"), py::arg("size") = 18,
-       py::arg("colour") = sf::Color::White,
-       "Make a text label at position (window pixels from the top-left) drawn over the scene. Use a font loaded with load_font.");
+       py::arg("colour") = sf::Color::White, py::arg("outline_colour") = sf::Color::Black, py::arg("outline_thickness") = 0.0f,
+       "Make a text label at position (window pixels from the top-left) drawn over the scene. Use a font loaded with load_font. "
+       "outline_thickness (pixels) draws an outline in outline_colour, which keeps the text readable over any background.");
 
     m.def("set_text_body", [](const std::string& name, const std::string& text) {
         Body* body = findBodyByName(name);

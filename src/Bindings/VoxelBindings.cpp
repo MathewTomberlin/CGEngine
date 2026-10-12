@@ -61,6 +61,8 @@ void bindVoxel(py::module_& m) {
            "Define a block id: its colour, whether it is solid (blocks movement), falls (sand-like, moves down into air or liquid) and liquid (flows, as water does).")
         .def("is_solid", &VoxelWorld::isSolid, py::arg("x"), py::arg("y"), py::arg("z"),
              "True if the block at these coordinates is solid. Air and liquids are not.")
+        .def("biome_at", &VoxelWorld::biomeName, py::arg("x"), py::arg("z"),
+             "The biome of the column at x, z: \"plains\", \"forest\" or \"desert\". Set by the terrain settings and the seed.")
         .def("light_at", &VoxelWorld::lightAt, py::arg("x"), py::arg("y"), py::arg("z"),
              "The sky light at a block, 0 to 255, as the mesh shades it (255 is open to the sky, dark caves are low).")
         .def("step_body", [](const VoxelWorld& world, std::array<double, 3> pos, std::array<double, 3> vel, double dt,

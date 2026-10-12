@@ -50,6 +50,7 @@ HOTBAR = [VoxelGen.STONE, VoxelGen.DIRT, VoxelGen.GRASS, VoxelGen.WOOD, VoxelGen
 WALKERS = int(os.environ.get("VOXEL_WALKERS", "12"))   # creatures that wander the terrain near the spawn
 SHADOWS = os.environ.get("VOXEL_SHADOWS", "1") != "0"   # the sun casts shadows (the map covers SHADOW_RADIUS around the camera)
 SHADOW_RADIUS = float(os.environ.get("VOXEL_SHADOW_RADIUS", "40"))
+HUD_OUTLINE = 2.0                 # pixels of black outline round each label, so it reads over sand and grass
 HUD_FONT = "fonts/defaultFont.ttf"   # the font for the labels (copied with the resources)
 SIM_BUDGET_MS = 1.5          # time per frame for the block physics (falling sand, flowing water)
 # Block physics runs in ticks this far apart, and a falling block takes most of a tick to move one cell, so sand and water
@@ -198,9 +199,11 @@ class VoxelGame(PyScript):
         """Two labels: the top left holds what the crosshair is on and the controls; the hotbar sits along the bottom."""
         cge.load_font(HUD_FONT, "hud")
         # Each label is one text draw, which costs the renderer a state switch, so there are only two.
-        cge.create_text_body("hud_target", "", "hud", cge.Vector2f(14, 10), 16)
-        cge.create_text_body("hud_help", HELP_TEXT, "hud", cge.Vector2f(14, 34), 14, cge.Color(200, 200, 200))
-        cge.create_text_body("hud_hotbar", "", "hud", cge.Vector2f(14, cge.window_size().y - 34), 16)
+        cge.create_text_body("hud_target", "", "hud", cge.Vector2f(14, 10), 16, outline_thickness=HUD_OUTLINE)
+        cge.create_text_body("hud_help", HELP_TEXT, "hud", cge.Vector2f(14, 34), 14, cge.Color(200, 200, 200),
+                             outline_thickness=HUD_OUTLINE)
+        cge.create_text_body("hud_hotbar", "", "hud", cge.Vector2f(14, cge.window_size().y - 34), 16,
+                             outline_thickness=HUD_OUTLINE)
         self.target_text = ""
         self.hotbar_text = ""
         # The pause menu: a title and two items, drawn only while the game is paused (their text is empty otherwise).
@@ -214,9 +217,9 @@ class VoxelGame(PyScript):
             "resume": (cx - 100, cy - 4, cx + 100, cy + 30),
             "quit": (cx - 100, cy + 40, cx + 100, cy + 74),
         }
-        cge.create_text_body("pause_title", "", "hud", cge.Vector2f(cx - 80, cy - 60), 28)
-        cge.create_text_body("pause_resume", "", "hud", cge.Vector2f(cx - 62, cy), 22)
-        cge.create_text_body("pause_quit", "", "hud", cge.Vector2f(cx - 40, cy + 44), 22)
+        cge.create_text_body("pause_title", "", "hud", cge.Vector2f(cx - 80, cy - 60), 28, outline_thickness=HUD_OUTLINE)
+        cge.create_text_body("pause_resume", "", "hud", cge.Vector2f(cx - 62, cy), 22, outline_thickness=HUD_OUTLINE)
+        cge.create_text_body("pause_quit", "", "hud", cge.Vector2f(cx - 40, cy + 44), 22, outline_thickness=HUD_OUTLINE)
 
     def set_menu_text(self, name, text):
         if self.menu_text.get(name) != text:
@@ -564,6 +567,7 @@ class VoxelGame(PyScript):
                  "seed": self.seed, "frames": self.frames,
                  "player": [round(v, 3) for v in self.pos], "on_ground": self.on_ground, "flying": self.flying,
                  "swimming": self.swimming, "walkers": len(self.walkers.walkers) if self.walkers else 0,
+                 "biome": self.world.biome_at(math.floor(self.pos[0]), math.floor(self.pos[2])),
                  "mouse_captured": self.mouse_captured, "yaw": round(self.yaw, 3), "pitch": round(self.pitch, 3),
                  "max_frame_ms": round(self.max_dt * 1000.0, 2),
                  "time_of_day": round(self.clock, 5), "sun": [round(v, 5) for v in self.sun],

@@ -51,6 +51,8 @@ namespace CGEngine {
 		int chunkQuads(int cx, int cz) const;
 		// The generator's settings. Chunks requested later use them; loaded chunks keep what they have.
 		void setTerrain(const VoxelTerrain& settings) { terrain = settings; }
+		/// The biome of the column at world (x, z): "plains", "forest" or "desert" (see VoxelTerrain::biomeAt).
+		const char* biomeName(int x, int z) const;
 
 		int getBlock(int x, int y, int z) const;
 		// Sets a block, and queues it and its neighbours for the simulation. Unloaded chunks keep the edit for later.

@@ -35,6 +35,14 @@ namespace CGEngine {
 		return block != 0 && types[static_cast<size_t>(block)].solid;
 	}
 
+	const char* VoxelWorld::biomeName(int x, int z) const {
+		switch (terrain.biomeAt(x, z)) {
+		case VoxelTerrain::Biome::Forest: return "forest";
+		case VoxelTerrain::Biome::Desert: return "desert";
+		default: return "plains";
+		}
+	}
+
 	uint8_t VoxelWorld::lightAt(int x, int y, int z) const {
 		if (y < 0) return 0;
 		if (y >= height) return 255;

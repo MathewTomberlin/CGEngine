@@ -30,6 +30,8 @@ rate, build and run the Release configuration.
 
 ## The look: day, night and fog
 
+- The land has three biomes, in regions about 90 blocks across: deserts (sand on top, no trees), forests (about three times
+  the trees) and plains. `world.biome_at(x, z)` names one, and the state file reports the player's.
 - The sun crosses the sky in `VOXEL_DAY_SECONDS`. Its light, the ambient fill, the sky and the fog all follow it: a bright
   sun by day, an orange light at sunrise and sunset, and a dim blue moon at night.
 - The fog starts halfway to the edge of the loaded chunks and is complete at that edge, so the land fades into the sky
