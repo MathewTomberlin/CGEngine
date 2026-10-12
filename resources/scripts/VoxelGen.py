@@ -26,6 +26,8 @@ OWN = (WOOD, LEAVES, BRICK) + LIQUIDS   # water is in its own mesh too, so the g
 CUBES = (BRICK,)
 MATERIALS = {WOOD: "voxel_wood", LEAVES: "voxel_leaves", BRICK: "voxel_brick", WATER: "voxel_water"}
 JOINS = {WOOD: LEAVES}              # a block whose top is covered by the mesh of this block joins that mesh (the trunk top joins the canopy)
+GROUND = (GRASS, DIRT, STONE, SAND, GRAVEL, SNOW)   # natural ground: a block standing on it joins the terrain (a trunk base)
+JOINS_BELOW = {WOOD: GROUND}
 
 COLOURS = {
     GRASS: (0.36, 0.72, 0.26),

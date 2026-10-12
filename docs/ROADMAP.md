@@ -182,8 +182,8 @@ Today every solid block is part of one smooth skin per chunk, which merges wood 
 - [x] **12.6** A wood block whose top is covered by leaves joins the leaves' skin (`BlockType::joinAbove`, `join_above=`):
   the trunk top and the canopy are one surface, while the trunk's sides and bottom stay wood, and so does a trunk with air
   above it. Checked by `check_groups`; seen in play (the trees worked).
-- [ ] **12.7** A wood block joins the ground under it (dirt, sand, gravel, grass, snow, and any other natural ground block) at
-  its bottom only, so a trunk base merges into the ground. Needs a join below, for a list of blocks rather than one.
+- [x] **12.7** A wood block standing on natural ground (stone, dirt, grass, sand, gravel, snow) joins the terrain at its bottom
+  (`join_below=`, a list of block ids). A wood block on a brick or on water keeps its own skin. Checked by `check_groups`.
 - [ ] **12.8** Water's surface is a semi-transparent mesh, not a solid colour: the water skin is drawn blended over what is
   under it (the seabed and the shore show through), and its faces do not write depth, so the sky through it stays visible.
 - Seams: a separate skin meets the terrain where they touch. The terrain treats a trunk or a leaf as air, so its surface sits

@@ -73,6 +73,8 @@ Each block type says how it is drawn, with `define_block(..., shape=, group=, ma
 - A wood block whose top is covered by leaves joins the leaves' skin (`join_above=`): the trunk top and the canopy are one
   surface, while the trunk's sides and bottom stay wood. The join is only through the cell above, so a leaf beside the trunk
   top still meets the trunk's side with a seam, not a merge.
+- A wood block standing on natural ground (stone, dirt, grass, sand, gravel, snow) joins the terrain at its bottom
+  (`join_below=`), so a trunk base merges into the ground. Wood on a brick or on water keeps its own skin.
 - Water is own too, in one mesh shared by the source and its flow (`mesh=` names the shared id). The ground under water has
   its own skin, so the seabed and the shore are seen from the water, and the water surface is seen from below as well.
   Under the water the sun's shadows are off: the surface would otherwise shade everything below it.

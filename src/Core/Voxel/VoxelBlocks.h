@@ -1,5 +1,6 @@
 #pragma once
 
+#include <bitset>
 #include <cstdint>
 
 namespace CGEngine {
@@ -16,6 +17,7 @@ namespace CGEngine {
 		bool cube = false;      // drawn as cubes, even where the terrain is smooth
 		uint8_t mesh = 0;       // the mesh of an own block: 0 is the block's own id, else this id, so blocks can share one mesh
 		uint8_t joinAbove = 0;  // a smooth block whose top is covered by a block of this mesh joins that mesh (its top only, see skinAt)
+		std::bitset<256> joinBelow;  // a smooth block standing on one of these terrain blocks joins the terrain (its bottom only)
 	};
 
 	// The mesh a block id is drawn in: 0 for the terrain, else the own mesh (see BlockType::own and mesh).

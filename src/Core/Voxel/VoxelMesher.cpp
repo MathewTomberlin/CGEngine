@@ -54,6 +54,10 @@ namespace CGEngine {
 			if (rule.join && y + 1 < chunk.height + chunk.border && chunk.rule[chunk.at(x, y + 1, z)].group == rule.join) {
 				return group == rule.join;
 			}
+			// A block standing on natural ground joins the terrain (its base only).
+			if (rule.joinBelow.any() && y - 1 >= -chunk.border && rule.joinBelow[chunk.at(x, y - 1, z)]) {
+				return group == 0;
+			}
 			return rule.group == group;
 		}
 

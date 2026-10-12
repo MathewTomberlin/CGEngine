@@ -52,11 +52,17 @@ namespace CGEngine {
 		if (!type.own) return TerrainSkin;
 		// A block whose top is covered by its join mesh is in that mesh's skin (the same rule as the mesher's inGroup).
 		uint8_t mesh = meshGroup(type, static_cast<uint8_t>(block));
+		bool joinedAbove = false;
 		if (type.joinAbove && y + 1 < height) {
 			const int above = getBlock(x, y + 1, z);
 			if (above != 0 && meshGroup(types[static_cast<size_t>(above)], static_cast<uint8_t>(above)) == type.joinAbove) {
 				mesh = type.joinAbove;
+				joinedAbove = true;
 			}
+		}
+		// A block standing on a block of its join-below set is in the terrain's skin (the same rule as the mesher's inGroup).
+		if (!joinedAbove && type.joinBelow.any() && y - 1 >= 0 && type.joinBelow[static_cast<size_t>(getBlock(x, y - 1, z))]) {
+			return TerrainSkin;
 		}
 		return (type.cube ? CubeSkin : OwnSkin) + mesh;
 	}
@@ -504,6 +510,7 @@ namespace CGEngine {
 			padded.emission[id] = types[id].emits;
 			padded.rule[id].group = meshGroup(types[id], static_cast<uint8_t>(id));
 			padded.rule[id].join = types[id].joinAbove;
+			padded.rule[id].joinBelow = types[id].joinBelow;
 			padded.rule[id].cube = types[id].cube;
 		}
 		return padded;

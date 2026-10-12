@@ -104,7 +104,9 @@ def check_groups(checks):
     terrain's, a brick is six cube faces, and ground is in the terrain's mesh. Collision sees each skin: a body lands on a
     brick at its drawn top, and the engine's mover agrees with the Python physics on a mixed patch of blocks."""
     world = cge.VoxelWorld(SIZE, HEIGHT, "voxel")
-    world.define_block(VOXEL_WOOD, cge.Vector3f(0.44, 0.29, 0.15), group="own", join_above=VOXEL_LEAVES)
+    # Wood joins the leaves above it and the natural ground under it (stone 3, dirt 2, grass 1, sand 4, gravel 16, snow 6).
+    world.define_block(VOXEL_WOOD, cge.Vector3f(0.44, 0.29, 0.15), group="own", join_above=VOXEL_LEAVES,
+                       join_below=[3, 2, 1, 4, 16, 6])
     world.define_block(VOXEL_LEAVES, cge.Vector3f(0.20, 0.50, 0.16), group="own", material="voxel_leaves")
     world.define_block(VOXEL_BRICK, cge.Vector3f(0.66, 0.30, 0.22), shape="cube", group="own")
     world.set_smoothing(1)
@@ -140,7 +142,8 @@ def check_groups(checks):
     wait_meshed(world, chunk)
     groups = world.chunk_group_quads(0, 0)
     checks["on the ground, the terrain and each own mesh are separate"] = (
-        set(groups) == {0, VOXEL_WOOD, VOXEL_LEAVES, VOXEL_BRICK} and groups[VOXEL_BRICK] == 12)
+        set(groups) == {0, VOXEL_LEAVES, VOXEL_BRICK} and groups[VOXEL_BRICK] == 12)
+    checks["wood standing on the ground joins the terrain's skin"] = world.skin_at(5, 6, 5) == 1
 
     # A body falls onto the brick and stands on its drawn top face, at y = 7 (the cell's top).
     state = ((8.5, 12.0, 8.5), (0.0, 0.0, 0.0), False)
@@ -163,6 +166,8 @@ def check_groups(checks):
     checks["wood under leaves joins the leaves' skin"] = world.skin_at(8, 8, 8) == 256 + VOXEL_LEAVES
     checks["wood with air above keeps its own skin"] = world.skin_at(3, 8, 3) == 256 + VOXEL_WOOD
     checks["wood beside leaves keeps its own skin"] = world.skin_at(7, 8, 12) == 256 + VOXEL_WOOD
+    world.set_block(6, 7, 9, VOXEL_WOOD)
+    checks["wood standing on a brick keeps its own skin"] = world.skin_at(6, 7, 9) == 256 + VOXEL_WOOD
     groups = world.chunk_group_quads(0, 0)
     checks["a joined trunk top is drawn with the leaves' mesh"] = groups.get(VOXEL_LEAVES, 0) > 0 and groups.get(VOXEL_WOOD, 0) > 0
     world.clear()

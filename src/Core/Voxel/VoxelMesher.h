@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <bitset>
 #include <cstdint>
 #include <vector>
 #include "../World/Renderer.h"
@@ -48,6 +49,7 @@ namespace CGEngine {
 			uint8_t group = 0;
 			bool cube = false;
 			uint8_t join = 0;   // the mesh this block joins when the block above is in it (BlockType::joinAbove), else 0
+			std::bitset<256> joinBelow;   // the blocks below that make this block join the terrain (BlockType::joinBelow)
 		};
 		std::array<MeshRule, 256> rule{};
 
