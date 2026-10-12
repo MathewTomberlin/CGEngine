@@ -13,13 +13,14 @@ import math
 import os
 import time
 import traceback
-from array import array
 
 import cg_engine_bindings as cge
 from PyScript import PyScript
 import StateFile
 import VoxelGen
 import VoxelPhysics as physics
+from VoxelShapes import mix, outline_arrays
+import VoxelWalkers
 
 VIEW_RADIUS = 14            # chunks requested around the player in each direction: (2 * 14 + 1)^2 = 841 chunks
 UNLOAD_RADIUS = 16          # chunks farther than this are unloaded
@@ -43,6 +44,7 @@ RESPAWN_DEPTH = -20.0       # below this the player is put back at the spawn hei
 # The blocks the number keys 1 to 7 choose from when placing (the hotbar), and the file the F5 and F9 keys save and load.
 HOTBAR = [VoxelGen.STONE, VoxelGen.DIRT, VoxelGen.GRASS, VoxelGen.WOOD, VoxelGen.LEAVES, VoxelGen.SAND, VoxelGen.GRAVEL,
           VoxelGen.SNOW, VoxelGen.WATER]
+WALKERS = int(os.environ.get("VOXEL_WALKERS", "12"))   # creatures that wander the terrain near the spawn
 SHADOWS = os.environ.get("VOXEL_SHADOWS", "1") != "0"   # the sun casts shadows (the map covers SHADOW_RADIUS around the camera)
 SHADOW_RADIUS = float(os.environ.get("VOXEL_SHADOW_RADIUS", "40"))
 HUD_FONT = "fonts/defaultFont.ttf"   # the font for the labels (copied with the resources)
@@ -56,7 +58,6 @@ EDITS_FILE = "cg_control/voxel_edits.bin"
 STATE_INTERVAL = 0.25       # seconds between writes to cg_control/voxel_state.json
 # The outline of the block the crosshair is on (yellow: it is broken), and of the cell a block would be placed in
 # (its own colour, brightened). Both are thin bars around the cube's edges, made as runtime meshes.
-WIRE_THICKNESS = 0.02
 HELP_TEXT = "LMB break  RMB place  WASD move  Space jump  Enter fly  1-9 block  F5/F9 save/load  Esc release"
 BREAK_COLOUR = (1.0, 0.85, 0.2)
 HIDDEN_BOX = ((-1.0e6, -1.0e6, -1.0e6), (-1.0e6 + 1.0, -1.0e6 + 1.0, -1.0e6 + 1.0))   # where an outline is put when not shown
@@ -78,67 +79,6 @@ DUSK_ZENITH = (0.30, 0.30, 0.52)
 MOON_LIGHT = (0.45, 0.55, 0.85)
 
 
-def box_faces(lo, hi):
-    """The six faces of the box lo..hi, each as (corners, outward normal)."""
-    x0, y0, z0 = lo
-    x1, y1, z1 = hi
-    return [
-        ([(x1, y0, z0), (x1, y1, z0), (x1, y1, z1), (x1, y0, z1)], (1, 0, 0)),
-        ([(x0, y0, z1), (x0, y1, z1), (x0, y1, z0), (x0, y0, z0)], (-1, 0, 0)),
-        ([(x0, y1, z0), (x0, y1, z1), (x1, y1, z1), (x1, y1, z0)], (0, 1, 0)),
-        ([(x0, y0, z1), (x0, y0, z0), (x1, y0, z0), (x1, y0, z1)], (0, -1, 0)),
-        ([(x0, y0, z1), (x1, y0, z1), (x1, y1, z1), (x0, y1, z1)], (0, 0, 1)),
-        ([(x1, y0, z0), (x0, y0, z0), (x0, y1, z0), (x1, y1, z0)], (0, 0, -1)),
-    ]
-
-
-def boxes_arrays(boxes):
-    """Arrays for solid boxes: each (lo, hi, colour) is a closed box whose faces are wound to face outward."""
-    positions, normals, colours, uvs, material_ids, indices = [], [], [], [], [], []
-    face_uvs = ((0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0))
-    for lo, hi, colour in boxes:
-        for corners, normal in box_faces(lo, hi):
-            first = len(positions) // 3
-            for corner, uv in zip(corners, face_uvs):
-                positions.extend(corner)
-                normals.extend(normal)
-                colours.extend(colour)
-                uvs.extend(uv)
-                material_ids.append(0.0)
-            # Two triangles, wound so their normal faces outward.
-            a, b, c = corners[0], corners[1], corners[2]
-            u = [b[i] - a[i] for i in range(3)]
-            w = [c[i] - a[i] for i in range(3)]
-            cross = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]]
-            if sum(cross[i] * normal[i] for i in range(3)) >= 0:
-                indices.extend((first, first + 1, first + 2, first, first + 2, first + 3))
-            else:
-                indices.extend((first, first + 2, first + 1, first, first + 3, first + 2))
-    return (array("f", positions), array("f", normals), array("f", colours), array("f", uvs),
-            array("f", material_ids), array("I", indices))
-
-
-def outline_arrays(lo, hi, colour):
-    """Arrays for the twelve edges of the box lo..hi, each edge a thin bar that sticks out a little from the box."""
-    t = WIRE_THICKNESS
-    boxes = []
-    for axis in range(3):
-        o1, o2 = [i for i in range(3) if i != axis]
-        for v1 in (lo[o1], hi[o1]):
-            for v2 in (lo[o2], hi[o2]):
-                bmin, bmax = [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]
-                bmin[axis], bmax[axis] = lo[axis] - t, hi[axis] + t
-                bmin[o1], bmax[o1] = v1 - t, v1 + t
-                bmin[o2], bmax[o2] = v2 - t, v2 + t
-                boxes.append((bmin, bmax, colour))
-    return boxes_arrays(boxes)
-
-
-def mix(a, b, t):
-    """Colour a moved t of the way from a to b (t in 0 to 1)."""
-    return tuple(x + (y - x) * t for x, y in zip(a, b))
-
-
 class VoxelGame(PyScript):
     def __init__(self):
         super().__init__()
@@ -152,6 +92,7 @@ class VoxelGame(PyScript):
             spawn_x, spawn_z = (float(v) for v in os.environ["VOXEL_SPAWN"].split(","))
             self.pos = [spawn_x, SPAWN_HEIGHT, spawn_z]
         self.swimming = False
+        self.walkers = None             # the creatures, made once the spawn area has loaded
         self.vel = [0.0, 0.0, 0.0]
         self.on_ground = False
         self.flying = False
@@ -222,6 +163,7 @@ class VoxelGame(PyScript):
             self.world.simulate(dt, SIM_BUDGET_MS, SIM_TICK)
             self.update_mouse()
             self.update_player(dt)
+            self.update_walkers(dt)
             self.update_target()
             self.edit_blocks()
         self.update_outlines()
@@ -369,6 +311,14 @@ class VoxelGame(PyScript):
             if max(abs(chunk[0] - cx), abs(chunk[1] - cz)) > UNLOAD_RADIUS:
                 self.world.unload_chunk(*chunk)
                 self.requested.discard(chunk)
+
+    def update_walkers(self, dt):
+        """Creatures wander the terrain once the spawn area is loaded: made once, then moved each frame by the mover."""
+        if self.walkers is None:
+            if not self.world.is_loaded(0, 0):
+                return
+            self.walkers = VoxelWalkers.Walkers(self.world, (8.5, 8.5), WALKERS, self.seed)
+        self.walkers.update(dt)
 
     def in_water(self):
         """True while a liquid block is at the player's feet or chest."""
@@ -591,7 +541,7 @@ class VoxelGame(PyScript):
                  "smoothing": self.world.smoothing(), "active": self.world.active_count(), "paused": self.paused,
                  "seed": self.seed, "frames": self.frames,
                  "player": [round(v, 3) for v in self.pos], "on_ground": self.on_ground, "flying": self.flying,
-                 "swimming": self.swimming,
+                 "swimming": self.swimming, "walkers": len(self.walkers.walkers) if self.walkers else 0,
                  "mouse_captured": self.mouse_captured, "yaw": round(self.yaw, 3), "pitch": round(self.pitch, 3),
                  "max_frame_ms": round(self.max_dt * 1000.0, 2),
                  "time_of_day": round(self.clock, 5), "sun": [round(v, 5) for v in self.sun],

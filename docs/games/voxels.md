@@ -72,6 +72,10 @@ world.active_count()                     # cells queued: 0 when everything has s
   sun, the fog, and the camera's own basis.
 - `resources/scripts/VoxelPhysics.py`: the Python reference for the player's mover (the game runs `world.step_body` in C++), and block
   picking. Pure Python: `python -I tools/test_voxel_physics.py` checks it without the engine.
+- `resources/scripts/VoxelWalkers.py`: creatures that wander the terrain (`VOXEL_WALKERS`, 12 by default). Each is a box
+  mesh moved by `world.step_body`, so it stands on the ground, turns at walls, jumps a block, and waits for its chunk.
+  `tools/voxel_world_check.py` checks them.
+- `resources/scripts/VoxelShapes.py`: the box meshes the outline and the creatures are made from.
 - `resources/scripts/VoxelGen.py`: block ids, colours and the tree chance. The terrain itself is C++ (below).
 - `resources/voxel_noise.png`: the base texture, a light grey noise, tinted per block. `tools/make_voxel_texture.py`
   writes it again.

@@ -6,6 +6,7 @@ It makes its own cge.VoxelWorld, so it does not touch the sample game's world. T
 cg_control/voxel_check.json as {"check": {name: bool}, "caveAir": n, "underground": n}.
 """
 import json
+import math
 import os
 import time
 
@@ -212,6 +213,53 @@ def check_light(world, checks, chunks, results):
     checks["air is never fully dark"] = bool(deep) and min(deep) >= 50
 
 
+def check_walkers(world, checks):
+    """Creatures stand on the ground, walk about, and never end up inside a block."""
+    import VoxelWalkers
+    herd = VoxelWalkers.Walkers(world, (0.0, 0.0), 4, 5, prefix="check_creature")
+    walkers = herd.walkers
+    checks["walkers spawn on the ground"] = len(walkers) == 4 and all(w.on_ground is False or w.pos[1] >= 1.0 for w in walkers)
+    spawns = [list(w.pos) for w in walkers]
+    for _ in range(240):   # 4 seconds at 60 frames a second
+        herd.update(1.0 / 60.0)
+    def top_below(x, z, feet):
+        # The top of the highest solid block in this column at or below the feet (0 if there is none).
+        for y in range(min(HEIGHT - 1, math.floor(feet + 0.05)), -1, -1):
+            if world.is_solid(x, y, z):
+                return y + 1
+        return 0
+
+    def ground_under(x, z, feet):
+        # A creature stands on the highest block under its footprint.
+        half = VoxelWalkers.HALF_WIDTH
+        return max(top_below(cx, cz, feet) for cx in {math.floor(x - half), math.floor(x + half - 1e-6)}
+                   for cz in {math.floor(z - half), math.floor(z + half - 1e-6)})
+    stands = True
+    inside = False
+    moved = 0.0
+    details = []
+    for w, spawn in zip(walkers, spawns):
+        x, z = w.pos[0], w.pos[2]
+        ground = ground_under(x, z, w.pos[1])
+        details.append({"pos": [round(v, 2) for v in w.pos], "vel": [round(v, 2) for v in w.vel], "ground": ground,
+                        "onGround": w.on_ground})
+        # A creature mid-jump or mid-fall is in the air; the others must stand on the top block of their column.
+        if not w.on_ground and abs(w.vel[1]) < 1e-6:
+            stands = False
+        if w.on_ground and abs(w.pos[1] - ground) > 0.05:
+            stands = False
+        for y in (w.pos[1] + 0.1, w.pos[1] + VoxelWalkers.HEIGHT - 0.1):
+            if world.is_solid(int(x // 1), int(y // 1), int(z // 1)):
+                inside = True
+        moved = max(moved, ((x - spawn[0]) ** 2 + (z - spawn[2]) ** 2) ** 0.5)
+    checks["walkers stand on the ground after 4 s"] = stands
+    checks.setdefault("_walkerDetails", details)
+    checks["walkers never end up inside a block"] = not inside
+    checks["walkers wander"] = moved > 0.5
+    for w in walkers:
+        cge.remove_mesh_body(w.name)
+
+
 def count_floating_leaves(world, chunks):
     """Leaves with no wood under them in their column, away from the loaded edge (a tree's trunk is in its own chunk, so
     a leaf next to the edge may have its trunk outside the loaded area)."""
@@ -248,6 +296,7 @@ def run(out_path="cg_control/voxel_check.json"):
     results["underground"] = underground
     results["check"]["caves carved"] = air > underground * 0.01
     check_light(world, results["check"], chunks, results)
+    check_walkers(world, results["check"])
 
     # An edit survives an unload of its chunk, and a save and load round trip.
     world.set_block(3, 20, 3, BLOCK_CHECK)
