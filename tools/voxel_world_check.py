@@ -187,6 +187,31 @@ def count_caves(world, chunks):
     return air, underground
 
 
+def check_light(world, checks, chunks, results):
+    """Sky light: open ground is full, and the air far under the surface is darker, but never fully dark."""
+    lo = min(cx for cx, _ in chunks) * SIZE + 2
+    hi = (max(cx for cx, _ in chunks) + 1) * SIZE - 2
+    tops, deep = [], []
+    for x in range(lo, hi, 4):
+        for z in range(lo, hi, 4):
+            top = None
+            for y in range(HEIGHT - 2, 0, -1):
+                if world.get_block(x, y, z) != 0 and world.get_block(x, y + 1, z) == 0:
+                    top = y + 1
+                    break
+            if top is None:
+                continue
+            tops.append(world.light_at(x, top, z))
+            for y in range(top - 10, 1, -3):
+                if world.get_block(x, y, z) == 0:
+                    deep.append(world.light_at(x, y, z))
+    results["light"] = {"surfaceSamples": len(tops), "deepSamples": len(deep),
+                        "deepMean": round(sum(deep) / max(1, len(deep)), 1)}
+    checks["open ground is full light"] = bool(tops) and all(v == 255 for v in tops)
+    checks["air far underground is darker than open ground"] = bool(deep) and sum(deep) / len(deep) < 0.5 * 255
+    checks["air is never fully dark"] = bool(deep) and min(deep) >= 50
+
+
 def count_floating_leaves(world, chunks):
     """Leaves with no wood under them in their column, away from the loaded edge (a tree's trunk is in its own chunk, so
     a leaf next to the edge may have its trunk outside the loaded area)."""
@@ -222,6 +247,7 @@ def run(out_path="cg_control/voxel_check.json"):
     results["caveAir"] = air
     results["underground"] = underground
     results["check"]["caves carved"] = air > underground * 0.01
+    check_light(world, results["check"], chunks, results)
 
     # An edit survives an unload of its chunk, and a save and load round trip.
     world.set_block(3, 20, 3, BLOCK_CHECK)

@@ -6,9 +6,14 @@
 #include "../World/Renderer.h"
 
 namespace CGEngine {
+	// How far light and shade reach through air, in blocks. A cell's light depends only on blocks this close to it, so a
+	// chunk with this much border computes the same light for a shared cell as its neighbour does.
+	constexpr int VoxelLightReach = 8;
+
 	// A chunk's blocks with a border of blocks copied from its neighbours (air where a neighbour is not loaded). The
 	// mesher reads only from this, so it can run on any thread while the world changes. The block mesher needs a border
 	// of 1; the smooth mesher needs 3, because its density samples and their normals reach two blocks beyond the chunk.
+	// Light needs VoxelLightReach, so the world builds every snapshot with that border.
 	struct PaddedChunk {
 		int size = 16;
 		int height = 64;
@@ -17,12 +22,28 @@ namespace CGEngine {
 		// [-border, size + border) and y in [-border, height + border), is at ((y + border) * P + (z + border)) * P + (x + border)
 		// where P = size + 2 * border.
 		std::vector<uint8_t> blocks;
+		// Sky light for each block position, in the same layout: 255 where the sky reaches, falling off through air (see
+		// computeLight). Empty until computeLight runs.
+		std::vector<uint8_t> light;
+
+		size_t index(int x, int y, int z) const {
+			const int p = size + 2 * border;
+			return static_cast<size_t>(((y + border) * p + (z + border)) * p + (x + border));
+		}
 
 		uint8_t at(int x, int y, int z) const {
-			const int p = size + 2 * border;
-			return blocks[static_cast<size_t>(((y + border) * p + (z + border)) * p + (x + border))];
+			return blocks[index(x, y, z)];
+		}
+
+		uint8_t lightAt(int x, int y, int z) const {
+			return light[index(x, y, z)];
 		}
 	};
+
+	// Fills chunk.light. A block is open to the sky if no block is above it in its column; the light of open air is full,
+	// and each block walked through air from there multiplies it by 0.8, down to a floor of 0.2 beyond VoxelLightReach steps.
+	// Any block counts as opaque, the same as in the meshes, so caves and the ground under trees are dark.
+	void computeLight(PaddedChunk& chunk);
 
 	struct MeshArrays {
 		std::vector<VoxelVertex> vertices;
