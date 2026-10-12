@@ -316,8 +316,9 @@ Goal: blocks and creatures take several hits, and what the player has hit looks 
   Not yet: the drop lands in the inventory directly, not on the ground to pick up, and the creatures do not fight each other.
 - [x] **16.6** The player has health: ten points on a bar above the hotbar. Bites and falls lower it (a fall past 4 blocks costs
   1 point a block beyond that; the spawn drop does not count). It heals 0.25 a second after 6 s without a hit, and does not heal
-  while the game is paused. At zero the player is back at the spawn with the inventory kept. Not yet: lava (the sample has none),
-  and the hurt is not shown on screen beyond the bar.
+  while the game is paused. At zero the player is back at the spawn with the inventory kept.
+  The hurt shows on screen too: the whole window reddens at the moment of a bite or a fall and fades over 0.4 s
+  (`update_hurt_flash`, under the hotbar). Creative mode (C) takes no bites or falls. Not yet: lava (the sample has none).
 ## Phase 17: inventory and a real hotbar (from playtesting: the hotbar is a line of text)
 Goal: items have quantities, the inventory is a grid the player can see and change, and the hotbar is a UI, not text.
 - [x] **17.1** An item model: an item is a block id (a torch is one too, though it is a prop), held in a slot with a count up to

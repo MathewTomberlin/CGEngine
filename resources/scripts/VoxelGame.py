@@ -79,6 +79,8 @@ WHITE = (1.0, 1.0, 1.0)
 HIT_FLASH_SECONDS = 0.12    # the aimed block's outline is white this long after a hit
 PLAYER_HEALTH = 10.0        # the player's health: ten segments on the bar above the hotbar
 REGEN_DELAY = 6.0           # seconds without a hit before the player starts to heal
+HURT_FLASH_SECONDS = 0.4    # the screen reddens this long after a bite or a fall
+HURT_FLASH_ALPHA = 110      # the most red the screen gets (0 to 255), at the moment of the hurt, fading after
 REGEN_RATE = 0.25           # health a second once it does
 FALL_SAFE = 4.0             # blocks a player can fall without harm
 FALL_DAMAGE = 1.0           # health lost for each block past FALL_SAFE
@@ -236,6 +238,7 @@ class VoxelGame(PyScript):
         self.flash_until = 0.0          # the aimed block's outline is white until this time, after a hit
         self.health = PLAYER_HEALTH     # the player's health (a bite, a fall and a death change it)
         self.hurt_at = -1e9             # when the player was last hurt (the healing waits after it)
+        self.hurt_flash_until = 0.0     # the screen is red until this time, after a hurt
         self.fell_from = None           # the height the player left the ground at, while in the air
         self.landed_once = False        # a fall counts only after the player has stood on the ground (the spawn drop does not)
         self.spawn_pos = list(self.pos)
@@ -556,6 +559,7 @@ class VoxelGame(PyScript):
             self.set_target_text(text)
         self.update_slots()
         self.update_health_bar()
+        self.update_hurt_flash()
         self.update_inventory_screen()
         self.update_notice()
 
@@ -1217,6 +1221,7 @@ class VoxelGame(PyScript):
             return
         self.health -= amount
         self.hurt_at = time.time()
+        self.hurt_flash_until = self.hurt_at + HURT_FLASH_SECONDS
         if self.health > 0.0:
             return
         self.pos = [self.spawn_pos[0], SPAWN_HEIGHT, self.spawn_pos[2]]
@@ -1249,6 +1254,15 @@ class VoxelGame(PyScript):
             self.draw_rect("hp_%d" % i, box, (50, 14, 14, 200), (0, 0, 0, 220), 1, layer=985)
             inner = HEALTH_SEGMENT - 4
             self.draw_rect("hp_fill_%d" % i, (x + 2, top + 2, inner * fill, inner), (210, 45, 45, 255), layer=986)
+
+    def update_hurt_flash(self):
+        """A red wash over the whole window at the moment of a hurt, fading to nothing over HURT_FLASH_SECONDS. It sits under
+        the hotbar and the health bar. Clear (alpha 0) when there is no hurt or the pause menu is up."""
+        left = self.hurt_flash_until - time.time()
+        alpha = 0
+        if left > 0.0 and not self.paused:
+            alpha = int(HURT_FLASH_ALPHA * min(1.0, left / HURT_FLASH_SECONDS))
+        self.draw_rect("hurt_flash", (0, 0, self.window.x, self.window.y), (200, 20, 20, alpha), layer=970)
 
     def walker_under_aim(self, eye, look):
         """The nearest creature the look ray meets within reach, as (distance, walker), or None. The boxes are the creatures' own."""
