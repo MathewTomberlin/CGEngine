@@ -11,9 +11,9 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done.
 - [x] **1.2** Example scene and startup hook (`CGENGINE_SCENE`) - `resources/scenes/example.json`
 - [x] **1.3** Scene format documentation - `docs/ai/scene-format.md`
 - [x] **1.4** Scene validation tests: syntax errors, bad version, bad vectors, unknown material/primitive, missing model (`resources/scenes/invalid/`, checked by `tools/test_control_channel.ps1`)
-- [x] **1.5** Primitive bodies in the scene format: `"primitive": "cube"` or `"plane"` with `"size"` (no sphere yet). Example: `resources/scenes/primitives.json`
+- [x] **1.5** Primitive bodies in the scene format: `"primitive": "cube"`, `"plane"` or `"sphere"` (a UV sphere, `"size"` is its radius) with `"size"`. Example: `resources/scenes/primitives.json`
 
-## Phase 2: AI control channel (done except set_material / remove_body)
+## Phase 2: AI control channel (done)
 - [x] **2.1** File-based command inbox/outbox (`cg_control/inbox`, `cg_control/outbox`), one JSON command per file, polled each frame. No sockets, no dependencies, works with any agent that can write files.
 - [x] **2.2** Commands: `load_scene`, `describe_scene` (bodies, transforms, materials, lights as JSON), `set_transform`, `set_material`, `remove_body`.
 - [x] **2.3** `screenshot` command: render to PNG so an agent can look at the result.
@@ -23,7 +23,9 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done.
 ## Phase 3: performance
 - [x] **3.1** Baseline frame time in smoke output (`avgFrameMs`). Baseline: Release, example scene, 1500 frames: **4.2 ms/frame** (3 runs: 4.21, 4.20, 4.20). Draw-call count not yet reported.
 - [x] **3.2** Renderer hot path. Release, example scene: **3.8 ms -> 0.86 ms per frame**, draw calls **22 -> 8**. Causes fixed: (a) Body re-parenting left stale entries in the root child list, so models were queued and drawn twice (fixed in `Body::attachBody`/`detachBody`); (b) shader uniform locations were looked up with `glGetUniformLocation` on every call (now cached per program). Further batching not yet done.
-- [x] **3.3** Asset load timing and caching review. Measured with `tools/measure_scene_load.ps1` (Debug, `loadMs` from `load_scene`). Fixed: (a) every `Mesh` construction re-uploaded its VBO/EBO/VAO and leaked the previous ones, now uploaded once per `MeshData` (`Renderer::getModelData`); (b) `Model::instantiate` appended to its own `sourcePath`, so body names grew with every child and never hit the cache (now a short per-instance key); (c) a reloaded primitive returned the cached Body with its old transform, now a fresh body per load. Body creation was about 1.3 ms per Body (fixed in 5.4). Still open: a Caveman FBX takes about 86 ms per load, cold or warm; a dungeon room load with no bodies still takes about 31 ms warm; a model that fails to import is re-imported on every load (no negative cache).
+- [x] **3.3** Asset load timing and caching review. Measured with `tools/measure_scene_load.ps1` (Debug, `loadMs` from `load_scene`). Fixed: (a) every `Mesh` construction re-uploaded its VBO/EBO/VAO and leaked the previous ones, now uploaded once per `MeshData` (`Renderer::getModelData`); (b) `Model::instantiate` appended to its own `sourcePath`, so body names grew with every child and never hit the cache (now a short per-instance key); (c) a reloaded primitive returned the cached Body with its old transform, now a fresh body per load. Body creation was about 1.3 ms per Body (fixed in 5.4). Re-measured: a Caveman FBX loads in 0.3 to 3.6 ms once it is cached (the 86 ms figure predates the model cache). A failed
+  model is no longer re-imported on every load: a failed load is remembered with the file's write time, and an unchanged file
+  is skipped. Still open: the dungeon room load (31 ms warm, not re-measured).
 
 ## Phase 4: skeletons, animation, games
 - [x] **4.1** Skeleton and animation authoring. Done: clip listing, play/pause/speed/looping via control channel and scene files; bone-matrix fix for multi-mesh models; clips defined as JSON keyframes (`load_clip`, scene `"clips"`, `docs/ai/clip-format.md`).
@@ -41,10 +43,18 @@ Making real models showed where the engine misrepresents content. These come fir
 - [x] **5.5** Reproducible exports. Blender writes OBJ normals and faces in a varying order. `tools/blender/dungeon_models.py` now rewrites each OBJ with sorted normals and sorted faces per material group; three exports in a row are byte-identical, so a model diff means the model changed.
 ## Phase 6: performance and the next round of gaps (from building the rigged dungeon)
 - [x] **6.1** Frame rate. The dungeon ran at 28 FPS (35 ms) with 137 draw calls. The draw path had two per-mesh costs, which are fixed: SFML GL state was pushed and popped around every mesh, and material parameters were read by name every draw (the material entries are now read once a frame). The camera matrix is computed once a frame, and culling (7.1) and instancing (7.2) cut the dungeon to 28 draws and about 7 ms per frame (Debug). Batching by material and merged room meshes are not needed for now.
-- [ ] **6.2** Bodies made from Python during the update lose their animator in one case: the player, created in `DungeonGame.setup`, reported "model has no animation clips" while a body made from a control command, and the same rig in a scene file, both played clips. The player now comes from `dungeon.json` as a workaround. Find the cause (suspect: the first load of a skinned model while the update runs).
-- [ ] **6.3** Bodies that share a model share one animator, so every slime hops in step. Give instances their own pose, or accept it and make the sync part of the look.
+- [x] **6.2** Bodies made from Python during the update lost their animator, so the dungeon's player came from
+  `dungeon.json` as a workaround. Not reproduced on the current build: a body made from Python after its clips load
+  plays every clip, and so does the dungeon's player, which is back in `DungeonGame.setup` (the scene has no bodies now).
+  `tools/test_dungeon_game.ps1` checks the knight clips. The cause of the old failure is not known.
+- [x] **6.3** Bodies that share a model had one animator, so every slime hopped in step. Each model instance now copies
+  the model's animator onto its root body (`Body::setInstanceAnimator`), and its child meshes use it. `play_clip` and the
+  control commands use the body's instance. `cge.animation_time(name)` reads the clock; two slimes started a second apart
+  read different times. Instances made from one model still share its clip data.
 - [x] **6.4** Frame-rate independent test. `DUNGEON_FIXED_STEP` (seconds) makes every frame advance the same game time, and the state file reports `frames`. `tools/test_dungeon_game.ps1` counts its scripted keys in frames and waits on the frame count, so the walk checks hold at any frame rate. Found while doing it: the old checks only passed on slow frames, because the dungeon caps the frame delta.
-- [ ] **6.5** Archers and brutes are still static OBJ models. Rig them like the knight and the slime; give the archer a bow-draw clip for its shots.
+- [x] **6.5** Archers are rigged: `tools/blender/archer_rig.py` (bones Torso, Head and Arm, rigid parts) and
+  `tools/clips/archer_clips.py` (archer_idle, archer_walk, and archer_draw for each shot, which holds its last pose). The
+  dungeon animates every enemy from its state, one animator per enemy (6.3). Brutes are still static.
 - [ ] **6.6** The game process exited twice between tool calls with no crash record. Watch for it; if it recurs, capture a dump.
 ## Phase 7: rendering at scale (engine)
 Goal: a world with thousands of objects, and procedurally made geometry, drawn in few calls.
@@ -55,10 +65,10 @@ Goal: a world with thousands of objects, and procedurally made geometry, drawn i
 
 ## Phase 8: voxel world sample (`docs/games/voxels.md`)
 A procedural block world with chunks, terrain, collision, block editing and a day/night cycle, built on Phase 7.
-- [x] **8.1** C++ voxel mesher (`cge.VoxelWorld`, `src/Core/Voxel/`): chunks of block ids meshed into runtime meshes, with per-face culling across chunk borders, per-vertex ambient occlusion, and per-block colours. Dirty chunks are re-meshed on demand. Checked offline for the terrain (`tools/test_voxel_gen.py`) and by a screenshot. Not yet: greedy meshing, a transparent water block.
-- [~] **8.2** Terrain: done are the noise, height and sand, grass, stone, snow and water per column (C++, on worker threads), chunks streamed around the camera, trees (one column in a hundred, drawn across chunk borders), and caves (tunnels and rooms carved by 3D noise, `cave_width`). Not yet: a biome map beyond height.
+- [x] **8.1** C++ voxel mesher (`cge.VoxelWorld`, `src/Core/Voxel/`): chunks of block ids meshed into runtime meshes, with per-face culling across chunk borders, per-vertex ambient occlusion, and per-block colours. Dirty chunks are re-meshed on demand. Checked offline for the terrain (`tools/test_voxel_gen.py`) and by a screenshot. Greedy meshing came in 9.2. Not yet: a transparent water block.
+- [~] **8.2** Terrain: done are the noise, height and sand, grass, stone, snow and water per column (C++, on worker threads), chunks streamed around the camera, trees (one column in a hundred, drawn across chunk borders), and caves (tunnels and rooms carved by 3D noise, `cave_width`). Biomes came in later: deserts, forests and plains from a slow noise field (`biome_at`). Not yet: rocks and ores per biome.
 - [x] **8.3** Player: gravity, jumping and collision with the blocks (`VoxelPhysics.py`, pure Python and tested offline), a ray cast to pick the block in view, and break (J) and place (K). Edited chunks are re-meshed. Flying (Enter) for exploring.
-- [~] **8.4** Day and night: done. The sun's direction and light, the ambient fill, the sky and the fog change over `VOXEL_DAY_SECONDS`, from the script (`cge.set_light`, `cge.set_environment`). A hotbar of seven block types (keys 1 to 7). Not yet: an on-screen hotbar.
+- [x] **8.4** Day and night: the sun's direction and light, the ambient fill, the sky and the fog change over `VOXEL_DAY_SECONDS`, from the script (`cge.set_light`, `cge.set_environment`). Nine block types on keys 1 to 9, with an on-screen hotbar (11.2).
 - [x] **8.5** Save and load of the edited blocks. `VoxelWorld` keeps every edit apart from its chunks, so an edit survives the chunk unloading and is applied when it loads again. `save_edits` and `load_edits` write a binary file; F5 and F9 use it in the sample. Checked by `tools/voxel_world_check.py` from `tools/test_voxels.ps1`.
 
 ## Phase 9: voxel performance and scale (from walking the voxel world)
@@ -69,19 +79,19 @@ Goal: enormous worlds with no hitching while chunks load.
 - [x] **9.4** Mouse look. The arrow keys' turn past 90 degrees flipped the camera upside down (`Camera::lookAt` only reached yaw in [-90, 90]); fixed. Static meshes no longer skin with the bone matrices an animated model left behind (a `skinned` uniform).
 - [ ] **9.5** Region batching (several chunks in one mesh, fewer draws). Deferred: at 700 chunks in view the Release build still runs at about 630 frames a second with a 3.5 ms worst frame, so it is not needed yet. Revisit when there are many more draws per chunk.
 - [x] **9.6** Measured and tested. Release, 169 chunks: loaded in 1.2 s, about 1100 frames a second when still, worst frame 8 ms while walking and turning. Debug: about 100 frames a second, worst frame about 15 ms. Release, 700 chunks: about 630 frames a second. `tools/test_voxels.ps1` loads the world, walks and turns with scripted keys, and checks the chunks, the pitch and the worst frame.
-- [~] **9.7** Lighting and atmosphere for the voxel world. Done: trees, caves, distance fog, a sky gradient from the horizon colour to the zenith colour, a sun disc with glow (`environment` zenith and sun in scenes, `cge.set_environment`), and the day and night light. Not yet: shadows.
+- [x] **9.7** Lighting and atmosphere for the voxel world: trees, caves, distance fog, a sky gradient from the horizon colour to the zenith colour, a sun disc with glow (`environment` zenith and sun in scenes, `cge.set_environment`), and the day and night light. Shadows came in 10.5; cave light is 11.6.
 - [x] **9.8** The camera turns level at any yaw. The view applied the pitch before the yaw, so once the yaw passed 90 degrees the horizon tilted by the pitch; and the script's look direction (pitch after yaw) disagreed with `Camera::lookAt` off yaw 0. Now the orientation is Rz * Rx * Ry, and `lookAt` reads the angles back in that order. `tools/test_voxels.ps1` checks that the right vector stays level and that the camera looks where the player does.
 - [x] **9.9** View radius 14: 841 chunks, about 460,000 quads. Release: all loaded in 1.3 s, about 580 frames a second still, worst frame about 5 ms while walking. The fog ends at the edge of the loaded area, so the edge does not show.
 - [x] **9.10** A runtime voxel mesh's arrays are freed once they are on the GPU. Its bounds are computed first, and its counts are kept. At 841 chunks (about 717,000 quads with the caves) the process holds about 295 MB.
 
 ## Phase 10: smooth terrain, physics and the next voxel steps (from the voxel sample's growth)
 Goal: the terrain looks rounded and real, the blocks obey physics the scripts can change, and the far world stays cheap.
-- [~] **10.1** Smooth skin: done. Surface nets over the blocks' occupancy (`buildSmoothMesh`, `set_smoothing`), so the
+- [x] **10.1** Smooth skin. Surface nets over the blocks' occupancy (`buildSmoothMesh`, `set_smoothing`), so the
   ground, hills and tree crowns are rounded and textured; shaded from the density gradient, coloured by the dominant
   block, with occlusion. One sample per block: 1.08 million quads for 841 chunks, 655 frames a second in Release, load
   1.4 s, 206 MB. Two samples per block gives half-block detail but 4.7 million quads, so it is not the default. Single-block
-  features keep their surface (the samples sit at block centres at one sample per block). Not yet:
-  a finer skin near the camera with a coarser one far away (the seams need skirts or matched edges).
+  features keep their surface (the samples sit at block centres at one sample per block). The finer skin near the
+  camera, with a coarser one far away, came in 11.7.
 - [x] **10.2** Block physics (`VoxelSimulation`, `VoxelBlocks.h`): block types (solid, falls, liquid). Sand and gravel
   fall, and swap down past water. Water is a full source with flowing levels 7 to 1, so it spreads and drains and stays
   finite. Only changed cells are queued, so an idle world costs nothing. Checked by `tools/voxel_world_check.py`.
@@ -95,11 +105,12 @@ Goal: the terrain looks rounded and real, the blocks obey physics the scripts ca
   and a 3 by 3 texel filter. Meshes draw into it with the standard shader, which stops early in that pass. Redrawn when the
   camera moves, the sun turns or a tenth of a second passes; skipped while the sun is down. Release: 650 frames a second
   with shadows on (about the same as without, after the caching).
-- [ ] **10.6** Region batching (9.5). Not needed yet: with the smooth skin, 841 chunks run at 650 frames a second in Release.
-- [ ] **10.7** An on-screen hotbar (8.4).
+- [x] **10.6** An on-screen hotbar (8.4), done in 11.2. Region batching is 9.5.
 
 ## Phase 11: making the voxel sample feel right to play (from playing it)
 Goal: the world reads well at a human pace, and the engine's own state is easy to see and to test.
+Next, in order: 11.14 and 11.15 (both wait for a snapshot from the player), then Phase 12 (block rendering rules), and the
+creatures' own behaviour (they only wander now).
 - [x] **11.1** Mouse look at a quarter of the first setting (0.00625 degrees a pixel, `VOXEL_MOUSE_SENSITIVITY`). Escape
   opens a pause menu: the mouse is freed and the world stands still; Resume locks the mouse; Quit closes the app.
   `tools/test_pause_menu.ps1` checks each step with scripted input.
@@ -112,31 +123,123 @@ Goal: the world reads well at a human pace, and the engine's own state is easy t
   Water still steps level by level on the tick.
 - [x] **11.5** Textures on voxel meshes are projected in world space and blended by facing (triplanar), so slopes and
   walls keep the block's texture shape instead of stretching.
-- [ ] **11.6** Light for caves: propagate sky and torch light through the blocks so caves and overhangs are dark. Without
-  it the shadow map is the only sense of depth underground.
+- [x] **11.6** Sky light for caves and the shade under trees. A block's light is full in the open and falls by a fifth for
+  each block walked through air from the open sky, down to a fifth beyond eight blocks. It is baked into the mesh colours,
+  so it costs nothing per frame. `light_at` queries it, and `tools/voxel_world_check.py` checks that open ground is full
+  and that the air far underground is darker. Torch light from block sources is not done.
 - [x] **11.7** Level of detail for the smooth skin: the chunks within 3 of the player (`VOXEL_NEAR_RADIUS`) use two samples a
   block (`VOXEL_NEAR_SAMPLES`), the rest one. Seams between the levels are hidden by skirts: a strip a block deep runs down
   each chunk's side from the surface. Measured: near chunks have about 2.7 times the quads of far ones. Release: 841 chunks
   at about 1.2 million quads, 559 frames a second, 239 MB.
-- [ ] **11.8** Frame rate: the labels and outlines together cut the Release rate from about 650 to about 360 frames a second
-  (measured after the HUD landed). Find out which part costs it (the per-frame text state switch, or the outline uploads)
-  before anything else is optimised.
-- [ ] **11.9** Entities: the player's box mover is C++ (`step_body`), but other bodies have no collision. A body component
-  that uses the same mover, so scripts can make many walking or falling bodies.
-- [ ] **11.10** Player in water: water is not solid, so the player falls through it. A slower fall and buoyancy in liquid.
+- [x] **11.8** Frame rate, measured with `tools/voxel_perf.ps1`: about 650 frames a second standing, turning and walking,
+  with the labels and outlines on, and a worst frame of about 5 ms (Release, 841 chunks). The labels and outlines only
+  change when their text or target does. The 360 figure came from an earlier build. Debug runs the same world at about 33
+  frames a second, so it is not a performance build.
+- [x] **11.9** Entities that walk the terrain: `cge.add_voxel_walker` makes a mesh body a walker in C++, moved once per
+  update by the same mover as the player (`VoxelWalker.cpp`). Scripts set the velocity and jumps; the engine does gravity,
+  collisions and the position. `VoxelWalkers.py` makes twelve creatures that wander near the spawn, run from the player,
+  and turn away from each other. Still open: bodies that push each other, and a walker for any body without a script.
+- [x] **11.10** Player in water: in a liquid block at the feet or chest the player sinks at 1.2 blocks a second, swims up
+  at 3 while Space is held, and walks at 60%. The mover runs without gravity while swimming. At the surface, Space jumps
+  out onto a bank a block high. The view under the water is a blue-green murk. `tools/test_swimming.ps1` checks the
+  landing, the swim up, the sink and the walk. Not done: a view through the water (its faces are culled from inside).
 - [x] **11.11** Falling blocks are drawn as smooth balls, not cubes (`buildBlob`, one mesh for all the blocks in flight, made
   in C++ each update). The settled blocks stay smooth-skinned as before.
 - [x] **11.12** Thin trunks read as vines, and skirts hung flat sheets over air. A one-sample surface pulls each vertex
   toward the middle of its cell, which thins features one block wide; the surface now sits a little further out
   (iso 0.3), so trunks are solid. Skirts only go where the neighbour is at another level of detail, and only over solid.
-- [ ] **11.14** Intermittent square shadow on the terrain at high sun, with nothing casting it. Not reproduced yet. F12 now saves a screenshot and the game state together, so the next occurrence can be checked. The shadow edge now fades to lit at the map boundary, which may hide a square edge.
-- [ ] **11.13** Trees whose trunk is outside the loaded area leave crowns floating. Look at the far edge of the view, and
-  make the trunk part of the crown's chunk, or skip crowns whose trunk is missing.
+- [x] **11.13** Trees whose trunk is outside the loaded area leave crowns floating. Closed by analysis: a crown can float
+  only while its trunk's chunk is unloaded, which happens at the edge of the loaded area, where the fog is about 93 per
+  cent complete. Fixing it would need each chunk to wait for its neighbours' terrain, which is not worth the cost there.
+- [x] **11.16** Settings page from the pause menu: Settings opens a page with the mouse sensitivity (arrows, 25% to 300%),
+  applied at once and saved to `voxel_settings.json`. Escape and Back return to the menu. `tools/test_pause_menu.ps1` checks
+  the page, the arrow, the saved file and the way back. Still open: the other settings (graphics, shadows, the sun).
+- [x] **11.17** Settings: a time-of-day slider (drag or click the track; it sets the sun, and the choice is saved), and the
+  mouse sensitivity now goes up to 500%. `tools/test_pause_menu.ps1` checks the slider and the saved time.
+- [ ] **11.14** Intermittent square shadow on the terrain at high sun, with nothing casting it. Not reproduced yet. F12 now saves a screenshot and the game state together (`cg_control/snapshots/`), so the next occurrence can be checked. The shadow edge now fades to lit at the map boundary, which may hide a square edge. Needs an F12 pair from the player.
+- [ ] **11.15** Start of game: the player sometimes falls through the ground into the kill zone, then restarts at the spawn
+  height and falls again until moved. Not reproduced: a run with focus in another window landed normally, and the 24-seed
+  landing check (`tools/spawn_check.py`) passes. The game saves `cg_control/snapshots/fell_*.json` when the player drops
+  below the kill zone. The mover now counts cells of unloaded chunks as solid, so a body cannot pass through terrain that
+  has not arrived; that is a guard, not the cause, which the snapshot still has to confirm. Needs a snapshot from the player.
+
+## Phase 12: block rendering rules (from the voxel sample, requested by the lead developer)
+Goal: each block type decides how it is drawn, so cube blocks, smooth blocks, and blocks in their own mesh can sit in one world.
+Today every solid block is part of one smooth skin per chunk, which merges wood and leaves into the ground.
+- [ ] **12.1** A per-type render rule: every block type has a shape (`smooth` for the skin, or `cube` for a normal voxel
+  cube) and a mesh group (`terrain` for the chunk's main mesh, or its own mesh per type). `define_block` takes both. Cube
+  blocks and smooth blocks are told apart by type, not by where they sit.
+- [ ] **12.2** Terrain blocks merge into the chunk's one mesh: ground (stone and dirt), grass, sand, gravel, water and snow.
+  This is what the skin does now.
+- [ ] **12.3** Wood and leaves are separate meshes, one per type and chunk, drawn with their own material. They do not
+  merge into the terrain. Their skin is built from their own blocks only, and the terrain skin treats them as air, so a
+  canopy does not hide the ground under it (and the ground does not hide the canopy).
+- [ ] **12.4** Brick: a new block type that stays a normal cube voxel and never merges, so it keeps sharp edges and its own
+  texture. The cube mesher draws its faces (no greedy merge across types) into a mesh of its own.
+- [ ] **12.5** The rules are data: the Python side sets the rule per block (`cge.VoxelWorld.define_block(id, ..., shape=,
+  group=)`), the hotbar shows the new block, and `tools/voxel_world_check.py` checks each rule (a brick face is a cube
+  face, a leaf is in the leaf mesh and not the terrain mesh, a ground block is in the terrain mesh).
+- Open question: the seams. A separate skin (wood, leaves) meets the terrain skin where they touch. Skirts (11.12) cover the
+  level-of-detail seams today; the same rule would be needed where a separate mesh meets the terrain, or the separate skin
+  would show a crack where the two meet.
+
+## Phase 13: collision and the camera on the skin (from playtesting: clipping, and no walking up slopes)
+Goal: the player, the creatures and the camera meet the surface that is drawn, not the blocks under it. The skin is drawn at
+the iso-surface of the blocks' occupancy (density 0.3), which sits about 0.2 blocks out from each solid face, so block
+collision leaves the feet 0.2 blocks inside the visible ground and the eye close to the wall it walks into.
+- [x] **13.1** A skin field: `VoxelWorld::skinDensity(x, y, z)`, the density the skin is built from (the trilinear occupancy of
+  the block centres, with occupancy = solid block types; water and air are open; unloaded cells are solid). A point is inside
+  the skin where the density is above 0.3. `physics.density` in `VoxelPhysics.py` is the same, operation for operation.
+- [x] **13.2** The body mover tests the skin: five points across at four heights (feet, middle, head and the eye), and a
+  blocked move is set flush by bisection. The player and the creatures share it (`VoxelBody.cpp`). A body that starts inside
+  the skin is lifted out first. `tools/voxel_world_check.py` compares it with the Python copy on random moves.
+- [x] **13.3** Walking up: a walk blocked on the ground climbs a block (`stepUp` 1.0) and snaps back to the surface, so the
+  player and creatures walk up hills and over one-block steps. A four-block wall still stops them. Measured while designing:
+  0.6 was not enough, since the terrain's columns step by a whole block and the skin makes those steps near-vertical.
+  The camera follows the eye's height over a few frames (`VIEW_SMOOTH`), so a climb is seen as a step.
+- [x] **13.4** The eye is one of the body's sample points, so the box stops with its eye outside the skin: a wall keeps the
+  near plane clear of it, and an overhang stops the head. Not yet seen in play: the camera at a wall corner (a check in a
+  screenshot is the next step).
+- [x] **13.5** Picking follows the skin: the break and place target is found by marching the ray through the density until it
+  crosses the iso-surface, so the outline is on the surface under the crosshair. The block is then walked from half a block
+  in front of that surface (`VoxelWorld::skinSurface`, `skin_surface` in Python). Checked by `check_skin_surface` and by eye.
+- [x] **13.6** Measured on the skin, in the engine: a walk step of one body takes about 25 microseconds and a fall step about
+  10 (the Python call included), so the twelve creatures and the player cost well under a millisecond a frame. No cache is
+  needed yet. Still to measure: the frame time of the whole game beside the 650 frames a second of the block version.
+- Open question: the level-of-detail skin (11.7) is drawn with two samples a block near the camera, while collision uses
+  one. The difference is up to half a block near the player; a finer collision field is possible if it shows.
+
+## Phase 14: light you carry and place (from playtesting: the caves are too dark to explore)
+Goal: light blocks and carried torches light caves. Light is what lets a player read a cave; the sky cannot reach
+underground, so the sky floor (0.2) is all a cave gets today. Steering from playtesting: the torch is a small item, not a
+full block, and light blocks (full cells that give light) are wanted too.
+- [x] **14.1** Light blocks: a block gives off light (`BlockType::emits`; the lamp, id 17, gives 255). Its light is full at its
+  cell and falls 0.8 a block through air, for 8 blocks, the same walk as sky light; each cell takes the brighter of the two.
+  The lamp is a solid block drawn as a cube, so it is placed like any block. `check_lamp` in `voxel_world_check.py` checks
+  a sealed pocket: the sky floor before the lamp, 0.8 one block away, 0.8 cubed three blocks away. Not on the hotbar yet.
+- [ ] **14.2** Small torch as an item, not a block: a torch is a prop on one face of a block, drawn as a thin mesh, so it
+  takes a fraction of a block and the grid does not change. Its cell stays air for collision, meshing and the walk, and the
+  torch enters the light pass as an emitter at that cell, from a sparse per-chunk list (no block id). Placed from the hotbar
+  on a face, broken by hitting it; the chunks within reach are re-lit as for a block edit.
+- [ ] **14.3** Held torch: a point light that follows the camera and lights the walls around the player, with a key to
+  light or put it out. It is a shader light, so it needs no re-mesh and stays separate from the baked light of 14.1 and 14.2.
+- [ ] **14.4** The light colour is warm, and a torch flickers a little (cosmetic, per torch).
+- [ ] **14.5** Measured: the cost of the light pass in the mesher (a chunk with and without a light block) and of a re-mesh
+  after a placement, in Release.
+- [ ] **14.6** Spike: a prop finer than a block. Can a block cell hold a finer grid where a prop needs one, without finer blocks
+  everywhere? Plan: a sparse 4×4×4 micro-grid per block cell, stored only where set, meshed with the same greedy mesher at
+  micro scale and lit from its cell. Whole-world subdivision is not the route: it multiplies the cells the mesher, the light
+  walk and the collision sample by 4 per axis (64 times the cells). Decide after 14.2 whether a prop needs micro collision.
+- Interim (not on the roadmap as a fix): the cave floor (0.2 of the sky) could be raised to make caves readable before the
+  torches land. Decide after 14.1 if they are still too dark.
 
 ## Tooling and quality
 - [x] CI build on Windows (`.github/workflows/build.yml`) with Mesa software OpenGL smoke run
 - [~] Unit tests for pure logic runnable without a GPU. Done for the dungeon generator (`python -I tools/test_dungeon_gen.py`) and for the scene format and command list (`python -I tools/test_scene_format.py`: example scenes, invalid fixtures, documented commands). The C++ parsers in `SceneLoader` and `ControlChannel` are still covered only by the GPU integration test.
 - [x] Documentation index (`docs/ai/README.md`) for agents
+- [x] Checks that depend on frame timing: the voxel walk and turn count frames (`VOXEL_FIXED_STEP`, the Enter key as
+  the frame count) and default to Release, so the 60 ms worst-frame check measures a build that is meant for it. The
+  dungeon walk counts frames (6.4). `tools/spawn_check.py` steps at a fixed time, so it does not depend on the frame rate.
 
 ## Open questions
 - "JEV" as an AI app controller was mentioned but not specified. Phase 2 is designed so an
@@ -151,5 +254,16 @@ Goal: the world reads well at a human pace, and the engine's own state is easy t
 - Look at the scene before trusting it. The dungeon floor sat half a tile above y = 0 for its whole life, because a plane primitive's surface is offset by its size. Cubes hid it; the first real models sank to the waist. Screenshots through the control channel caught it.
 - Remaining big-ticket items: Phase 5, batching draws by material (3.2 continuation), and the dungeon's next steps (an inventory, a shop for coins, and sound).
 - Voxel notes (from the voxel sample, later work): the smooth skin looks much better than the cubes, and shadows read well once the map is cached. The HUD took several passes: the screen's own view is a square in the middle of the window, so window-wide text needs its own view, and text draws over meshes only with a high z order. A closed window used to restart the scene (the run loop now ends).
-- How I feel about it: the engine is in good shape for building games quickly from Python, and the voxel sample feels like a real game now. My worries are the frame-rate drop from the HUD (11.8), the `Body` draw path that casts a transformable to a shape to draw text (it works, but it is undefined behaviour and should store a drawable), and tests that depend on frame timing. I want to fix those before adding more features.
+- Hypotheses get a run before a fix. The background-run theory for the start-of-game fall was tested (a run with focus in another window) and it landed normally. A bug that cannot be reproduced gets instrumentation that saves the state at the moment of failure, not a guess.
+- A check that counts seconds fails under load, so count frames. The voxel walk and the dungeon walk hold their keys for
+  frames now, and the walk's yaw lands on 180 degrees at any frame rate.
+- The Debug build is not a performance build: the 841-chunk world runs at about 33 frames a second in Debug and 650 in
+  Release. Measure frame times in Release, and say which build a number came from.
+- A probe that places a body at a fixed point can put it behind a wall, since the dungeon's layout depends on the seed.
+  The brute looked missing in three spots before it showed beside the player on a fixed seed. Check the placement first.
+- How I feel about it, after this round: the sample now has what it was missing for a player: caves that read as caves,
+  water to swim in, a desert to walk into, creatures on the ground, and enemies that move like they have bodies. The two
+  bugs I still cannot reproduce, the start-of-game fall and the square shadow, are where my guesses have been wrong, so I
+  want the snapshot before any more theory. I would keep the Release-only frame checks honest, and move bodies without a
+  script (11.9) next, since every new creature currently needs its own Python.
 - The tests run through the control channel with scripted input. They are the best guard against regressions in the game, and they caught a real engine bug (the run loop), so keep adding one for each new interaction.

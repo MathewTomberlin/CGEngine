@@ -1,0 +1,74 @@
+{
+  "version": 1,
+  "name": "archer_draw",
+  "model": "models/dungeon/archer_rig.fbx",
+  "durationSeconds": 0.6,
+  "channels": [
+    {
+      "bone": "Arm",
+      "rotation": [
+        {
+          "t": 0.0,
+          "euler": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "t": 0.35,
+          "euler": [
+            0,
+            -40,
+            0
+          ]
+        },
+        {
+          "t": 0.45,
+          "euler": [
+            0,
+            -40,
+            0
+          ]
+        },
+        {
+          "t": 0.6,
+          "euler": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "bone": "Torso",
+      "rotation": [
+        {
+          "t": 0.0,
+          "euler": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "t": 0.35,
+          "euler": [
+            0,
+            -10,
+            0
+          ]
+        },
+        {
+          "t": 0.6,
+          "euler": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
+    }
+  ]
+}

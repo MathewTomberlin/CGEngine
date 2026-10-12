@@ -61,7 +61,8 @@ namespace CGEngine {
             if (!body) throw std::runtime_error("no body named '" + name + "'");
             model = findModelFor(body);
             if (!model) throw std::runtime_error("body '" + name + "' is not part of an imported model");
-            Animator* animator = model->getAnimator();
+            Animator* animator = body->findInstanceAnimator();
+            if (!animator) animator = model->getAnimator();
             if (!animator) throw std::runtime_error("model of body '" + name + "' has no animation clips");
             return animator;
         }

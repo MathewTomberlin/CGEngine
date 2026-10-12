@@ -7,6 +7,7 @@ namespace CGEngine {
     OpenGLSettings openGLSettings = OpenGLSettings(true, true);
     //List of Scenes to create, add to World and load sceneList[0]
     vector<Behavior*> sceneList = { };
+    string defaultScene = "";
     PyInterpreter* interpreter = nullptr;
     Logging log;
     GlobalTime time;

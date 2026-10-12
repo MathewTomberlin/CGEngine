@@ -95,7 +95,7 @@ returns to the defaults before the file's own values are read. Scripts change it
 
 ### Primitive bodies
 
-A body can use `"primitive": "cube"` or `"primitive": "plane"` instead of `"model"`, with an optional `"size"`
+A body can use `"primitive": "cube"`, `"primitive": "plane"` or `"primitive": "sphere"` instead of `"model"`, with an optional `"size"` (a sphere's size is its radius)
 (default `1`). `size` is the half extent: a cube of size `0.5` is one unit wide.
 
 The plane is the cube's front face: a square in the local XY plane at local `z = size`, facing +Z. Rotated

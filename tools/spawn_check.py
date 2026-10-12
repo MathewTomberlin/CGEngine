@@ -15,7 +15,9 @@ HEIGHT = 64
 SPAWN = (8.5, 60.0, 8.5)
 DT = 0.05   # the game caps its frame step at 0.05 s; a slow start hits that cap
 SECONDS = 12.0
-SEEDS = list(range(1, 25))
+# The game's default seed is the time of the launch, so large seeds matter as much as small ones: SPAWN_CHECK_SEEDS
+# (comma-separated) replaces the list when set.
+SEEDS = [int(s) for s in os.environ["SPAWN_CHECK_SEEDS"].split(",")] if os.environ.get("SPAWN_CHECK_SEEDS") else list(range(1, 25))
 
 
 def load(world, chunks, timeout=60.0):

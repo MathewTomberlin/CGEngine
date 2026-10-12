@@ -30,7 +30,7 @@ CONTROL_DOC = os.path.join(ROOT, "docs", "ai", "control-api.md")
 WORLD_ROOT = "Root"  # created by the engine before any scene loads, so scripts may attach to it
 LIST_KEYS = ("clips", "materials", "lights", "bodies", "scripts")
 SCRIPT_DOMAINS = ("start", "update", "delete")
-PRIMITIVES = ("cube", "plane")
+PRIMITIVES = ("cube", "plane", "sphere")
 
 # Each invalid fixture and a fragment of the error it must produce. None means the static checks
 # pass and the failure only shows up in the engine (the clip name is read from the model).
@@ -144,7 +144,7 @@ def check_scene(scene):
         if "primitive" in b:
             primitive = require_str(b, "primitive", context)
             if primitive not in PRIMITIVES:
-                raise SceneError(f"{context} has unknown primitive '{primitive}' (use \"cube\" or \"plane\")")
+                raise SceneError(f"{context} has unknown primitive '{primitive}' (use \"cube\", \"plane\" or \"sphere\")")
             if "size" in b and not is_number(b["size"]):
                 raise SceneError(f"{context}: 'size' must be a number")
         else:

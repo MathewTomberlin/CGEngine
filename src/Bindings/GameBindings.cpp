@@ -39,6 +39,7 @@ namespace {
             {"1", sf::Keyboard::Scan::Num1}, {"2", sf::Keyboard::Scan::Num2}, {"3", sf::Keyboard::Scan::Num3},
             {"4", sf::Keyboard::Scan::Num4}, {"5", sf::Keyboard::Scan::Num5}, {"6", sf::Keyboard::Scan::Num6},
             {"7", sf::Keyboard::Scan::Num7}, {"8", sf::Keyboard::Scan::Num8}, {"9", sf::Keyboard::Scan::Num9},
+            {"0", sf::Keyboard::Scan::Num0},
             {"F5", sf::Keyboard::Scan::F5}, {"F9", sf::Keyboard::Scan::F9}, {"F12", sf::Keyboard::Scan::F12},
         };
         return keys;
@@ -128,7 +129,7 @@ void bindGame(py::module_& m) {
         auto it = gameKeys().find(name);
         if (it == gameKeys().end()) throw std::invalid_argument("unknown key '" + name + "'");
         return sf::Keyboard::isKeyPressed(it->second);
-    }, py::arg("name"), "True while the named key is held. Names: W A S D Up Down Left Right J K Space Enter R Escape, 1 to 9, F5, F9.");
+    }, py::arg("name"), "True while the named key is held. Names: W A S D Up Down Left Right J K Space Enter R Escape, 0 to 9, F5, F9, F12.");
 
     m.def("find_body", [](const std::string& name) -> Body* {
         return findBody(name);
@@ -157,7 +158,8 @@ void bindGame(py::module_& m) {
                 if (mesh->getModelId().has_value()) model = assets.get<Model>(mesh->getModelId().value());
             }
         });
-        Animator* animator = model ? model->getAnimator() : nullptr;
+        Animator* animator = body->findInstanceAnimator();
+        if (!animator && model) animator = model->getAnimator();
         if (!animator) throw std::runtime_error("body '" + name + "' is not part of a model with animation clips");
         const auto& clips = model->getAnimationNames();
         if (std::find(clips.begin(), clips.end(), clip) == clips.end()) throw std::invalid_argument("no clip named '" + clip + "' on body '" + name + "'");
@@ -166,7 +168,25 @@ void bindGame(py::module_& m) {
         animator->setLooping(looping);
         animator->setPaused(false);
     }, py::arg("name"), py::arg("clip"), py::arg("looping") = true, py::arg("speed") = 1.0f,
-        "Start a clip on the model that a body belongs to. Restarts the clip if it is already playing.");
+        "Start a clip on the model that a body belongs to. Restarts the clip if it is already playing. Each model instance "
+        "(each body made from a model) plays on its own animator, so instances started at different times stay out of step.");
+    m.def("animation_time", [](const std::string& name) {
+        Body* body = findBody(name);
+        if (!body) throw std::runtime_error("no body named '" + name + "'");
+        Animator* animator = body->findInstanceAnimator();
+        if (!animator) {
+            Model* model = nullptr;
+            body->apply([&model](Body* b) {
+                if (model) return;
+                if (Mesh* mesh = b->get<Mesh*>()) {
+                    if (mesh->getModelId().has_value()) model = assets.get<Model>(mesh->getModelId().value());
+                }
+            });
+            animator = model ? model->getAnimator() : nullptr;
+        }
+        if (!animator) throw std::runtime_error("body '" + name + "' is not part of a model with animation clips");
+        return animator->getTimeSeconds();
+    }, py::arg("name"), "Position in the body's current clip, in seconds (its model instance's clock).");
     m.def("create_mesh_body", [](const std::string& name, py::buffer positions, py::buffer normals, py::buffer colours,
                                   py::buffer uvs, py::buffer materialIds, py::buffer indices, std::vector<std::string> materials,
                                   sf::Vector3f position) {
@@ -282,11 +302,14 @@ void bindGame(py::module_& m) {
 
     // Text drawn over the scene, in window pixels from the top-left corner: a label for the game's HUD.
     m.def("create_text_body", [](const std::string& name, const std::string& text, const std::string& fontName,
-        sf::Vector2f position, unsigned int size, sf::Color colour) {
+        sf::Vector2f position, unsigned int size, sf::Color colour, sf::Color outlineColour, float outlineThickness) {
         FontResource* resource = assets.get<FontResource>(fontName);
         if (!resource || !resource->getFont()) throw std::runtime_error("no font named '" + fontName + "' (load_font it first)");
         sf::Text label(*resource->getFont(), text, size);
         label.setFillColor(colour);
+        // An outline keeps a label readable over any background; 0 draws the plain text.
+        label.setOutlineColor(outlineColour);
+        label.setOutlineThickness(outlineThickness);
         label.setPosition(position);
         // The asset name is a cache key, so it carries a prefix; the body's own name is what findBodyByName finds.
         auto body = assets.create<Body>("text:" + name, std::move(label));
@@ -296,8 +319,9 @@ void bindGame(py::module_& m) {
         body.value().second->zOrder = 1000;
         return body.value().second;
     }, py::arg("name"), py::arg("text"), py::arg("font"), py::arg("position"), py::arg("size") = 18,
-       py::arg("colour") = sf::Color::White,
-       "Make a text label at position (window pixels from the top-left) drawn over the scene. Use a font loaded with load_font.");
+       py::arg("colour") = sf::Color::White, py::arg("outline_colour") = sf::Color::Black, py::arg("outline_thickness") = 0.0f,
+       "Make a text label at position (window pixels from the top-left) drawn over the scene. Use a font loaded with load_font. "
+       "outline_thickness (pixels) draws an outline in outline_colour, which keeps the text readable over any background.");
 
     m.def("set_text_body", [](const std::string& name, const std::string& text) {
         Body* body = findBodyByName(name);

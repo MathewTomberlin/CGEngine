@@ -254,6 +254,8 @@ namespace CGEngine {
 		bind("position", 3, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, position));
 		bind("texCoord", 2, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, texCoord));
 		bind("vertNormal", 3, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, normal));
+		bind("vertGlow", 3, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, glow));
+		bind("vertSky", 1, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, sky));
 		bind("materialId", 1, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, materialId));
 		bind("vertColour", 3, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, colour));
 		GL_CHECK(glBindVertexArray(0));
@@ -587,7 +589,7 @@ namespace CGEngine {
 	}
 
 	void Renderer::endFrame() {
-		updatedModels.clear();
+		updatedAnimators.clear();
 	}
 
 	glm::mat4 Renderer::getBodyGlobalTransform(optional<id_t> bodyId) {
@@ -623,17 +625,20 @@ namespace CGEngine {
 	};
 
 	Animator* Renderer::updateAnimator(Mesh* mesh) {
-		//Update each model's animator, if present, once per frame (instead of once per mesh per model per frame)
+		//Update each animator once per frame (instead of once per mesh), and return it for every mesh that uses it: each mesh
+		//needs the bone matrices, not only the first one drawn.
 		optional<id_t> meshModelId = mesh->getModelId();
 		if (!meshModelId.has_value()) return nullptr;
 		Model* meshModel = assets.get<Model>(meshModelId.value());
 		if (!meshModel) return nullptr;
-		Animator* animator = meshModel->getAnimator();
-		// Advance the clip once per model per frame, but return the animator for every mesh of the
-		// model: each mesh needs the bone matrices, not only the first one drawn.
-		if (animator && updatedModels.find(meshModelId.value()) == updatedModels.end()) {
+		// A model instance has its own animator (on its root body); a model made in code uses the model's.
+		Animator* animator = nullptr;
+		if (optional<id_t> bodyId = mesh->getBodyId()) {
+			if (Body* body = assets.get<Body>(bodyId.value())) animator = body->findInstanceAnimator();
+		}
+		if (!animator) animator = meshModel->getAnimator();
+		if (animator && updatedAnimators.insert(animator).second) {
 			animator->updateAnimation(time.getDeltaSec());
-			updatedModels.insert(meshModelId.value());
 		}
 		return animator;
 	}

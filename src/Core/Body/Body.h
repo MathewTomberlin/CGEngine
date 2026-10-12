@@ -50,6 +50,8 @@ namespace CGEngine {
     /// 
     /// A Body creates a bounds RectangleShape and updates it with its entity. The bounds may be drawn by setting the correct setting in the World.
     /// </summary>
+    class Animator;
+
     class Body : public Transformable, public Drawable, public ScriptController, public IResource {
     public:
         using ScriptEventHandler = std::variant<ScriptEvent, pybind11::object>;
@@ -93,6 +95,12 @@ namespace CGEngine {
 
         std::optional<id_t> getParentId() const { return parentId; }
         Body* getParent() const;
+
+        /// Give this body the animator of a model instance. Only the root of an instance holds one, so every mesh of the instance
+        /// (its child bodies) plays the same clip, and two instances of one model animate on their own.
+        void setInstanceAnimator(Animator* animator);
+        /// The instance animator of this body, or of the nearest parent that has one. nullptr if the body is in no instance.
+        Animator* findInstanceAnimator() const;
         /// <summary>
         /// Return the drawn Shape as an object of the indicated type
         /// </summary>
@@ -675,6 +683,8 @@ namespace CGEngine {
         /// The assigned Transformable entity
         /// </summary>
         unique_ptr<Transformable> entity = nullptr;
+        /// The animator of the model instance this body roots, if any (see setInstanceAnimator).
+        Animator* instanceAnimator = nullptr;
         /// <summary>
         /// The Behaviors assigned to this Body
         /// </summary>

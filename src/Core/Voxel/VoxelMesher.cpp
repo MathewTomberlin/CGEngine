@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cmath>
 #include "VoxelMesher.h"
 
 namespace CGEngine {
@@ -9,13 +10,25 @@ namespace CGEngine {
 			uint8_t block = 0;
 			int8_t sign = 0;
 			uint8_t occlusion[4] = { 0, 0, 0, 0 };
+			// The sky light of the air in front. Faces merge when it is close (within an eighth), and the quad takes this one.
+			uint8_t light = 0;
+			// The light of the lamps in the air in front (PaddedChunk::lamp). It is added to the sky light, and merges like it.
+			uint8_t lamp = 0;
+			// The light the block gives off (BlockType::emits), for the glow of its faces.
+			uint8_t emission = 0;
 
 			bool operator==(const MaskCell& other) const {
-				return block == other.block && sign == other.sign
+				return block == other.block && sign == other.sign && (light >> 5) == (other.light >> 5) && (lamp >> 5) == (other.lamp >> 5)
 					&& occlusion[0] == other.occlusion[0] && occlusion[1] == other.occlusion[1]
 					&& occlusion[2] == other.occlusion[2] && occlusion[3] == other.occlusion[3];
 			}
 		};
+
+		// How much a light block's light is multiplied where the sky is at sky (0 to 1): VoxelLampBrightness in a cave, and 1 in
+		// the open, where the sun already lights the ground, so a lamp does not wash out sunlit grass.
+		float lampGain(float sky) {
+			return 1.0f + (VoxelLampLight - 1.0f) * (1.0f - sky);
+		}
 
 		// Brightness of a corner by its occlusion (0 = walled in, 3 = open).
 		const float occlusionLight[4] = { 0.5f, 0.66f, 0.82f, 1.0f };
@@ -69,6 +82,9 @@ namespace CGEngine {
 				// Texture repeats once per block across the quad, so a big quad tiles like its blocks would.
 				vertex.texCoord = glm::vec2(static_cast<float>(cornerU[k] * w), static_cast<float>(cornerV[k] * h));
 				vertex.colour = base * occlusionLight[face.occlusion[k]];
+				vertex.sky = face.light / 255.0f;
+				vertex.glow = palette[face.block] * (face.emission / 255.0f * VoxelLampBrightness)
+					+ vertex.colour * (face.lamp / 255.0f * lampGain(face.light / 255.0f));
 				out.vertices.push_back(vertex);
 			}
 			// Split the quad along the diagonal between its less occluded corners, so the shading does not streak.
@@ -76,6 +92,114 @@ namespace CGEngine {
 				out.indices.insert(out.indices.end(), { first + 1, first + 2, first + 3, first + 1, first + 3, first });
 			} else {
 				out.indices.insert(out.indices.end(), { first, first + 1, first + 2, first, first + 2, first + 3 });
+			}
+		}
+	}
+
+	namespace {
+		// Light kept per block walked through air from the open sky, and the least a cell gets beyond that reach.
+		const float LightPerStep = 0.8f;
+		const float LightFloor = 0.0f;
+	}
+
+	void computeLight(PaddedChunk& chunk) {
+		struct Cell {
+			int x, y, z;
+		};
+		const int b = chunk.border;
+		const int h = chunk.height;
+		const int lo = -b;
+		const int hi = chunk.size + b;
+		// steps: the walk from the open sky to each air cell, 0xFF while it is not reached (air under a block, or too far).
+		std::vector<uint8_t> steps(chunk.blocks.size(), 0xFF);
+		std::vector<Cell> frontier;
+		for (int z = lo; z < hi; ++z) {
+			for (int x = lo; x < hi; ++x) {
+				// Walking down the column, the air above the first block is open to the sky; the air under a block is not.
+				bool open = true;
+				for (int y = h - 1; y >= 0; --y) {
+					if (chunk.at(x, y, z) != 0) {
+						open = false;
+						continue;
+					}
+					if (open) {
+						steps[chunk.index(x, y, z)] = 0;
+						frontier.push_back({ x, y, z });
+					}
+				}
+			}
+		}
+
+		static const int Directions[6][3] = { { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 }, { 0, 0, 1 }, { 0, 0, -1 } };
+		std::vector<Cell> next;
+		for (int step = 0; step < VoxelLightReach && !frontier.empty(); ++step) {
+			next.clear();
+			for (const Cell& cell : frontier) {
+				for (const auto& d : Directions) {
+					const int x = cell.x + d[0], y = cell.y + d[1], z = cell.z + d[2];
+					if (x < lo || x >= hi || z < lo || z >= hi || y < 0 || y >= h) continue;
+					const size_t i = chunk.index(x, y, z);
+					if (chunk.blocks[i] != 0 || steps[i] != 0xFF) continue;
+					steps[i] = static_cast<uint8_t>(step + 1);
+					next.push_back({ x, y, z });
+				}
+			}
+			frontier.swap(next);
+		}
+
+		// Light from the light blocks: full at the block, and each block walked through air (or any block that is not opaque)
+		// multiplies it by LightPerStep, for VoxelLightReach rounds. A cell keeps the brightest that reaches it. Nothing is
+		// done when the chunk has no light block, which is most of the time.
+		std::vector<float> emitted;
+		std::vector<Cell> sources;
+		for (int z = lo; z < hi; ++z) {
+			for (int x = lo; x < hi; ++x) {
+				for (int y = 0; y < h; ++y) {
+					const uint8_t level = chunk.emission[chunk.at(x, y, z)];
+					if (level == 0) continue;
+					if (emitted.empty()) emitted.assign(chunk.blocks.size(), 0.0f);
+					emitted[chunk.index(x, y, z)] = level / 255.0f;
+					sources.push_back({ x, y, z });
+				}
+			}
+		}
+		for (int round = 0; round < VoxelLightReach && !sources.empty(); ++round) {
+			next.clear();
+			for (const Cell& cell : sources) {
+				const float carried = emitted[chunk.index(cell.x, cell.y, cell.z)] * LightPerStep;
+				for (const auto& d : Directions) {
+					const int x = cell.x + d[0], y = cell.y + d[1], z = cell.z + d[2];
+					if (x < lo || x >= hi || z < lo || z >= hi || y < 0 || y >= h) continue;
+					const size_t i = chunk.index(x, y, z);
+					if (chunk.blocks[i] != 0 && chunk.emission[chunk.blocks[i]] == 0) continue;
+					if (carried <= emitted[i]) continue;
+					emitted[i] = carried;
+					next.push_back({ x, y, z });
+				}
+			}
+			sources.swap(next);
+		}
+
+		float byStep[VoxelLightReach + 1];
+		for (int s = 0; s <= VoxelLightReach; ++s) {
+			byStep[s] = std::max(LightFloor, std::pow(LightPerStep, static_cast<float>(s)));
+		}
+		// Every position of the padded chunk, including the air above the world (full light) and below it (none).
+		chunk.light.assign(chunk.blocks.size(), 0);
+		chunk.lamp.assign(chunk.blocks.size(), 0);
+		for (int z = lo; z < hi; ++z) {
+			for (int x = lo; x < hi; ++x) {
+				for (int y = -b; y < h + b; ++y) {
+					const size_t i = chunk.index(x, y, z);
+					float level = 0.0f;
+					if (y >= h) {
+						level = 1.0f;
+					} else if (y >= 0 && chunk.blocks[i] == 0) {
+						level = steps[i] == 0xFF ? LightFloor : byStep[steps[i]];
+					}
+					chunk.light[i] = static_cast<uint8_t>(std::lround(level * 255.0f));
+					if (!emitted.empty()) chunk.lamp[i] = static_cast<uint8_t>(std::lround(emitted[i] * 255.0f));
+				}
 			}
 		}
 	}
@@ -116,8 +240,11 @@ namespace CGEngine {
 							const uint8_t block = chunk.at(solid[0], solid[1], solid[2]);
 							if (block == 0 || chunk.at(air[0], air[1], air[2]) != 0) continue;
 							cell.block = block;
+							cell.emission = chunk.emission[block];
 							cell.sign = static_cast<int8_t>(sign);
 							cornerOcclusion(chunk, air, u, v, cell.occlusion);
+							cell.light = chunk.lightAt(air[0], air[1], air[2]);
+							cell.lamp = chunk.lampAt(air[0], air[1], air[2]);
 						}
 					}
 
@@ -158,7 +285,7 @@ namespace CGEngine {
 
 	namespace {
 		// The surface is where the density crosses this: a sample inside the solid blocks is above it.
-		const float SmoothIso = 0.3f;
+		const float SmoothIso = VoxelSkinIso;
 
 		// The 12 edges of a cell's cube, as pairs of corner indices (corner bit 0 is x, bit 1 is y, bit 2 is z).
 		const int CubeEdges[12][2] = { { 0, 1 }, { 2, 3 }, { 4, 5 }, { 6, 7 }, { 0, 2 }, { 1, 3 }, { 4, 6 }, { 5, 7 },
@@ -231,7 +358,14 @@ namespace CGEngine {
 			} else {
 				vertex.texCoord = glm::vec2(p.x, p.y);
 			}
+			// Sky light of the air the normal points into: caves and the ground under trees are darker.
+			const glm::vec3 air = glm::floor(p + normal * 0.5f);
+			const float sky = chunk.lightAt(static_cast<int>(air.x), static_cast<int>(air.y), static_cast<int>(air.z)) / 255.0f;
+			const float lamp = chunk.lampAt(static_cast<int>(air.x), static_cast<int>(air.y), static_cast<int>(air.z)) / 255.0f;
 			vertex.colour = palette[static_cast<size_t>(block)] * occlusion;
+			vertex.sky = sky;
+			vertex.glow = palette[static_cast<size_t>(block)] * (chunk.emission[block] / 255.0f * VoxelLampBrightness)
+				+ vertex.colour * (lamp * lampGain(sky));
 			return vertex;
 		}
 	}

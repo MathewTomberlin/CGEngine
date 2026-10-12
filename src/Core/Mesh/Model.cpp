@@ -128,6 +128,8 @@ namespace CGEngine {
 			auto rootAsset = assets.create<Body>(instanceKey + ".Root", Mesh(nullptr));
 		if (rootAsset.has_value()) {
 			Body* rootBody = rootAsset.value().second;
+			// The instance animates on its own copy of the model's animator, so two instances of one model play out of step.
+			if (modelAnimator) rootBody->setInstanceAnimator(new Animator(*modelAnimator));
 
 			//Apply root body as the first Model body
 			bodyCount = 1;

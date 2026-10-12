@@ -1,3 +1,5 @@
+#include <cmath>
+#include <utility>
 #include "../../Core/Engine/Engine.h"
 #include "CommonModels.h"
 
@@ -14,6 +16,53 @@ namespace CGEngine {
 		if (!planeAsset.has_value()) return nullptr;
         optional<id_t> planeId = planeAsset.value().first;
 		return assets.get<MeshData>(planeId.value());
+    }
+
+    vector<VertexData> getSphereVertices(float radius, int segments, int rings) {
+        vector<VertexData> vertices;
+        const float pi = 3.14159265358979f;
+        for (int r = 0; r <= rings; ++r) {
+            const float theta = pi * static_cast<float>(r) / static_cast<float>(rings);
+            for (int s = 0; s <= segments; ++s) {
+                const float phi = 2.0f * pi * static_cast<float>(s) / static_cast<float>(segments);
+                const glm::vec3 unit(std::sin(theta) * std::cos(phi), std::cos(theta), std::sin(theta) * std::sin(phi));
+                const float u = static_cast<float>(s) / static_cast<float>(segments);
+                const float v = static_cast<float>(r) / static_cast<float>(rings);
+                vertices.push_back(VertexData({ unit.x * radius, unit.y * radius, unit.z * radius }, { u, v }, { unit.x, unit.y, unit.z }, 0));
+            }
+        }
+        return vertices;
+    }
+
+    vector<unsigned int> getSphereIndices(int segments, int rings, const vector<VertexData>& vertices) {
+        // Two triangles per cell of the grid. Each is wound counter-clockwise seen from outside: a triangle whose winding
+        // points inwards (against the vertex normals) is turned round, so backface culling keeps the outside.
+        vector<unsigned int> indices;
+        const unsigned int row = static_cast<unsigned int>(segments + 1);
+        auto addTriangle = [&](unsigned int a, unsigned int b, unsigned int c) {
+            if (!vertices.empty()) {
+                const auto& pa = vertices[a].position;
+                const auto& pb = vertices[b].position;
+                const auto& pc = vertices[c].position;
+                const auto& n = vertices[a].normal;
+                const float ux = pb[0] - pa[0], uy = pb[1] - pa[1], uz = pb[2] - pa[2];
+                const float wx = pc[0] - pa[0], wy = pc[1] - pa[1], wz = pc[2] - pa[2];
+                const float facing = (uy * wz - uz * wy) * n[0] + (uz * wx - ux * wz) * n[1] + (ux * wy - uy * wx) * n[2];
+                if (facing < 0.0f) std::swap(b, c);
+            }
+            indices.push_back(a);
+            indices.push_back(b);
+            indices.push_back(c);
+        };
+        for (int r = 0; r < rings; ++r) {
+            for (int s = 0; s < segments; ++s) {
+                const unsigned int a = static_cast<unsigned int>(r) * row + static_cast<unsigned int>(s);
+                const unsigned int b = a + row;
+                addTriangle(a, b, a + 1);
+                addTriangle(a + 1, b, b + 1);
+            }
+        }
+        return indices;
     }
 
     vector<VertexData> getCubeVertices(float scale) {

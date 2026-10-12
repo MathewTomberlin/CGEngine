@@ -407,7 +407,10 @@ namespace CGEngine {
 
             // The scene file loads after the built-in scene, so its replaceWorld can clear the built-in bodies.
             // Scene load events create those bodies, which is why this cannot run in startWorld.
-            if (const char* scenePath = std::getenv("CGENGINE_SCENE")) {
+            // CGENGINE_SCENE overrides the program's default scene (defaultScene).
+            const char* envScene = std::getenv("CGENGINE_SCENE");
+            const std::string scenePath = envScene ? envScene : defaultScene;
+            if (!scenePath.empty()) {
                 SceneLoadResult scene = SceneLoader::loadFile(scenePath);
                 if (!scene.ok) {
                     std::cerr << "Scene load failed: " << scene.error << std::endl;

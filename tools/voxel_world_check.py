@@ -6,6 +6,7 @@ It makes its own cge.VoxelWorld, so it does not touch the sample game's world. T
 cg_control/voxel_check.json as {"check": {name: bool}, "caveAir": n, "underground": n}.
 """
 import json
+import math
 import os
 import time
 
@@ -16,6 +17,8 @@ HEIGHT = 64
 BLOCK_CHECK = 7   # wood: an id that the terrain never makes next to the edited block
 VOXEL_WOOD = 7
 VOXEL_LEAVES = 8
+VOXEL_STONE = 3
+VOXEL_LAMP = 17   # VoxelGen.LAMP
 
 
 def load_chunks(world, chunks, timeout=60.0):
@@ -80,8 +83,9 @@ def check_body_parity(world, checks):
         vel = (rng.uniform(-6, 6), rng.uniform(-30, 10), rng.uniform(-6, 6))
         dt = rng.uniform(0.005, 0.05)
         flying = rng.random() < 0.2
-        py_pos, py_vel, py_ground = physics.step(world.is_solid, pos, vel, dt, flying)
-        cpp_pos, cpp_vel, cpp_ground = world.step_body(pos, vel, dt, flying)
+        on_ground = rng.random() < 0.5
+        py_pos, py_vel, py_ground = physics.step(world.is_solid, pos, vel, dt, flying, on_ground)
+        cpp_pos, cpp_vel, cpp_ground = world.step_body(pos, vel, dt, flying, on_ground=on_ground)
         gap = max(abs(a - b) for a, b in zip(py_pos + py_vel, cpp_pos + cpp_vel))
         if gap > 1e-9 or py_ground != cpp_ground:
             mismatches += 1
@@ -187,6 +191,114 @@ def count_caves(world, chunks):
     return air, underground
 
 
+def check_light(world, checks, chunks, results):
+    """Sky light: open ground is full, and the air far under the surface is darker, but never fully dark."""
+    lo = min(cx for cx, _ in chunks) * SIZE + 2
+    hi = (max(cx for cx, _ in chunks) + 1) * SIZE - 2
+    tops, deep = [], []
+    for x in range(lo, hi, 4):
+        for z in range(lo, hi, 4):
+            top = None
+            for y in range(HEIGHT - 2, 0, -1):
+                if world.get_block(x, y, z) != 0 and world.get_block(x, y + 1, z) == 0:
+                    top = y + 1
+                    break
+            if top is None:
+                continue
+            tops.append(world.light_at(x, top, z))
+            for y in range(top - 10, 1, -3):
+                if world.get_block(x, y, z) == 0:
+                    deep.append(world.light_at(x, y, z))
+    results["light"] = {"surfaceSamples": len(tops), "deepSamples": len(deep),
+                        "deepMean": round(sum(deep) / max(1, len(deep)), 1)}
+    checks["open ground is full light"] = bool(tops) and all(v == 255 for v in tops)
+    checks["air far underground is darker than open ground"] = bool(deep) and sum(deep) / len(deep) < 0.5 * 255
+
+
+def check_walkers(world, checks, results):
+    """Creatures stand on the ground, walk about, and never end up inside a block. The engine moves them through
+    cge.step_voxel_walker here, since this check runs inside a frame and no frames pass while it works."""
+    import VoxelWalkers
+    herd = VoxelWalkers.Walkers(world, (0.0, 0.0), 4, 5, prefix="check_creature")
+    walkers = herd.walkers
+    checks["walkers spawn on the ground"] = len(walkers) == 4 and all(w.state()[2] is False or w.state()[0][1] >= 1.0 for w in walkers)
+    spawns = [list(w.state()[0]) for w in walkers]
+    dt = 1.0 / 60.0
+    for _ in range(240):   # 4 seconds at 60 frames a second
+        herd.update(dt)
+        for w in walkers:
+            cge.step_voxel_walker(w.name, dt)
+
+    import VoxelPhysics as physics
+    stands = True
+    inside = False
+    moved = 0.0
+    for w, spawn in zip(walkers, spawns):
+        pos, vel, on_ground = w.state()
+        x, z = pos[0], pos[2]
+        # A creature on the ground stands on the skin: it is outside the skin, and nothing moves it on.
+        results.setdefault("walkers", []).append({"pos": [round(c, 3) for c in pos], "vel": [round(c, 3) for c in vel],
+                                                 "onGround": on_ground, "inside": physics.inside(world.is_solid, pos)})
+        if not on_ground and abs(vel[1]) < 1e-6:
+            stands = False
+        if on_ground and physics.inside(world.is_solid, pos):
+            stands = False
+        for y in (pos[1] + 0.1, pos[1] + VoxelWalkers.HEIGHT - 0.1):
+            if world.is_solid(int(x // 1), int(y // 1), int(z // 1)):
+                inside = True
+        moved = max(moved, ((x - spawn[0]) ** 2 + (z - spawn[2]) ** 2) ** 0.5)
+    checks["walkers stand on the skin after 4 s"] = stands
+    checks["walkers never end up inside a block"] = not inside
+    checks["walkers wander"] = moved > 0.5
+    for w in walkers:
+        cge.remove_voxel_walker(w.name)
+        cge.remove_mesh_body(w.name)
+
+
+def check_skin_surface(world, checks):
+    """The surface the view meets is the drawn skin: looking straight down, it lies about 0.2 of a block above the top block of
+    the column (the skin sits out from each face), and the outline's block is the one under it."""
+    good = 0
+    total = 0
+    for x in range(-20, 20, 5):
+        for z in range(-20, 20, 5):
+            top = max([y for y in range(HEIGHT - 1) if world.is_solid(x, y, z)] or [-1]) + 1
+            if top <= 0:
+                continue
+            surface = world.skin_surface((x + 0.5, top + 20.0, z + 0.5), (0.0, -1.0, 0.0), 40.0)
+            total += 1
+            if surface is not None and abs(surface[1] - (top + 0.2)) < 0.25:
+                good += 1
+    checks["the view meets the drawn skin (about 0.2 of a block above the top block)"] = total > 0 and good >= 0.9 * total
+
+
+def check_lamp(world, checks):
+    """A light block lights the air round it: full at its cell, and 0.8 less for each block walked through air. Tested in a
+    sealed pocket of stone, which the sky cannot reach, so the air has no sky light until the lamp is placed. The
+    pocket is put back afterwards, so the checks after it see the same world."""
+    world.define_block(VOXEL_LAMP, cge.Vector3f(1.0, 0.8, 0.42), solid=True, emits=255)
+    cx, cy, cz = 4, 20, 4
+    saved = {}
+    for x in range(cx - 2, cx + 3):
+        for y in range(cy - 2, cy + 3):
+            for z in range(cz - 2, cz + 3):
+                saved[(x, y, z)] = world.get_block(x, y, z)
+                inside = max(abs(x - cx), abs(y - cy), abs(z - cz)) <= 1
+                world.set_block(x, y, z, 0 if inside else VOXEL_STONE)
+    dark = world.light_at(cx, cy, cz)
+    world.set_block(cx, cy, cz, VOXEL_LAMP)
+    near = world.light_at(cx + 1, cy, cz)            # one block through air: 0.8
+    far = world.light_at(cx + 1, cy + 1, cz + 1)     # three blocks through air: 0.8 cubed, about 0.5
+    checks["a sealed pocket has no sky light before the lamp"] = dark == 0
+    checks["a lamp is a block, and it is not walkable air"] = world.get_block(cx, cy, cz) == VOXEL_LAMP and world.is_solid(cx, cy, cz)
+    checks["one block from a lamp is 0.8 of full light"] = abs(near - 204) <= 2
+    checks["three blocks from a lamp, through air, is 0.8 cubed"] = abs(far - 131) <= 2
+    for (x, y, z), block in saved.items():
+        world.set_block(x, y, z, block)
+    # Putting the pocket back is recorded as edits too; forget them, so the edit checks below see only their own.
+    world.clear_edits()
+
+
 def count_floating_leaves(world, chunks):
     """Leaves with no wood under them in their column, away from the loaded edge (a tree's trunk is in its own chunk, so
     a leaf next to the edge may have its trunk outside the loaded area)."""
@@ -222,6 +334,13 @@ def run(out_path="cg_control/voxel_check.json"):
     results["caveAir"] = air
     results["underground"] = underground
     results["check"]["caves carved"] = air > underground * 0.01
+    check_light(world, results["check"], chunks, results)
+    check_walkers(world, results["check"], results)
+    check_skin_surface(world, results["check"])
+    check_lamp(world, results["check"])
+    biomes ={world.biome_at(x, z) for x in range(-200, 200, 10) for z in range(-200, 200, 10)}
+    results["check"]["biomes vary: plains, forest and desert occur"] = biomes == {"plains", "forest", "desert"}
+    results["biomes"] = sorted(biomes)
 
     # An edit survives an unload of its chunk, and a save and load round trip.
     world.set_block(3, 20, 3, BLOCK_CHECK)

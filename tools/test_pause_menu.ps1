@@ -82,8 +82,9 @@ cge.mouse_down = _button
 cge.mouse_position = lambda: (500, 260)
 cge.mouse_delta = lambda: (0.0, 0.0)
 '@
-# Clicking at (500, 305): the Quit item.
-$quitScript = @'
+# A click at (x, y), once.
+function Click-Script($x, $y) {
+    return @"
 import cg_engine_bindings as cge
 _press = [0]
 def _button(name):
@@ -93,16 +94,29 @@ def _button(name):
     return False
 cge.key_down = lambda name: False
 cge.mouse_down = _button
-cge.mouse_position = lambda: (500, 305)
+cge.mouse_position = lambda: ($x, $y)
 cge.mouse_delta = lambda: (0.0, 0.0)
-'@
+"@
+}
+
+# The menu of the 1000 x 500 window: the pause page has Resume (y 260), Settings (y 305) and Quit (y 351). The settings
+# page has the sensitivity arrows (the up arrow at x 665, y 241), the time-of-day track (y 323, from x 350 to 650) and Back
+# (y 377).
+$settingsScript = Click-Script 500 305
+$sensUpScript = Click-Script 665 241
+$trackScript = Click-Script 500 323
+$backScript = Click-Script 500 377
+$quitScript = Click-Script 500 351
 
 Remove-Item -Recurse -Force $control -ErrorAction SilentlyContinue
 $env:CGENGINE_SCENE = "scenes/voxels.json"
 $env:VOXEL_SEED = "1"
+# The settings go to a file of the test's own, so the player's saved settings are not changed by the test.
+$env:VOXEL_SETTINGS = "cg_control/test_settings.json"
 $app = Start-Process -FilePath (Join-Path $exeDir "main.exe") -WorkingDirectory $exeDir -PassThru
 Remove-Item Env:CGENGINE_SCENE
 Remove-Item Env:VOXEL_SEED
+Remove-Item Env:VOXEL_SETTINGS
 
 function Run-Script($id, $text) {
     $path = Join-Path $control "$id.py"
@@ -138,11 +152,32 @@ try {
     Check "clicking Resume unpauses the game" ($resumed -and $resumed.paused -eq $false)
     Check "resuming locks the mouse again" ($resumed -and $resumed.mouse_captured -eq $true)
 
-    # 3. Escape again, then clicking Quit closes the app.
+    # 3. Escape again, Settings opens its page, Escape goes back to the pause page (the game stays paused), then Quit.
     $ran = Run-Script "03_pause_again" $pauseScript
     $paused = Wait-State { param($s) $s.paused -eq $true } 10
     Check "Escape pauses the game again" ($paused -and $paused.paused -eq $true)
-    $ran = Run-Script "04_quit" $quitScript
+    $ran = Run-Script "04_settings" $settingsScript
+    $page = Wait-State { param($s) $s.menu -eq "settings" } 10
+    Check "clicking Settings opens the settings page" ($page -and $page.menu -eq "settings")
+    $ran = Run-Script "05_escape_from_settings" $pauseScript
+    $back = Wait-State { param($s) $s.menu -eq "pause" } 10
+    Check "Escape on the settings page goes back to the pause page, still paused" ($back -and $back.menu -eq "pause" -and $back.paused -eq $true)
+    $ran = Run-Script "06_settings_again" $settingsScript
+    $page = Wait-State { param($s) $s.menu -eq "settings" } 10
+    Check "Settings opens again" ($page -and $page.menu -eq "settings")
+    $ran = Run-Script "06b_time_track" $trackScript
+    $noon = Wait-State { param($s) [math]::Abs($s.time_of_day - 0.5) -lt 0.02 } 10
+    Check "clicking the middle of the time-of-day track sets the time to the middle of the day ($([math]::Round($noon.time_of_day, 3)))" ($noon -and [math]::Abs($noon.time_of_day - 0.5) -lt 0.02)
+    Start-Sleep -Milliseconds 600
+    Check "the time-of-day choice is saved to the settings file" ((Get-Content (Join-Path $exeDir "cg_control/test_settings.json") -Raw) -match "time_of_day`": 0\.5")
+    $ran = Run-Script "07_sensitivity_up" $sensUpScript
+    $raised = Wait-State { param($s) $s.sensitivity -eq 125 } 10
+    Check "the up arrow raises the mouse sensitivity from 100% to 125%" ($raised -and $raised.sensitivity -eq 125)
+    Check "the sensitivity is saved to the settings file" ((Test-Path (Join-Path $exeDir "cg_control/test_settings.json")) -and ((Get-Content (Join-Path $exeDir "cg_control/test_settings.json") -Raw) -match "125"))
+    $ran = Run-Script "08_back" $backScript
+    $back = Wait-State { param($s) $s.menu -eq "pause" } 10
+    Check "Back returns to the pause page" ($back -and $back.menu -eq "pause")
+    $ran = Run-Script "09_quit" $quitScript
     Check "the quit script installs" ($ran -and $ran.ok)
     $deadline = (Get-Date).AddSeconds(15)
     while (-not $app.HasExited -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 200 }

@@ -51,6 +51,8 @@ namespace CGEngine {
 		int chunkQuads(int cx, int cz) const;
 		// The generator's settings. Chunks requested later use them; loaded chunks keep what they have.
 		void setTerrain(const VoxelTerrain& settings) { terrain = settings; }
+		/// The biome of the column at world (x, z): "plains", "forest" or "desert" (see VoxelTerrain::biomeAt).
+		const char* biomeName(int x, int z) const;
 
 		int getBlock(int x, int y, int z) const;
 		// Sets a block, and queues it and its neighbours for the simulation. Unloaded chunks keep the edit for later.
@@ -62,8 +64,21 @@ namespace CGEngine {
 		void defineBlock(int blockId, const BlockType& type);
 		const BlockType& blockType(int blockId) const { return types[static_cast<size_t>(std::clamp(blockId, 0, 255))]; }
 		bool isSolid(int x, int y, int z) const;
+
+		/// The sky light at a block, 0 (none) to 255 (full), as the mesh shades it. Computed on demand, so this is for queries.
+		uint8_t lightAt(int x, int y, int z) const;
 		// Moves a box of this shape through the blocks (see VoxelBody.h). The C++ twin of VoxelPhysics.step.
 		VoxelBodyState stepBody(const VoxelBodyState& body, const VoxelBodyShape& shape, double dt, bool flying) const;
+
+		/// The skin's density at world position (x, y, z): the occupancy of the eight block centres around the point, weighted
+		/// trilinearly. A point is inside the drawn surface where this is above VoxelSkinIso. Solid blocks occupy it (water and
+		/// air do not), and cells of chunks that are not loaded count as solid, so a body cannot walk out of the loaded world.
+		double skinDensity(double x, double y, double z) const;
+
+		/// The first point along the ray from origin (direction is a unit vector) where the skin begins, within maxDistance. False
+		/// if the origin is already inside the skin or nothing is hit. It is the surface the player sees under the crosshair.
+		bool skinSurface(const std::array<double, 3>& origin, const std::array<double, 3>& direction, double maxDistance,
+			std::array<double, 3>& surface) const;
 		// Runs the simulation for dt seconds, within budgetMs of work (see VoxelSimulation). Returns the cells looked at.
 		int simulate(double dt, double budgetMs, double tickSeconds = 0.1) {
 			return simulation.simulate(*this, dt, budgetMs, tickSeconds);

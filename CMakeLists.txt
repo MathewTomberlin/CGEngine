@@ -66,6 +66,12 @@ target_compile_features(CGEngineCore PRIVATE cxx_std_17)
 add_executable(main src/main.cpp) # Assuming main.cpp is the entry point
 target_link_libraries(main PRIVATE CGEngineCore SFML::Graphics ${OPENGL_LIBRARIES} ${GLEW_LIBRARY} ${ASSIMP_LIBRARY} pybind11::embed)
 
+# The voxel game as its own exe, beside main.exe. It depends on main, so the resources, scripts and Assimp DLL that main's
+# post-build steps copy into the output folder are there for it too.
+add_executable(voxel_game src/voxel_main.cpp)
+target_link_libraries(voxel_game PRIVATE CGEngineCore SFML::Graphics ${OPENGL_LIBRARIES} ${GLEW_LIBRARY} ${ASSIMP_LIBRARY} pybind11::embed)
+add_dependencies(voxel_game main)
+
 add_custom_command(TARGET main POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/resources/ $<TARGET_FILE_DIR:main> COMMAND ${CMAKE_COMMAND} -E echo "Installed resources")
 if(DOXYGEN_FOUND AND BUILD_DOC)
     add_custom_command(TARGET main POST_BUILD COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile COMMAND ${CMAKE_COMMAND} -E echo "Built Doxygen documentation")

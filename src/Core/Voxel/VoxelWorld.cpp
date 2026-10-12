@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cstdlib>
+#include <cstring>
 #include <chrono>
 #include "VoxelWorld.h"
 #include "../Engine/Engine.h"
@@ -32,6 +33,90 @@ namespace CGEngine {
 	bool VoxelWorld::isSolid(int x, int y, int z) const {
 		const int block = getBlock(x, y, z);
 		return block != 0 && types[static_cast<size_t>(block)].solid;
+	}
+
+	const char* VoxelWorld::biomeName(int x, int z) const {
+		switch (terrain.biomeAt(x, z)) {
+		case VoxelTerrain::Biome::Forest: return "forest";
+		case VoxelTerrain::Biome::Desert: return "desert";
+		default: return "plains";
+		}
+	}
+
+	uint8_t VoxelWorld::lightAt(int x, int y, int z) const {
+		if (y < 0) return 0;
+		if (y >= height) return 255;
+		// Built on demand from the blocks around the cell, so it is a query, not the mesher's path. It is exact for a loaded
+		// chunk; the sky is taken to be open where a neighbour is not loaded.
+		const int cx = floorDiv(x, size);
+		const int cz = floorDiv(z, size);
+		PaddedChunk padded = snapshot(cx, cz, VoxelLightReach);
+		computeLight(padded);
+		const int lx = x - cx * size;
+		const int lz = z - cz * size;
+		return std::max(padded.lightAt(lx, y, lz), padded.lampAt(lx, y, lz));
+	}
+
+	double VoxelWorld::skinDensity(double x, double y, double z) const {
+		// The same weights as the mesh's density (VoxelMesher.cpp), on the occupancy of solid blocks, with the unloaded
+		// cells solid and the world's ends solid below and open above. Python's copy (VoxelPhysics.py) matches it operation for
+		// operation, so the parity check can compare them exactly.
+		const double bx = x - 0.5, by = y - 0.5, bz = z - 0.5;
+		const double fx = std::floor(bx), fy = std::floor(by), fz = std::floor(bz);
+		const double tx = bx - fx, ty = by - fy, tz = bz - fz;
+		const int x0 = static_cast<int>(fx), y0 = static_cast<int>(fy), z0 = static_cast<int>(fz);
+		double value = 0.0;
+		for (int c = 0; c < 8; ++c) {
+			const int dx = c & 1, dy = (c >> 1) & 1, dz = (c >> 2) & 1;
+			const double w = (dx ? tx : 1.0 - tx) * (dy ? ty : 1.0 - ty) * (dz ? tz : 1.0 - tz);
+			const int ix = x0 + dx, iy = y0 + dy, iz = z0 + dz;
+			bool occupied;
+			if (iy < 0) {
+				occupied = true;
+			} else if (iy >= height) {
+				occupied = false;
+			} else if (!loadedAt(ix, iz)) {
+				occupied = true;
+			} else {
+				occupied = isSolid(ix, iy, iz);
+			}
+			if (occupied) value += w;
+		}
+		return value;
+	}
+
+	bool VoxelWorld::skinSurface(const std::array<double, 3>& origin, const std::array<double, 3>& direction, double maxDistance,
+		std::array<double, 3>& surface) const {
+		const auto at = [&](double t) {
+			return std::array<double, 3>{ origin[0] + direction[0] * t, origin[1] + direction[1] * t, origin[2] + direction[2] * t };
+		};
+		const auto inside = [&](double t) {
+			const auto p = at(t);
+			return skinDensity(p[0], p[1], p[2]) > VoxelSkinIso;
+		};
+		if (inside(0.0)) return false;
+		const double step = 0.05;
+		double outside = 0.0;
+		for (double t = step; t <= maxDistance + step; t += step) {
+			if (!inside(t)) {
+				outside = t;
+				continue;
+			}
+			// The surface lies between the last point outside and this one: bisect it.
+			double free = outside;
+			double blocked = t;
+			for (int i = 0; i < 12; ++i) {
+				const double mid = (free + blocked) * 0.5;
+				if (inside(mid)) {
+					blocked = mid;
+				} else {
+					free = mid;
+				}
+			}
+			surface = at(free);
+			return true;
+		}
+		return false;
 	}
 
 	bool VoxelWorld::loadedAt(int x, int z) const {
@@ -172,13 +257,14 @@ namespace CGEngine {
 		Chunk* chunk = findChunk(cx, cz);
 		if (!chunk || !chunk->loaded) return;
 		chunk->blocks[localIndex(lx, y, lz)] = block;
-		// A block on a chunk border is seen from the neighbour too, and a corner from the three diagonal chunks.
+		// A block near a chunk border is seen from the neighbour too (its skin and its light reach that far), and near a
+		// corner from the diagonal chunks.
 		for (int dx = -1; dx <= 1; ++dx) {
 			for (int dz = -1; dz <= 1; ++dz) {
-				if (dx == -1 && lx != 0) continue;
-				if (dx == 1 && lx != size - 1) continue;
-				if (dz == -1 && lz != 0) continue;
-				if (dz == 1 && lz != size - 1) continue;
+				if (dx == -1 && lx >= VoxelLightReach) continue;
+				if (dx == 1 && lx < size - VoxelLightReach) continue;
+				if (dz == -1 && lz >= VoxelLightReach) continue;
+				if (dz == 1 && lz < size - VoxelLightReach) continue;
 				markDirty(cx + dx, cz + dz);
 			}
 		}
@@ -352,23 +438,29 @@ namespace CGEngine {
 				around[dz + 1][dx + 1] = chunk && chunk->loaded ? chunk : nullptr;
 			}
 		}
-		for (int py = 0; py < height + 2 * border; ++py) {
-			const int y = py - border;
-			if (y < 0 || y >= height) continue;
+		// Copied a run at a time: a row along x stays in one neighbour except where it crosses a chunk border, so each row
+		// takes at most three copies. This runs on the world's thread for every chunk it meshes, so it has to be quick.
+		for (int y = 0; y < height; ++y) {
+			const int py = y + border;
 			for (int pz = 0; pz < p; ++pz) {
 				const int lz = pz - border;
 				const int nz = lz < 0 ? -1 : (lz >= size ? 1 : 0);
 				const int inZ = lz - nz * size;
-				for (int px = 0; px < p; ++px) {
+				for (int px = 0; px < p;) {
 					const int lx = px - border;
 					const int nx = lx < 0 ? -1 : (lx >= size ? 1 : 0);
 					const int inX = lx - nx * size;
+					const int run = nx < 0 ? -lx : (nx == 0 ? size - lx : p - px);
 					const Chunk* source = around[nz + 1][nx + 1];
-					if (!source) continue;
-					padded.blocks[static_cast<size_t>((py * p + pz) * p + px)] = source->blocks[localIndex(inX, y, inZ)];
+					if (source) {
+						std::memcpy(&padded.blocks[static_cast<size_t>((py * p + pz) * p + px)],
+							&source->blocks[static_cast<size_t>(localIndex(inX, y, inZ))], static_cast<size_t>(run));
+					}
+					px += run;
 				}
 			}
 		}
+		for (size_t id = 0; id < 256; ++id) padded.emission[id] = types[id].emits;
 		return padded;
 	}
 
@@ -377,7 +469,7 @@ namespace CGEngine {
 		chunk.meshing = true;
 		dirtyKeys.erase(std::make_pair(cx, cz));
 		const int resolution = chunk.resolution;
-		PaddedChunk padded = snapshot(cx, cz, resolution > 0 ? 3 : 1);
+		PaddedChunk padded = snapshot(cx, cz, VoxelLightReach);
 		// Skirts on the sides that meet a neighbour at another level of detail (bit 1: -x, 2: +x, 4: -z, 8: +z).
 		unsigned skirtSides = 0;
 		if (resolution > 0) {
@@ -397,6 +489,7 @@ namespace CGEngine {
 			result.cz = cz;
 			result.generation = generation;
 			result.version = version;
+			computeLight(padded);
 			if (resolution > 0) {
 				buildSmoothMesh(padded, colours, resolution, skirtSides, result.mesh);
 			} else {

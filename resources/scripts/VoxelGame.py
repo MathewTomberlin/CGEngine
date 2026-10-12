@@ -9,17 +9,19 @@ Controls: W A S D walk, Space jumps, Enter toggles flying (then Space rises and 
 the mouse; move it to look, left-click breaks the block under the crosshair, right-click places stone against it, and
 Escape releases the mouse. Without the mouse: arrow keys turn and look, J breaks, K places. VOXEL_SEED chooses a world.
 """
+import json
 import math
 import os
 import time
 import traceback
-from array import array
 
 import cg_engine_bindings as cge
 from PyScript import PyScript
 import StateFile
 import VoxelGen
 import VoxelPhysics as physics
+from VoxelShapes import mix, outline_arrays
+import VoxelWalkers
 
 VIEW_RADIUS = 14            # chunks requested around the player in each direction: (2 * 14 + 1)^2 = 841 chunks
 UNLOAD_RADIUS = 16          # chunks farther than this are unloaded
@@ -27,16 +29,40 @@ UPLOAD_BUDGET_MS = 2.0      # time per frame spent uploading finished meshes
 WALK_SPEED = 5.0            # blocks per second
 FLY_SPEED = 14.0
 FLY_RISE = 10.0             # blocks per second when flying up or down
+# In water (any liquid block at the feet or the chest) the player sinks slowly, swims up with Space and walks slower.
+WATER_SPEED = 0.6           # the walking speed in water, as a share of the walk
+WATER_SINK = 1.2            # blocks per second the player sinks in water
+WATER_RISE = 3.0            # blocks per second the player swims up with Space
+WATER_DRAG = 4.0            # how quickly the vertical speed moves to the swim speed (per second)
+WATER_FOG = (0.10, 0.30, 0.42)   # the colour of the view under the water
+WATER_FOG_START = 1.0
+WATER_FOG_END = 22.0
 TURN_SPEED = 90.0           # degrees per second, for the arrow keys
-MOUSE_SENSITIVITY = float(os.environ.get("VOXEL_MOUSE_SENSITIVITY", "0.00625"))   # degrees per pixel
+MOUSE_SENSITIVITY = float(os.environ.get("VOXEL_MOUSE_SENSITIVITY", "0.00625"))   # degrees per pixel at 100%
+VIEW_SMOOTH = 14.0          # how quickly the camera follows the eye's height (per second): a climbed block is seen as a step, not a jump
+# The settings the player chose, kept between runs in the game's folder. VOXEL_SETTINGS moves the file (the tests use one of their own).
+SETTINGS_FILE = os.environ.get("VOXEL_SETTINGS", "voxel_settings.json")
+SENSITIVITY_STEPS = [25, 50, 75, 100, 125, 150, 200, 250, 300, 400, 500]   # mouse sensitivity, as a percent of MOUSE_SENSITIVITY
+TRACK_CELLS = 39            # the characters of the time-of-day slider's track
 MAX_PITCH = 85.0            # the engine's camera stops at this angle
+# VOXEL_FIXED_STEP (seconds) makes every frame advance the same time, so a scripted test holds a key for the same game time
+# whatever the frame rate. Unset, a frame advances the real time since the last one.
+FIXED_STEP = float(os.environ["VOXEL_FIXED_STEP"]) if os.environ.get("VOXEL_FIXED_STEP") else None
 SPAWN_HEIGHT = 60.0         # above the tallest column, so the player drops onto the terrain
 RESPAWN_DEPTH = -20.0       # below this the player is put back at the spawn height
-# The blocks the number keys 1 to 7 choose from when placing (the hotbar), and the file the F5 and F9 keys save and load.
+# The blocks the number keys choose from when placing (the hotbar: 1 to 9, then 0 for the tenth), and the file the F5 and F9
+# keys save and load.
 HOTBAR = [VoxelGen.STONE, VoxelGen.DIRT, VoxelGen.GRASS, VoxelGen.WOOD, VoxelGen.LEAVES, VoxelGen.SAND, VoxelGen.GRAVEL,
-          VoxelGen.SNOW, VoxelGen.WATER]
+          VoxelGen.SNOW, VoxelGen.WATER, VoxelGen.LAMP]
+
+
+def hotbar_key(slot):
+    """The number key for a hotbar slot: 1 to 9, then 0 for the tenth."""
+    return str((slot + 1) % 10)
+WALKERS = int(os.environ.get("VOXEL_WALKERS", "12"))   # creatures that wander the terrain near the spawn
 SHADOWS = os.environ.get("VOXEL_SHADOWS", "1") != "0"   # the sun casts shadows (the map covers SHADOW_RADIUS around the camera)
 SHADOW_RADIUS = float(os.environ.get("VOXEL_SHADOW_RADIUS", "40"))
+HUD_OUTLINE = 2.0                 # pixels of black outline round each label, so it reads over sand and grass
 HUD_FONT = "fonts/defaultFont.ttf"   # the font for the labels (copied with the resources)
 SIM_BUDGET_MS = 1.5          # time per frame for the block physics (falling sand, flowing water)
 # Block physics runs in ticks this far apart, and a falling block takes most of a tick to move one cell, so sand and water
@@ -48,8 +74,7 @@ EDITS_FILE = "cg_control/voxel_edits.bin"
 STATE_INTERVAL = 0.25       # seconds between writes to cg_control/voxel_state.json
 # The outline of the block the crosshair is on (yellow: it is broken), and of the cell a block would be placed in
 # (its own colour, brightened). Both are thin bars around the cube's edges, made as runtime meshes.
-WIRE_THICKNESS = 0.02
-HELP_TEXT = "LMB break  RMB place  WASD move  Space jump  Enter fly  1-9 block  F5/F9 save/load  Esc release"
+HELP_TEXT = "LMB break  RMB place  WASD move  Space jump  Enter fly  0-9 block  F5/F9 save/load  Esc release"
 BREAK_COLOUR = (1.0, 0.85, 0.2)
 HIDDEN_BOX = ((-1.0e6, -1.0e6, -1.0e6), (-1.0e6 + 1.0, -1.0e6 + 1.0, -1.0e6 + 1.0))   # where an outline is put when not shown
 SMOOTH_RESOLUTION = int(os.environ.get("VOXEL_SMOOTH", "1"))   # samples per block for the smooth skin; 0 draws cubes
@@ -70,65 +95,32 @@ DUSK_ZENITH = (0.30, 0.30, 0.52)
 MOON_LIGHT = (0.45, 0.55, 0.85)
 
 
-def box_faces(lo, hi):
-    """The six faces of the box lo..hi, each as (corners, outward normal)."""
-    x0, y0, z0 = lo
-    x1, y1, z1 = hi
-    return [
-        ([(x1, y0, z0), (x1, y1, z0), (x1, y1, z1), (x1, y0, z1)], (1, 0, 0)),
-        ([(x0, y0, z1), (x0, y1, z1), (x0, y1, z0), (x0, y0, z0)], (-1, 0, 0)),
-        ([(x0, y1, z0), (x0, y1, z1), (x1, y1, z1), (x1, y1, z0)], (0, 1, 0)),
-        ([(x0, y0, z1), (x0, y0, z0), (x1, y0, z0), (x1, y0, z1)], (0, -1, 0)),
-        ([(x0, y0, z1), (x1, y0, z1), (x1, y1, z1), (x0, y1, z1)], (0, 0, 1)),
-        ([(x1, y0, z0), (x0, y0, z0), (x0, y1, z0), (x1, y1, z0)], (0, 0, -1)),
-    ]
+# The pause menu's pages: the title, and the items on each page. The settings page holds the mouse sensitivity.
+MENU_PAGES = {
+    "pause": ("PAUSED", ("resume", "settings", "quit")),
+    "settings": ("SETTINGS", ("sens_down", "sens_value", "sens_up", "time_value", "time_track", "back")),
+}
+MENU_TEXT = {"resume": "Resume", "settings": "Settings", "quit": "Quit", "back": "Back", "sens_down": "<", "sens_up": ">"}
 
 
-def boxes_arrays(boxes):
-    """Arrays for solid boxes: each (lo, hi, colour) is a closed box whose faces are wound to face outward."""
-    positions, normals, colours, uvs, material_ids, indices = [], [], [], [], [], []
-    face_uvs = ((0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0))
-    for lo, hi, colour in boxes:
-        for corners, normal in box_faces(lo, hi):
-            first = len(positions) // 3
-            for corner, uv in zip(corners, face_uvs):
-                positions.extend(corner)
-                normals.extend(normal)
-                colours.extend(colour)
-                uvs.extend(uv)
-                material_ids.append(0.0)
-            # Two triangles, wound so their normal faces outward.
-            a, b, c = corners[0], corners[1], corners[2]
-            u = [b[i] - a[i] for i in range(3)]
-            w = [c[i] - a[i] for i in range(3)]
-            cross = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]]
-            if sum(cross[i] * normal[i] for i in range(3)) >= 0:
-                indices.extend((first, first + 1, first + 2, first, first + 2, first + 3))
-            else:
-                indices.extend((first, first + 2, first + 1, first, first + 3, first + 2))
-    return (array("f", positions), array("f", normals), array("f", colours), array("f", uvs),
-            array("f", material_ids), array("I", indices))
+def load_settings():
+    """The saved settings: the mouse sensitivity (a percent, one of SENSITIVITY_STEPS) and the time of day (0 to 1, or None
+    if none is saved). Missing or unreadable settings keep their defaults."""
+    settings = {"mouse_sensitivity": 100, "time_of_day": None}
+    try:
+        with open(SETTINGS_FILE) as f:
+            data = json.load(f)
+        settings["mouse_sensitivity"] = int(data.get("mouse_sensitivity", 100))
+        if "time_of_day" in data:
+            settings["time_of_day"] = float(data["time_of_day"]) % 1.0
+    except (OSError, ValueError, TypeError, AttributeError):
+        pass
+    settings["mouse_sensitivity"] = min(SENSITIVITY_STEPS, key=lambda step: abs(step - settings["mouse_sensitivity"]))
+    return settings
 
 
-def outline_arrays(lo, hi, colour):
-    """Arrays for the twelve edges of the box lo..hi, each edge a thin bar that sticks out a little from the box."""
-    t = WIRE_THICKNESS
-    boxes = []
-    for axis in range(3):
-        o1, o2 = [i for i in range(3) if i != axis]
-        for v1 in (lo[o1], hi[o1]):
-            for v2 in (lo[o2], hi[o2]):
-                bmin, bmax = [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]
-                bmin[axis], bmax[axis] = lo[axis] - t, hi[axis] + t
-                bmin[o1], bmax[o1] = v1 - t, v1 + t
-                bmin[o2], bmax[o2] = v2 - t, v2 + t
-                boxes.append((bmin, bmax, colour))
-    return boxes_arrays(boxes)
-
-
-def mix(a, b, t):
-    """Colour a moved t of the way from a to b (t in 0 to 1)."""
-    return tuple(x + (y - x) * t for x, y in zip(a, b))
+def save_settings(sensitivity, time_of_day):
+    StateFile.write_json(SETTINGS_FILE, {"mouse_sensitivity": sensitivity, "time_of_day": round(time_of_day, 5)})
 
 
 class VoxelGame(PyScript):
@@ -139,6 +131,12 @@ class VoxelGame(PyScript):
         self.requested = set()          # (cx, cz) of the chunks asked for, loaded or not
         self.wanted_centre = None       # chunk the wanted set was last built for
         self.pos = [8.5, SPAWN_HEIGHT, 8.5]   # the player's feet, y up
+        if os.environ.get("VOXEL_SPAWN"):
+            # VOXEL_SPAWN="x,z" starts the player over that column (for checks and for looking at a place)
+            spawn_x, spawn_z = (float(v) for v in os.environ["VOXEL_SPAWN"].split(","))
+            self.pos = [spawn_x, SPAWN_HEIGHT, spawn_z]
+        self.swimming = False
+        self.walkers = None             # the creatures, made once the spawn area has loaded
         self.vel = [0.0, 0.0, 0.0]
         self.on_ground = False
         self.flying = False
@@ -154,10 +152,20 @@ class VoxelGame(PyScript):
         self.broken = False
         self.hud_ready = False          # the label and the outline bodies exist (made on the second frame)
         self.paused = False             # the pause menu is open: the world stands still and the mouse is free
+        self.frame_dt = 0.0             # the time this frame advances the game (0 while paused)
+        self.view_y = None              # the height the camera is at, which follows the eye's height smoothly
+        self.menu_page = "pause"        # the page of the pause menu: "pause" or "settings"
+        saved = load_settings()
+        self.sensitivity = saved["mouse_sensitivity"]   # mouse sensitivity, a percent of MOUSE_SENSITIVITY
+        self.dragging = False           # the time-of-day slider is being dragged
         self.outline_keys = {}          # the last outline shown under each name, so unchanged ones are not re-uploaded
         self.outline_bodies = set()     # the outlines already made as runtime meshes
         self.slot = 0                   # the hotbar slot placing uses
-        self.clock = START_TIME % 1.0   # fraction of a day
+        # The time of day: VOXEL_TIME if it is set, else the time the player last chose on the settings page, else START_TIME.
+        if "VOXEL_TIME" in os.environ or saved["time_of_day"] is None:
+            self.clock = START_TIME % 1.0   # fraction of a day
+        else:
+            self.clock = saved["time_of_day"]
         self.sun = (0.0, -1.0, 0.0)     # the direction the sun's light travels
         self.fog = (0.0, 0.0)           # fog start and end distances, in blocks
 
@@ -177,6 +185,8 @@ class VoxelGame(PyScript):
     def frame(self):
         now = time.perf_counter()
         raw = 0.0 if self.last is None else now - self.last
+        if FIXED_STEP is not None:
+            raw = 0.0 if self.last is None else FIXED_STEP
         dt = min(0.05, raw)
         raw_dt = min(0.05, raw)
         self.last = now
@@ -207,11 +217,13 @@ class VoxelGame(PyScript):
             self.world.simulate(dt, SIM_BUDGET_MS, SIM_TICK)
             self.update_mouse()
             self.update_player(dt)
+            self.update_walkers(dt)
             self.update_target()
             self.edit_blocks()
         self.update_outlines()
         self.update_hud()
         self.update_sky(dt)
+        self.frame_dt = dt
         self.place_camera()
 
         self.state_timer -= raw_dt   # the state keeps being written while paused, so tests can read the menu
@@ -225,7 +237,8 @@ class VoxelGame(PyScript):
         self.world = cge.VoxelWorld(VoxelGen.CHUNK, VoxelGen.HEIGHT, "voxel")
         for block, rgb in VoxelGen.COLOURS.items():
             self.world.define_block(block, cge.Vector3f(*rgb), solid=block not in VoxelGen.LIQUIDS,
-                                    falls=block in VoxelGen.FALLS, liquid=block in VoxelGen.LIQUIDS)
+                                    falls=block in VoxelGen.FALLS, liquid=block in VoxelGen.LIQUIDS,
+                                    emits=VoxelGen.EMITS.get(block, 0))
         self.world.set_smoothing(SMOOTH_RESOLUTION)
         self.world.set_move_seconds(SIM_TICK * 0.9)   # a falling block lands just before the next tick
         # Smooth skin nearest the camera is finer: NEAR_SAMPLES per block within NEAR_RADIUS chunks.
@@ -238,25 +251,37 @@ class VoxelGame(PyScript):
         """Two labels: the top left holds what the crosshair is on and the controls; the hotbar sits along the bottom."""
         cge.load_font(HUD_FONT, "hud")
         # Each label is one text draw, which costs the renderer a state switch, so there are only two.
-        cge.create_text_body("hud_target", "", "hud", cge.Vector2f(14, 10), 16)
-        cge.create_text_body("hud_help", HELP_TEXT, "hud", cge.Vector2f(14, 34), 14, cge.Color(200, 200, 200))
-        cge.create_text_body("hud_hotbar", "", "hud", cge.Vector2f(14, cge.window_size().y - 34), 16)
+        cge.create_text_body("hud_target", "", "hud", cge.Vector2f(14, 10), 16, outline_thickness=HUD_OUTLINE)
+        cge.create_text_body("hud_help", HELP_TEXT, "hud", cge.Vector2f(14, 34), 14, cge.Color(200, 200, 200),
+                             outline_thickness=HUD_OUTLINE)
+        cge.create_text_body("hud_hotbar", "", "hud", cge.Vector2f(14, cge.window_size().y - 34), 16,
+                             outline_thickness=HUD_OUTLINE)
+        # A small cross at the middle of the window: the block the crosshair is on is outlined, and this shows where the aim is.
+        size = cge.window_size()
+        cge.create_text_body("hud_cross", "+", "hud", cge.Vector2f(size.x / 2 - 6, size.y / 2 - 13), 22,
+                             outline_thickness=HUD_OUTLINE)
         self.target_text = ""
         self.hotbar_text = ""
-        # The pause menu: a title and two items, drawn only while the game is paused (their text is empty otherwise).
+        # The pause menu, drawn only while the game is paused (its labels are empty otherwise). Each item has a click
+        # rectangle (left, top, right, bottom) in window pixels, or None if it is not clickable, and a text position.
         self.menu_text = {}
         self.menu_hover = None
-        # Centred in the window. Each item is a rectangle (left, top, right, bottom) in window pixels for clicks, and its
-        # text starts at the rectangle's left.
         size = cge.window_size()
         cx, cy = size.x / 2, size.y / 2
-        self.menu_rects = {
-            "resume": (cx - 100, cy - 4, cx + 100, cy + 30),
-            "quit": (cx - 100, cy + 40, cx + 100, cy + 74),
+        self.menu_layout = {
+            "resume": ((cx - 100, cy - 4, cx + 100, cy + 30), (cx - 62, cy)),
+            "settings": ((cx - 100, cy + 40, cx + 100, cy + 74), (cx - 62, cy + 44)),
+            "quit": ((cx - 100, cy + 84, cx + 100, cy + 118), (cx - 40, cy + 88)),
+            "sens_down": ((cx - 215, cy - 24, cx - 150, cy + 6), (cx - 200, cy - 20)),
+            "sens_value": (None, (cx - 120, cy - 20)),
+            "sens_up": ((cx + 150, cy - 24, cx + 215, cy + 6), (cx + 165, cy - 20)),
+            "time_value": (None, (cx - 120, cy + 36)),
+            "time_track": ((cx - 150, cy + 60, cx + 150, cy + 86), (cx - 150, cy + 62)),
+            "back": ((cx - 100, cy + 110, cx + 100, cy + 144), (cx - 30, cy + 114)),
         }
-        cge.create_text_body("pause_title", "", "hud", cge.Vector2f(cx - 80, cy - 60), 28)
-        cge.create_text_body("pause_resume", "", "hud", cge.Vector2f(cx - 62, cy), 22)
-        cge.create_text_body("pause_quit", "", "hud", cge.Vector2f(cx - 40, cy + 44), 22)
+        cge.create_text_body("menu_title", "", "hud", cge.Vector2f(cx - 80, cy - 60), 28, outline_thickness=HUD_OUTLINE)
+        for item, (_rect, (x, y)) in self.menu_layout.items():
+            cge.create_text_body("menu_" + item, "", "hud", cge.Vector2f(x, y), 22, outline_thickness=HUD_OUTLINE)
 
     def set_menu_text(self, name, text):
         if self.menu_text.get(name) != text:
@@ -264,23 +289,64 @@ class VoxelGame(PyScript):
             cge.set_text_body(name, text)
 
     def show_menu(self, shown):
-        """The menu's labels are drawn while the game is paused, and are empty (so not drawn) otherwise."""
-        self.set_menu_text("pause_title", "PAUSED" if shown else "")
-        self.set_menu_text("pause_resume", self.menu_item("resume", "Resume") if shown else "")
-        self.set_menu_text("pause_quit", self.menu_item("quit", "Quit") if shown else "")
+        """The labels of the current page are drawn while the game is paused, and are empty (so not drawn) otherwise."""
+        title, items = MENU_PAGES[self.menu_page] if shown else ("", ())
+        self.set_menu_text("menu_title", title)
+        for item in self.menu_layout:
+            self.set_menu_text("menu_" + item, self.menu_label(item) if item in items else "")
 
-    def menu_item(self, item, label):
-        return "> %s <" % label if self.menu_hover == item else label
+    def menu_label(self, item):
+        if item == "sens_value":
+            return "Mouse sensitivity: %d%%" % self.sensitivity
+        if item == "time_value":
+            minutes = (round(self.clock * 1440) + 360) % 1440   # 0 is sunrise (06:00), 0.25 noon, 0.5 sunset, 0.75 midnight
+            return "Time of day: %02d:%02d" % (minutes // 60, minutes % 60)
+        if item == "time_track":
+            knob = min(TRACK_CELLS - 1, int(self.clock * TRACK_CELLS))
+            return "[" + "-" * knob + "O" + "-" * (TRACK_CELLS - 1 - knob) + "]"
+        text = MENU_TEXT[item]
+        if self.menu_hover == item:
+            return "[%s]" % text if item in ("sens_down", "sens_up") else "> %s <" % text
+        return text
 
     def update_pause_key(self):
         if self.pressed("Pause", bool(cge.key_down("Escape"))):
-            if self.paused:
-                self.resume()
-            else:
+            if not self.paused:
                 self.pause()
+            elif self.menu_page == "settings":
+                self.open_page("pause")
+            else:
+                self.resume()
+
+    def open_page(self, page):
+        self.menu_page = page
+        self.menu_hover = None
+        self.show_menu(True)
+
+    def change_sensitivity(self, step):
+        index = SENSITIVITY_STEPS.index(self.sensitivity) + step
+        self.sensitivity = SENSITIVITY_STEPS[max(0, min(len(SENSITIVITY_STEPS) - 1, index))]
+        save_settings(self.sensitivity, self.clock)
+
+    def drag_time(self, mouse_x, pressing):
+        """The time-of-day slider: while the button is held on the track, the time follows the mouse; the choice is saved
+        when the button comes up."""
+        left, right = self.menu_layout["time_track"][0][0], self.menu_layout["time_track"][0][2]
+        if pressing and (self.dragging or self.menu_hover == "time_track"):
+            self.dragging = True
+            self.clock = min(0.999, max(0.0, (mouse_x - left) / (right - left)))
+        elif self.dragging:
+            self.dragging = False
+            save_settings(self.sensitivity, self.clock)
+
+    def look_speed(self):
+        """Degrees a pixel of mouse movement turns the view."""
+        return MOUSE_SENSITIVITY * self.sensitivity / 100.0
 
     def pause(self):
         self.paused = True
+        self.menu_page = "pause"
+        self.dragging = False
         cge.set_mouse_captured(False)
         self.mouse_captured = False
         self.menu_hover = None
@@ -293,19 +359,33 @@ class VoxelGame(PyScript):
         self.show_menu(False)
 
     def update_pause_menu(self):
-        """Hover and click the menu: Resume locks the mouse again, Quit closes the window."""
+        """Hover and click the menu of the current page. Resume locks the mouse again, Quit closes the window, Settings
+        opens the settings page, the arrows change the mouse sensitivity, and Back returns to the pause page."""
         mouse_x, mouse_y = cge.mouse_position()
         self.menu_hover = None
-        for item, (left, top, right, bottom) in self.menu_rects.items():
-            if left <= mouse_x <= right and top <= mouse_y <= bottom:
+        for item in MENU_PAGES[self.menu_page][1]:
+            rect = self.menu_layout[item][0]
+            if rect and rect[0] <= mouse_x <= rect[2] and rect[1] <= mouse_y <= rect[3]:
                 self.menu_hover = item
-        clicked = self.pressed("MenuClick", bool(cge.mouse_down("Left")))
+        pressing = bool(cge.mouse_down("Left"))
+        self.drag_time(mouse_x, pressing)
+        clicked = self.pressed("MenuClick", pressing)
         if clicked and self.menu_hover == "resume":
             self.resume()
             return
         if clicked and self.menu_hover == "quit":
             cge.quit()
             return
+        if clicked and self.menu_hover == "settings":
+            self.open_page("settings")
+            return
+        if clicked and self.menu_hover == "back":
+            self.open_page("pause")
+            return
+        if clicked and self.menu_hover == "sens_down":
+            self.change_sensitivity(-1)
+        if clicked and self.menu_hover == "sens_up":
+            self.change_sensitivity(1)
         self.show_menu(True)
 
     def set_target_text(self, text):
@@ -321,22 +401,25 @@ class VoxelGame(PyScript):
     def update_hud(self):
         if not self.hud_ready:
             return
+        # The crosshair is for aiming, so it is hidden while the pause menu is open.
+        self.set_menu_text("hud_cross", "" if self.paused else "+")
+        biome = self.world.biome_at(math.floor(self.pos[0]), math.floor(self.pos[2])).capitalize()
         if self.paused:
             self.set_target_text("")
         elif not self.mouse_captured:
-            self.set_target_text("Click the game to capture the mouse")
+            self.set_target_text("%s.  Click the game to capture the mouse" % biome)
         elif self.target is None:
-            self.set_target_text("Looking at: nothing in reach")
+            self.set_target_text("%s.  Looking at: nothing in reach" % biome)
         else:
             block, normal = self.target
-            text = "Looking at: %s" % VoxelGen.NAMES.get(self.world.get_block(*block), "?")
+            text = "%s.  Looking at: %s" % (biome, VoxelGen.NAMES.get(self.world.get_block(*block), "?"))
             cell = (block[0] + normal[0], block[1] + normal[1], block[2] + normal[2])
             if normal != (0, 0, 0) and not physics.cell_in_player(cell, self.pos):
                 text += "   (right click: %s)" % VoxelGen.NAMES[HOTBAR[self.slot]]
             self.set_target_text(text)
         slots = []
         for slot, block in enumerate(HOTBAR):
-            label = "%d %s" % (slot + 1, VoxelGen.NAMES[block])
+            label = "%s %s" % (hotbar_key(slot), VoxelGen.NAMES[block])
             slots.append("[%s]" % label if slot == self.slot else label)
         self.set_hotbar("  ".join(slots))
 
@@ -354,6 +437,30 @@ class VoxelGame(PyScript):
             if max(abs(chunk[0] - cx), abs(chunk[1] - cz)) > UNLOAD_RADIUS:
                 self.world.unload_chunk(*chunk)
                 self.requested.discard(chunk)
+
+    def update_walkers(self, dt):
+        """Creatures wander the terrain once the spawn area is loaded: made once, then moved each frame by the mover."""
+        if self.walkers is None:
+            if not self.world.is_loaded(0, 0):
+                return
+            self.walkers = VoxelWalkers.Walkers(self.world, (8.5, 8.5), WALKERS, self.seed)
+        self.walkers.update(dt, (self.pos[0], self.pos[2]))
+
+    def in_water(self):
+        """True while a liquid block is at the player's feet or chest."""
+        x, z = math.floor(self.pos[0]), math.floor(self.pos[2])
+        feet = self.world.get_block(x, math.floor(self.pos[1] + 0.1), z)
+        chest = self.world.get_block(x, math.floor(self.pos[1] + 1.0), z)
+        return feet in VoxelGen.LIQUIDS or chest in VoxelGen.LIQUIDS
+
+    def at_surface(self):
+        """True when the feet are in water and the chest is above it: the player is floating at the surface."""
+        x, z = math.floor(self.pos[0]), math.floor(self.pos[2])
+        return self.world.get_block(x, math.floor(self.pos[1] + 1.0), z) not in VoxelGen.LIQUIDS
+
+    def eye_in_water(self):
+        eye = self.eye()
+        return self.world.get_block(math.floor(eye[0]), math.floor(eye[1]), math.floor(eye[2])) in VoxelGen.LIQUIDS
 
     def chunk_under_player(self):
         size = VoxelGen.CHUNK
@@ -377,7 +484,7 @@ class VoxelGame(PyScript):
                 self.mouse_captured = True
             return
         dx, dy = cge.mouse_delta()
-        self.turn(dx * MOUSE_SENSITIVITY, -dy * MOUSE_SENSITIVITY)
+        self.turn(dx * self.look_speed(), -dy * self.look_speed())
 
     def turn(self, yaw_delta, pitch_delta):
         self.yaw = (self.yaw + yaw_delta) % 360.0
@@ -392,6 +499,7 @@ class VoxelGame(PyScript):
 
         self.turn((self.key("Right") - self.key("Left")) * TURN_SPEED * dt,
                   (self.key("Up") - self.key("Down")) * TURN_SPEED * dt)
+        self.swimming = not self.flying and self.in_water()
 
         # Walk along the ground in the direction the player faces (flat, so looking down does not sink the player).
         yaw = math.radians(self.yaw)
@@ -402,20 +510,30 @@ class VoxelGame(PyScript):
         dx = forward[0] * across + right[0] * sideways
         dz = forward[1] * across + right[1] * sideways
         length = math.hypot(dx, dz)
-        speed = FLY_SPEED if self.flying else WALK_SPEED
+        speed = FLY_SPEED if self.flying else (WALK_SPEED * WATER_SPEED if self.swimming else WALK_SPEED)
         if length > 0.0:
             dx, dz = dx / length * speed, dz / length * speed
         self.vel[0], self.vel[2] = dx, dz
 
         if self.flying:
             self.vel[1] = (self.key("Space") - self.key("R")) * FLY_RISE
+        elif self.swimming:
+            if self.key("Space") and self.at_surface():
+                # A jump from the surface lifts the player out onto a bank a block higher.
+                self.vel[1] = physics.JUMP_SPEED
+            else:
+                # The vertical speed eases towards the swim speed: up while Space is held, down otherwise.
+                target = WATER_RISE if self.key("Space") else -WATER_SINK
+                self.vel[1] += (target - self.vel[1]) * min(1.0, dt * WATER_DRAG)
         elif self.key("Space") and self.on_ground:
             self.vel[1] = physics.JUMP_SPEED
 
         # Physics waits until the chunk under the player is in the world, so the player does not fall through air.
         if self.world.is_loaded(*self.chunk_under_player()):
             # The engine's mover is the same as physics.step (tests check they agree), and it is faster.
-            pos, vel, self.on_ground = self.world.step_body(tuple(self.pos), tuple(self.vel), dt, self.flying)
+            # Swimming has no gravity of its own: the swim speed above takes its place, so the mover runs without it.
+            pos, vel, self.on_ground = self.world.step_body(tuple(self.pos), tuple(self.vel), dt,
+                                                           self.flying or self.swimming, on_ground=self.on_ground)
             self.pos = list(pos)
             self.vel = list(vel)
         if self.pos[1] < RESPAWN_DEPTH:
@@ -440,7 +558,16 @@ class VoxelGame(PyScript):
         return (math.sin(yaw) * math.cos(pitch), math.sin(pitch), -math.cos(yaw) * math.cos(pitch))
 
     def update_target(self):
-        self.target = physics.raycast(self.solid, tuple(self.eye()), self.look_direction())
+        """The block under the crosshair: the first block behind the drawn surface the view meets. The surface is found on the
+        skin, then the blocks are walked from half a block in front of it, so the outline is on the ground that is drawn."""
+        eye = tuple(self.eye())
+        look = self.look_direction()
+        surface = self.world.skin_surface(eye, look, physics.REACH)
+        if surface is None:
+            self.target = physics.raycast(self.solid, eye, look)
+            return
+        start = tuple(surface[i] - look[i] * 0.5 for i in range(3))
+        self.target = physics.raycast(self.solid, start, look, max_distance=physics.REACH + 0.5)
 
     def show_outline(self, name, box, colour):
         """Show the outline of box (lo, hi) in colour as the runtime mesh called name, or hide it when box is None."""
@@ -475,7 +602,7 @@ class VoxelGame(PyScript):
 
     def choose_hotbar(self):
         for slot in range(len(HOTBAR)):
-            if self.pressed("Slot%d" % slot, bool(cge.key_down(str(slot + 1)))):
+            if self.pressed("Slot%d" % slot, bool(cge.key_down(hotbar_key(slot)))):
                 self.slot = slot
 
     def snapshot_key(self):
@@ -535,10 +662,16 @@ class VoxelGame(PyScript):
         sun_disc = mix((0.0, 0.0, 0.0), sun_disc, min(1.0, max(0.0, height * 12.0)))
 
         fog_end = FOG_END_CHUNKS * VoxelGen.CHUNK
+        fog_colour, fog_start = sky, fog_end * FOG_START_FRACTION
+        if self.world is not None and self.eye_in_water():
+            # Under the water the view is short and blue-green, whatever the time of day. The sky is that colour too, since
+            # the faces of the water a player is inside are back faces, and the sky shows through them.
+            sky = zenith = fog_colour = WATER_FOG
+            fog_start, fog_end = WATER_FOG_START, WATER_FOG_END
         cge.set_light("sun", direction=cge.Vector3f(*travel), colour=cge.Vector3f(*light),
                       brightness=0.45 + 0.55 * day)
-        cge.set_environment(sky=cge.Vector3f(*sky), zenith=cge.Vector3f(*zenith), fog=cge.Vector3f(*sky),
-                            fog_start=fog_end * FOG_START_FRACTION, fog_end=fog_end,
+        cge.set_environment(sky=cge.Vector3f(*sky), zenith=cge.Vector3f(*zenith), fog=cge.Vector3f(*fog_colour),
+                            fog_start=fog_start, fog_end=fog_end,
                             sun_direction=cge.Vector3f(*toward_sun), sun_colour=cge.Vector3f(*sun_disc),
                             sun_size=1.6)
         self.sun = travel
@@ -546,9 +679,15 @@ class VoxelGame(PyScript):
 
     def place_camera(self):
         eye = self.eye()
+        if self.view_y is None:
+            self.view_y = eye[1]
+        # The camera follows the eye's height over a few frames, so climbing a block is a step up, not a jump. Picking and the
+        # water check use the eye itself.
+        self.view_y += (eye[1] - self.view_y) * min(1.0, VIEW_SMOOTH * self.frame_dt)
         look = self.look_direction()
-        target = [eye[0] + look[0], eye[1] + look[1], eye[2] + look[2]]
-        cge.set_camera(cge.Vector3f(*eye), cge.Vector3f(*target))
+        origin = [eye[0], self.view_y, eye[2]]
+        target = [origin[0] + look[0], origin[1] + look[1], origin[2] + look[2]]
+        cge.set_camera(cge.Vector3f(*origin), cge.Vector3f(*target))
 
     # ----- state for tests and agents -----------------------------------------------------
 
@@ -560,8 +699,11 @@ class VoxelGame(PyScript):
                  "dirty": stats["dirty"], "meshing": stats["meshing"], "quads": stats["quads"],
                  "upload_ms": round(stats["upload_ms"], 3), "edits": stats["edits"], "slot": self.slot,
                  "smoothing": self.world.smoothing(), "active": self.world.active_count(), "paused": self.paused,
+                 "menu": self.menu_page if self.paused else None, "sensitivity": self.sensitivity,
                  "seed": self.seed, "frames": self.frames,
                  "player": [round(v, 3) for v in self.pos], "on_ground": self.on_ground, "flying": self.flying,
+                 "swimming": self.swimming, "walkers": len(self.walkers.walkers) if self.walkers else 0,
+                 "biome": self.world.biome_at(math.floor(self.pos[0]), math.floor(self.pos[2])),
                  "mouse_captured": self.mouse_captured, "yaw": round(self.yaw, 3), "pitch": round(self.pitch, 3),
                  "max_frame_ms": round(self.max_dt * 1000.0, 2),
                  "time_of_day": round(self.clock, 5), "sun": [round(v, 5) for v in self.sun],

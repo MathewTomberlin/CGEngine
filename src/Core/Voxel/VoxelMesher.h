@@ -6,9 +6,26 @@
 #include "../World/Renderer.h"
 
 namespace CGEngine {
+	// The skin is the surface where the blocks' occupancy, interpolated between block centres, is this (see buildSmoothMesh).
+	// Collision uses the same surface, so the drawn ground and the ground a body stands on are one.
+	constexpr float VoxelSkinIso = 0.3f;
+
+	// How far light and shade reach through air, in blocks. A cell's light depends only on blocks this close to it, so a
+	// chunk with this much border computes the same light for a shared cell as its neighbour does.
+	constexpr int VoxelLightReach = 8;
+
+	// How bright a light block is: its glow is this many times its colour, its light in a cave is VoxelLampLight (below), and
+	// the open gets less; see lampGain. The glow is clamped only where it is shown.
+	constexpr float VoxelLampBrightness = 4.0f;
+
+	// How much a light block's light is multiplied in a cave, where the sky gives none (see lampGain in VoxelMesher.cpp). In
+	// the open it is 1, so sunlit ground is not washed out.
+	constexpr float VoxelLampLight = 2.0f;
+
 	// A chunk's blocks with a border of blocks copied from its neighbours (air where a neighbour is not loaded). The
 	// mesher reads only from this, so it can run on any thread while the world changes. The block mesher needs a border
 	// of 1; the smooth mesher needs 3, because its density samples and their normals reach two blocks beyond the chunk.
+	// Light needs VoxelLightReach, so the world builds every snapshot with that border.
 	struct PaddedChunk {
 		int size = 16;
 		int height = 64;
@@ -17,12 +34,39 @@ namespace CGEngine {
 		// [-border, size + border) and y in [-border, height + border), is at ((y + border) * P + (z + border)) * P + (x + border)
 		// where P = size + 2 * border.
 		std::vector<uint8_t> blocks;
+		// Sky light for each block position, in the same layout: 255 where the sky reaches, falling off through air (see
+		// computeLight). Empty until computeLight runs.
+		std::vector<uint8_t> light;
+		// Light from the light blocks alone, in the same layout (0 where none reaches). The mesh adds it to the sky light, so a
+		// lamp brightens a sunlit wall as well as a cave. The light at a block (VoxelWorld::lightAt) is the brighter of the two.
+		std::vector<uint8_t> lamp;
+		// The light each block id gives off at its own cell, 0 to 255. Set from the world's block types (BlockType::emits).
+		std::array<uint8_t, 256> emission{};
+
+		size_t index(int x, int y, int z) const {
+			const int p = size + 2 * border;
+			return static_cast<size_t>(((y + border) * p + (z + border)) * p + (x + border));
+		}
 
 		uint8_t at(int x, int y, int z) const {
-			const int p = size + 2 * border;
-			return blocks[static_cast<size_t>(((y + border) * p + (z + border)) * p + (x + border))];
+			return blocks[index(x, y, z)];
+		}
+
+		uint8_t lightAt(int x, int y, int z) const {
+			return light[index(x, y, z)];
+		}
+
+		uint8_t lampAt(int x, int y, int z) const {
+			return lamp[index(x, y, z)];
 		}
 	};
+
+	// Fills chunk.light. A block is open to the sky if no block is above it in its column; the light of open air is full,
+	// and each block walked through air from there multiplies it by 0.8, and nothing beyond VoxelLightReach steps, so a sealed cave has no sky light at any hour.
+	// A light block (chunk.emission) is full at its own cell, and the light it gives multiplies by 0.8 for each block walked
+	// through air, for VoxelLightReach blocks; it goes to chunk.lamp, apart from the sky's. Any block counts as opaque, the same
+	// as in the meshes, so caves and the ground under trees are dark until a light block is in them.
+	void computeLight(PaddedChunk& chunk);
 
 	struct MeshArrays {
 		std::vector<VoxelVertex> vertices;
