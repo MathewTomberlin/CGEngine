@@ -267,7 +267,7 @@ full block, and light blocks (full cells that give light) are wanted too.
 Goal: the player chooses how far they can see, and a long view stays cheap enough to walk through.
 - [x] **15.1** A view distance setting on the settings page: arrows from 6 to 40 chunks each way, with 14 (the old default) in
   the middle. The fog, the chunk requests and the unload radius follow it, and the choice is saved with the other settings.
-  "Unlimited" is the last step and is capped at 40, because each chunk is held in memory (about 6,500 chunks, roughly 2 GB).
+  "Unlimited" is the last step and is capped at 60 (15.6), because each chunk is held in memory.
   `tools/test_pause_menu.ps1` checks the arrow and the saved file.
 - [x] **15.2** Far skins: the chunks more than 6 from the player (`VOXEL_FAR_RADIUS`) are meshed with every second block
   sampled (`buildSmoothMesh` takes a stride; the chunk size is even, so the grids of neighbours line up, and the skirts hide
@@ -294,6 +294,12 @@ Goal: the player chooses how far they can see, and a long view stays cheap enoug
   set went from 624 MB to a peak of 1,064 MB around the 24th hop, then fell back to 675 MB by the end. So the churn does not
   grow without bound: the peak is the chunks being meshed as they come in, and the heap gives most of it back. Not measured:
   a walk of hours, and the GPU's own memory (the buffers are not in the working set).
+- [x] **15.6** The cap rises from 40 to 60 chunks: `VIEW_STEPS` and `UNLIMITED_VIEW` in `VoxelGame.py`. Measured in Release on
+  this machine, after the region merge (15.5): view 40 is 6,561 chunks, 2.2 million quads, 0.77 GB private memory, 201 frames a
+  second standing; view 60 is 14,641 chunks, 4.5 million quads, 1.46 GB, 94 frames a second standing and 102 walking, loaded in
+  12 s; view 80 is 25,921 chunks, 7.6 million quads, 2.4 GB, 72 frames a second standing, 63 walking and one 132 ms frame, loaded
+  in 28 s. So 80 stays out until the far skins get a coarser tier (a stride of 4 past about 20 chunks), which would cut the quads
+  there. The fog's end follows the view (`VoxelGame.py`), so the far edge stays hazy, not cut off.
 ## Phase 16: voxel health and damage (from playtesting: one hit breaks everything)
 Goal: blocks and creatures take several hits, and what the player has hit looks hit.
 - [x] **16.1** Block hardness: each block type has a number of hits to break (stone more than dirt, leaves less than wood,

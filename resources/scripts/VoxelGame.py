@@ -31,10 +31,11 @@ import VoxelWalkers
 
 # The view distance, in chunks each way from the player (the settings page changes it). The default is the middle step, 14, which
 # is (2 * 14 + 1)^2 = 841 chunks. The last step is "Unlimited", capped at UNLIMITED_VIEW: the chunks grow with the square of the
-# distance and each one is held in memory (40 is about 6,500 chunks, roughly 2 GB).
-VIEW_STEPS = [6, 8, 10, 12, 14, 18, 24, 32, 40]
+# distance and each one is held in memory. Measured in Release: 60 is about 14,600 chunks, 1.5 GB private memory and about 100
+# frames a second; 80 is about 25,900 chunks, 2.4 GB and dips to 60 frames a second, so it stays out.
+VIEW_STEPS = [6, 8, 10, 12, 14, 18, 24, 32, 40, 60]
 DEFAULT_VIEW = 14
-UNLIMITED_VIEW = 40
+UNLIMITED_VIEW = 60
 UNLOAD_MARGIN = 2           # chunks farther than the view distance plus this are unloaded
 UPLOAD_BUDGET_MS = 2.0      # time per frame spent uploading finished meshes
 WALK_SPEED = 5.0            # blocks per second
