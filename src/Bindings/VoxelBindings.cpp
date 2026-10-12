@@ -57,7 +57,7 @@ void bindVoxel(py::module_& m) {
         .def("smoothing", &VoxelWorld::smoothing, "The surface style set by set_smoothing: 0 for cubes, else the samples per block.")
         .def("define_block", [](VoxelWorld& world, int block_id, sf::Vector3f colour, bool solid, bool falls, bool liquid, int emits,
                 const std::string& shape, const std::string& group, const std::optional<std::string>& material, int mesh,
-                int join_above, const std::optional<std::vector<int>>& join_below) {
+                int join_above, const std::optional<std::vector<int>>& join_below, bool transparent) {
             if (shape != "smooth" && shape != "cube") throw py::value_error("shape must be \"smooth\" or \"cube\"");
             if (group != "terrain" && group != "own") throw py::value_error("group must be \"terrain\" or \"own\"");
             if (shape == "cube" && group == "terrain") throw py::value_error("a cube block is drawn in its own mesh: group must be \"own\"");
@@ -73,6 +73,7 @@ void bindVoxel(py::module_& m) {
             type.cube = shape == "cube";
             type.mesh = static_cast<uint8_t>(mesh);
             type.joinAbove = static_cast<uint8_t>(join_above);
+            type.transparent = transparent;
             if (join_below) {
                 for (int below : *join_below) {
                     if (below < 0 || below > 255) throw py::value_error("join_below must be block ids, 0 to 255");
@@ -85,7 +86,7 @@ void bindVoxel(py::module_& m) {
             world.setMaterial(block_id, material.value_or(std::string()));
         }, py::arg("block_id"), py::arg("colour"), py::arg("solid") = true, py::arg("falls") = false, py::arg("liquid") = false,
            py::arg("emits") = 0, py::arg("shape") = "smooth", py::arg("group") = "terrain", py::arg("material") = py::none(),
-           py::arg("mesh") = 0, py::arg("join_above") = 0, py::arg("join_below") = py::none(),
+           py::arg("mesh") = 0, py::arg("join_above") = 0, py::arg("join_below") = py::none(), py::arg("transparent") = false,
            "Define a block id: its colour, whether it is solid (blocks movement), falls (sand-like, moves down into air or liquid), "
            "liquid (flows, as water does) and emits (the light it gives off at its own cell, 0 to 255; a lamp is 255). How it is "
            "drawn: shape is \"smooth\" (the skin) or \"cube\" (a cube that never merges with its neighbours); group is \"terrain\" "

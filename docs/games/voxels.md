@@ -77,7 +77,8 @@ Each block type says how it is drawn, with `define_block(..., shape=, group=, ma
   (`join_below=`), so a trunk base merges into the ground. Wood on a brick or on water keeps its own skin.
 - Water is own too, in one mesh shared by the source and its flow (`mesh=` names the shared id). The ground under water has
   its own skin, so the seabed and the shore are seen from the water, and the water surface is seen from below as well.
-  Under the water the sun's shadows are off: the surface would otherwise shade everything below it.
+  Under the water the sun's shadows are off: the surface would otherwise shade everything below it. The water is drawn
+  see-through (`opacity` 0.55 in the scene file, `transparent=True` in the block), after the opaque meshes.
 
 Collision follows the same rule: a body meets the skin of each mesh, so it stands on a brick's top face and on a leaf's
 rounded top. `voxel_world_check.py` checks the rules (a leaf alone is in its own mesh and not the terrain's, a brick is six

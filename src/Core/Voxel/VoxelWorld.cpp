@@ -607,6 +607,7 @@ namespace CGEngine {
 					std::move(part.mesh.indices), materials, position);
 				if (body) chunk.bodies[part.group] = body->getId().value_or(0);
 			}
+			if (body) body->transparent = types[part.group].transparent;
 			chunk.groupQuads[part.group] = part.quads;
 		}
 		// A group that is drawn no more (its blocks were taken away) loses its body.

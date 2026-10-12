@@ -219,6 +219,8 @@ void main() {
             }
         }
     }
+    //Voxel materials can be see-through (the water): their opacity multiplies the surface's.
+    if(triplanar != 0 && materials[mtl].opacity > 0.0) surfOpacity *= opacity;
     if(surfOpacity < materials[mtl].alphaCutoff) discard;                                       //Discard fragments with alpha below the cutoff
 
     //Surface lighting

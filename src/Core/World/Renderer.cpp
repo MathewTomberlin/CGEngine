@@ -1105,10 +1105,23 @@ namespace CGEngine {
 			sortZ();
 		}
 
-		//Draw each body with its calculated transform
+		//Draw each body with its calculated transform. Transparent bodies (the voxel water) come after the opaque ones, blended and
+		//without writing depth, so what is behind them still shows. The shadow map skips them: they do not block the sun.
+		vector<Body*> transparentBodies;
 		for (auto iterator = renderOrder.begin(); iterator != renderOrder.end(); ++iterator) {
 			Body* body = assets.get<Body>(*iterator);
+			if (body->transparent) {
+				if (!shadowPass) transparentBodies.push_back(body);
+				continue;
+			}
 			body->onDraw(*window, body->getGlobalTransform());
+		}
+		if (!transparentBodies.empty()) {
+			GL_CHECK(glDepthMask(GL_FALSE));
+			for (Body* body : transparentBodies) {
+				body->onDraw(*window, body->getGlobalTransform());
+			}
+			GL_CHECK(glDepthMask(GL_TRUE));
 		}
 	}
 

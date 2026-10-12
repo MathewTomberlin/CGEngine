@@ -28,6 +28,7 @@ MATERIALS = {WOOD: "voxel_wood", LEAVES: "voxel_leaves", BRICK: "voxel_brick", W
 JOINS = {WOOD: LEAVES}              # a block whose top is covered by the mesh of this block joins that mesh (the trunk top joins the canopy)
 GROUND = (GRASS, DIRT, STONE, SAND, GRAVEL, SNOW)   # natural ground: a block standing on it joins the terrain (a trunk base)
 JOINS_BELOW = {WOOD: GROUND}
+TRANSPARENT = (WATER,) + tuple(range(FLOW_FIRST, FLOW_LAST + 1))   # drawn blended: the water's mesh is named after the source
 
 COLOURS = {
     GRASS: (0.36, 0.72, 0.26),

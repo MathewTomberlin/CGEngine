@@ -184,8 +184,9 @@ Today every solid block is part of one smooth skin per chunk, which merges wood 
   above it. Checked by `check_groups`; seen in play (the trees worked).
 - [x] **12.7** A wood block standing on natural ground (stone, dirt, grass, sand, gravel, snow) joins the terrain at its bottom
   (`join_below=`, a list of block ids). A wood block on a brick or on water keeps its own skin. Checked by `check_groups`.
-- [ ] **12.8** Water's surface is a semi-transparent mesh, not a solid colour: the water skin is drawn blended over what is
-  under it (the seabed and the shore show through), and its faces do not write depth, so the sky through it stays visible.
+- [x] **12.8** Water is a semi-transparent mesh: `define_block(..., transparent=True)` draws its mesh after the opaque ones,
+  blended and without writing depth (`Body::transparent`, `Renderer::render`), and the material's `opacity` (0.55 for
+  `voxel_water`, read from the scene file) multiplies the surface's alpha. The shadow map skips transparent meshes.
 - Seams: a separate skin meets the terrain where they touch. The terrain treats a trunk or a leaf as air, so its surface sits
   where the block's own skin does; in the screenshot the two meet without a crack. Level-of-detail seams between own meshes use
   the same skirts as the terrain (11.12), not yet checked in play. Light is not split by mesh (every block shades behind

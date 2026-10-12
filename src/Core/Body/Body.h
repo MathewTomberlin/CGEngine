@@ -606,6 +606,8 @@ namespace CGEngine {
         /// in front of their parents
         /// </summary>
         int zOrder = 0;
+        // Drawn after the opaque bodies, blended and without writing depth, so what is behind it still shows (the voxel water).
+        bool transparent = false;
         /// <summary>
         /// The amount of time between calling scripts in the "update" domain for this Body
         /// </summary>

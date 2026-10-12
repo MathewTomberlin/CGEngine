@@ -245,7 +245,8 @@ class VoxelGame(PyScript):
                                     material=VoxelGen.MATERIALS.get(block),
                                     mesh=VoxelGen.WATER if block in VoxelGen.LIQUIDS else 0,
                                     join_above=VoxelGen.JOINS.get(block, 0),
-                                    join_below=list(VoxelGen.JOINS_BELOW[block]) if block in VoxelGen.JOINS_BELOW else None)
+                                    join_below=list(VoxelGen.JOINS_BELOW[block]) if block in VoxelGen.JOINS_BELOW else None,
+                                    transparent=block in VoxelGen.TRANSPARENT)
         self.world.set_smoothing(SMOOTH_RESOLUTION)
         self.world.set_move_seconds(SIM_TICK * 0.9)   # a falling block lands just before the next tick
         # Smooth skin nearest the camera is finer: NEAR_SAMPLES per block within NEAR_RADIUS chunks.
