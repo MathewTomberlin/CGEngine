@@ -280,12 +280,15 @@ Goal: the player chooses how far they can see, and a long view stays cheap enoug
   841 chunks" in the notes did not come back: the build from before this round measured 201 / 199 / 178 on the same machine
   today, so this round's HUD and game script cost about 10%. Still open: memory per step (the step list is chosen from these
   numbers, so the memory is the next measurement).
-- [ ] **15.5** Draw calls at a long view: each chunk is one body with its own draws, so at 40 there are 6,561 chunk bodies a frame
-  and the frame rate is 27 whatever the quads are. Analysis (not built): merging 4 by 4 chunks into one body per group means
-  the region's mesh is rebuilt from every chunk's CPU copy when one chunk changes, and those copies are not kept now. At 40 the
-  vertices alone are about 2 GB of GPU memory, so keeping the copies roughly doubles the memory. Either keep the copies in a
-  compact form, or rebuild a region from the chunks' blocks (the mesher is fast: a chunk takes a few ms). Decide before building.
-  Until then "Unlimited" stays at 40.
+- [x] **15.5** Draw calls at a long view: a region is 4 by 4 chunks, drawn as one body per mesh group (`VoxelWorld.cpp`,
+  `RegionChunks`), so 6,561 chunks at view 40 are about 400 regions' bodies, not one per chunk. Option B: a changed region is
+  meshed again from its blocks, and no chunk's mesh is kept after upload (the memory stays as it was). A region waits two
+  updates after its last change (`RegionSettleUpdates`), so a run of changes is meshed once. Measured at view 40 on this
+  machine, before and after: standing 26 to 201 fps, turning 26 to 193, walking 23 to 166; load 37 s to 8 s; worst frame 55 to
+  72 ms to 11 to 18 ms. The quads are unchanged (2,217,929). Checked by `voxel_world_check.py` (through `test_voxels.ps1`),
+  `test_voxel_net.ps1`, `test_swimming.ps1` and `test_pause_menu.ps1`. Not measured: the cost of a block edit, which re-meshes
+  up to 16 chunks on a worker, and a frontier of new chunks while walking. One turning run at view 14 had a single 108 ms
+  frame; it did not come back in the next run (worst 5 ms).
 - [x] **15.4** Memory on a long walk at 40 (`VOXEL_SEED=1`, Release): the player was moved round a wide circle 40 times, 90 blocks
   a hop, so the chunks behind unloaded and the ones ahead loaded (about 6,750 to 6,880 chunks held throughout). The working
   set went from 624 MB to a peak of 1,064 MB around the 24th hop, then fell back to 675 MB by the end. So the churn does not
