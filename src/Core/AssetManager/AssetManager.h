@@ -1,6 +1,7 @@
 #pragma once
 
 #include <unordered_map>
+#include <map>
 #include <memory>
 #include <typeindex>
 #include <filesystem>
@@ -52,6 +53,14 @@ namespace CGEngine {
 		UniqueDomain<id_t, ResourceEntry> resources{ 1000 };
 		unordered_map<string, id_t> nameToId;
 	};
+
+	// When a file was last written, or the earliest time if it cannot be read (so a missing file counts as unchanged until it
+	// appears). A failed load is remembered with this, so the same unchanged file is not imported again.
+	inline filesystem::file_time_type writeTimeOf(const filesystem::path& path) {
+		std::error_code ec;
+		const filesystem::file_time_type time = filesystem::last_write_time(path, ec);
+		return ec ? filesystem::file_time_type::min() : time;
+	}
 
 	class AssetManager : public EngineSystem {
 	public:
@@ -396,9 +405,20 @@ namespace CGEngine {
 				return nullopt;
 			}
 			else {
-				logMessage(LogInfo, string("Using loader for resource type: ").append(typeid(T).name()));
-				//Load the resource using the appropriate loader
-				resource = resourceLoaders[resourceTypeId]->load(resourcePath);
+				// A file that failed and has not changed since is not imported again; it goes straight to the default below.
+				const auto failureKey = std::make_pair(resourceTypeId, resourcePath.string());
+				const auto failure = failedLoads.find(failureKey);
+				const bool knownFailure = failure != failedLoads.end() && failure->second == writeTimeOf(resourcePath);
+				if (!knownFailure) {
+					logMessage(LogInfo, string("Using loader for resource type: ").append(typeid(T).name()));
+					//Load the resource using the appropriate loader
+					resource = resourceLoaders[resourceTypeId]->load(resourcePath);
+					if (resource) {
+						failedLoads.erase(failureKey);
+					} else if (!resourcePath.empty()) {
+						failedLoads[failureKey] = writeTimeOf(resourcePath);
+					}
+				}
 				//If resource was not loaded successfully and the resourceType has a defaultId
 				if (!resource && hasDefaultId(resourceTypeId)) {
 					//Get the default id for the resource type and try to load it
@@ -540,6 +560,8 @@ namespace CGEngine {
 		//ResourceTypeName string, ResourceContainer mapped to ResourceType type_index
 		unordered_map<type_index, pair<string, ResourceContainer>> resourceContainers;
 		unordered_map<type_index, unique_ptr<AssetLoader>> resourceLoaders;
+		// Loads that failed, by resource type and path, with the file's write time at the failure.
+		std::map<std::pair<type_index, string>, filesystem::file_time_type> failedLoads;
 
 		//Check if the resource type is registered
 		template<typename T>
