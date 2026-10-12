@@ -101,6 +101,8 @@ namespace CGEngine {
 		// How much of the sun and the ambient light reaches the surface (0 to 1). The lighting is multiplied by it, so a sealed
 		// cave gets none whatever the time of day. Meshes that are not voxels ignore it (see the fragment shader).
 		float sky = 1.0f;
+		// How much of the block has been hit (0 for none, up to 1 just before it breaks): the cracks on the surface grow with it.
+		float damage = 0.0f;
 	};
 
 	struct MeshData : public IResource {

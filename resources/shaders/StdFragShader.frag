@@ -78,6 +78,7 @@ in float matId;
 in vec3 vertexColour;
 in vec3 vertexGlow;
 in float vertexSky;
+in float vertexDamage;      //How much of the voxel's block has been hit, 0 to 1 (see crackMask)
 
 out vec4 FragColor;
 
@@ -93,6 +94,35 @@ vec4 triplanarSample(sampler2D tex, vec3 pos, vec3 n){
     vec4 alongY = texture(tex, pos.xz);
     vec4 alongZ = texture(tex, pos.xy);
     return alongX * weights.x + alongY * weights.y + alongZ * weights.z;
+}
+
+//Cracks on a damaged voxel: the borders between the cells of a Voronoi pattern in world space, which read as the thin branching
+//lines of a broken surface. The lines widen with the damage, so a block gets more and wider cracks as it is hit.
+float latticeHash(vec3 p){ return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+float crackEdge(vec3 p){
+    vec3 cell = floor(p);
+    vec3 local = fract(p);
+    float nearest = 8.0;
+    float second = 8.0;
+    for(int z = -1; z <= 1; z++){
+        for(int y = -1; y <= 1; y++){
+            for(int x = -1; x <= 1; x++){
+                vec3 g = vec3(float(x), float(y), float(z));
+                vec3 at = cell + g;
+                vec3 jitter = vec3(latticeHash(at), latticeHash(at + vec3(19.1, 7.3, 3.7)), latticeHash(at + vec3(5.2, 13.9, 27.4)));
+                vec3 r = g + jitter - local;
+                float d = dot(r, r);
+                if(d < nearest){ second = nearest; nearest = d; }
+                else if(d < second){ second = d; }
+            }
+        }
+    }
+    return sqrt(second) - sqrt(nearest);                 // 0 on a border between two cells
+}
+float crackMask(vec3 p, float damage){
+    float edge = crackEdge(p * 2.4);
+    float width = mix(0.04, 0.10, clamp(damage, 0.0, 1.0));   // more hits, wider cracks (in cell units)
+    return 1.0 - smoothstep(width * 0.5, width, edge);
 }
 
 //The sun's shadows: shadowPass is set while the shadow map is drawn, and shadowsOn while surfaces look it up.
@@ -202,6 +232,9 @@ void main() {
     }
     surfColor *=  diffuseColor;                                                                 //Modulate diffuse texture color with diffuse color
     surfColor.rgb *= vertexColour;                                                              //Per-vertex tint (white unless the mesh sets it)
+    //Cracks: a damaged voxel gets dark lines on its surface (the damage is 0 for every other mesh). The damage is interpolated
+    //across the triangles, so a triangle that reaches a hit block from a clean one fades its cracks out (the envelope).
+    if(triplanar != 0 && vertexDamage > 0.0) surfColor.rgb *= 1.0 - 0.6 * crackMask(surfPos, vertexDamage) * smoothstep(0.2, 0.5, vertexDamage);
 
     //Material Opacity --   Calculated without lighting
     float opacity = clamp(materials[mtl].opacity,0.0,1.0);                                      //Normalize material opacity

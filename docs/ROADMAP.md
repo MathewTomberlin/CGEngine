@@ -277,9 +277,13 @@ Goal: the player chooses how far they can see, and a long view stays cheap enoug
 Goal: blocks and creatures take several hits, and what the player has hit looks hit.
 - [x] **16.1** Block hardness: each block type has a number of hits to break (stone more than dirt, leaves less than wood,
   lamps and torches one). `define_block(..., hits=)`. The hardness is data, like the other block rules.
-- [~] **16.2** Visual damage states (darkening per stage is in; cracks and the save file are not yet): a damaged block shows its stage, from a darker tint to cracks on its faces. Damage is a
-  per-cell value kept with the edits (like props), so the mesher can tint the cell's faces; a stage change re-meshes only the
-  chunk it is in. Measure the re-mesh cost (14.5 is the baseline: about 3 ms).
+- [x] **16.2** Visual damage states: a damaged block shows its stage in three ways. Its colour darkens with the stage (the
+  damage is per cell, kept with the edits, so the mesher tints the cell's faces). Its surface gets cracks (a Voronoi border
+  pattern in world space, drawn in the voxel shader from a per-vertex damage value; the lines widen with the hits, and fade
+  out on the triangles that only reach a hit block). The damage is saved with the edits (edit file version 3, after the
+  torches), and a stage change re-meshes only the chunk it is in. Checked by `voxel_world_check.py` (the save and load round
+  trip) and seen in screenshots of a two-hit and a one-hit block. The cracks use a 27-cell search per fragment, so the cost
+  of many damaged blocks in view is not measured yet (15.3).
 - [~] **16.3** Hit feedback: the aimed block's outline flashes white for 0.12 s on each hit (done). Still open: a short particle
   burst in the block's colour when a block breaks (particles are a new engine feature, so this may wait for a small particle system).
 - [x] **16.4** Damage heals: a block not hit for a few seconds goes back one stage (so a half-broken wall is a choice, not a

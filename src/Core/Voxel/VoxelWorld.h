@@ -213,7 +213,7 @@ namespace CGEngine {
 		std::map<std::pair<int, int>, std::map<int, uint8_t>> edits;
 		// Props (torches) by chunk: local index -> dir. See setProp.
 		std::map<std::pair<int, int>, std::map<int, uint8_t>> propsByChunk;
-		// Damage by chunk: local index -> stage (see hitBlock). Not saved with the edits yet.
+		// Damage by chunk: local index -> stage (see hitBlock). Saved with the edits (version 3 of the edit file).
 		std::map<std::pair<int, int>, std::map<int, uint8_t>> damageByChunk;
 		void clearDamage(int x, int y, int z);
 		uint32_t nextGeneration = 1;

@@ -102,6 +102,7 @@ namespace CGEngine {
 				vertex.texCoord = glm::vec2(static_cast<float>(cornerU[k] * w), static_cast<float>(cornerV[k] * h));
 				vertex.colour = base * occlusionLight[face.occlusion[k]];
 				vertex.sky = face.light / 255.0f;
+				vertex.damage = face.damage / 255.0f;
 				vertex.glow = VoxelLightTint * (face.emission / 255.0f * VoxelGlow)
 					+ vertex.colour * VoxelLightTint * (face.lamp / 255.0f * lampGain(face.light / 255.0f));
 				out.vertices.push_back(vertex);
@@ -395,6 +396,7 @@ namespace CGEngine {
 			vertex.colour = palette[static_cast<size_t>(block)] * occlusion
 				* (chunk.damage.empty() ? 1.0f : 1.0f - DamageTint * chunk.damage[dominant] / 255.0f);
 			vertex.sky = sky;
+			vertex.damage = chunk.damage.empty() ? 0.0f : chunk.damage[dominant] / 255.0f;
 			vertex.glow = VoxelLightTint * (chunk.emission[block] / 255.0f * VoxelGlow)
 				+ vertex.colour * VoxelLightTint * (lamp * lampGain(sky));
 			return vertex;

@@ -570,6 +570,17 @@ def run(out_path="cg_control/voxel_check.json"):
     results["check"]["a torch is saved and loaded with the edits"] = world.prop_at(5, 30, 5) == 2
     world.remove_prop(5, 30, 5)
     world.clear_edits()
+    # Damage is saved with the edits too: a block hit once keeps its stage through a save and a load (stone takes three).
+    world.define_block(VOXEL_STONE, cge.Vector3f(0.5, 0.5, 0.53), hits=3)
+    world.set_block(7, 20, 7, VOXEL_STONE)
+    world.hit_block(7, 20, 7)
+    world.save_edits(edit_file)
+    world.heal_block(7, 20, 7)
+    results["check"]["the damage is healed before the load"] = world.damage_at(7, 20, 7) == 0
+    world.load_edits(edit_file)
+    results["check"]["a damaged block is saved and loaded with its stage"] = world.damage_at(7, 20, 7) == 1
+    world.set_block(7, 20, 7, 0)
+    world.clear_edits()
 
     # The smooth skin meshes the same chunks: every loaded chunk gets a mesh, and switching back to cubes works too.
     world.set_smoothing(1)
