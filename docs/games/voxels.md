@@ -1,14 +1,17 @@
 # Voxel sample
 
-A procedural block world in chunks, with trees, a day and night cycle and distance fog. Run it with:
+A procedural block world in chunks, with trees, a day and night cycle and distance fog. Build it and run it with:
 
 ```
+cmake --build build --config Release
 cd build/bin/Release
-set VOXEL_SEED=1
-$env:CGENGINE_SCENE = "scenes/voxels.json"; $env:CGENGINE_FULLSCREEN = "1"; .\main.exe
+$env:CGENGINE_FULLSCREEN = "1"; .oxel_game.exe
 ```
 
-`VOXEL_SEED` picks the world. `VOXEL_TIME` sets the time of day at the start: 0 is sunrise, 0.25 noon, 0.5 sunset and
+`voxel_game.exe` is built with every build and starts in the voxel scene. `CGENGINE_SCENE` still overrides the scene, and
+`main.exe` runs the tilemap scene unless it is set (`$env:CGENGINE_SCENE = "scenes/voxels.json"; .\main.exe` also works).
+
+`VOXEL_SEED` (set it before running, e.g. `$env:VOXEL_SEED = "1"`) picks the world. `VOXEL_TIME` sets the time of day at the start: 0 is sunrise, 0.25 noon, 0.5 sunset and
 0.75 midnight. `VOXEL_DAY_SECONDS` sets how long a day lasts (240 seconds by default). `VOXEL_FIXED_STEP` (seconds) makes every frame advance that
 much game time; the scripted tests use it. `VOXEL_SPAWN="x,z"` starts the player over that column. For the best frame
 rate, build and run the Release configuration.
