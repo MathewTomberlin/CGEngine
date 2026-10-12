@@ -151,6 +151,9 @@ creatures' own behaviour (they only wander now).
 - [x] **11.13** Trees whose trunk is outside the loaded area leave crowns floating. Closed by analysis: a crown can float
   only while its trunk's chunk is unloaded, which happens at the edge of the loaded area, where the fog is about 93 per
   cent complete. Fixing it would need each chunk to wait for its neighbours' terrain, which is not worth the cost there.
+- [x] **11.16** Settings page from the pause menu: Settings opens a page with the mouse sensitivity (arrows, 25% to 300%),
+  applied at once and saved to `voxel_settings.json`. Escape and Back return to the menu. `tools/test_pause_menu.ps1` checks
+  the page, the arrow, the saved file and the way back. Still open: the other settings (graphics, shadows, the sun).
 - [ ] **11.14** Intermittent square shadow on the terrain at high sun, with nothing casting it. Not reproduced yet. F12 now saves a screenshot and the game state together (`cg_control/snapshots/`), so the next occurrence can be checked. The shadow edge now fades to lit at the map boundary, which may hide a square edge. Needs an F12 pair from the player.
 - [ ] **11.15** Start of game: the player sometimes falls through the ground into the kill zone, then restarts at the spawn
   height and falls again until moved. Not reproduced: a run with focus in another window landed normally, and the 24-seed

@@ -9,6 +9,7 @@ Controls: W A S D walk, Space jumps, Enter toggles flying (then Space rises and 
 the mouse; move it to look, left-click breaks the block under the crosshair, right-click places stone against it, and
 Escape releases the mouse. Without the mouse: arrow keys turn and look, J breaks, K places. VOXEL_SEED chooses a world.
 """
+import json
 import math
 import os
 import time
@@ -37,7 +38,10 @@ WATER_FOG = (0.10, 0.30, 0.42)   # the colour of the view under the water
 WATER_FOG_START = 1.0
 WATER_FOG_END = 22.0
 TURN_SPEED = 90.0           # degrees per second, for the arrow keys
-MOUSE_SENSITIVITY = float(os.environ.get("VOXEL_MOUSE_SENSITIVITY", "0.00625"))   # degrees per pixel
+MOUSE_SENSITIVITY = float(os.environ.get("VOXEL_MOUSE_SENSITIVITY", "0.00625"))   # degrees per pixel at 100%
+# The settings the player chose, kept between runs in the game's folder. VOXEL_SETTINGS moves the file (the tests use one of their own).
+SETTINGS_FILE = os.environ.get("VOXEL_SETTINGS", "voxel_settings.json")
+SENSITIVITY_STEPS = [25, 50, 75, 100, 125, 150, 200, 250, 300]   # mouse sensitivity, as a percent of MOUSE_SENSITIVITY
 MAX_PITCH = 85.0            # the engine's camera stops at this angle
 # VOXEL_FIXED_STEP (seconds) makes every frame advance the same time, so a scripted test holds a key for the same game time
 # whatever the frame rate. Unset, a frame advances the real time since the last one.
@@ -83,6 +87,28 @@ DUSK_ZENITH = (0.30, 0.30, 0.52)
 MOON_LIGHT = (0.45, 0.55, 0.85)
 
 
+# The pause menu's pages: the title, and the items on each page. The settings page holds the mouse sensitivity.
+MENU_PAGES = {
+    "pause": ("PAUSED", ("resume", "settings", "quit")),
+    "settings": ("SETTINGS", ("sens_down", "sens_value", "sens_up", "back")),
+}
+MENU_TEXT = {"resume": "Resume", "settings": "Settings", "quit": "Quit", "back": "Back", "sens_down": "<", "sens_up": ">"}
+
+
+def load_settings():
+    """The saved mouse sensitivity (a percent), or 100 if nothing usable is saved."""
+    try:
+        with open(SETTINGS_FILE) as f:
+            percent = int(json.load(f).get("mouse_sensitivity", 100))
+    except (OSError, ValueError, TypeError, AttributeError):
+        return 100
+    return min(SENSITIVITY_STEPS, key=lambda step: abs(step - percent))
+
+
+def save_settings(sensitivity):
+    StateFile.write_json(SETTINGS_FILE, {"mouse_sensitivity": sensitivity})
+
+
 class VoxelGame(PyScript):
     def __init__(self):
         super().__init__()
@@ -112,6 +138,8 @@ class VoxelGame(PyScript):
         self.broken = False
         self.hud_ready = False          # the label and the outline bodies exist (made on the second frame)
         self.paused = False             # the pause menu is open: the world stands still and the mouse is free
+        self.menu_page = "pause"        # the page of the pause menu: "pause" or "settings"
+        self.sensitivity = load_settings()   # mouse sensitivity, a percent of MOUSE_SENSITIVITY
         self.outline_keys = {}          # the last outline shown under each name, so unchanged ones are not re-uploaded
         self.outline_bodies = set()     # the outlines already made as runtime meshes
         self.slot = 0                   # the hotbar slot placing uses
@@ -210,20 +238,24 @@ class VoxelGame(PyScript):
                              outline_thickness=HUD_OUTLINE)
         self.target_text = ""
         self.hotbar_text = ""
-        # The pause menu: a title and two items, drawn only while the game is paused (their text is empty otherwise).
+        # The pause menu, drawn only while the game is paused (its labels are empty otherwise). Each item has a click
+        # rectangle (left, top, right, bottom) in window pixels, or None if it is not clickable, and a text position.
         self.menu_text = {}
         self.menu_hover = None
-        # Centred in the window. Each item is a rectangle (left, top, right, bottom) in window pixels for clicks, and its
-        # text starts at the rectangle's left.
         size = cge.window_size()
         cx, cy = size.x / 2, size.y / 2
-        self.menu_rects = {
-            "resume": (cx - 100, cy - 4, cx + 100, cy + 30),
-            "quit": (cx - 100, cy + 40, cx + 100, cy + 74),
+        self.menu_layout = {
+            "resume": ((cx - 100, cy - 4, cx + 100, cy + 30), (cx - 62, cy)),
+            "settings": ((cx - 100, cy + 40, cx + 100, cy + 74), (cx - 62, cy + 44)),
+            "quit": ((cx - 100, cy + 84, cx + 100, cy + 118), (cx - 40, cy + 88)),
+            "sens_down": ((cx - 215, cy - 4, cx - 150, cy + 30), (cx - 200, cy)),
+            "sens_value": (None, (cx - 120, cy)),
+            "sens_up": ((cx + 150, cy - 4, cx + 215, cy + 30), (cx + 165, cy)),
+            "back": ((cx - 100, cy + 40, cx + 100, cy + 74), (cx - 30, cy + 44)),
         }
-        cge.create_text_body("pause_title", "", "hud", cge.Vector2f(cx - 80, cy - 60), 28, outline_thickness=HUD_OUTLINE)
-        cge.create_text_body("pause_resume", "", "hud", cge.Vector2f(cx - 62, cy), 22, outline_thickness=HUD_OUTLINE)
-        cge.create_text_body("pause_quit", "", "hud", cge.Vector2f(cx - 40, cy + 44), 22, outline_thickness=HUD_OUTLINE)
+        cge.create_text_body("menu_title", "", "hud", cge.Vector2f(cx - 80, cy - 60), 28, outline_thickness=HUD_OUTLINE)
+        for item, (_rect, (x, y)) in self.menu_layout.items():
+            cge.create_text_body("menu_" + item, "", "hud", cge.Vector2f(x, y), 22, outline_thickness=HUD_OUTLINE)
 
     def set_menu_text(self, name, text):
         if self.menu_text.get(name) != text:
@@ -231,23 +263,46 @@ class VoxelGame(PyScript):
             cge.set_text_body(name, text)
 
     def show_menu(self, shown):
-        """The menu's labels are drawn while the game is paused, and are empty (so not drawn) otherwise."""
-        self.set_menu_text("pause_title", "PAUSED" if shown else "")
-        self.set_menu_text("pause_resume", self.menu_item("resume", "Resume") if shown else "")
-        self.set_menu_text("pause_quit", self.menu_item("quit", "Quit") if shown else "")
+        """The labels of the current page are drawn while the game is paused, and are empty (so not drawn) otherwise."""
+        title, items = MENU_PAGES[self.menu_page] if shown else ("", ())
+        self.set_menu_text("menu_title", title)
+        for item in self.menu_layout:
+            self.set_menu_text("menu_" + item, self.menu_label(item) if item in items else "")
 
-    def menu_item(self, item, label):
-        return "> %s <" % label if self.menu_hover == item else label
+    def menu_label(self, item):
+        if item == "sens_value":
+            return "Mouse sensitivity: %d%%" % self.sensitivity
+        text = MENU_TEXT[item]
+        if self.menu_hover == item:
+            return "[%s]" % text if item in ("sens_down", "sens_up") else "> %s <" % text
+        return text
 
     def update_pause_key(self):
         if self.pressed("Pause", bool(cge.key_down("Escape"))):
-            if self.paused:
-                self.resume()
-            else:
+            if not self.paused:
                 self.pause()
+            elif self.menu_page == "settings":
+                self.open_page("pause")
+            else:
+                self.resume()
+
+    def open_page(self, page):
+        self.menu_page = page
+        self.menu_hover = None
+        self.show_menu(True)
+
+    def change_sensitivity(self, step):
+        index = SENSITIVITY_STEPS.index(self.sensitivity) + step
+        self.sensitivity = SENSITIVITY_STEPS[max(0, min(len(SENSITIVITY_STEPS) - 1, index))]
+        save_settings(self.sensitivity)
+
+    def look_speed(self):
+        """Degrees a pixel of mouse movement turns the view."""
+        return MOUSE_SENSITIVITY * self.sensitivity / 100.0
 
     def pause(self):
         self.paused = True
+        self.menu_page = "pause"
         cge.set_mouse_captured(False)
         self.mouse_captured = False
         self.menu_hover = None
@@ -260,11 +315,13 @@ class VoxelGame(PyScript):
         self.show_menu(False)
 
     def update_pause_menu(self):
-        """Hover and click the menu: Resume locks the mouse again, Quit closes the window."""
+        """Hover and click the menu of the current page. Resume locks the mouse again, Quit closes the window, Settings
+        opens the settings page, the arrows change the mouse sensitivity, and Back returns to the pause page."""
         mouse_x, mouse_y = cge.mouse_position()
         self.menu_hover = None
-        for item, (left, top, right, bottom) in self.menu_rects.items():
-            if left <= mouse_x <= right and top <= mouse_y <= bottom:
+        for item in MENU_PAGES[self.menu_page][1]:
+            rect = self.menu_layout[item][0]
+            if rect and rect[0] <= mouse_x <= rect[2] and rect[1] <= mouse_y <= rect[3]:
                 self.menu_hover = item
         clicked = self.pressed("MenuClick", bool(cge.mouse_down("Left")))
         if clicked and self.menu_hover == "resume":
@@ -273,6 +330,16 @@ class VoxelGame(PyScript):
         if clicked and self.menu_hover == "quit":
             cge.quit()
             return
+        if clicked and self.menu_hover == "settings":
+            self.open_page("settings")
+            return
+        if clicked and self.menu_hover == "back":
+            self.open_page("pause")
+            return
+        if clicked and self.menu_hover == "sens_down":
+            self.change_sensitivity(-1)
+        if clicked and self.menu_hover == "sens_up":
+            self.change_sensitivity(1)
         self.show_menu(True)
 
     def set_target_text(self, text):
@@ -288,6 +355,8 @@ class VoxelGame(PyScript):
     def update_hud(self):
         if not self.hud_ready:
             return
+        # The crosshair is for aiming, so it is hidden while the pause menu is open.
+        self.set_menu_text("hud_cross", "" if self.paused else "+")
         biome = self.world.biome_at(math.floor(self.pos[0]), math.floor(self.pos[2])).capitalize()
         if self.paused:
             self.set_target_text("")
@@ -369,7 +438,7 @@ class VoxelGame(PyScript):
                 self.mouse_captured = True
             return
         dx, dy = cge.mouse_delta()
-        self.turn(dx * MOUSE_SENSITIVITY, -dy * MOUSE_SENSITIVITY)
+        self.turn(dx * self.look_speed(), -dy * self.look_speed())
 
     def turn(self, yaw_delta, pitch_delta):
         self.yaw = (self.yaw + yaw_delta) % 360.0
@@ -569,6 +638,7 @@ class VoxelGame(PyScript):
                  "dirty": stats["dirty"], "meshing": stats["meshing"], "quads": stats["quads"],
                  "upload_ms": round(stats["upload_ms"], 3), "edits": stats["edits"], "slot": self.slot,
                  "smoothing": self.world.smoothing(), "active": self.world.active_count(), "paused": self.paused,
+                 "menu": self.menu_page if self.paused else None, "sensitivity": self.sensitivity,
                  "seed": self.seed, "frames": self.frames,
                  "player": [round(v, 3) for v in self.pos], "on_ground": self.on_ground, "flying": self.flying,
                  "swimming": self.swimming, "walkers": len(self.walkers.walkers) if self.walkers else 0,

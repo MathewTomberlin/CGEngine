@@ -22,7 +22,10 @@ rate, build and run the Release configuration.
 - Mouse: left-click captures the mouse. Move it to look. Left-click breaks the block under the crosshair, right-click
   places the selected block against it.
 - Escape opens the pause menu: the mouse is freed, the world stands still, and Resume (click it) locks the mouse again.
-  Quit (click it) closes the app. `VOXEL_MOUSE_SENSITIVITY` sets the look speed in degrees per pixel (0.00625 by default).
+  Quit (click it) closes the app. Settings (click it) opens a page with the mouse sensitivity: the arrows step it from 25%
+  to 300% of the base, and Back (or Escape) returns to the menu. The choice is saved in `voxel_settings.json` beside the
+  game, and applies at once. `VOXEL_MOUSE_SENSITIVITY` sets the base look speed in degrees per pixel (0.00625 by default),
+  and `VOXEL_SETTINGS` moves the settings file.
 - Without the mouse: the arrow keys turn and look, J breaks, K places.
 - Keys 1 to 9 choose the block to place (the hotbar: stone, dirt, grass, wood, leaves, sand, gravel, snow, water). Sand and
   gravel fall, and water falls and flows. F5 saves the edited blocks to `cg_control/voxel_edits.bin`, and F9 loads them back. F12 saves a screenshot and the
