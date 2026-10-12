@@ -226,6 +226,13 @@ distance is set on the settings page. Measured with `tools/voxel_perf.ps1` at ea
 24 about 80 frames a second, at 40 about 27, and the cost there is the number of chunk draws. `tools/test_voxels.ps1` checks
 the load, the walk, the view's level and the worst frame.
 
+## Two players on one machine (roadmap 18.2)
+
+Start one game with `VOXEL_NET=listen:7790` and a second with `VOXEL_NET=connect:127.0.0.1:7790`, both with the same
+`VOXEL_SEED`. Each shows the other as a box where its feet are, and the edits (blocks, torches, hits) are shared. Each game
+keeps its own inventory and health, and the creatures are not shared yet. `tools/test_voxel_net.ps1` runs the two processes and
+checks the sharing. There is no server and nothing is secure: this is the first step of the multi-user goal (Phase 18).
+
 ## Limits
 
 - Light is baked when a chunk is meshed, so an edit that lets the sky into a cave shows once the chunks around it are

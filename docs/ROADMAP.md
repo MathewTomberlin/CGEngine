@@ -344,12 +344,18 @@ Goal: several people (or an AI and a person) work in one CG Engine world at the 
 - [ ] **18.1** Engine assumptions to change first: the engine is single-process by design. The globals (`world`, `renderer`,
   `assets`, the Python interpreter) are process singletons, and the control channel is one file inbox. A second player needs
   the world state to be separable from the presentation: a state that can be sent, and a view that draws a state it did not make.
-- [ ] **18.2** A transport: a message layer (sockets, or a library such as ENet) with a small set of messages (join, state
-  snapshot, block edit, prop edit, player position, chat). Starts as a loopback test with two processes on one machine.
+- [x] **18.2** A transport, as a loopback test: `VoxelNet.py` links two game processes over TCP, JSON lines, non-blocking and polled
+  once a frame. One process listens (`VOXEL_NET=listen:7790`), the other connects (`VOXEL_NET=connect:127.0.0.1:7790`), and both
+  run the same `VOXEL_SEED`, since each generates the terrain itself. The messages are block, prop, hit (the damage stage) and
+  position. A remote edit to a chunk that is not loaded waits until it loads. Checked by `tools/test_voxel_net.ps1`: a break, a
+  placement and a hit each show in the other process, and each sees the other's position. Not secure, and only on one machine.
 - [ ] **18.3** A server that owns the world: the voxel edits, props and damage are applied there; clients send requests and draw
   what the server says. The server is the same engine headless (no window), which the smoke test can already approximate.
-- [ ] **18.4** Stretch goal, the multiplayer voxel game: two players see each other (a body with a name), share edits, and
-  one can break what the other placed. Then the inventory per player (17) and the damage from other players (16.5 and 16.6).
+- [~] **18.4** Stretch goal, the multiplayer voxel game, in its first form: the two processes see each other (a box where the other
+  player's feet are, with no name yet), share the edits (blocks, torches, damage), and one breaks what the other placed. Each has
+  its own inventory and health, so the inventory per player is in place by construction. Not yet: a name, the creatures (each
+  process has its own, so a creature hit in one is not seen in the other), the other player's damage on a player, and a server
+  that owns the world (18.3): right now each process is an equal peer, and the edits race if both edit the same cell at once.
 - [ ] **18.5** Shared authoring: the control channel (Phase 2) works per server, so an AI and a person can change the same
   world through the same messages a client sends. This is the original goal of the roadmap, reached through 18.3.
 

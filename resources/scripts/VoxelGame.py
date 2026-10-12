@@ -22,9 +22,10 @@ from PyScript import PyScript
 import StateFile
 import VoxelGen
 import VoxelInventory
+import VoxelNet
 import VoxelParticles
 import VoxelPhysics as physics
-from VoxelShapes import mix, outline_arrays
+from VoxelShapes import boxes_arrays, mix, outline_arrays
 import VoxelWalkers
 
 # The view distance, in chunks each way from the player (the settings page changes it). The default is the middle step, 14, which
@@ -84,6 +85,8 @@ FALL_DAMAGE = 1.0           # health lost for each block past FALL_SAFE
 HEALTH_SEGMENT = 16         # pixels, a side, of one segment of the health bar
 INVENTORY_FILE = "cg_control/voxel_inventory.json"
 EDITS_FILE = "cg_control/voxel_edits.bin"
+NET_SPEC = os.environ.get("VOXEL_NET")   # listen:<port> or connect:<host>:<port>: two processes share their edits (VoxelNet)
+POS_INTERVAL = 0.1         # seconds between the player's position messages
 
 
 def ray_box(origin, direction, centre, half):
@@ -238,6 +241,11 @@ class VoxelGame(PyScript):
         self.spawn_pos = list(self.pos)
         self.walker_target = None       # (distance, walker) of the creature under the crosshair, or None
         self.bursts = VoxelParticles.Bursts(random.Random(self.seed))   # the chips a hit or a break throws
+        self.net = None                 # the link to the other process (VOXEL_NET), or None for a single player
+        self.net_pending = {}           # remote edits for chunks not loaded yet: cell -> (kind, value), applied when they load
+        self.net_pos_timer = 0.0
+        self.net_applied = 0            # remote edits applied to this world
+        self.remote_pos = None          # the other player's feet and yaw, from their last position message
         self.window = None              # the window's size, set when the HUD is made
         self.bodies = set()             # the HUD's rectangle and text bodies, made once each
         self.drawn = {}                 # the last value set on each HUD body, so unchanged ones are not set again
@@ -280,6 +288,7 @@ class VoxelGame(PyScript):
             self.wanted_centre = centre
             self.request_chunks(centre)
         self.world.update(UPLOAD_BUDGET_MS, centre[0], centre[1])
+        self.update_net(raw_dt)
 
         if not self.hud_ready and self.frames >= 2:
             # Made a frame after the world, not during the scene's start: the outlines first, then the labels, so the
@@ -345,6 +354,12 @@ class VoxelGame(PyScript):
         self.world.set_terrain(self.seed, VoxelGen.SEA_LEVEL, 8, 44, VoxelGen.SNOW_LEVEL, VoxelGen.TREE_CHANCE,
                           VoxelGen.CAVE_WIDTH)
         self.inventory.start(START_ITEMS, START_COUNT)
+        spec = VoxelNet.parse(NET_SPEC)
+        if spec is not None:
+            try:
+                self.net = VoxelNet.Link(*spec)
+            except OSError as error:
+                print("[voxel] could not open the network link (%s): playing alone" % error)
         self.inventory.slots[COLUMNS] = [VoxelGen.PICKAXE, 1]   # the first row below the hotbar: drag it into the hotbar to use it
 
     def setup_hud(self):
@@ -872,6 +887,7 @@ class VoxelGame(PyScript):
             cell = (block[0] + d[0], block[1] + d[1], block[2] + d[2])
             if self.world.prop_at(*cell) == DIRECTION_INDEX[(-d[0], -d[1], -d[2])]:
                 self.world.remove_prop(*cell)
+                self.net_send({"t": "prop", "c": list(cell), "dir": -1})
                 self.gain(VoxelGen.TORCH)
 
     def show_outline(self, name, box, colour):
@@ -1033,6 +1049,7 @@ class VoxelGame(PyScript):
             # A torch the crosshair is on, nearer than the block behind it, is the one broken, and it goes into the inventory.
             if self.creative or self.inventory.fits(VoxelGen.TORCH):
                 self.world.remove_prop(*self.torch_target[1])
+                self.net_send({"t": "prop", "c": list(self.torch_target[1]), "dir": -1})
                 self.gain(VoxelGen.TORCH)
             else:
                 self.notify("Inventory full")
@@ -1063,9 +1080,11 @@ class VoxelGame(PyScript):
                 self.hit_times.pop(tuple(block), None)
                 self.drop_torches_on(block)
                 self.gain(kind)
+                self.net_send({"t": "block", "c": list(block), "id": 0})
                 self.bursts.add(centre, colour, 10, 0.16, 0.6)
             elif stage > 0:
                 self.hit_times[tuple(block)] = time.time()
+                self.net_send({"t": "hit", "c": list(block), "stage": stage})
                 # The chips fly from the face that was hit, not from the middle of the block.
                 face = [centre[i] + normal[i] * 0.5 for i in range(3)]
                 self.bursts.add(face, tuple(c * 0.7 for c in colour), 3, 0.14, 0.35)
@@ -1084,11 +1103,82 @@ class VoxelGame(PyScript):
             if item == VoxelGen.TORCH:
                 # A torch goes on a face: into the air cell in front of a solid block, leaning on it.
                 if self.world.is_solid(block[0], block[1], block[2]) and self.world.get_block(cell[0], cell[1], cell[2]) == VoxelGen.AIR:
-                    self.world.set_prop(cell[0], cell[1], cell[2], DIRECTION_INDEX[(-normal[0], -normal[1], -normal[2])])
+                    direction = DIRECTION_INDEX[(-normal[0], -normal[1], -normal[2])]
+                    self.world.set_prop(cell[0], cell[1], cell[2], direction)
+                    self.net_send({"t": "prop", "c": list(cell), "dir": direction})
                     self.spend()
             else:
                 self.world.set_block(cell[0], cell[1], cell[2], item)
+                self.net_send({"t": "block", "c": list(cell), "id": item})
                 self.spend()
+
+    # ----- the other process (VoxelNet) ---------------------------------------------------
+
+    def net_send(self, message):
+        if self.net is not None:
+            self.net.send(message)
+
+    def update_net(self, dt):
+        """Read the messages that arrived, apply them, retry the ones for chunks not loaded yet, and send the player's position."""
+        if self.net is None:
+            return
+        for message in self.net.poll():
+            self.apply_remote(message)
+        self.apply_pending()
+        self.net_pos_timer -= dt
+        if self.net_pos_timer <= 0.0 and not self.paused:
+            self.net_pos_timer = POS_INTERVAL
+            self.net.send({"t": "pos", "p": [round(v, 3) for v in self.pos], "yaw": round(self.yaw, 2)})
+
+    def apply_remote(self, message):
+        kind = message.get("t")
+        if kind == "pos":
+            self.remote_pos = message
+            self.show_remote(message["p"])
+        elif kind == "block":
+            self.set_remote(tuple(message["c"]), "block", int(message["id"]))
+        elif kind == "prop":
+            self.set_remote(tuple(message["c"]), "prop", int(message["dir"]))
+        elif kind == "hit":
+            self.set_remote(tuple(message["c"]), "hit", int(message["stage"]))
+
+    def set_remote(self, cell, kind, value):
+        """Apply a remote edit now if its chunk is loaded, else keep it until the chunk loads (the world ignores edits to
+        chunks that are not loaded)."""
+        if not self.apply_remote_edit(cell, kind, value):
+            self.net_pending[cell] = (kind, value)
+
+    def apply_remote_edit(self, cell, kind, value):
+        if not self.world.is_loaded(math.floor(cell[0] / VoxelGen.CHUNK), math.floor(cell[2] / VoxelGen.CHUNK)):
+            return False
+        if kind == "block":
+            self.world.set_block(cell[0], cell[1], cell[2], value)
+        elif kind == "prop":
+            if value < 0:
+                self.world.remove_prop(*cell)
+            else:
+                self.world.set_prop(cell[0], cell[1], cell[2], value)
+        elif kind == "hit":
+            # The other process's stage: hit up to it, never past it (a break comes as a block message).
+            hits = VoxelGen.HITS.get(self.world.get_block(*cell), 1)
+            while self.world.damage_at(*cell) < min(value, hits - 1):
+                self.world.hit_block(cell[0], cell[1], cell[2])
+        self.net_applied += 1
+        return True
+
+    def apply_pending(self):
+        for cell, (kind, value) in list(self.net_pending.items()):
+            if self.apply_remote_edit(cell, kind, value):
+                del self.net_pending[cell]
+
+    def show_remote(self, feet):
+        """The other player, as a box where their feet are: made the first time, then moved."""
+        if "remote_player" not in self.bodies:
+            self.bodies.add("remote_player")
+            cge.create_mesh_body("remote_player", *boxes_arrays([((-0.3, 0.0, -0.3), (0.3, 1.8, 0.3), (0.9, 0.5, 0.2))]),
+                                 materials=["voxel"], position=cge.Vector3f(*feet))
+        else:
+            cge.find_body("remote_player").get_mesh().set_position(cge.Vector3f(*feet))
 
     # ----- sky ----------------------------------------------------------------------------
 
@@ -1255,6 +1345,10 @@ class VoxelGame(PyScript):
                  "menu": self.menu_page if self.paused else None, "sensitivity": self.sensitivity, "view_radius": self.view_radius,
                  "seed": self.seed, "frames": self.frames, "inventory": self.inventory.to_list(), "creative": self.creative,
                  "inventory_open": self.inventory_open, "health": round(self.health, 3),
+                 "net": None if self.net is None else {"mode": self.net.mode, "connected": self.net.connected,
+                                                       "sent": self.net.sent, "received": self.net.received,
+                                                       "applied": self.net_applied, "pending": len(self.net_pending),
+                                                       "remote": self.remote_pos},
                  "player": [round(v, 3) for v in self.pos], "on_ground": self.on_ground, "flying": self.flying,
                  "swimming": self.swimming, "walkers": len(self.walkers.walkers) if self.walkers else 0,
                  "biome": self.world.biome_at(math.floor(self.pos[0]), math.floor(self.pos[2])),
