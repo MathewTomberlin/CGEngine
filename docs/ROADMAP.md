@@ -281,9 +281,11 @@ Goal: the player chooses how far they can see, and a long view stays cheap enoug
 - [ ] **15.5** Draw calls at a long view: each chunk is one body with its own draws, so at 40 there are 6,561 chunk bodies a frame
   and the frame rate is 27 whatever the quads are. Merge the far chunks into a few bodies (say, 4 by 4 chunks, rebuilt when one of
   them changes), or cull them earlier, and measure with 15.3.
-- [ ] **15.4** Chunks beyond the view are unloaded as the player moves, but the edits are kept (they are already); check that a
-  long walk at 40 does not leave the process growing (the unload path, and the meshes' GPU buffers).
-
+- [x] **15.4** Memory on a long walk at 40 (`VOXEL_SEED=1`, Release): the player was moved round a wide circle 40 times, 90 blocks
+  a hop, so the chunks behind unloaded and the ones ahead loaded (about 6,750 to 6,880 chunks held throughout). The working
+  set went from 624 MB to a peak of 1,064 MB around the 24th hop, then fell back to 675 MB by the end. So the churn does not
+  grow without bound: the peak is the chunks being meshed as they come in, and the heap gives most of it back. Not measured:
+  a walk of hours, and the GPU's own memory (the buffers are not in the working set).
 ## Phase 16: voxel health and damage (from playtesting: one hit breaks everything)
 Goal: blocks and creatures take several hits, and what the player has hit looks hit.
 - [x] **16.1** Block hardness: each block type has a number of hits to break (stone more than dirt, leaves less than wood,
