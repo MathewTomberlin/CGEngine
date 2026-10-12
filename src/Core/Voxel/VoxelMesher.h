@@ -14,9 +14,13 @@ namespace CGEngine {
 	// chunk with this much border computes the same light for a shared cell as its neighbour does.
 	constexpr int VoxelLightReach = 8;
 
-	// How bright a light block is: its glow is this many times its colour, and in a cave its light is too (the mesh scales the
-	// light by less in the open, where the sky is already full; see lampGain). The glow is clamped only where it is shown.
+	// How bright a light block is: its glow is this many times its colour, its light in a cave is VoxelLampLight (below), and
+	// the open gets less; see lampGain. The glow is clamped only where it is shown.
 	constexpr float VoxelLampBrightness = 4.0f;
+
+	// How much a light block's light is multiplied in a cave, where the sky gives none (see lampGain in VoxelMesher.cpp). In
+	// the open it is 1, so sunlit ground is not washed out.
+	constexpr float VoxelLampLight = 2.0f;
 
 	// A chunk's blocks with a border of blocks copied from its neighbours (air where a neighbour is not loaded). The
 	// mesher reads only from this, so it can run on any thread while the world changes. The block mesher needs a border

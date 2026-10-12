@@ -27,7 +27,7 @@ namespace CGEngine {
 		// How much a light block's light is multiplied where the sky is at sky (0 to 1): VoxelLampBrightness in a cave, and 1 in
 		// the open, where the sun already lights the ground, so a lamp does not wash out sunlit grass.
 		float lampGain(float sky) {
-			return 1.0f + (VoxelLampBrightness - 1.0f) * (1.0f - sky);
+			return 1.0f + (VoxelLampLight - 1.0f) * (1.0f - sky);
 		}
 
 		// Brightness of a corner by its occlusion (0 = walled in, 3 = open).
