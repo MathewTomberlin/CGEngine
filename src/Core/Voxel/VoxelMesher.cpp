@@ -48,7 +48,13 @@ namespace CGEngine {
 		// every block drawn in no group of its own). Air is in no group. Blocks of other groups count as air to this mesh.
 		bool inGroup(const PaddedChunk& chunk, int x, int y, int z, uint8_t group) {
 			const uint8_t block = chunk.at(x, y, z);
-			return block != 0 && chunk.rule[block].group == group;
+			if (block == 0) return false;
+			const PaddedChunk::MeshRule& rule = chunk.rule[block];
+			// A block whose top is covered by its join mesh belongs to that mesh instead (the cover is the block above it).
+			if (rule.join && y + 1 < chunk.height + chunk.border && chunk.rule[chunk.at(x, y + 1, z)].group == rule.join) {
+				return group == rule.join;
+			}
+			return rule.group == group;
 		}
 
 		// Occlusion of each corner of a face, from the air cell in front of it. Each corner has two cells beside it and

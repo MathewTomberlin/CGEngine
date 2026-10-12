@@ -15,7 +15,13 @@ namespace CGEngine {
 		bool own = false;       // drawn in its own mesh, not the terrain mesh
 		bool cube = false;      // drawn as cubes, even where the terrain is smooth
 		uint8_t mesh = 0;       // the mesh of an own block: 0 is the block's own id, else this id, so blocks can share one mesh
+		uint8_t joinAbove = 0;  // a smooth block whose top is covered by a block of this mesh joins that mesh (its top only, see skinAt)
 	};
+
+	// The mesh a block id is drawn in: 0 for the terrain, else the own mesh (see BlockType::own and mesh).
+	inline uint8_t meshGroup(const BlockType& type, uint8_t block) {
+		return type.own ? (type.mesh ? type.mesh : block) : 0;
+	}
 
 	// Water: block 5 is a full source. Flowing water has a level from 7 down to 1, kept as block ids 9 to 15 (id = 16 -
 	// level), so a flow is a block like any other and is saved with the edits. Level 0 is air.

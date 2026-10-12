@@ -47,6 +47,7 @@ namespace CGEngine {
 		struct MeshRule {
 			uint8_t group = 0;
 			bool cube = false;
+			uint8_t join = 0;   // the mesh this block joins when the block above is in it (BlockType::joinAbove), else 0
 		};
 		std::array<MeshRule, 256> rule{};
 

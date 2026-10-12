@@ -104,7 +104,7 @@ def check_groups(checks):
     terrain's, a brick is six cube faces, and ground is in the terrain's mesh. Collision sees each skin: a body lands on a
     brick at its drawn top, and the engine's mover agrees with the Python physics on a mixed patch of blocks."""
     world = cge.VoxelWorld(SIZE, HEIGHT, "voxel")
-    world.define_block(VOXEL_WOOD, cge.Vector3f(0.44, 0.29, 0.15), group="own")
+    world.define_block(VOXEL_WOOD, cge.Vector3f(0.44, 0.29, 0.15), group="own", join_above=VOXEL_LEAVES)
     world.define_block(VOXEL_LEAVES, cge.Vector3f(0.20, 0.50, 0.16), group="own", material="voxel_leaves")
     world.define_block(VOXEL_BRICK, cge.Vector3f(0.66, 0.30, 0.22), shape="cube", group="own")
     world.set_smoothing(1)
@@ -151,6 +151,20 @@ def check_groups(checks):
     checks["a body lands on a brick at its drawn top face"] = state[2] and abs(state[0][1] - 7.0) < 0.01
 
     checks["the engine's mover matches the Python physics on a mixed patch"] = body_parity(world, 11, 300, (4, 5, 4), (12, 9, 12)) == 0
+
+    # Wood joins the leaves above it: a trunk top under a canopy belongs to the canopy's skin. Wood with air above, and wood
+    # beside leaves, keep their own skin.
+    world.set_block(8, 8, 8, VOXEL_WOOD)
+    world.set_block(8, 9, 8, VOXEL_LEAVES)
+    world.set_block(3, 8, 3, VOXEL_WOOD)
+    world.set_block(7, 8, 12, VOXEL_WOOD)
+    world.set_block(8, 8, 12, VOXEL_LEAVES)
+    wait_meshed(world, chunk)
+    checks["wood under leaves joins the leaves' skin"] = world.skin_at(8, 8, 8) == 256 + VOXEL_LEAVES
+    checks["wood with air above keeps its own skin"] = world.skin_at(3, 8, 3) == 256 + VOXEL_WOOD
+    checks["wood beside leaves keeps its own skin"] = world.skin_at(7, 8, 12) == 256 + VOXEL_WOOD
+    groups = world.chunk_group_quads(0, 0)
+    checks["a joined trunk top is drawn with the leaves' mesh"] = groups.get(VOXEL_LEAVES, 0) > 0 and groups.get(VOXEL_WOOD, 0) > 0
     world.clear()
 
 

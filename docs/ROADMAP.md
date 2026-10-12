@@ -179,6 +179,13 @@ Today every solid block is part of one smooth skin per chunk, which merges wood 
   them (`check_groups`: a leaf alone is in its own mesh, a brick alone is six cube faces, ground is in the terrain mesh, a body
   lands on a brick, and the engine's mover matches the Python physics on a mixed patch). `tools/test_voxel_physics.py` checks
   the cube and largest-skin densities.
+- [x] **12.6** A wood block whose top is covered by leaves joins the leaves' skin (`BlockType::joinAbove`, `join_above=`):
+  the trunk top and the canopy are one surface, while the trunk's sides and bottom stay wood, and so does a trunk with air
+  above it. Checked by `check_groups`; seen in play (the trees worked).
+- [ ] **12.7** A wood block joins the ground under it (dirt, sand, gravel, grass, snow, and any other natural ground block) at
+  its bottom only, so a trunk base merges into the ground. Needs a join below, for a list of blocks rather than one.
+- [ ] **12.8** Water's surface is a semi-transparent mesh, not a solid colour: the water skin is drawn blended over what is
+  under it (the seabed and the shore show through), and its faces do not write depth, so the sky through it stays visible.
 - Seams: a separate skin meets the terrain where they touch. The terrain treats a trunk or a leaf as air, so its surface sits
   where the block's own skin does; in the screenshot the two meet without a crack. Level-of-detail seams between own meshes use
   the same skirts as the terrain (11.12), not yet checked in play. Light is not split by mesh (every block shades behind

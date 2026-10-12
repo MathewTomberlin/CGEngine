@@ -70,6 +70,9 @@ Each block type says how it is drawn, with `define_block(..., shape=, group=, ma
 - `group="own"` gives the block a mesh of its own in each chunk, drawn with `material` (a material in the scene file, here
   `voxel_wood`, `voxel_leaves`, `voxel_brick`). Wood and leaves are own: a canopy is its own skin, and the terrain treats its
   blocks as air, so a canopy does not hide the ground under it, and the ground does not hide the canopy. A cube is always own.
+- A wood block whose top is covered by leaves joins the leaves' skin (`join_above=`): the trunk top and the canopy are one
+  surface, while the trunk's sides and bottom stay wood. The join is only through the cell above, so a leaf beside the trunk
+  top still meets the trunk's side with a seam, not a merge.
 - Water is own too, in one mesh shared by the source and its flow (`mesh=` names the shared id). The ground under water has
   its own skin, so the seabed and the shore are seen from the water, and the water surface is seen from below as well.
   Under the water the sun's shadows are off: the surface would otherwise shade everything below it.

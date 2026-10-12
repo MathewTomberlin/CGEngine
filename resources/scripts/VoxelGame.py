@@ -243,7 +243,8 @@ class VoxelGame(PyScript):
                                     shape="cube" if block in VoxelGen.CUBES else "smooth",
                                     group="own" if block in VoxelGen.OWN else "terrain",
                                     material=VoxelGen.MATERIALS.get(block),
-                                    mesh=VoxelGen.WATER if block in VoxelGen.LIQUIDS else 0)
+                                    mesh=VoxelGen.WATER if block in VoxelGen.LIQUIDS else 0,
+                                    join_above=VoxelGen.JOINS.get(block, 0))
         self.world.set_smoothing(SMOOTH_RESOLUTION)
         self.world.set_move_seconds(SIM_TICK * 0.9)   # a falling block lands just before the next tick
         # Smooth skin nearest the camera is finer: NEAR_SAMPLES per block within NEAR_RADIUS chunks.
