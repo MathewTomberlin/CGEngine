@@ -55,10 +55,10 @@ Goal: a world with thousands of objects, and procedurally made geometry, drawn i
 
 ## Phase 8: voxel world sample (`docs/games/voxels.md`)
 A procedural block world with chunks, terrain, collision, block editing and a day/night cycle, built on Phase 7.
-- [x] **8.1** C++ voxel mesher (`cge.VoxelWorld`, `src/Core/Voxel/`): chunks of block ids meshed into runtime meshes, with per-face culling across chunk borders, per-vertex ambient occlusion, and per-block colours. Dirty chunks are re-meshed on demand. Checked offline for the terrain (`tools/test_voxel_gen.py`) and by a screenshot. Not yet: greedy meshing, a transparent water block.
+- [x] **8.1** C++ voxel mesher (`cge.VoxelWorld`, `src/Core/Voxel/`): chunks of block ids meshed into runtime meshes, with per-face culling across chunk borders, per-vertex ambient occlusion, and per-block colours. Dirty chunks are re-meshed on demand. Checked offline for the terrain (`tools/test_voxel_gen.py`) and by a screenshot. Greedy meshing came in 9.2. Not yet: a transparent water block.
 - [~] **8.2** Terrain: done are the noise, height and sand, grass, stone, snow and water per column (C++, on worker threads), chunks streamed around the camera, trees (one column in a hundred, drawn across chunk borders), and caves (tunnels and rooms carved by 3D noise, `cave_width`). Not yet: a biome map beyond height.
 - [x] **8.3** Player: gravity, jumping and collision with the blocks (`VoxelPhysics.py`, pure Python and tested offline), a ray cast to pick the block in view, and break (J) and place (K). Edited chunks are re-meshed. Flying (Enter) for exploring.
-- [~] **8.4** Day and night: done. The sun's direction and light, the ambient fill, the sky and the fog change over `VOXEL_DAY_SECONDS`, from the script (`cge.set_light`, `cge.set_environment`). A hotbar of seven block types (keys 1 to 7). Not yet: an on-screen hotbar.
+- [x] **8.4** Day and night: the sun's direction and light, the ambient fill, the sky and the fog change over `VOXEL_DAY_SECONDS`, from the script (`cge.set_light`, `cge.set_environment`). Nine block types on keys 1 to 9, with an on-screen hotbar (11.2).
 - [x] **8.5** Save and load of the edited blocks. `VoxelWorld` keeps every edit apart from its chunks, so an edit survives the chunk unloading and is applied when it loads again. `save_edits` and `load_edits` write a binary file; F5 and F9 use it in the sample. Checked by `tools/voxel_world_check.py` from `tools/test_voxels.ps1`.
 
 ## Phase 9: voxel performance and scale (from walking the voxel world)
@@ -69,19 +69,19 @@ Goal: enormous worlds with no hitching while chunks load.
 - [x] **9.4** Mouse look. The arrow keys' turn past 90 degrees flipped the camera upside down (`Camera::lookAt` only reached yaw in [-90, 90]); fixed. Static meshes no longer skin with the bone matrices an animated model left behind (a `skinned` uniform).
 - [ ] **9.5** Region batching (several chunks in one mesh, fewer draws). Deferred: at 700 chunks in view the Release build still runs at about 630 frames a second with a 3.5 ms worst frame, so it is not needed yet. Revisit when there are many more draws per chunk.
 - [x] **9.6** Measured and tested. Release, 169 chunks: loaded in 1.2 s, about 1100 frames a second when still, worst frame 8 ms while walking and turning. Debug: about 100 frames a second, worst frame about 15 ms. Release, 700 chunks: about 630 frames a second. `tools/test_voxels.ps1` loads the world, walks and turns with scripted keys, and checks the chunks, the pitch and the worst frame.
-- [~] **9.7** Lighting and atmosphere for the voxel world. Done: trees, caves, distance fog, a sky gradient from the horizon colour to the zenith colour, a sun disc with glow (`environment` zenith and sun in scenes, `cge.set_environment`), and the day and night light. Not yet: shadows.
+- [x] **9.7** Lighting and atmosphere for the voxel world: trees, caves, distance fog, a sky gradient from the horizon colour to the zenith colour, a sun disc with glow (`environment` zenith and sun in scenes, `cge.set_environment`), and the day and night light. Shadows came in 10.5; cave light is 11.6.
 - [x] **9.8** The camera turns level at any yaw. The view applied the pitch before the yaw, so once the yaw passed 90 degrees the horizon tilted by the pitch; and the script's look direction (pitch after yaw) disagreed with `Camera::lookAt` off yaw 0. Now the orientation is Rz * Rx * Ry, and `lookAt` reads the angles back in that order. `tools/test_voxels.ps1` checks that the right vector stays level and that the camera looks where the player does.
 - [x] **9.9** View radius 14: 841 chunks, about 460,000 quads. Release: all loaded in 1.3 s, about 580 frames a second still, worst frame about 5 ms while walking. The fog ends at the edge of the loaded area, so the edge does not show.
 - [x] **9.10** A runtime voxel mesh's arrays are freed once they are on the GPU. Its bounds are computed first, and its counts are kept. At 841 chunks (about 717,000 quads with the caves) the process holds about 295 MB.
 
 ## Phase 10: smooth terrain, physics and the next voxel steps (from the voxel sample's growth)
 Goal: the terrain looks rounded and real, the blocks obey physics the scripts can change, and the far world stays cheap.
-- [~] **10.1** Smooth skin: done. Surface nets over the blocks' occupancy (`buildSmoothMesh`, `set_smoothing`), so the
+- [x] **10.1** Smooth skin. Surface nets over the blocks' occupancy (`buildSmoothMesh`, `set_smoothing`), so the
   ground, hills and tree crowns are rounded and textured; shaded from the density gradient, coloured by the dominant
   block, with occlusion. One sample per block: 1.08 million quads for 841 chunks, 655 frames a second in Release, load
   1.4 s, 206 MB. Two samples per block gives half-block detail but 4.7 million quads, so it is not the default. Single-block
-  features keep their surface (the samples sit at block centres at one sample per block). Not yet:
-  a finer skin near the camera with a coarser one far away (the seams need skirts or matched edges).
+  features keep their surface (the samples sit at block centres at one sample per block). The finer skin near the
+  camera, with a coarser one far away, came in 11.7.
 - [x] **10.2** Block physics (`VoxelSimulation`, `VoxelBlocks.h`): block types (solid, falls, liquid). Sand and gravel
   fall, and swap down past water. Water is a full source with flowing levels 7 to 1, so it spreads and drains and stays
   finite. Only changed cells are queued, so an idle world costs nothing. Checked by `tools/voxel_world_check.py`.
@@ -95,11 +95,11 @@ Goal: the terrain looks rounded and real, the blocks obey physics the scripts ca
   and a 3 by 3 texel filter. Meshes draw into it with the standard shader, which stops early in that pass. Redrawn when the
   camera moves, the sun turns or a tenth of a second passes; skipped while the sun is down. Release: 650 frames a second
   with shadows on (about the same as without, after the caching).
-- [ ] **10.6** Region batching (9.5). Not needed yet: with the smooth skin, 841 chunks run at 650 frames a second in Release.
-- [ ] **10.7** An on-screen hotbar (8.4).
+- [x] **10.6** An on-screen hotbar (8.4), done in 11.2. Region batching is 9.5.
 
 ## Phase 11: making the voxel sample feel right to play (from playing it)
 Goal: the world reads well at a human pace, and the engine's own state is easy to see and to test.
+Next, in order: 11.15 (needs a snapshot from the player), 11.8 (measure again before optimising), 11.13 (floating crowns), 11.6 (cave light), then 11.9 and 11.10.
 - [x] **11.1** Mouse look at a quarter of the first setting (0.00625 degrees a pixel, `VOXEL_MOUSE_SENSITIVITY`). Escape
   opens a pause menu: the mouse is freed and the world stands still; Resume locks the mouse; Quit closes the app.
   `tools/test_pause_menu.ps1` checks each step with scripted input.
@@ -119,7 +119,7 @@ Goal: the world reads well at a human pace, and the engine's own state is easy t
   each chunk's side from the surface. Measured: near chunks have about 2.7 times the quads of far ones. Release: 841 chunks
   at about 1.2 million quads, 559 frames a second, 239 MB.
 - [ ] **11.8** Frame rate: the labels and outlines together cut the Release rate from about 650 to about 360 frames a second
-  (measured after the HUD landed). Find out which part costs it (the per-frame text state switch, or the outline uploads)
+  (measured after the HUD landed). 11.7 reports 559 frames a second, which may already include the HUD, so measure again first. Find out which part costs it (the per-frame text state switch, or the outline uploads)
   before anything else is optimised.
 - [ ] **11.9** Entities: the player's box mover is C++ (`step_body`), but other bodies have no collision. A body component
   that uses the same mover, so scripts can make many walking or falling bodies.
@@ -129,14 +129,16 @@ Goal: the world reads well at a human pace, and the engine's own state is easy t
 - [x] **11.12** Thin trunks read as vines, and skirts hung flat sheets over air. A one-sample surface pulls each vertex
   toward the middle of its cell, which thins features one block wide; the surface now sits a little further out
   (iso 0.3), so trunks are solid. Skirts only go where the neighbour is at another level of detail, and only over solid.
-- [ ] **11.14** Intermittent square shadow on the terrain at high sun, with nothing casting it. Not reproduced yet. F12 now saves a screenshot and the game state together, so the next occurrence can be checked. The shadow edge now fades to lit at the map boundary, which may hide a square edge.
 - [ ] **11.13** Trees whose trunk is outside the loaded area leave crowns floating. Look at the far edge of the view, and
   make the trunk part of the crown's chunk, or skip crowns whose trunk is missing.
+- [ ] **11.14** Intermittent square shadow on the terrain at high sun, with nothing casting it. Not reproduced yet. F12 now saves a screenshot and the game state together (`cg_control/snapshots/`), so the next occurrence can be checked. The shadow edge now fades to lit at the map boundary, which may hide a square edge. Needs an F12 pair from the player.
+- [ ] **11.15** Start of game: the player sometimes falls through the ground into the kill zone, then restarts at the spawn height and falls again until moved. Not reproduced: a run with focus in another window landed normally, and the 24-seed landing check (`tools/spawn_check.py`) passes. The game now saves `cg_control/snapshots/fell_*.json` when the player drops below the kill zone. Open: whether the chunk under the player was loaded, and whether the blocks under the feet were solid. Blocks in unloaded chunks read as air, so a box that reaches into an unloaded neighbour can fall through it. Needs a snapshot from the player.
 
 ## Tooling and quality
 - [x] CI build on Windows (`.github/workflows/build.yml`) with Mesa software OpenGL smoke run
 - [~] Unit tests for pure logic runnable without a GPU. Done for the dungeon generator (`python -I tools/test_dungeon_gen.py`) and for the scene format and command list (`python -I tools/test_scene_format.py`: example scenes, invalid fixtures, documented commands). The C++ parsers in `SceneLoader` and `ControlChannel` are still covered only by the GPU integration test.
 - [x] Documentation index (`docs/ai/README.md`) for agents
+- [ ] Checks that depend on frame timing: `tools/spawn_check.py` steps at a fixed 0.05 s, and the dungeon walk in Release. Make each wait for a condition (a chunk loaded, the player on the ground, a state field set) instead of a frame count, so it holds at any frame rate.
 
 ## Open questions
 - "JEV" as an AI app controller was mentioned but not specified. Phase 2 is designed so an
@@ -151,5 +153,6 @@ Goal: the world reads well at a human pace, and the engine's own state is easy t
 - Look at the scene before trusting it. The dungeon floor sat half a tile above y = 0 for its whole life, because a plane primitive's surface is offset by its size. Cubes hid it; the first real models sank to the waist. Screenshots through the control channel caught it.
 - Remaining big-ticket items: Phase 5, batching draws by material (3.2 continuation), and the dungeon's next steps (an inventory, a shop for coins, and sound).
 - Voxel notes (from the voxel sample, later work): the smooth skin looks much better than the cubes, and shadows read well once the map is cached. The HUD took several passes: the screen's own view is a square in the middle of the window, so window-wide text needs its own view, and text draws over meshes only with a high z order. A closed window used to restart the scene (the run loop now ends).
-- How I feel about it: the engine is in good shape for building games quickly from Python, and the voxel sample feels like a real game now. My worries are the frame-rate drop from the HUD (11.8), the `Body` draw path that casts a transformable to a shape to draw text (it works, but it is undefined behaviour and should store a drawable), and tests that depend on frame timing. I want to fix those before adding more features.
+- Hypotheses get a run before a fix. The background-run theory for the start-of-game fall was tested (a run with focus in another window) and it landed normally. A bug that cannot be reproduced gets instrumentation that saves the state at the moment of failure, not a guess.
+- How I feel about it, after PR #186: the voxel sample reads as a game now. The level of detail and the skirts fixed the thing I was least happy with (flat green sheets and vines), and the shadows read well. I am least sure of the two bugs I cannot reproduce, the start-of-game fall and the square shadow, so I want a snapshot before a theory. The worries, in order: the frame-rate drop from the HUD (11.8), checks that depend on frame timing, and the `Body` draw path that casts a transformable to a shape to draw text (it works, but it is undefined behaviour and should store a drawable). I would fix those three before the next big feature. Caves are where the lighting is weakest, so 11.6 is the feature I would pick after them.
 - The tests run through the control channel with scripted input. They are the best guard against regressions in the game, and they caught a real engine bug (the run loop), so keep adding one for each new interaction.

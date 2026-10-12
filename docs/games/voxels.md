@@ -64,7 +64,7 @@ world.active_count()                     # cells queued: 0 when everything has s
   841 in all), moves the player and the camera, edits blocks, runs the day and night cycle, and writes
   `cg_control/voxel_state.json` four times a second: chunk counts, quads, the player, the frame time, the time of day, the
   sun, the fog, and the camera's own basis.
-- `resources/scripts/VoxelPhysics.py`: gravity, jumping, collision of the player's box with the blocks, and block
+- `resources/scripts/VoxelPhysics.py`: the Python reference for the player's mover (the game runs `world.step_body` in C++), and block
   picking. Pure Python: `python -I tools/test_voxel_physics.py` checks it without the engine.
 - `resources/scripts/VoxelGen.py`: block ids, colours and the tree chance. The terrain itself is C++ (below).
 - `resources/voxel_noise.png`: the base texture, a light grey noise, tinted per block. `tools/make_voxel_texture.py`
@@ -132,22 +132,22 @@ Only bodies made this way can be updated. Each vertex's colour multiplies the su
 
 ## Player
 
-The player is a box 0.6 wide and 1.8 tall, with its feet at `pos`. `VoxelPhysics.step` moves it one axis at a time, in
+The player is a box 0.6 wide and 1.8 tall, with its feet at `pos`. `world.step_body` (C++) moves it one axis at a time, in
 steps of at most 0.1 blocks, and sets it flush against any block it runs into, so it stands on the ground without
 hovering. Gravity is 28 blocks per second squared; a jump is 9 blocks per second. The eye is 1.6 above the feet. The
 block picked is the first solid one along the view, within 6 blocks. A block is not placed where the player stands.
 
 ## Performance
 
-Release, 841 chunks in view (about 460,000 quads): all loaded in 1.3 seconds, about 580 frames a second while standing
-still, and a worst frame of about 5 ms while walking and turning. `tools/test_voxels.ps1` checks the load, the walk,
+Release, 841 chunks in view (about 1.2 million quads with the near detail): about 560 frames a second while standing
+still (11.7 in the roadmap). `tools/test_voxels.ps1` checks the load, the walk,
 the view's level and the worst frame.
 
 ## Limits
 
-- The hotbar has no picture on screen, and the shadows are hard-edged only where the map is sharp (near the camera).
+- Caves get no light of their own yet: only the sun's shadow reaches them (11.6 in the roadmap).
 - The simulation runs on the loaded chunks only. The player's collision is in C++ (`world.step_body`), and the Python
   version (`VoxelPhysics.step`) stays as the reference that the tests compare with.
-- Water is opaque. The smooth skin has one level of detail for every chunk; a finer skin near the camera is on the roadmap.
+- Water is opaque. The smooth skin has two levels of detail: two samples a block within 3 chunks of the player, and one a block beyond that.
 - Each chunk is one draw call. Region batching (several chunks in one mesh) is the next step if the draw count
   becomes the limit.
