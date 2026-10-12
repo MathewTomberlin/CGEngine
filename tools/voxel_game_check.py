@@ -261,6 +261,7 @@ def main():
         test_walker = VoxelWalkers.Walker(world, "test_creature", spawn, (0.5, 0.5, 0.5), random.Random(1))
         game.walkers.walkers.append(test_walker)
         hides0 = inv.count(VoxelGen.HIDE)
+        drops0 = len(game.drops.live)
         game.walker_target = (1.0, test_walker)
         game.target = None
         click(game, "Left")
@@ -270,7 +271,19 @@ def main():
         click(game, "Left")
         checks["the last hit takes the creature out of the world"] = (
             test_walker not in game.walkers.walkers and cge.find_body("test_creature") is None)
-        checks["a dead creature leaves a hide in the inventory"] = inv.count(VoxelGen.HIDE) == hides0 + 1
+        checks["a dead creature leaves a hide on the ground, not in the inventory"] = (
+            inv.count(VoxelGen.HIDE) == hides0 and len(game.drops.live) == drops0 + 1 and game.drops.live[-1].item == VoxelGen.HIDE)
+        # Walking up to the hide takes it into the inventory, and standing away from it does not.
+        drop_feet = game.drops.live[-1].feet
+        player_pos = list(game.pos)
+        game.pos = [drop_feet[0] + 4.0, drop_feet[1], drop_feet[2]]
+        game.collect_drops()
+        checks["a hide out of reach stays on the ground"] = len(game.drops.live) == drops0 + 1 and inv.count(VoxelGen.HIDE) == hides0
+        game.pos = [drop_feet[0] + 0.3, drop_feet[1], drop_feet[2]]
+        game.collect_drops()
+        game.pos = player_pos
+        checks["walking up to the hide takes it into the inventory"] = (
+            len(game.drops.live) == drops0 and inv.count(VoxelGen.HIDE) == hides0 + 1)
         game.walker_target = None
         game.slot = 0
         inv.slots[0] = [VoxelGen.HIDE, 2]

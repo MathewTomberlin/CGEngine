@@ -311,14 +311,20 @@ Goal: blocks and creatures take several hits, and what the player has hit looks 
   trap). The timer is per cell and only runs for damaged cells.
 - [x] **16.5** Creatures take hits: each has `HEALTH` (3) and a left click takes one (the aimed creature is outlined, and its
   hits left are on the HUD). A hit pushes it away and flashes it red. A dead one is taken out of the world (its walker and its
-  mesh) and leaves a hide for the inventory (`VoxelGen.HIDE`, an item that cannot be placed). One in three is a biter: it chases
+  mesh) and leaves a hide on the ground where it fell (16.7). The hide is `VoxelGen.HIDE`, an item that cannot be placed. One in three is a biter: it chases
   the player inside 7 blocks and bites at 1 health each 1.2 s when within 1.3 blocks. The others still run from the player.
-  Not yet: the drop lands in the inventory directly, not on the ground to pick up, and the creatures do not fight each other.
+  Not yet: the creatures do not fight each other.
 - [x] **16.6** The player has health: ten points on a bar above the hotbar. Bites and falls lower it (a fall past 4 blocks costs
   1 point a block beyond that; the spawn drop does not count). It heals 0.25 a second after 6 s without a hit, and does not heal
   while the game is paused. At zero the player is back at the spawn with the inventory kept.
   The hurt shows on screen too: the whole window reddens at the moment of a bite or a fall and fades over 0.4 s
   (`update_hurt_flash`, under the hotbar). Creative mode (C) takes no bites or falls. Not yet: lava (the sample has none).
+- [x] **16.7** Dropped items: a creature's hide lies on the ground where it died (`VoxelDrops.py`), a small bobbing cube in the
+  item's colour, one mesh body each. Walking within 1.2 blocks of it (and no more than a floor away) takes it, when the inventory
+  has room; a full inventory leaves it there. Drops are saved with the inventory (F5 and F9), and creative mode takes none and
+  leaves them where they are. Checked by `tools/test_voxel_drops.py` (no GPU) and `voxel_game_check.py`. Not yet: a creature that
+  dies in the air leaves its drop there (nothing makes it fall), a full inventory gives no message, and each drop rebuilds its
+  mesh every frame.
 ## Phase 17: inventory and a real hotbar (from playtesting: the hotbar is a line of text)
 Goal: items have quantities, the inventory is a grid the player can see and change, and the hotbar is a UI, not text.
 - [x] **17.1** An item model: an item is a block id (a torch is one too, though it is a prop), held in a slot with a count up to

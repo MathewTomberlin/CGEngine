@@ -20,6 +20,7 @@ import traceback
 import cg_engine_bindings as cge
 from PyScript import PyScript
 import StateFile
+import VoxelDrops
 import VoxelGen
 import VoxelInventory
 import VoxelNet
@@ -244,6 +245,7 @@ class VoxelGame(PyScript):
         self.spawn_pos = list(self.pos)
         self.walker_target = None       # (distance, walker) of the creature under the crosshair, or None
         self.bursts = VoxelParticles.Bursts(random.Random(self.seed))   # the chips a hit or a break throws
+        self.drops = VoxelDrops.Drops()  # the items lying on the ground, taken by walking up to them
         self.net = None                 # the link to the other process (VOXEL_NET), or None for a single player
         self.net_pending = {}           # remote edits for chunks not loaded yet: cell -> (kind, value), applied when they load
         self.net_pos_timer = 0.0
@@ -314,6 +316,7 @@ class VoxelGame(PyScript):
             self.world.simulate(dt, SIM_BUDGET_MS, SIM_TICK)
             self.update_mouse()
             self.update_player(dt)
+            self.collect_drops()
             self.update_walkers(dt)
             self.update_target()
             self.edit_blocks()
@@ -324,6 +327,7 @@ class VoxelGame(PyScript):
         self.update_healing()
         self.update_health(dt)
         self.bursts.update(dt)
+        self.drops.update(dt)
         self.frame_dt = dt
         self.place_camera()
 
@@ -879,6 +883,14 @@ class VoxelGame(PyScript):
         if not self.creative:
             self.inventory.add(item, amount)
 
+    def collect_drops(self):
+        """Walking up to an item on the ground takes it, when the inventory has room. Creative mode leaves the drops where they are,
+        since it keeps no stock: an item taken there would be lost."""
+        if self.creative:
+            return
+        for item in self.drops.take_in_reach(self.pos, self.inventory):
+            self.notify("Picked up a %s" % VoxelGen.NAMES[item])
+
     def spend(self):
         """Placing takes one from the selected slot. Creative mode takes nothing."""
         if not self.creative:
@@ -964,7 +976,8 @@ class VoxelGame(PyScript):
             self.world.settle_moves()   # blocks in flight land first, so none is missing from the file
             self.world.save_edits(EDITS_FILE)
             self.inventory.return_held()
-            StateFile.write_json(INVENTORY_FILE, {"slots": self.inventory.to_list(), "slot": self.slot})
+            StateFile.write_json(INVENTORY_FILE, {"slots": self.inventory.to_list(), "slot": self.slot,
+                                                  "drops": self.drops.to_list()})
             self.notify("Saved")
         if self.pressed("Load", bool(cge.key_down("F9"))):
             self.world.load_edits(EDITS_FILE)
@@ -978,6 +991,7 @@ class VoxelGame(PyScript):
                 data = json.load(f)
             self.inventory.load_list(data.get("slots", []))
             self.slot = int(data.get("slot", self.slot)) % COLUMNS
+            self.drops.load_list(data.get("drops", []), lambda item: VoxelGen.ITEM_COLOURS.get(item, (0.8, 0.8, 0.8)))
         except (OSError, ValueError, TypeError, AttributeError):
             pass
 
@@ -1044,8 +1058,10 @@ class VoxelGame(PyScript):
                 self.bursts.add(centre, (0.55, 0.45, 0.40), 12, 0.14, 0.7)
                 self.walkers.remove(walker)
                 self.walker_target = None
-                self.gain(VoxelGen.HIDE)
-                self.notify("A creature died: a hide" if not self.creative else "A creature died")
+                if not self.creative:
+                    # The hide lies where the creature fell, on the ground under its middle, for the player to walk up to.
+                    self.drops.add(VoxelGen.HIDE, VoxelGen.ITEM_COLOURS[VoxelGen.HIDE], (centre[0], lo[1], centre[2]))
+                self.notify("A creature died: a hide on the ground" if not self.creative else "A creature died")
             else:
                 self.bursts.add(centre, (0.85, 0.25, 0.2), 4, 0.12, 0.4)
             return
@@ -1358,7 +1374,7 @@ class VoxelGame(PyScript):
                  "upload_ms": round(stats["upload_ms"], 3), "edits": stats["edits"], "slot": self.slot,
                  "smoothing": self.world.smoothing(), "active": self.world.active_count(), "paused": self.paused,
                  "menu": self.menu_page if self.paused else None, "sensitivity": self.sensitivity, "view_radius": self.view_radius,
-                 "seed": self.seed, "frames": self.frames, "inventory": self.inventory.to_list(), "creative": self.creative,
+                 "seed": self.seed, "frames": self.frames, "inventory": self.inventory.to_list(), "drops": len(self.drops.live), "creative": self.creative,
                  "inventory_open": self.inventory_open, "health": round(self.health, 3),
                  "net": None if self.net is None else {"mode": self.net.mode, "connected": self.net.connected,
                                                        "sent": self.net.sent, "received": self.net.received,
