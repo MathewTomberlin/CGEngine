@@ -27,6 +27,7 @@ void bindModel(py::module_& m);
 void bindWorld(py::module_& m);
 void bindGame(py::module_& m);
 void bindVoxel(py::module_& m);
+void bindVoxelWalkers(py::module_& m);
 
 // The bindings are embedded in main.exe, not built as a separate .pyd. A .pyd would carry its own copy
 // of the engine's globals (assets, world, renderer), so scripts would see a different world from the one
@@ -59,6 +60,7 @@ PYBIND11_EMBEDDED_MODULE(cg_engine_bindings, m) {
     bindWorld(m);
     bindGame(m);
     bindVoxel(m);
+    bindVoxelWalkers(m);
     //extern CGEngine::PyInterpreter* interpreter;
     //m.attr("py_interpreter") = py::cast(*interpreter);
 }

@@ -76,8 +76,8 @@ world.active_count()                     # cells queued: 0 when everything has s
 - `resources/scripts/VoxelPhysics.py`: the Python reference for the player's mover (the game runs `world.step_body` in C++), and block
   picking. Pure Python: `python -I tools/test_voxel_physics.py` checks it without the engine.
 - `resources/scripts/VoxelWalkers.py`: creatures that wander the terrain (`VOXEL_WALKERS`, 12 by default). Each is a box
-  mesh moved by `world.step_body`, so it stands on the ground, turns at walls, jumps a block, and waits for its chunk.
-  `tools/voxel_world_check.py` checks them.
+  mesh that the engine's voxel walker moves once per update, so it stands on the ground, turns at walls, jumps a block, and
+  does not fall through unloaded terrain. `tools/voxel_world_check.py` checks them.
 - `resources/scripts/VoxelShapes.py`: the box meshes the outline and the creatures are made from.
 - `resources/scripts/VoxelGen.py`: block ids, colours and the tree chance. The terrain itself is C++ (below).
 - `resources/voxel_noise.png`: the base texture, a light grey noise, tinted per block. `tools/make_voxel_texture.py`
@@ -117,6 +117,9 @@ world.update(2.0, focus_x=0, focus_z=0)        # once a frame: install, upload w
 world.set_block(3, 10, 5, 0)                   # remove one block; its chunks are re-meshed by update()
 world.get_block(3, 10, 5)                      # 0 for air, and for chunks that are not loaded
 world.light_at(3, 10, 5)                       # sky light, 0 to 255 (computed on demand, for queries)
+cge.add_voxel_walker("creature", world)       # a mesh body that falls, lands and walks on the world (C++, each update)
+cge.set_voxel_velocity("creature", 1.0, 0.0)   # horizontal velocity; cge.voxel_jump(name, 9.0) jumps from the ground
+cge.voxel_walker_state("creature")             # (pos, vel, on_ground); cge.remove_voxel_walker(name) before dropping the world
 world.unload_chunk(0, 0)
 world.stats()                                  # chunks, loaded, pending, dirty, meshing, quads, upload_ms
 

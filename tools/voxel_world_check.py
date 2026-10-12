@@ -214,15 +214,20 @@ def check_light(world, checks, chunks, results):
 
 
 def check_walkers(world, checks):
-    """Creatures stand on the ground, walk about, and never end up inside a block."""
+    """Creatures stand on the ground, walk about, and never end up inside a block. The engine moves them through
+    cge.step_voxel_walker here, since this check runs inside a frame and no frames pass while it works."""
     import VoxelWalkers
     herd = VoxelWalkers.Walkers(world, (0.0, 0.0), 4, 5, prefix="check_creature")
     walkers = herd.walkers
-    checks["walkers spawn on the ground"] = len(walkers) == 4 and all(w.on_ground is False or w.pos[1] >= 1.0 for w in walkers)
-    spawns = [list(w.pos) for w in walkers]
+    checks["walkers spawn on the ground"] = len(walkers) == 4 and all(w.state()[2] is False or w.state()[0][1] >= 1.0 for w in walkers)
+    spawns = [list(w.state()[0]) for w in walkers]
+    dt = 1.0 / 60.0
     for _ in range(240):   # 4 seconds at 60 frames a second
-        herd.update(1.0 / 60.0)
-    def top_below(x, z, feet):
+        herd.update(dt)
+        for w in walkers:
+            cge.step_voxel_walker(w.name, dt)
+
+    def column_top(x, z, feet):
         # The top of the highest solid block in this column at or below the feet (0 if there is none).
         for y in range(min(HEIGHT - 1, math.floor(feet + 0.05)), -1, -1):
             if world.is_solid(x, y, z):
@@ -232,31 +237,30 @@ def check_walkers(world, checks):
     def ground_under(x, z, feet):
         # A creature stands on the highest block under its footprint.
         half = VoxelWalkers.HALF_WIDTH
-        return max(top_below(cx, cz, feet) for cx in {math.floor(x - half), math.floor(x + half - 1e-6)}
+        return max(column_top(cx, cz, feet) for cx in {math.floor(x - half), math.floor(x + half - 1e-6)}
                    for cz in {math.floor(z - half), math.floor(z + half - 1e-6)})
+
     stands = True
     inside = False
     moved = 0.0
-    details = []
     for w, spawn in zip(walkers, spawns):
-        x, z = w.pos[0], w.pos[2]
-        ground = ground_under(x, z, w.pos[1])
-        details.append({"pos": [round(v, 2) for v in w.pos], "vel": [round(v, 2) for v in w.vel], "ground": ground,
-                        "onGround": w.on_ground})
+        pos, vel, on_ground = w.state()
+        x, z = pos[0], pos[2]
+        ground = ground_under(x, z, pos[1])
         # A creature mid-jump or mid-fall is in the air; the others must stand on the top block of their column.
-        if not w.on_ground and abs(w.vel[1]) < 1e-6:
+        if not on_ground and abs(vel[1]) < 1e-6:
             stands = False
-        if w.on_ground and abs(w.pos[1] - ground) > 0.05:
+        if on_ground and abs(pos[1] - ground) > 0.05:
             stands = False
-        for y in (w.pos[1] + 0.1, w.pos[1] + VoxelWalkers.HEIGHT - 0.1):
+        for y in (pos[1] + 0.1, pos[1] + VoxelWalkers.HEIGHT - 0.1):
             if world.is_solid(int(x // 1), int(y // 1), int(z // 1)):
                 inside = True
         moved = max(moved, ((x - spawn[0]) ** 2 + (z - spawn[2]) ** 2) ** 0.5)
     checks["walkers stand on the ground after 4 s"] = stands
-    checks.setdefault("_walkerDetails", details)
     checks["walkers never end up inside a block"] = not inside
     checks["walkers wander"] = moved > 0.5
     for w in walkers:
+        cge.remove_voxel_walker(w.name)
         cge.remove_mesh_body(w.name)
 
 
