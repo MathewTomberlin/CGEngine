@@ -71,16 +71,21 @@ namespace CGEngine {
         // Cube or plane generated in code. Meshes are cached per size, so bodies can share them.
         void createPrimitiveBody(const json& b, const std::string& name, const Transformation3D& transform, const std::vector<id_t>& overrides) {
             std::string primitive = requireString(b, "primitive", "body '" + name + "'");
-            if (primitive != "cube" && primitive != "plane") {
-                throw std::invalid_argument("body '" + name + "' has unknown primitive '" + primitive + "' (use \"cube\" or \"plane\")");
+            if (primitive != "cube" && primitive != "plane" && primitive != "sphere") {
+                throw std::invalid_argument("body '" + name + "' has unknown primitive '" + primitive + "' (use \"cube\", \"plane\" or \"sphere\")");
             }
             float size = b.value("size", 1.0f);
             std::ostringstream meshName;
             meshName << "primitive:" << primitive << ":" << size;
 
-            auto meshData = assets.create<MeshData>(meshName.str(),
-                primitive == "cube" ? getCubeVertices(size) : getPlaneVertices(size, 0.0f, Vector3f(0, 0, 0)),
-                primitive == "cube" ? getCubeIndices() : getPlaneIndices());
+            // A sphere's "size" is its radius.
+            vector<VertexData> vertices = primitive == "cube" ? getCubeVertices(size)
+                : primitive == "plane" ? getPlaneVertices(size, 0.0f, Vector3f(0, 0, 0))
+                : getSphereVertices(size);
+            vector<unsigned int> indices = primitive == "cube" ? getCubeIndices()
+                : primitive == "plane" ? getPlaneIndices()
+                : getSphereIndices(16, 12, vertices);
+            auto meshData = assets.create<MeshData>(meshName.str(), vertices, indices);
             if (!meshData.has_value()) {
                 throw std::runtime_error("failed to create mesh for primitive body '" + name + "'");
             }

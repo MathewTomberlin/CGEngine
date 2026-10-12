@@ -5,6 +5,7 @@
   ],
   "bodies": [
     { "name": "block", "primitive": "cube", "size": 1, "position": [0, 0, -5] },
-    { "name": "block_big", "primitive": "cube", "size": 2, "material": "brick", "position": [3, 0, -5] }
+    { "name": "block_big", "primitive": "cube", "size": 2, "material": "brick", "position": [3, 0, -5] },
+    { "name": "ball", "primitive": "sphere", "size": 0.8, "position": [-3, 0, -5] }
   ]
 }
