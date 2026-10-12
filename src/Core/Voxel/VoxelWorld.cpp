@@ -52,7 +52,9 @@ namespace CGEngine {
 		const int cz = floorDiv(z, size);
 		PaddedChunk padded = snapshot(cx, cz, VoxelLightReach);
 		computeLight(padded);
-		return padded.lightAt(x - cx * size, y, z - cz * size);
+		const int lx = x - cx * size;
+		const int lz = z - cz * size;
+		return std::max(padded.lightAt(lx, y, lz), padded.lampAt(lx, y, lz));
 	}
 
 	double VoxelWorld::skinDensity(double x, double y, double z) const {

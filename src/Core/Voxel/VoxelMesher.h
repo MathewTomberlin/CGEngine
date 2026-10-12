@@ -26,9 +26,12 @@ namespace CGEngine {
 		// [-border, size + border) and y in [-border, height + border), is at ((y + border) * P + (z + border)) * P + (x + border)
 		// where P = size + 2 * border.
 		std::vector<uint8_t> blocks;
-		// Light for each block position, in the same layout: the sky's (255 where the sky reaches, falling off through air) or
-		// a light block's, whichever is brighter (see computeLight). Empty until computeLight runs.
+		// Sky light for each block position, in the same layout: 255 where the sky reaches, falling off through air (see
+		// computeLight). Empty until computeLight runs.
 		std::vector<uint8_t> light;
+		// Light from the light blocks alone, in the same layout (0 where none reaches). The mesh adds it to the sky light, so a
+		// lamp brightens a sunlit wall as well as a cave. The light at a block (VoxelWorld::lightAt) is the brighter of the two.
+		std::vector<uint8_t> lamp;
 		// The light each block id gives off at its own cell, 0 to 255. Set from the world's block types (BlockType::emits).
 		std::array<uint8_t, 256> emission{};
 
@@ -44,12 +47,16 @@ namespace CGEngine {
 		uint8_t lightAt(int x, int y, int z) const {
 			return light[index(x, y, z)];
 		}
+
+		uint8_t lampAt(int x, int y, int z) const {
+			return lamp[index(x, y, z)];
+		}
 	};
 
 	// Fills chunk.light. A block is open to the sky if no block is above it in its column; the light of open air is full,
 	// and each block walked through air from there multiplies it by 0.8, down to a floor of 0.2 beyond VoxelLightReach steps.
 	// A light block (chunk.emission) is full at its own cell, and the light it gives multiplies by 0.8 for each block walked
-	// through air, for VoxelLightReach blocks; each cell takes the brighter of the two. Any block counts as opaque, the same
+	// through air, for VoxelLightReach blocks; it goes to chunk.lamp, apart from the sky's. Any block counts as opaque, the same
 	// as in the meshes, so caves and the ground under trees are dark until a light block is in them.
 	void computeLight(PaddedChunk& chunk);
 

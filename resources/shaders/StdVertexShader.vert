@@ -65,6 +65,7 @@ in vec3 vertNormal;
 in float materialId;
 in mat4 instanceMatrix;	//Read only when instanced is set (see Renderer::drawInstances)
 in vec3 vertColour;
+in vec3 vertGlow;	//Light the surface gives off (black unless the mesh sets it; see VoxelVertex::glow)
 uniform bool instanced;
 uniform bool skinned;	//Only meshes with bones read the bone attributes; others would read defaults (see Renderer::renderMesh)
 in ivec4 boneIds;
@@ -75,6 +76,7 @@ out vec3 normal;
 out vec3 vertex;
 out float matId;
 out vec3 vertexColour;
+out vec3 vertexGlow;
 
 void main() {
     vec4 bonePosition = vec4(0.0f);
@@ -111,6 +113,7 @@ void main() {
 	vertex = worldPos.xyz;
 	matId = materialId;
 	vertexColour = vertColour;
+	vertexGlow = vertGlow;
 
 	gl_Position = camera * worldPos;
 }

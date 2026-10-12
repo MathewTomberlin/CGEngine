@@ -12,9 +12,13 @@ namespace CGEngine {
 			uint8_t occlusion[4] = { 0, 0, 0, 0 };
 			// The sky light of the air in front. Faces merge when it is close (within an eighth), and the quad takes this one.
 			uint8_t light = 0;
+			// The light of the lamps in the air in front (PaddedChunk::lamp). It is added to the sky light, and merges like it.
+			uint8_t lamp = 0;
+			// The light the block gives off (BlockType::emits), for the glow of its faces.
+			uint8_t emission = 0;
 
 			bool operator==(const MaskCell& other) const {
-				return block == other.block && sign == other.sign && (light >> 5) == (other.light >> 5)
+				return block == other.block && sign == other.sign && (light >> 5) == (other.light >> 5) && (lamp >> 5) == (other.lamp >> 5)
 					&& occlusion[0] == other.occlusion[0] && occlusion[1] == other.occlusion[1]
 					&& occlusion[2] == other.occlusion[2] && occlusion[3] == other.occlusion[3];
 			}
@@ -71,7 +75,8 @@ namespace CGEngine {
 				vertex.normal = normal;
 				// Texture repeats once per block across the quad, so a big quad tiles like its blocks would.
 				vertex.texCoord = glm::vec2(static_cast<float>(cornerU[k] * w), static_cast<float>(cornerV[k] * h));
-				vertex.colour = base * occlusionLight[face.occlusion[k]] * (face.light / 255.0f);
+				vertex.colour = base * occlusionLight[face.occlusion[k]] * ((face.light + face.lamp) / 255.0f);
+				vertex.glow = palette[face.block] * (face.emission / 255.0f);
 				out.vertices.push_back(vertex);
 			}
 			// Split the quad along the diagonal between its less occluded corners, so the shading does not streak.
@@ -173,6 +178,7 @@ namespace CGEngine {
 		}
 		// Every position of the padded chunk, including the air above the world (full light) and below it (none).
 		chunk.light.assign(chunk.blocks.size(), 0);
+		chunk.lamp.assign(chunk.blocks.size(), 0);
 		for (int z = lo; z < hi; ++z) {
 			for (int x = lo; x < hi; ++x) {
 				for (int y = -b; y < h + b; ++y) {
@@ -183,8 +189,8 @@ namespace CGEngine {
 					} else if (y >= 0 && chunk.blocks[i] == 0) {
 						level = steps[i] == 0xFF ? LightFloor : byStep[steps[i]];
 					}
-					if (!emitted.empty()) level = std::max(level, emitted[i]);
 					chunk.light[i] = static_cast<uint8_t>(std::lround(level * 255.0f));
+					if (!emitted.empty()) chunk.lamp[i] = static_cast<uint8_t>(std::lround(emitted[i] * 255.0f));
 				}
 			}
 		}
@@ -226,9 +232,11 @@ namespace CGEngine {
 							const uint8_t block = chunk.at(solid[0], solid[1], solid[2]);
 							if (block == 0 || chunk.at(air[0], air[1], air[2]) != 0) continue;
 							cell.block = block;
+							cell.emission = chunk.emission[block];
 							cell.sign = static_cast<int8_t>(sign);
 							cornerOcclusion(chunk, air, u, v, cell.occlusion);
 							cell.light = chunk.lightAt(air[0], air[1], air[2]);
+							cell.lamp = chunk.lampAt(air[0], air[1], air[2]);
 						}
 					}
 
@@ -345,7 +353,9 @@ namespace CGEngine {
 			// Sky light of the air the normal points into: caves and the ground under trees are darker.
 			const glm::vec3 air = glm::floor(p + normal * 0.5f);
 			const float sky = chunk.lightAt(static_cast<int>(air.x), static_cast<int>(air.y), static_cast<int>(air.z)) / 255.0f;
-			vertex.colour = palette[static_cast<size_t>(block)] * occlusion * sky;
+			const float lamp = chunk.lampAt(static_cast<int>(air.x), static_cast<int>(air.y), static_cast<int>(air.z)) / 255.0f;
+			vertex.colour = palette[static_cast<size_t>(block)] * occlusion * (sky + lamp);
+			vertex.glow = palette[static_cast<size_t>(block)] * (chunk.emission[block] / 255.0f);
 			return vertex;
 		}
 	}

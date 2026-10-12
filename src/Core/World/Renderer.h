@@ -95,6 +95,9 @@ namespace CGEngine {
 		glm::vec3 normal = { 0,0,0 };
 		float materialId = 0.0f;
 		glm::vec3 colour = { 1,1,1 };
+		// The light the surface gives off, added after the lighting so a lamp glows in the dark and in the sun. Black for
+		// most blocks.
+		glm::vec3 glow = { 0,0,0 };
 	};
 
 	struct MeshData : public IResource {

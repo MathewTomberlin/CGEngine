@@ -76,6 +76,7 @@ in vec3 normal;
 in vec3 vertex;
 in float matId;
 in vec3 vertexColour;
+in vec3 vertexGlow;
 
 out vec4 FragColor;
 
@@ -246,6 +247,9 @@ void main() {
         }
     }
     
+    //Emission: a light block's own glow, added after the lighting so the sun and the shadows do not dim it. Fog still applies.
+    fragColor += vertexGlow;
+
     //Distance fog: fades the surface into the fog colour between the start and end distances
     if(fogRange.y > fogRange.x){
         float fogAmount = clamp((length(surfPos - cameraPosition) - fogRange.x) / (fogRange.y - fogRange.x), 0.0, 1.0);

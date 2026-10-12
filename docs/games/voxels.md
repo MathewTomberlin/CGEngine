@@ -51,7 +51,9 @@ rate, build and run the Release configuration.
   each block walked through air from the sky, down to a fifth beyond eight blocks. It is baked into the mesh colours, so
   it costs nothing per frame.
 - A light block (the lamp, `VoxelGen.LAMP`, id 17) gives 255 at its own cell and falls by the same 0.8 a block through air, for
-  eight blocks. Each cell takes the brighter of the sky's light and the lamp's. A lamp is a solid block, drawn as a cube. Carried
+  eight blocks. The lamp's light is added to the sky's in the mesh colours, so it brightens sunlit ground as well as caves
+  (`light_at` gives the brighter of the two). A lamp is a solid block, drawn as a cube, and its faces glow at full strength
+  whatever the sun and the shadows do (the glow is `VoxelVertex::glow`, added after the lighting). Carried
   and small torches are on the roadmap (Phase 14); they will be props on a block's face, not full blocks.
 - The sun casts shadows (`VOXEL_SHADOWS=0` turns them off; `VOXEL_SHADOW_RADIUS`, 40 blocks by default, sets how far
   they reach). The map is drawn again when the camera moves, the sun turns, or a tenth of a second passes, and not at
