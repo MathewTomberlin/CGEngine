@@ -239,7 +239,9 @@ void main() {
 
         for(int i = 0; i < lightCount; ++i){
             if(lights[i].brightness > 0){
-                linearColor += applyLight(lights[i], surfColor.rgb * skyVisible, surfNormal, surfPos, surfViewDir, mtl);
+                //A point light (a held torch) is not shaded by the sky: it lights the cave the player is in.
+                float gate = lights[i].position.w == 0.0 ? skyVisible : 1.0;
+                linearColor += applyLight(lights[i], surfColor.rgb * gate, surfNormal, surfPos, surfViewDir, mtl);
             }
         }
     }

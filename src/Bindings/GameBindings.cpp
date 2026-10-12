@@ -41,6 +41,7 @@ namespace {
             {"7", sf::Keyboard::Scan::Num7}, {"8", sf::Keyboard::Scan::Num8}, {"9", sf::Keyboard::Scan::Num9},
             {"0", sf::Keyboard::Scan::Num0}, {"-", sf::Keyboard::Scan::Hyphen}, {"=", sf::Keyboard::Scan::Equal},
             {"F5", sf::Keyboard::Scan::F5}, {"F9", sf::Keyboard::Scan::F9}, {"F12", sf::Keyboard::Scan::F12},
+            {"L", sf::Keyboard::Scan::L},
         };
         return keys;
     }
@@ -288,7 +289,7 @@ void bindGame(py::module_& m) {
     "The sky and fog. sky is the colour at the horizon, zenith the colour straight up (left out, the sky is one colour). fog fades from fog_start to fog_end blocks away; the fog is off while fog_end is not past fog_start. sun_direction points towards the sun, sun_colour draws its disc (black hides it) and sun_size is its angular radius in degrees. shadows turns on the sun's shadows, from a map that covers shadow_radius blocks around the camera. Arguments left out keep their value.");
 
     m.def("set_light", [](const std::string& name, std::optional<sf::Vector3f> direction, std::optional<sf::Vector3f> colour,
-        std::optional<float> brightness, std::optional<float> ambiance) {
+        std::optional<float> brightness, std::optional<float> ambiance, std::optional<sf::Vector3f> position) {
         Light* light = assets.get<Light>(name);
         if (!light) throw std::runtime_error("no light named '" + name + "'");
         // Renderer copies the parameters into the light buffer every frame, so the change applies at once.
@@ -296,9 +297,11 @@ void bindGame(py::module_& m) {
         if (colour) light->parameters.colorIntensities = *colour;
         if (brightness) light->parameters.brightness = *brightness;
         if (ambiance) light->parameters.ambiance = *ambiance;
+        // A point light's position (its w stays 1); a held torch moves its light every frame.
+        if (position) light->position = glm::vec4(position->x, position->y, position->z, light->position.w);
     }, py::arg("name"), py::arg("direction") = py::none(), py::arg("colour") = py::none(), py::arg("brightness") = py::none(),
-    py::arg("ambiance") = py::none(),
-    "Change a light made by the scene: direction (where the light travels, for a directional light), colour, brightness and ambiance. Arguments left out keep their value.");
+    py::arg("ambiance") = py::none(), py::arg("position") = py::none(),
+    "Change a light made by the scene: direction (where the light travels, for a directional light), colour, brightness, ambiance and position (for a point light). Arguments left out keep their value.");
 
     // Text drawn over the scene, in window pixels from the top-left corner: a label for the game's HUD.
     m.def("create_text_body", [](const std::string& name, const std::string& text, const std::string& fontName,

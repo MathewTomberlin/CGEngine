@@ -81,6 +81,7 @@ def ray_box(origin, direction, centre, half):
 def hotbar_key(slot):
     """The key for a hotbar slot: 1 to 9, then 0, - and =."""
     return HOTBAR_KEYS[slot]
+HELD_TORCH_BRIGHTNESS = 2.5     # the light of the torch the player carries (L lights and puts it out)
 WALKERS = int(os.environ.get("VOXEL_WALKERS", "12"))   # creatures that wander the terrain near the spawn
 SHADOWS = os.environ.get("VOXEL_SHADOWS", "1") != "0"   # the sun casts shadows (the map covers SHADOW_RADIUS around the camera)
 SHADOW_RADIUS = float(os.environ.get("VOXEL_SHADOW_RADIUS", "40"))
@@ -167,6 +168,7 @@ class VoxelGame(PyScript):
         self.pitch = float(os.environ.get("VOXEL_PITCH", "-25"))   # degrees; negative looks down
         self.target = None              # (block, normal) under the crosshair, or None
         self.torch_target = None        # (distance, cell) of the torch under the crosshair, or None
+        self.held_lit = False           # the torch the player carries is lit (L toggles it)
         self.keys_was = {}              # previous state of the one-shot keys and buttons
         self.last = None
         self.frames = 0
@@ -246,6 +248,7 @@ class VoxelGame(PyScript):
         self.update_outlines()
         self.update_hud()
         self.update_sky(dt)
+        self.update_held_torch()
         self.frame_dt = dt
         self.place_camera()
 
@@ -711,6 +714,14 @@ class VoxelGame(PyScript):
                 self.world.set_block(cell[0], cell[1], cell[2], HOTBAR[self.slot])
 
     # ----- sky ----------------------------------------------------------------------------
+
+    def update_held_torch(self):
+        """The carried torch: a point light at the eye, lit or out. It is a shader light, so it needs no re-mesh."""
+        if self.pressed("HeldTorch", bool(cge.key_down("L"))):
+            self.held_lit = not self.held_lit
+        eye = self.eye()
+        cge.set_light("held_torch", position=cge.Vector3f(eye[0], eye[1] - 0.2, eye[2]),
+                      brightness=HELD_TORCH_BRIGHTNESS if self.held_lit else 0.0)
 
     def update_sky(self, dt):
         """The sun crosses the sky in DAY_SECONDS. The light, the sky and the fog follow it: at night the sky is dark and

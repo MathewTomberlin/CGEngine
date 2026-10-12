@@ -62,7 +62,10 @@ $env:CGENGINE_SCENE = "scenes/voxels.json"
 $env:VOXEL_SEED = "1"
 # Every frame advances 1/60 s, so the keys below last the same game time at any frame rate.
 $env:VOXEL_FIXED_STEP = "0.0166667"
+# The start is noon, whatever time the player saved: the sun checks below depend on it.
+$env:VOXEL_TIME = "0.25"
 $app = Start-Process -FilePath (Join-Path $exeDir "main.exe") -WorkingDirectory $exeDir -PassThru
+Remove-Item Env:VOXEL_TIME
 Remove-Item Env:CGENGINE_SCENE
 Remove-Item Env:VOXEL_SEED
 Remove-Item Env:VOXEL_FIXED_STEP

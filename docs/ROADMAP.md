@@ -233,8 +233,9 @@ full block, and light blocks (full cells that give light) are wanted too.
   behind it), and torches leaning on a block that is broken are broken with it. Chunks in reach are re-lit as for a block edit.
   Limits: torches are kept with the edits in the world but not written to the save file (F5), and the outline is not drawn
   on a torch. Checked by `check_props` (light in the cell and beside it, air to collision, geometry, removal).
-- [ ] **14.3** Held torch: a point light that follows the camera and lights the walls around the player, with a key to
-  light or put it out. It is a shader light, so it needs no re-mesh and stays separate from the baked light of 14.1 and 14.2.
+- [x] **14.3** Held torch: a point light at the eye (`held_torch` in the scene, `set_light(position=)`), lit and put out with
+  L. It is a shader light, so it needs no re-mesh and stays separate from the baked light of 14.1 and 14.2. Point lights are not
+  gated by the sky (the shader's `gate`), so it lights a sealed cave. Not yet seen in play: the lit torch and its walls.
 - [ ] **14.4** The light colour is warm, and a torch flickers a little (cosmetic, per torch).
 - [ ] **14.5** Measured: the cost of the light pass in the mesher (a chunk with and without a light block) and of a re-mesh
   after a placement, in Release.
