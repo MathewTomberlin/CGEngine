@@ -13,7 +13,7 @@ Status: `[ ]` not started, `[~]` in progress, `[x]` done.
 - [x] **1.4** Scene validation tests: syntax errors, bad version, bad vectors, unknown material/primitive, missing model (`resources/scenes/invalid/`, checked by `tools/test_control_channel.ps1`)
 - [x] **1.5** Primitive bodies in the scene format: `"primitive": "cube"` or `"plane"` with `"size"` (no sphere yet). Example: `resources/scenes/primitives.json`
 
-## Phase 2: AI control channel (done except set_material / remove_body)
+## Phase 2: AI control channel (done)
 - [x] **2.1** File-based command inbox/outbox (`cg_control/inbox`, `cg_control/outbox`), one JSON command per file, polled each frame. No sockets, no dependencies, works with any agent that can write files.
 - [x] **2.2** Commands: `load_scene`, `describe_scene` (bodies, transforms, materials, lights as JSON), `set_transform`, `set_material`, `remove_body`.
 - [x] **2.3** `screenshot` command: render to PNG so an agent can look at the result.
@@ -133,9 +133,9 @@ creatures' own behaviour (they only wander now).
   that has not loaded. Twelve wander near the spawn. Still open: a C++ body component, so the engine moves any body
   without a script, and bodies that collide with each other.
 - [x] **11.10** Player in water: in a liquid block at the feet or chest the player sinks at 1.2 blocks a second, swims up
-  at 3 while Space is held, and walks at 60%. The mover runs without gravity while swimming. `tools/test_swimming.ps1`
-  checks the landing, the swim up, the sink and the walk. Not done: climbing out onto a bank (the player floats at the
-  surface), and a view from under the water.
+  at 3 while Space is held, and walks at 60%. The mover runs without gravity while swimming. At the surface, Space jumps
+  out onto a bank a block high. The view under the water is a blue-green murk. `tools/test_swimming.ps1` checks the
+  landing, the swim up, the sink and the walk. Not done: a view through the water (its faces are culled from inside).
 - [x] **11.11** Falling blocks are drawn as smooth balls, not cubes (`buildBlob`, one mesh for all the blocks in flight, made
   in C++ each update). The settled blocks stay smooth-skinned as before.
 - [x] **11.12** Thin trunks read as vines, and skirts hung flat sheets over air. A one-sample surface pulls each vertex

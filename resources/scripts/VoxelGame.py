@@ -33,6 +33,9 @@ WATER_SPEED = 0.6           # the walking speed in water, as a share of the walk
 WATER_SINK = 1.2            # blocks per second the player sinks in water
 WATER_RISE = 3.0            # blocks per second the player swims up with Space
 WATER_DRAG = 4.0            # how quickly the vertical speed moves to the swim speed (per second)
+WATER_FOG = (0.10, 0.30, 0.42)   # the colour of the view under the water
+WATER_FOG_START = 1.0
+WATER_FOG_END = 22.0
 TURN_SPEED = 90.0           # degrees per second, for the arrow keys
 MOUSE_SENSITIVITY = float(os.environ.get("VOXEL_MOUSE_SENSITIVITY", "0.00625"))   # degrees per pixel
 MAX_PITCH = 85.0            # the engine's camera stops at this angle
@@ -327,6 +330,15 @@ class VoxelGame(PyScript):
         chest = self.world.get_block(x, math.floor(self.pos[1] + 1.0), z)
         return feet in VoxelGen.LIQUIDS or chest in VoxelGen.LIQUIDS
 
+    def at_surface(self):
+        """True when the feet are in water and the chest is above it: the player is floating at the surface."""
+        x, z = math.floor(self.pos[0]), math.floor(self.pos[2])
+        return self.world.get_block(x, math.floor(self.pos[1] + 1.0), z) not in VoxelGen.LIQUIDS
+
+    def eye_in_water(self):
+        eye = self.eye()
+        return self.world.get_block(math.floor(eye[0]), math.floor(eye[1]), math.floor(eye[2])) in VoxelGen.LIQUIDS
+
     def chunk_under_player(self):
         size = VoxelGen.CHUNK
         return math.floor(self.pos[0] / size), math.floor(self.pos[2] / size)
@@ -383,9 +395,13 @@ class VoxelGame(PyScript):
         if self.flying:
             self.vel[1] = (self.key("Space") - self.key("R")) * FLY_RISE
         elif self.swimming:
-            # The vertical speed eases towards the swim speed: up while Space is held, down otherwise.
-            target = WATER_RISE if self.key("Space") else -WATER_SINK
-            self.vel[1] += (target - self.vel[1]) * min(1.0, dt * WATER_DRAG)
+            if self.key("Space") and self.at_surface():
+                # A jump from the surface lifts the player out onto a bank a block higher.
+                self.vel[1] = physics.JUMP_SPEED
+            else:
+                # The vertical speed eases towards the swim speed: up while Space is held, down otherwise.
+                target = WATER_RISE if self.key("Space") else -WATER_SINK
+                self.vel[1] += (target - self.vel[1]) * min(1.0, dt * WATER_DRAG)
         elif self.key("Space") and self.on_ground:
             self.vel[1] = physics.JUMP_SPEED
 
@@ -514,10 +530,16 @@ class VoxelGame(PyScript):
         sun_disc = mix((0.0, 0.0, 0.0), sun_disc, min(1.0, max(0.0, height * 12.0)))
 
         fog_end = FOG_END_CHUNKS * VoxelGen.CHUNK
+        fog_colour, fog_start = sky, fog_end * FOG_START_FRACTION
+        if self.world is not None and self.eye_in_water():
+            # Under the water the view is short and blue-green, whatever the time of day. The sky is that colour too, since
+            # the faces of the water a player is inside are back faces, and the sky shows through them.
+            sky = zenith = fog_colour = WATER_FOG
+            fog_start, fog_end = WATER_FOG_START, WATER_FOG_END
         cge.set_light("sun", direction=cge.Vector3f(*travel), colour=cge.Vector3f(*light),
                       brightness=0.45 + 0.55 * day)
-        cge.set_environment(sky=cge.Vector3f(*sky), zenith=cge.Vector3f(*zenith), fog=cge.Vector3f(*sky),
-                            fog_start=fog_end * FOG_START_FRACTION, fog_end=fog_end,
+        cge.set_environment(sky=cge.Vector3f(*sky), zenith=cge.Vector3f(*zenith), fog=cge.Vector3f(*fog_colour),
+                            fog_start=fog_start, fog_end=fog_end,
                             sun_direction=cge.Vector3f(*toward_sun), sun_colour=cge.Vector3f(*sun_disc),
                             sun_size=1.6)
         self.sun = travel

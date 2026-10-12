@@ -17,7 +17,8 @@ rate, build and run the Release configuration.
 
 - W A S D walk, Space jumps, Enter toggles flying (then Space rises and R falls).
 - In water (a liquid block at the feet or chest) the player sinks slowly, Space swims up, and walking is slower. The
-  player floats at the surface and cannot climb out onto a bank yet.
+  player floats at the surface; Space there jumps out, so a bank a block high can be climbed. Under the water the view
+  is a flat blue-green murk, since the water's faces are back faces from inside.
 - Mouse: left-click captures the mouse. Move it to look. Left-click breaks the block under the crosshair, right-click
   places the selected block against it.
 - Escape opens the pause menu: the mouse is freed, the world stands still, and Resume (click it) locks the mouse again.
