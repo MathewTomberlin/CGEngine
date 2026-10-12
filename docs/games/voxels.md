@@ -10,11 +10,14 @@ $env:CGENGINE_SCENE = "scenes/voxels.json"; $env:CGENGINE_FULLSCREEN = "1"; .\ma
 
 `VOXEL_SEED` picks the world. `VOXEL_TIME` sets the time of day at the start: 0 is sunrise, 0.25 noon, 0.5 sunset and
 0.75 midnight. `VOXEL_DAY_SECONDS` sets how long a day lasts (240 seconds by default). `VOXEL_FIXED_STEP` (seconds) makes every frame advance that
-much game time; the scripted tests use it. For the best frame rate, build and run the Release configuration.
+much game time; the scripted tests use it. `VOXEL_SPAWN="x,z"` starts the player over that column. For the best frame
+rate, build and run the Release configuration.
 
 ## Controls
 
 - W A S D walk, Space jumps, Enter toggles flying (then Space rises and R falls).
+- In water (a liquid block at the feet or chest) the player sinks slowly, Space swims up, and walking is slower. The
+  player floats at the surface and cannot climb out onto a bank yet.
 - Mouse: left-click captures the mouse. Move it to look. Left-click breaks the block under the crosshair, right-click
   places the selected block against it.
 - Escape opens the pause menu: the mouse is freed, the world stands still, and Resume (click it) locks the mouse again.
@@ -153,6 +156,6 @@ the view's level and the worst frame.
   re-meshed, a few frames later.
 - The simulation runs on the loaded chunks only. The player's collision is in C++ (`world.step_body`), and the Python
   version (`VoxelPhysics.step`) stays as the reference that the tests compare with.
-- Water is opaque. The smooth skin has two levels of detail: two samples a block within 3 chunks of the player, and one a block beyond that.
+- Water is opaque, and the player cannot climb out of a pool onto its bank. The smooth skin has two levels of detail: two samples a block within 3 chunks of the player, and one a block beyond that.
 - Each chunk is one draw call. Region batching (several chunks in one mesh) is the next step if the draw count
   becomes the limit.

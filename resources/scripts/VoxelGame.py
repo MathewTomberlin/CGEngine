@@ -27,6 +27,11 @@ UPLOAD_BUDGET_MS = 2.0      # time per frame spent uploading finished meshes
 WALK_SPEED = 5.0            # blocks per second
 FLY_SPEED = 14.0
 FLY_RISE = 10.0             # blocks per second when flying up or down
+# In water (any liquid block at the feet or the chest) the player sinks slowly, swims up with Space and walks slower.
+WATER_SPEED = 0.6           # the walking speed in water, as a share of the walk
+WATER_SINK = 1.2            # blocks per second the player sinks in water
+WATER_RISE = 3.0            # blocks per second the player swims up with Space
+WATER_DRAG = 4.0            # how quickly the vertical speed moves to the swim speed (per second)
 TURN_SPEED = 90.0           # degrees per second, for the arrow keys
 MOUSE_SENSITIVITY = float(os.environ.get("VOXEL_MOUSE_SENSITIVITY", "0.00625"))   # degrees per pixel
 MAX_PITCH = 85.0            # the engine's camera stops at this angle
@@ -142,6 +147,11 @@ class VoxelGame(PyScript):
         self.requested = set()          # (cx, cz) of the chunks asked for, loaded or not
         self.wanted_centre = None       # chunk the wanted set was last built for
         self.pos = [8.5, SPAWN_HEIGHT, 8.5]   # the player's feet, y up
+        if os.environ.get("VOXEL_SPAWN"):
+            # VOXEL_SPAWN="x,z" starts the player over that column (for checks and for looking at a place)
+            spawn_x, spawn_z = (float(v) for v in os.environ["VOXEL_SPAWN"].split(","))
+            self.pos = [spawn_x, SPAWN_HEIGHT, spawn_z]
+        self.swimming = False
         self.vel = [0.0, 0.0, 0.0]
         self.on_ground = False
         self.flying = False
@@ -360,6 +370,13 @@ class VoxelGame(PyScript):
                 self.world.unload_chunk(*chunk)
                 self.requested.discard(chunk)
 
+    def in_water(self):
+        """True while a liquid block is at the player's feet or chest."""
+        x, z = math.floor(self.pos[0]), math.floor(self.pos[2])
+        feet = self.world.get_block(x, math.floor(self.pos[1] + 0.1), z)
+        chest = self.world.get_block(x, math.floor(self.pos[1] + 1.0), z)
+        return feet in VoxelGen.LIQUIDS or chest in VoxelGen.LIQUIDS
+
     def chunk_under_player(self):
         size = VoxelGen.CHUNK
         return math.floor(self.pos[0] / size), math.floor(self.pos[2] / size)
@@ -397,6 +414,7 @@ class VoxelGame(PyScript):
 
         self.turn((self.key("Right") - self.key("Left")) * TURN_SPEED * dt,
                   (self.key("Up") - self.key("Down")) * TURN_SPEED * dt)
+        self.swimming = not self.flying and self.in_water()
 
         # Walk along the ground in the direction the player faces (flat, so looking down does not sink the player).
         yaw = math.radians(self.yaw)
@@ -407,20 +425,26 @@ class VoxelGame(PyScript):
         dx = forward[0] * across + right[0] * sideways
         dz = forward[1] * across + right[1] * sideways
         length = math.hypot(dx, dz)
-        speed = FLY_SPEED if self.flying else WALK_SPEED
+        speed = FLY_SPEED if self.flying else (WALK_SPEED * WATER_SPEED if self.swimming else WALK_SPEED)
         if length > 0.0:
             dx, dz = dx / length * speed, dz / length * speed
         self.vel[0], self.vel[2] = dx, dz
 
         if self.flying:
             self.vel[1] = (self.key("Space") - self.key("R")) * FLY_RISE
+        elif self.swimming:
+            # The vertical speed eases towards the swim speed: up while Space is held, down otherwise.
+            target = WATER_RISE if self.key("Space") else -WATER_SINK
+            self.vel[1] += (target - self.vel[1]) * min(1.0, dt * WATER_DRAG)
         elif self.key("Space") and self.on_ground:
             self.vel[1] = physics.JUMP_SPEED
 
         # Physics waits until the chunk under the player is in the world, so the player does not fall through air.
         if self.world.is_loaded(*self.chunk_under_player()):
             # The engine's mover is the same as physics.step (tests check they agree), and it is faster.
-            pos, vel, self.on_ground = self.world.step_body(tuple(self.pos), tuple(self.vel), dt, self.flying)
+            # Swimming has no gravity of its own: the swim speed above takes its place, so the mover runs without it.
+            pos, vel, self.on_ground = self.world.step_body(tuple(self.pos), tuple(self.vel), dt,
+                                                           self.flying or self.swimming)
             self.pos = list(pos)
             self.vel = list(vel)
         if self.pos[1] < RESPAWN_DEPTH:
@@ -567,6 +591,7 @@ class VoxelGame(PyScript):
                  "smoothing": self.world.smoothing(), "active": self.world.active_count(), "paused": self.paused,
                  "seed": self.seed, "frames": self.frames,
                  "player": [round(v, 3) for v in self.pos], "on_ground": self.on_ground, "flying": self.flying,
+                 "swimming": self.swimming,
                  "mouse_captured": self.mouse_captured, "yaw": round(self.yaw, 3), "pitch": round(self.pitch, 3),
                  "max_frame_ms": round(self.max_dt * 1000.0, 2),
                  "time_of_day": round(self.clock, 5), "sun": [round(v, 5) for v in self.sun],
