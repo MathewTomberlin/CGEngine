@@ -386,6 +386,42 @@ def check_props(world, checks, chunks):
     wait_meshed(world, chunks)
 
 
+def measure_remesh(world, chunks, results):
+    """How long an edit takes to reach the mesh, in milliseconds (the median of 9 edits): a block, and a torch, in a chunk with
+    no light block, and the same block in a chunk with a lamp in it. The check runs inside the engine, so the build is the
+    one the test runs (Release)."""
+    import statistics
+    edit_cell = (8, 40, 8)
+    def settle():
+        # A busy poll: wait_meshed sleeps between polls, which would be most of a 5 ms measurement.
+        while True:
+            world.update(5.0, 0, 0)
+            stats = world.stats()
+            if stats["dirty"] == 0 and stats["meshing"] == 0:
+                return
+    def timed(edit):
+        samples = []
+        for i in range(9):
+            start = time.perf_counter()
+            edit(i)
+            settle()
+            samples.append((time.perf_counter() - start) * 1000.0)
+        return round(statistics.median(samples), 2)
+    world.set_block(*edit_cell, 0)
+    results["measure"] = {}
+    results["measure"]["block edit, no light block in the chunk"] = timed(
+        lambda i: world.set_block(edit_cell[0], edit_cell[1], edit_cell[2], VOXEL_STONE if i % 2 == 0 else 0))
+    results["measure"]["torch placed and removed, no light block in the chunk"] = timed(
+        lambda i: world.set_prop(edit_cell[0] + 1, edit_cell[1], edit_cell[2], 0) if i % 2 == 0 else world.remove_prop(edit_cell[0] + 1, edit_cell[1], edit_cell[2]))
+    world.set_block(edit_cell[0] - 2, edit_cell[1], edit_cell[2], VOXEL_LAMP)
+    results["measure"]["block edit, with a lamp in the chunk"] = timed(
+        lambda i: world.set_block(edit_cell[0], edit_cell[1], edit_cell[2], VOXEL_STONE if i % 2 == 0 else 0))
+    world.set_block(edit_cell[0] - 2, edit_cell[1], edit_cell[2], 0)
+    world.set_block(edit_cell[0], edit_cell[1], edit_cell[2], 0)
+    world.clear_edits()
+    wait_meshed(world, chunks)
+
+
 def check_lamp(world, checks):
     """A light block lights the air round it: full at its cell, and 0.8 less for each block walked through air. Tested in a
     sealed pocket of stone, which the sky cannot reach, so the air has no sky light until the lamp is placed. The
@@ -453,6 +489,7 @@ def run(out_path="cg_control/voxel_check.json"):
     check_skin_surface(world, results["check"])
     check_lamp(world, results["check"])
     check_props(world, results["check"], chunks)
+    measure_remesh(world, chunks, results)
     check_groups(results["check"])
     biomes ={world.biome_at(x, z) for x in range(-200, 200, 10) for z in range(-200, 200, 10)}
     results["check"]["biomes vary: plains, forest and desert occur"] = biomes == {"plains", "forest", "desert"}

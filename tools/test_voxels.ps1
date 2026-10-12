@@ -90,6 +90,7 @@ try {
     $worldCheck = Get-Content (Join-Path $control "voxel_check.json") -Raw | ConvertFrom-Json
     $worldCheck.check.PSObject.Properties | ForEach-Object { Check ("world: " + $_.Name) ([bool]$_.Value) }
     Write-Host ("      caves: {0} of {1} underground blocks are air" -f $worldCheck.caveAir, $worldCheck.underground)
+    if ($worldCheck.measure) { $worldCheck.measure.PSObject.Properties | ForEach-Object { Write-Host ("      remesh ms, {0}: {1}" -f $_.Name, $_.Value) } }
     Write-Host ("      light: {0} open-ground samples, {1} underground samples with a mean of {2} (255 is full sky)" -f $worldCheck.light.surfaceSamples, $worldCheck.light.deepSamples, $worldCheck.light.deepMean)
 
     # Walk forward for 240 frames (4 seconds), then turn right for 120 frames (2 seconds): 90 degrees a second is 180

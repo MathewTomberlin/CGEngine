@@ -720,8 +720,11 @@ class VoxelGame(PyScript):
         if self.pressed("HeldTorch", bool(cge.key_down("L"))):
             self.held_lit = not self.held_lit
         eye = self.eye()
+        # A little flicker: two slow sines, so the light wavers without looking random.
+        now = time.time()
+        flicker = 0.92 + 0.08 * math.sin(now * 9.0) * math.sin(now * 3.1 + 1.0)
         cge.set_light("held_torch", position=cge.Vector3f(eye[0], eye[1] - 0.2, eye[2]),
-                      brightness=HELD_TORCH_BRIGHTNESS if self.held_lit else 0.0)
+                      brightness=HELD_TORCH_BRIGHTNESS * flicker if self.held_lit else 0.0)
 
     def update_sky(self, dt):
         """The sun crosses the sky in DAY_SECONDS. The light, the sky and the fog follow it: at night the sky is dark and

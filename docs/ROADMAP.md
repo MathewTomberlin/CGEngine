@@ -236,13 +236,15 @@ full block, and light blocks (full cells that give light) are wanted too.
 - [x] **14.3** Held torch: a point light at the eye (`held_torch` in the scene, `set_light(position=)`), lit and put out with
   L. It is a shader light, so it needs no re-mesh and stays separate from the baked light of 14.1 and 14.2. Point lights are not
   gated by the sky (the shader's `gate`), so it lights a sealed cave. Not yet seen in play: the lit torch and its walls.
-- [ ] **14.4** The light colour is warm, and a torch flickers a little (cosmetic, per torch).
-- [ ] **14.5** Measured: the cost of the light pass in the mesher (a chunk with and without a light block) and of a re-mesh
-  after a placement, in Release.
-- [ ] **14.6** Spike: a prop finer than a block. Can a block cell hold a finer grid where a prop needs one, without finer blocks
-  everywhere? Plan: a sparse 4×4×4 micro-grid per block cell, stored only where set, meshed with the same greedy mesher at
-  micro scale and lit from its cell. Whole-world subdivision is not the route: it multiplies the cells the mesher, the light
-  walk and the collision sample by 4 per axis (64 times the cells). Decide after 14.2 whether a prop needs micro collision.
+- [~] **14.4** The light colour is warm (the held torch and the placed ones). The held torch flickers, two slow sines a few
+  per cent either way. Placed torches do not flicker yet: their light is baked into the mesh, so a flicker would need a
+  re-mesh each frame; it waits for a shader term that reads a per-torch time.
+- [x] **14.5** Measured in Release (the check runs inside the engine, `measure_remesh`, median of 9 edits, busy poll): a block
+  edit reaches the mesh in about 2.6 ms, a torch placed or removed in about 2.9 ms, and a block edit in a chunk with a lamp
+  in it in about 3.0 ms. The light pass adds little next to the meshing itself.
+- [x] **14.6** Decided: a torch needs no micro grid. It is drawn at a fraction of a block by `buildPropMesh` and its cell is
+  air to collision, so the walk, the mesher and the light pass see no finer cells. The 4x4x4 micro-grid is not built; it stays
+  an option for a prop that must collide at its own scale.
 - Interim (not on the roadmap as a fix): the cave floor (0.2 of the sky) could be raised to make caves readable before the
   torches land. Decide after 14.1 if they are still too dark.
 
