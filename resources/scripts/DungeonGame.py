@@ -47,7 +47,7 @@ MODEL_DIR = "models/dungeon/"
 ENEMY_STATS = {
     "slime":  {"speed": 1.6, "hp": 2, "size": 0.35, "radius": 0.35, "model": "slime_rig.fbx"},
     "archer": {"speed": 1.3, "hp": 1, "size": 0.3,  "radius": 0.3,  "model": "archer_rig.fbx"},
-    "brute":  {"speed": 0.9, "hp": 4, "size": 0.5,  "radius": 0.45, "model": "brute"},
+    "brute":  {"speed": 0.9, "hp": 4, "size": 0.5,  "radius": 0.45, "model": "brute_rig.fbx"},
 }
 ARCHER_RANGE = (3.0, 5.0)   # an archer backs off inside the first distance and closes in beyond the second
 ARCHER_SHOT_TIME = 2.0      # seconds between shots
@@ -489,7 +489,7 @@ class DungeonGame(PyScript):
             else:
                 clip, looping = ("archer_walk", True) if moving else ("archer_idle", True)
         else:
-            return  # brutes are still models with no clips
+            clip, looping = ("brute_walk", True) if moving else ("brute_idle", True)
         if enemy.get("clip") == clip:
             return
         enemy["clip"] = clip
