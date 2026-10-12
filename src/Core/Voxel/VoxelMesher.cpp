@@ -16,9 +16,11 @@ namespace CGEngine {
 			uint8_t lamp = 0;
 			// The light the block gives off (BlockType::emits), for the glow of its faces.
 			uint8_t emission = 0;
+			// The damage of the block (PaddedChunk::damage): faces of different damage do not merge.
+			uint8_t damage = 0;
 
 			bool operator==(const MaskCell& other) const {
-				return block == other.block && sign == other.sign && (light >> 5) == (other.light >> 5) && (lamp >> 5) == (other.lamp >> 5)
+				return block == other.block && damage == other.damage && sign == other.sign && (light >> 5) == (other.light >> 5) && (lamp >> 5) == (other.lamp >> 5)
 					&& occlusion[0] == other.occlusion[0] && occlusion[1] == other.occlusion[1]
 					&& occlusion[2] == other.occlusion[2] && occlusion[3] == other.occlusion[3];
 			}
@@ -87,7 +89,7 @@ namespace CGEngine {
 			const unsigned int first = static_cast<unsigned int>(out.vertices.size());
 			glm::vec3 normal(0.0f);
 			normal[d] = static_cast<float>(sign);
-			const glm::vec3 base = palette[face.block] * faceShade(d, sign);
+			const glm::vec3 base = palette[face.block] * faceShade(d, sign) * (1.0f - DamageTint * face.damage / 255.0f);
 			for (int k = 0; k < 4; ++k) {
 				VoxelVertex vertex;
 				glm::vec3 position(0.0f);
@@ -266,6 +268,7 @@ namespace CGEngine {
 							const uint8_t block = chunk.at(solid[0], solid[1], solid[2]);
 							cell.block = block;
 							cell.emission = chunk.emission[block];
+							cell.damage = chunk.damage.empty() ? 0 : chunk.damage[chunk.index(solid[0], solid[1], solid[2])];
 							cell.sign = static_cast<int8_t>(sign);
 							cornerOcclusion(chunk, air, u, v, group, cell.occlusion);
 							cell.light = chunk.lightAt(air[0], air[1], air[2]);
@@ -357,12 +360,14 @@ namespace CGEngine {
 			const glm::vec3 t = b - base;
 			int block = 0;
 			float blockWeight = -1.0f;
+			size_t dominant = 0;
 			for (int c = 0; c < 8; ++c) {
 				const int dx = c & 1, dy = (c >> 1) & 1, dz = (c >> 2) & 1;
 				const int x = static_cast<int>(base.x) + dx, y = static_cast<int>(base.y) + dy, z = static_cast<int>(base.z) + dz;
 				const float w = (dx ? t.x : 1.0f - t.x) * (dy ? t.y : 1.0f - t.y) * (dz ? t.z : 1.0f - t.z);
 				if (solidAt(chunk, group,x, y, z) && w > blockWeight) {
 					blockWeight = w;
+					dominant = chunk.index(x, y, z);
 					block = chunk.at(x, y, z);
 				}
 			}
@@ -387,7 +392,8 @@ namespace CGEngine {
 			const glm::vec3 air = glm::floor(p + normal * 0.5f);
 			const float sky = chunk.lightAt(static_cast<int>(air.x), static_cast<int>(air.y), static_cast<int>(air.z)) / 255.0f;
 			const float lamp = chunk.lampAt(static_cast<int>(air.x), static_cast<int>(air.y), static_cast<int>(air.z)) / 255.0f;
-			vertex.colour = palette[static_cast<size_t>(block)] * occlusion;
+			vertex.colour = palette[static_cast<size_t>(block)] * occlusion
+				* (chunk.damage.empty() ? 1.0f : 1.0f - DamageTint * chunk.damage[dominant] / 255.0f);
 			vertex.sky = sky;
 			vertex.glow = VoxelLightTint * (chunk.emission[block] / 255.0f * VoxelGlow)
 				+ vertex.colour * VoxelLightTint * (lamp * lampGain(sky));

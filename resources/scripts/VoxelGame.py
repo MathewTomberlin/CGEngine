@@ -281,6 +281,7 @@ class VoxelGame(PyScript):
                                     mesh=VoxelGen.WATER if block in VoxelGen.LIQUIDS else 0,
                                     join_above=VoxelGen.JOINS.get(block, 0),
                                     join_below=list(VoxelGen.JOINS_BELOW[block]) if block in VoxelGen.JOINS_BELOW else None,
+                                    hits=VoxelGen.HITS.get(block, 1),
                                     transparent=block in VoxelGen.TRANSPARENT)
         self.world.set_smoothing(SMOOTH_RESOLUTION)
         self.world.set_move_seconds(SIM_TICK * 0.9)   # a falling block lands just before the next tick
@@ -726,8 +727,9 @@ class VoxelGame(PyScript):
             return
         block, normal = self.target
         if breaking:
-            self.world.set_block(block[0], block[1], block[2], VoxelGen.AIR)
-            self.drop_torches_on(block)
+            # A block takes its hits (VoxelGen.HITS) to break: this hit breaks it when hit_block says -1.
+            if self.world.hit_block(block[0], block[1], block[2]) == -1:
+                self.drop_torches_on(block)
         elif placing:
             cell = (block[0] + normal[0], block[1] + normal[1], block[2] + normal[2])
             if physics.cell_in_player(cell, self.pos):

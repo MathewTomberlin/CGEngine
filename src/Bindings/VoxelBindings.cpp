@@ -40,6 +40,10 @@ void bindVoxel(py::module_& m) {
         .def("prop_at", &VoxelWorld::propAt, py::arg("x"), py::arg("y"), py::arg("z"),
              "The direction of the torch in a cell (see set_prop), or -1 for none.")
         .def("props", &VoxelWorld::props, "Every torch as a list of (x, y, z, dir).")
+        .def("hit_block", &VoxelWorld::hitBlock, py::arg("x"), py::arg("y"), py::arg("z"),
+             "Hit the block at (x, y, z). Returns its damage stage (1 to hits - 1), -1 if this hit breaks it, or -2 if there is no block.")
+        .def("damage_at", &VoxelWorld::damageAt, py::arg("x"), py::arg("y"), py::arg("z"),
+             "The damage stage of the block at (x, y, z): 0 for none.")
         .def("prop_boxes", [](const VoxelWorld& world) {
             // The boxes the torches are drawn with, so a hit test can use what the player sees.
             py::list result;
@@ -78,7 +82,7 @@ void bindVoxel(py::module_& m) {
         .def("smoothing", &VoxelWorld::smoothing, "The surface style set by set_smoothing: 0 for cubes, else the samples per block.")
         .def("define_block", [](VoxelWorld& world, int block_id, sf::Vector3f colour, bool solid, bool falls, bool liquid, int emits,
                 const std::string& shape, const std::string& group, const std::optional<std::string>& material, int mesh,
-                int join_above, const std::optional<std::vector<int>>& join_below, bool transparent) {
+                int join_above, const std::optional<std::vector<int>>& join_below, bool transparent, int hits) {
             if (shape != "smooth" && shape != "cube") throw py::value_error("shape must be \"smooth\" or \"cube\"");
             if (group != "terrain" && group != "own") throw py::value_error("group must be \"terrain\" or \"own\"");
             if (shape == "cube" && group == "terrain") throw py::value_error("a cube block is drawn in its own mesh: group must be \"own\"");
@@ -95,6 +99,7 @@ void bindVoxel(py::module_& m) {
             type.mesh = static_cast<uint8_t>(mesh);
             type.joinAbove = static_cast<uint8_t>(join_above);
             type.transparent = transparent;
+            type.hits = static_cast<uint8_t>(std::clamp(hits, 1, 255));
             if (join_below) {
                 for (int below : *join_below) {
                     if (below < 0 || below > 255) throw py::value_error("join_below must be block ids, 0 to 255");
@@ -107,7 +112,7 @@ void bindVoxel(py::module_& m) {
             world.setMaterial(block_id, material.value_or(std::string()));
         }, py::arg("block_id"), py::arg("colour"), py::arg("solid") = true, py::arg("falls") = false, py::arg("liquid") = false,
            py::arg("emits") = 0, py::arg("shape") = "smooth", py::arg("group") = "terrain", py::arg("material") = py::none(),
-           py::arg("mesh") = 0, py::arg("join_above") = 0, py::arg("join_below") = py::none(), py::arg("transparent") = false,
+           py::arg("mesh") = 0, py::arg("join_above") = 0, py::arg("join_below") = py::none(), py::arg("transparent") = false, py::arg("hits") = 1,
            "Define a block id: its colour, whether it is solid (blocks movement), falls (sand-like, moves down into air or liquid), "
            "liquid (flows, as water does) and emits (the light it gives off at its own cell, 0 to 255; a lamp is 255). How it is "
            "drawn: shape is \"smooth\" (the skin) or \"cube\" (a cube that never merges with its neighbours); group is \"terrain\" "

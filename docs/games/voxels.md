@@ -29,7 +29,8 @@ rate, build and run the Release configuration.
   to 500% of the base) and a time-of-day slider (drag it along the track), and Back (or Escape) returns to the menu. The choice is saved in `voxel_settings.json` beside the
   game, and applies at once. `VOXEL_MOUSE_SENSITIVITY` sets the base look speed in degrees per pixel (0.00625 by default),
   and `VOXEL_SETTINGS` moves the settings file.
-- Without the mouse: the arrow keys turn and look, J breaks, K places. L lights or puts out the torch you carry, which
+- Without the mouse: the arrow keys turn and look, J hits, K places. A block takes several hits (stone three, wood four, coal four, iron five, the rest one), and a
+  damaged block is shown darker; the last hit breaks it. L lights or puts out the torch you carry, which
   lights the cave around you.
 - Keys 1 to 9, 0, - and = choose the block to place (the hotbar: stone, dirt, grass, wood, leaves, sand, gravel, snow, water,
   the lamp (0, a light block), brick (-), and a torch (=)). A torch goes on the face of a block you aim at; aim at it to break

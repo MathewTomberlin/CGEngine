@@ -447,6 +447,26 @@ def check_ores(world, chunks, checks):
     checks["iron ore is in the stone, and only deep"] = iron > 0 and iron_high == 0
 
 
+def check_damage(checks):
+    """A block takes its hits to break (stone takes three here). Each hit before the last leaves a damage stage, the last one
+    breaks it, and the stage goes with the block. A hit marks the chunk to be meshed again, so the stage shows."""
+    world = cge.VoxelWorld(SIZE, HEIGHT, "voxel")
+    world.define_block(VOXEL_STONE, cge.Vector3f(0.5, 0.5, 0.53), hits=3)
+    load_chunks(world, [(0, 0)])
+    world.set_block(4, 30, 4, VOXEL_STONE)
+    wait_meshed(world, [(0, 0)])
+    first = world.hit_block(4, 30, 4)
+    stage = world.damage_at(4, 30, 4)
+    dirty = world.stats()["dirty"]
+    second = world.hit_block(4, 30, 4)
+    third = world.hit_block(4, 30, 4)
+    checks["a block takes its hits to break (stone: three)"] = first == 1 and second == 2 and third == -1 \
+        and world.get_block(4, 30, 4) == 0
+    checks["a hit leaves a damage stage, and the stage goes with the block"] = stage == 1 and world.damage_at(4, 30, 4) == 0
+    checks["a hit marks the chunk to be meshed again"] = dirty > 0
+    world.clear()
+
+
 def check_lamp(world, checks):
     """A light block lights the air round it: full at its cell, and 0.8 less for each block walked through air. Tested in a
     sealed pocket of stone, which the sky cannot reach, so the air has no sky light until the lamp is placed. The
@@ -515,6 +535,7 @@ def run(out_path="cg_control/voxel_check.json"):
     check_lamp(world, results["check"])
     check_props(world, results["check"], chunks)
     check_ores(world, chunks, results["check"])
+    check_damage(results["check"])
     measure_remesh(world, chunks, results)
     check_groups(results["check"])
     biomes ={world.biome_at(x, z) for x in range(-200, 200, 10) for z in range(-200, 200, 10)}

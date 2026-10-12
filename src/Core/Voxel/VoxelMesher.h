@@ -30,6 +30,10 @@ namespace CGEngine {
 	// light block does, but less.
 	constexpr float VoxelTorchLight = 0.8f;
 
+	// How dark a block gets at its last damage stage (0 to 1 of its colour is taken away): a damaged block is shown darker as it
+	// takes hits, so the player sees which blocks have been hit (VoxelWorld::hitBlock).
+	constexpr float DamageTint = 0.45f;
+
 	// The direction from a prop to the block it leans on, by its dir (VoxelWorld::setProp): +x, -x, +y, -y, +z, -z.
 	constexpr int PropDirs[6][3] = { { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 }, { 0, 0, 1 }, { 0, 0, -1 } };
 
@@ -70,6 +74,9 @@ namespace CGEngine {
 			float anchor = 0.5f;   // how far from the cell's centre, toward the block it leans on, the drawn skin is (VoxelWorld::propAnchor)
 		};
 		std::vector<Prop> props;
+		// The damage of each block position, in the layout of blocks: the fraction of its hits taken, 0 to 255. Empty if no block
+		// in the padded chunk is damaged.
+		std::vector<uint8_t> damage;
 
 		size_t index(int x, int y, int z) const {
 			const int p = size + 2 * border;

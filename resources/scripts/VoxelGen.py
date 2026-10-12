@@ -22,6 +22,7 @@ DIRECTIONS = ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1
 FLOW_FIRST, FLOW_LAST = 9, 15       # flowing water, levels 7 to 1 (the block id is 16 - level); WATER is the full source
 LIQUIDS = (WATER,) + tuple(range(FLOW_FIRST, FLOW_LAST + 1))
 FALLS = (SAND, GRAVEL)              # blocks that fall into air or liquid
+HITS = {STONE: 3, WOOD: 4, BRICK: 3, COAL: 4, IRON: 5}   # hits to break a block (the others take one); see VoxelWorld.hit_block
 EMITS = {LAMP: 255}                 # the light each block gives off at its own cell, 0 to 255; the light falls off through air
 # How each block is drawn (BlockType::own and cube). A block in OWN has its own mesh per chunk, drawn with MATERIALS[block]
 # (a material in scenes/voxels.json); the rest are the terrain's smooth skin. A cube block is always in OWN.

@@ -298,6 +298,7 @@ namespace CGEngine {
 		const int lx = x - cx * size;
 		const int lz = z - cz * size;
 		const uint8_t block = static_cast<uint8_t>(std::clamp(blockId, 0, 255));
+		clearDamage(x, y, z);
 		// The edit is recorded even if the chunk is not loaded, so it is in place when the chunk loads.
 		edits[std::make_pair(cx, cz)][localIndex(lx, y, lz)] = block;
 		Chunk* chunk = findChunk(cx, cz);
@@ -356,6 +357,43 @@ namespace CGEngine {
 		if (chunk == propsByChunk.end()) return -1;
 		auto entry = chunk->second.find(localIndex(x - cx * size, y, z - cz * size));
 		return entry == chunk->second.end() ? -1 : entry->second;
+	}
+
+	int VoxelWorld::hitBlock(int x, int y, int z) {
+		const int block = getBlock(x, y, z);
+		if (block == 0) return -2;
+		const int hits = std::max(1, static_cast<int>(types[static_cast<size_t>(block)].hits));
+		const int stage = damageAt(x, y, z) + 1;
+		if (stage >= hits) {
+			setBlock(x, y, z, 0);   // setBlock also clears the block's damage
+			return -1;
+		}
+		const int cx = floorDiv(x, size);
+		const int cz = floorDiv(z, size);
+		damageByChunk[std::make_pair(cx, cz)][localIndex(x - cx * size, y, z - cz * size)] = static_cast<uint8_t>(stage);
+		markLight(cx, cz, x - cx * size, z - cz * size);   // the stage shows in this chunk's mesh, and in the neighbours that draw its skin
+		return stage;
+	}
+
+	int VoxelWorld::damageAt(int x, int y, int z) const {
+		if (y < 0 || y >= height) return 0;
+		const int cx = floorDiv(x, size);
+		const int cz = floorDiv(z, size);
+		auto chunk = damageByChunk.find(std::make_pair(cx, cz));
+		if (chunk == damageByChunk.end()) return 0;
+		auto entry = chunk->second.find(localIndex(x - cx * size, y, z - cz * size));
+		return entry == chunk->second.end() ? 0 : entry->second;
+	}
+
+	void VoxelWorld::clearDamage(int x, int y, int z) {
+		if (y < 0 || y >= height) return;
+		const int cx = floorDiv(x, size);
+		const int cz = floorDiv(z, size);
+		auto chunk = damageByChunk.find(std::make_pair(cx, cz));
+		if (chunk == damageByChunk.end()) return;
+		if (chunk->second.erase(localIndex(x - cx * size, y, z - cz * size)) == 0) return;
+		if (chunk->second.empty()) damageByChunk.erase(chunk);
+		markLight(cx, cz, x - cx * size, z - cz * size);
 	}
 
 	float VoxelWorld::propAnchor(int x, int y, int z, int dir) const {
@@ -638,6 +676,28 @@ namespace CGEngine {
 					if (px < -border || px >= size + border || pz < -border || pz >= size + border) continue;
 					const float anchor = propAnchor(cx * size + px, py, cz * size + pz, entry.second);
 					padded.props.push_back({ px, py, pz, entry.second, anchor });
+				}
+			}
+		}
+		// The damage of the blocks in the padded area, as the fraction of their hits taken (PaddedChunk::damage).
+		bool anyDamage = false;
+		for (int dz = -1; dz <= 1; ++dz) {
+			for (int dx = -1; dx <= 1; ++dx) anyDamage = anyDamage || damageByChunk.count(std::make_pair(cx + dx, cz + dz));
+		}
+		if (anyDamage) {
+			padded.damage.assign(padded.blocks.size(), 0);
+			for (int dz = -1; dz <= 1; ++dz) {
+				for (int dx = -1; dx <= 1; ++dx) {
+					auto chunk = damageByChunk.find(std::make_pair(cx + dx, cz + dz));
+					if (chunk == damageByChunk.end()) continue;
+					for (const auto& entry : chunk->second) {
+						const int px = dx * size + entry.first % size;
+						const int pz = dz * size + (entry.first / size) % size;
+						const int py = entry.first / (size * size);
+						if (px < -border || px >= size + border || pz < -border || pz >= size + border) continue;
+						const int hits = std::max(1, static_cast<int>(types[static_cast<size_t>(getBlock(cx * size + px, py, cz * size + pz))].hits));
+						padded.damage[padded.index(px, py, pz)] = static_cast<uint8_t>(std::min(255, entry.second * 255 / hits));
+					}
 				}
 			}
 		}

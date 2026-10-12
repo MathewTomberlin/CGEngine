@@ -274,9 +274,9 @@ Goal: the player chooses how far they can see, and a long view stays cheap enoug
 
 ## Phase 16: voxel health and damage (from playtesting: one hit breaks everything)
 Goal: blocks and creatures take several hits, and what the player has hit looks hit.
-- [ ] **16.1** Block hardness: each block type has a number of hits to break (stone more than dirt, leaves less than wood,
+- [x] **16.1** Block hardness: each block type has a number of hits to break (stone more than dirt, leaves less than wood,
   lamps and torches one). `define_block(..., hits=)`. The hardness is data, like the other block rules.
-- [ ] **16.2** Visual damage states: a damaged block shows its stage, from a darker tint to cracks on its faces. Damage is a
+- [~] **16.2** Visual damage states (darkening per stage is in; cracks and the save file are not yet): a damaged block shows its stage, from a darker tint to cracks on its faces. Damage is a
   per-cell value kept with the edits (like props), so the mesher can tint the cell's faces; a stage change re-meshes only the
   chunk it is in. Measure the re-mesh cost (14.5 is the baseline: about 3 ms).
 - [ ] **16.3** Hit feedback: the aimed block shakes or flashes on a hit, and a broken block gives a short particle burst in its

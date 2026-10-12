@@ -68,6 +68,11 @@ namespace CGEngine {
 		// How far from the cell's centre, toward the block the prop at (x, y, z) leans on (dir), the drawn skin is: a torch stands
 		// on that surface (VoxelMesher.h propShape). 0.5 if there is no solid block there.
 		float propAnchor(int x, int y, int z, int dir) const;
+		// Hits: a block takes BlockType::hits hits to break. Each hit adds one, and the damage shows in the block's colour. Returns the
+		// damage stage the block is at now (1 to hits - 1), -1 when this hit breaks it (it becomes air), or -2 if there is no block.
+		int hitBlock(int x, int y, int z);
+		// The damage stage of the block at (x, y, z), 0 for none.
+		int damageAt(int x, int y, int z) const;
 		// Every prop as (x, y, z, dir). Props are kept with the edits, so a chunk that unloads keeps them.
 		std::vector<std::array<int, 4>> props() const;
 		// True if the column at (x, z) is in a loaded chunk, so its blocks are real.
@@ -206,6 +211,9 @@ namespace CGEngine {
 		std::map<std::pair<int, int>, std::map<int, uint8_t>> edits;
 		// Props (torches) by chunk: local index -> dir. See setProp.
 		std::map<std::pair<int, int>, std::map<int, uint8_t>> propsByChunk;
+		// Damage by chunk: local index -> stage (see hitBlock). Not saved with the edits yet.
+		std::map<std::pair<int, int>, std::map<int, uint8_t>> damageByChunk;
+		void clearDamage(int x, int y, int z);
 		uint32_t nextGeneration = 1;
 		double uploadMs = 0.0;
 

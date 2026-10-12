@@ -19,6 +19,7 @@ namespace CGEngine {
 		uint8_t joinAbove = 0;  // a smooth block whose top is covered by a block of this mesh joins that mesh (its top only, see skinAt)
 		std::bitset<256> joinBelow;  // a smooth block standing on one of these terrain blocks joins the terrain (its bottom only)
 		bool transparent = false;    // its mesh is drawn blended, after the opaque ones (the water)
+		uint8_t hits = 1;           // how many hits break it (VoxelWorld::hitBlock); a hit on a damaged block shows its stage
 	};
 
 	// The mesh a block id is drawn in: 0 for the terrain, else the own mesh (see BlockType::own and mesh).
