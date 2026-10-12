@@ -42,6 +42,10 @@ rate, build and run the Release configuration.
   open). A left click takes a whole stack from a slot, and a left click on another slot puts it down (onto the same item up
   to 64, or swapping with a different one). A right click takes half a stack, or puts one down. I or Escape closes it, and
   the stack in the cursor goes back into the inventory. The swatches are the blocks' colours until there are textures.
+- Creatures wander the terrain. A left click on one takes a hit (three hits kill it, and it leaves a hide). One in three is a
+  dark red biter: it chases you inside 7 blocks and bites, 1 health a bite. The bar above the hotbar is your health (ten
+  points): it heals after a few seconds without a hit, a fall past 4 blocks hurts, and at zero you are back at the spawn with
+  the inventory kept.
 - C toggles creative mode: placing takes nothing from the slots and breaking adds nothing to them (the old unlimited
   building). `VOXEL_CREATIVE=1` starts in it.
 - F5 saves the edited blocks to `cg_control/voxel_edits.bin` and the inventory to `cg_control/voxel_inventory.json`; F9 loads

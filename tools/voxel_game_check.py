@@ -12,12 +12,14 @@ functions are replaced for the run and put back afterwards. The result goes to c
 import gc
 import json
 import os
+import random
 import time
 
 import cg_engine_bindings as cge
 import VoxelGame
 import VoxelGen
 import VoxelInventory
+import VoxelWalkers
 
 RESULT = "cg_control/voxel_game_check.json"
 STONE, DIRT, TORCH = VoxelGen.STONE, VoxelGen.DIRT, VoxelGen.TORCH
@@ -64,6 +66,7 @@ def main():
     saved = {
         "paused": game.paused, "creative": game.creative, "slot": game.slot, "slots": inv.to_list(),
         "mouse_captured": game.mouse_captured, "inventory_open": game.inventory_open,
+        "pos": list(game.pos), "health": game.health, "landed_once": game.landed_once, "fell_from": game.fell_from,
     }
     originals = {name: getattr(cge, name) for name in ("key_down", "mouse_down", "mouse_position", "mouse_delta",
                                                        "set_mouse_captured")}
@@ -76,6 +79,7 @@ def main():
     game.creative = False
     game.mouse_captured = True
     game.torch_target = None
+    game.walker_target = None
     game.target = None
     game.hit_times = {}
     inv.slots = [None] * VoxelInventory.SLOTS
@@ -225,11 +229,81 @@ def main():
         PRESSED["key:C"] = False
         checks["C turns creative mode on"] = game.creative is True
         game.creative = False
+
+        # Creatures: a hit takes one of the creature's health, the last one takes it out of the world and leaves a hide.
+        checks["creatures are in the world"] = game.walkers is not None and len(game.walkers.walkers) > 0
+        if game.walkers is None:
+            raise RuntimeError("the creatures are not made yet")
+        spawn = (game.spawn_pos[0] + 3.0, 40.0, game.spawn_pos[2] + 3.0)
+        test_walker = VoxelWalkers.Walker(world, "test_creature", spawn, (0.5, 0.5, 0.5), random.Random(1))
+        game.walkers.walkers.append(test_walker)
+        hides0 = inv.count(VoxelGen.HIDE)
+        game.walker_target = (1.0, test_walker)
+        game.target = None
+        click(game, "Left")
+        checks["a hit on a creature takes one of its health"] = test_walker.health == VoxelWalkers.HEALTH - 1
+        checks["the hit flashes the creature's outline"] = game.flash_until > time.time()
+        click(game, "Left")
+        click(game, "Left")
+        checks["the last hit takes the creature out of the world"] = (
+            test_walker not in game.walkers.walkers and cge.find_body("test_creature") is None)
+        checks["a dead creature leaves a hide in the inventory"] = inv.count(VoxelGen.HIDE) == hides0 + 1
+        game.walker_target = None
+        game.slot = 0
+        inv.slots[0] = [VoxelGen.HIDE, 2]
+        game.target = (floor, UP)
+        before_hide = inv.count(VoxelGen.HIDE)
+        click(game, "Right", secondary=True)
+        checks["a hide cannot be placed"] = game.notice == "A hide cannot be placed" and inv.count(VoxelGen.HIDE) == before_hide
+        inv.slots[0] = None
+
+        # A biter bites when it is close, and then waits for its next bite.
+        biter = VoxelWalkers.Walker(world, "test_biter", spawn, (0.4, 0.1, 0.1), random.Random(2), biter=True)
+        player_xz = (biter.state()[0][0], biter.state()[0][2])
+        first_bite = biter.update(0.0, player_xz)
+        second_bite = biter.update(0.0, player_xz)
+        checks["a biter bites when it is close, not again at once"] = first_bite == VoxelWalkers.BITE_DAMAGE and second_bite == 0.0
+        biter.remove()
+
+        # The player's health: bites and falls lower it, it heals once it has not been hurt for a while, and a death puts it
+        # back at the spawn with the inventory kept.
+        game.health = VoxelGame.PLAYER_HEALTH
+        game.hurt_player(3.0)
+        checks["a hit takes health from the player"] = abs(game.health - (VoxelGame.PLAYER_HEALTH - 3.0)) < 1e-6
+        game.hurt_at = time.time() - 100.0
+        game.update_health(1.0)
+        checks["the player heals after a while without a hit"] = abs(game.health - (VoxelGame.PLAYER_HEALTH - 3.0 + VoxelGame.REGEN_RATE)) < 1e-6
+        game.health = VoxelGame.PLAYER_HEALTH
+        game.landed_once = True
+        game.flying = False
+        game.swimming = False
+        game.on_ground = False
+        game.fell_from = None
+        game.pos[1] = 30.0
+        game.track_fall()
+        game.on_ground = True
+        game.pos[1] = 20.0
+        game.track_fall()
+        expected = VoxelGame.PLAYER_HEALTH - (10.0 - VoxelGame.FALL_SAFE) * VoxelGame.FALL_DAMAGE
+        checks["a fall past the safe height hurts, by the blocks past it"] = abs(game.health - expected) < 1e-6
+        game.health = VoxelGame.PLAYER_HEALTH
+        inv_total = sum(stack[1] for stack in inv.slots if stack)
+        game.pos = [5.5, 33.0, 5.5]
+        game.hurt_player(VoxelGame.PLAYER_HEALTH + 1.0)
+        checks["a death puts the player back at the spawn, healed"] = (
+            game.health == VoxelGame.PLAYER_HEALTH and abs(game.pos[0] - game.spawn_pos[0]) < 1e-6)
+        checks["a death keeps the inventory"] = sum(stack[1] for stack in inv.slots if stack) == inv_total
+        game.health = VoxelGame.PLAYER_HEALTH
+        game.landed_once = False
     except Exception as error:   # the checks above are the record; an error is a failure too
         errors.append("%s: %s" % (type(error).__name__, error))
     finally:
         for cell in test_cells:
             world.set_block(cell[0], cell[1], cell[2], 0)
+        for name in ("test_creature", "test_biter"):
+            if cge.find_body(name) is not None:
+                cge.remove_mesh_body(name)
+                cge.remove_voxel_walker(name)
         for name, value in originals.items():
             setattr(cge, name, value)
         inv.slots = [None] * VoxelInventory.SLOTS
@@ -240,6 +314,11 @@ def main():
         game.mouse_captured = saved["mouse_captured"]
         game.inventory_open = saved["inventory_open"]
         game.paused = saved["paused"]
+        game.pos = saved["pos"]
+        game.health = saved["health"]
+        game.landed_once = saved["landed_once"]
+        game.fell_from = saved["fell_from"]
+        game.walker_target = None
         game.target = None
         game.torch_target = None
         os.makedirs("cg_control", exist_ok=True)

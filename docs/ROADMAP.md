@@ -289,11 +289,15 @@ Goal: blocks and creatures take several hits, and what the player has hit looks 
   burst in the block's colour when a block breaks (particles are a new engine feature, so this may wait for a small particle system).
 - [x] **16.4** Damage heals: a block not hit for a few seconds goes back one stage (so a half-broken wall is a choice, not a
   trap). The timer is per cell and only runs for damaged cells.
-- [ ] **16.5** Creatures take hits: the walkers (11.9) have health, a hit pushes them back, and a dead one leaves a drop. This is
-  also where the creatures' own behaviour starts (they chase, flee and fight, not only wander).
-- [ ] **16.6** The player has health: hits from creatures, falling and water-free lava (if lava is added) lower it; it refills
-  slowly out of combat; at zero the player respawns at the spawn with the inventory kept.
-
+- [x] **16.5** Creatures take hits: each has `HEALTH` (3) and a left click takes one (the aimed creature is outlined, and its
+  hits left are on the HUD). A hit pushes it away and flashes it red. A dead one is taken out of the world (its walker and its
+  mesh) and leaves a hide for the inventory (`VoxelGen.HIDE`, an item that cannot be placed). One in three is a biter: it chases
+  the player inside 7 blocks and bites at 1 health each 1.2 s when within 1.3 blocks. The others still run from the player.
+  Not yet: the drop lands in the inventory directly, not on the ground to pick up, and the creatures do not fight each other.
+- [x] **16.6** The player has health: ten points on a bar above the hotbar. Bites and falls lower it (a fall past 4 blocks costs
+  1 point a block beyond that; the spawn drop does not count). It heals 0.25 a second after 6 s without a hit, and does not heal
+  while the game is paused. At zero the player is back at the spawn with the inventory kept. Not yet: lava (the sample has none),
+  and the hurt is not shown on screen beyond the bar.
 ## Phase 17: inventory and a real hotbar (from playtesting: the hotbar is a line of text)
 Goal: items have quantities, the inventory is a grid the player can see and change, and the hotbar is a UI, not text.
 - [x] **17.1** An item model: an item is a block id (a torch is one too, though it is a prop), held in a slot with a count up to

@@ -58,3 +58,10 @@ NAMES = {AIR: "air", GRASS: "grass", DIRT: "dirt", STONE: "stone", SAND: "sand",
 for _block in range(FLOW_FIRST, FLOW_LAST + 1):
     NAMES[_block] = "flowing water"
 
+
+# Items that are not blocks: a creature leaves a hide when it dies. They are held in the inventory like blocks, but a slot
+# holding one cannot place it (the game checks COLOURS, which lists the blocks only), and the world never defines them.
+HIDE = 40
+ITEM_COLOURS = {HIDE: (0.72, 0.56, 0.40)}
+ITEM_NAMES = {HIDE: "hide"}
+NAMES.update(ITEM_NAMES)

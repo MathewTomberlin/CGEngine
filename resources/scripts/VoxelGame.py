@@ -74,6 +74,12 @@ HUD_BOTTOM = 14             # pixels between the hotbar and the bottom of the wi
 NOTICE_SECONDS = 1.5        # how long a notice ("Inventory full") stays on screen
 WHITE = (1.0, 1.0, 1.0)
 HIT_FLASH_SECONDS = 0.12    # the aimed block's outline is white this long after a hit
+PLAYER_HEALTH = 10.0        # the player's health: ten segments on the bar above the hotbar
+REGEN_DELAY = 6.0           # seconds without a hit before the player starts to heal
+REGEN_RATE = 0.25           # health a second once it does
+FALL_SAFE = 4.0             # blocks a player can fall without harm
+FALL_DAMAGE = 1.0           # health lost for each block past FALL_SAFE
+HEALTH_SEGMENT = 16         # pixels, a side, of one segment of the health bar
 INVENTORY_FILE = "cg_control/voxel_inventory.json"
 EDITS_FILE = "cg_control/voxel_edits.bin"
 
@@ -221,6 +227,12 @@ class VoxelGame(PyScript):
         self.notice = ""                # a short message on the HUD ("Inventory full"), shown until notice_until
         self.notice_until = 0.0
         self.flash_until = 0.0          # the aimed block's outline is white until this time, after a hit
+        self.health = PLAYER_HEALTH     # the player's health (a bite, a fall and a death change it)
+        self.hurt_at = -1e9             # when the player was last hurt (the healing waits after it)
+        self.fell_from = None           # the height the player left the ground at, while in the air
+        self.landed_once = False        # a fall counts only after the player has stood on the ground (the spawn drop does not)
+        self.spawn_pos = list(self.pos)
+        self.walker_target = None       # (distance, walker) of the creature under the crosshair, or None
         self.window = None              # the window's size, set when the HUD is made
         self.bodies = set()             # the HUD's rectangle and text bodies, made once each
         self.drawn = {}                 # the last value set on each HUD body, so unchanged ones are not set again
@@ -293,6 +305,7 @@ class VoxelGame(PyScript):
         self.update_sky(dt)
         self.update_held_torch()
         self.update_healing()
+        self.update_health(dt)
         self.frame_dt = dt
         self.place_camera()
 
@@ -504,6 +517,9 @@ class VoxelGame(PyScript):
             self.set_target_text("")
         elif not self.mouse_captured:
             self.set_target_text("%s.  Click the game to capture the mouse" % biome)
+        elif self.aims_at_walker():
+            hits = self.walker_target[1].health
+            self.set_target_text("%s.  Looking at: creature   (left click: %d hit%s to go)" % (biome, hits, "" if hits == 1 else "s"))
         elif self.aims_at_torch():
             self.set_target_text("%s.  Looking at: torch   (left click: take it back)" % biome)
         elif self.target is None:
@@ -516,6 +532,7 @@ class VoxelGame(PyScript):
                 text += "   (right click: %s)" % self.selected_name()
             self.set_target_text(text)
         self.update_slots()
+        self.update_health_bar()
         self.update_inventory_screen()
         self.update_notice()
 
@@ -553,7 +570,7 @@ class VoxelGame(PyScript):
 
     def item_colour(self, item):
         """An item's colour as (r, g, b, 255), for its swatch."""
-        r, g, b = VoxelGen.COLOURS.get(item, WHITE)
+        r, g, b = VoxelGen.COLOURS.get(item) or VoxelGen.ITEM_COLOURS.get(item, WHITE)
         return (int(r * 255), int(g * 255), int(b * 255), 255)
 
     def slot_origin(self, index):
@@ -666,7 +683,8 @@ class VoxelGame(PyScript):
             if not self.world.is_loaded(0, 0):
                 return
             self.walkers = VoxelWalkers.Walkers(self.world, (8.5, 8.5), WALKERS, self.seed)
-        self.walkers.update(dt, (self.pos[0], self.pos[2]))
+        bites = self.walkers.update(dt, (self.pos[0], self.pos[2]))
+        self.hurt_player(bites)
 
     def in_water(self):
         """True while a liquid block is at the player's feet or chest."""
@@ -758,6 +776,7 @@ class VoxelGame(PyScript):
                                                            self.flying or self.swimming, on_ground=self.on_ground)
             self.pos = list(pos)
             self.vel = list(vel)
+        self.track_fall()
         if self.pos[1] < RESPAWN_DEPTH:
             # Keep the state from the moment of the fall: where the player was, and whether the chunk under them was loaded.
             folder = os.path.abspath("cg_control/snapshots")
@@ -767,6 +786,8 @@ class VoxelGame(PyScript):
             print("[voxel] fell below the kill zone at %s (state saved)" % [round(v, 2) for v in self.pos])
             self.pos = [self.pos[0], SPAWN_HEIGHT, self.pos[2]]
             self.vel = [0.0, 0.0, 0.0]
+            self.fell_from = None
+            self.landed_once = False
 
     def solid(self, x, y, z):
         return self.world.skin_at(x, y, z)
@@ -785,6 +806,7 @@ class VoxelGame(PyScript):
         eye = tuple(self.eye())
         look = self.look_direction()
         self.torch_target = self.torch_under_aim(eye, look)
+        self.walker_target = self.walker_under_aim(eye, look)
         surface = self.world.skin_surface(eye, look, physics.REACH)
         if surface is None:
             self.target = physics.raycast(self.solid, eye, look)
@@ -863,6 +885,12 @@ class VoxelGame(PyScript):
         would go into, in the colour it would have. A hit flashes the break outline white for a moment."""
         if self.paused or self.inventory_open:
             self.show_outline("target_break", None, None)
+            self.show_outline("target_place", None, None)
+            return
+        if self.aims_at_walker():
+            lo, hi = self.walker_target[1].box()
+            flash = time.time() < self.flash_until
+            self.show_outline("target_break", (lo, hi), WHITE if flash else BREAK_COLOUR)
             self.show_outline("target_place", None, None)
             return
         if self.aims_at_torch():
@@ -977,6 +1005,17 @@ class VoxelGame(PyScript):
         place_down = self.mouse_captured and bool(cge.mouse_down("Right"))
         breaking = self.pressed("Break", break_down or bool(cge.key_down("J")))
         placing = self.pressed("Place", place_down or bool(cge.key_down("K")))
+        if breaking and self.aims_at_walker():
+            # A creature the crosshair is on, nearer than the block behind it, is hit: each hit takes one of its HEALTH. The
+            # one that kills it leaves a hide for the inventory.
+            walker = self.walker_target[1]
+            self.flash_until = time.time() + HIT_FLASH_SECONDS
+            if walker.hurt((self.pos[0], self.pos[2])):
+                self.walkers.remove(walker)
+                self.walker_target = None
+                self.gain(VoxelGen.HIDE)
+                self.notify("A creature died: a hide" if not self.creative else "A creature died")
+            return
         if breaking and self.aims_at_torch():
             # A torch the crosshair is on, nearer than the block behind it, is the one broken, and it goes into the inventory.
             if self.creative or self.inventory.fits(VoxelGen.TORCH):
@@ -1014,6 +1053,9 @@ class VoxelGame(PyScript):
                 if not self.creative:
                     self.notify("This slot is empty")
                 return
+            if item not in VoxelGen.COLOURS:
+                self.notify("A %s cannot be placed" % VoxelGen.NAMES[item])
+                return
             if item == VoxelGen.TORCH:
                 # A torch goes on a face: into the air cell in front of a solid block, leaning on it.
                 if self.world.is_solid(block[0], block[1], block[2]) and self.world.get_block(cell[0], cell[1], cell[2]) == VoxelGen.AIR:
@@ -1036,6 +1078,85 @@ class VoxelGame(PyScript):
                 del self.hit_times[cell]
             else:
                 self.hit_times[cell] = now - HEAL_AFTER + HEAL_STEP
+
+    def track_fall(self):
+        """The fall: the highest point the player leaves the ground from, to the height they land at. A fall past FALL_SAFE
+        blocks hurts. Flying and swimming are not falls, and the spawn drop is not counted (landed_once)."""
+        if self.flying or self.swimming:
+            self.fell_from = None
+        elif not self.on_ground:
+            if self.landed_once:
+                self.fell_from = self.pos[1] if self.fell_from is None else max(self.fell_from, self.pos[1])
+        else:
+            self.landed_once = True
+            if self.fell_from is not None:
+                fall = self.fell_from - self.pos[1]
+                self.fell_from = None
+                if fall > FALL_SAFE:
+                    self.hurt_player((fall - FALL_SAFE) * FALL_DAMAGE)
+
+    def hurt_player(self, amount):
+        """The player loses health (a bite, a fall). At zero the player is back at the spawn, healed, with the inventory kept."""
+        if amount <= 0.0:
+            return
+        self.health -= amount
+        self.hurt_at = time.time()
+        if self.health > 0.0:
+            return
+        self.pos = [self.spawn_pos[0], SPAWN_HEIGHT, self.spawn_pos[2]]
+        self.vel = [0.0, 0.0, 0.0]
+        self.health = PLAYER_HEALTH
+        self.fell_from = None
+        self.landed_once = False
+        self.notify("You died. Back at the spawn, with the inventory kept")
+
+    def update_health(self, dt):
+        """The player heals REGEN_RATE a second once REGEN_DELAY seconds have passed without a hit. The world's time is dt, so
+        nothing heals while the game is paused."""
+        if self.health < PLAYER_HEALTH and time.time() - self.hurt_at > REGEN_DELAY:
+            self.health = min(PLAYER_HEALTH, self.health + REGEN_RATE * dt)
+
+    def update_health_bar(self):
+        """Ten segments above the hotbar: red for the health left, dark for the rest. Not drawn under the pause menu."""
+        segments = int(PLAYER_HEALTH)
+        row_width = segments * HEALTH_SEGMENT + (segments - 1) * SLOT_GAP
+        left = (self.window.x - row_width) / 2
+        top = self.slot_origin(0)[1] - HEALTH_SEGMENT - 6
+        for i in range(segments):
+            x = left + i * (HEALTH_SEGMENT + SLOT_GAP)
+            box = (x, top, HEALTH_SEGMENT, HEALTH_SEGMENT)
+            if self.paused:
+                self.hide_rect("hp_%d" % i, box)
+                self.hide_rect("hp_fill_%d" % i, box)
+                continue
+            fill = max(0.0, min(1.0, self.health - i))
+            self.draw_rect("hp_%d" % i, box, (50, 14, 14, 200), (0, 0, 0, 220), 1, layer=985)
+            inner = HEALTH_SEGMENT - 4
+            self.draw_rect("hp_fill_%d" % i, (x + 2, top + 2, inner * fill, inner), (210, 45, 45, 255), layer=986)
+
+    def walker_under_aim(self, eye, look):
+        """The nearest creature the look ray meets within reach, as (distance, walker), or None. The boxes are the creatures' own."""
+        if self.walkers is None:
+            return None
+        best = None
+        for walker in self.walkers.walkers:
+            lo, hi = walker.box()
+            centre = tuple((lo[i] + hi[i]) / 2 for i in range(3))
+            half = tuple((hi[i] - lo[i]) / 2 for i in range(3))
+            t = ray_box(eye, look, centre, half)
+            if t is not None and t <= physics.REACH and (best is None or t < best[0]):
+                best = (t, walker)
+        return best
+
+    def aims_at_walker(self):
+        """True when the crosshair is on a creature that is nearer than the block behind it: a hit takes the creature then."""
+        if self.walker_target is None:
+            return False
+        if self.target is None:
+            return True
+        block = self.target[0]
+        block_distance = math.dist(self.eye(), (block[0] + 0.5, block[1] + 0.5, block[2] + 0.5))
+        return self.walker_target[0] < block_distance
 
     def update_held_torch(self):
         """The carried torch: a point light at the eye, lit or out. It is a shader light, so it needs no re-mesh."""
@@ -1108,7 +1229,7 @@ class VoxelGame(PyScript):
                  "smoothing": self.world.smoothing(), "active": self.world.active_count(), "paused": self.paused,
                  "menu": self.menu_page if self.paused else None, "sensitivity": self.sensitivity, "view_radius": self.view_radius,
                  "seed": self.seed, "frames": self.frames, "inventory": self.inventory.to_list(), "creative": self.creative,
-                 "inventory_open": self.inventory_open,
+                 "inventory_open": self.inventory_open, "health": round(self.health, 3),
                  "player": [round(v, 3) for v in self.pos], "on_ground": self.on_ground, "flying": self.flying,
                  "swimming": self.swimming, "walkers": len(self.walkers.walkers) if self.walkers else 0,
                  "biome": self.world.biome_at(math.floor(self.pos[0]), math.floor(self.pos[2])),
