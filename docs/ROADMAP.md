@@ -181,6 +181,40 @@ Today every solid block is part of one smooth skin per chunk, which merges wood 
   level-of-detail seams today; the same rule would be needed where a separate mesh meets the terrain, or the separate skin
   would show a crack where the two meet.
 
+## Phase 13: collision and the camera on the skin (from playtesting: clipping, and no walking up slopes)
+Goal: the player, the creatures and the camera meet the surface that is drawn, not the blocks under it. The skin is drawn at
+the iso-surface of the blocks' occupancy (density 0.3), which sits about 0.2 blocks out from each solid face, so block
+collision leaves the feet 0.2 blocks inside the visible ground and the eye close to the wall it walks into.
+- [~] **13.1** A skin field: the density the skin is built from (`VoxelWorld::skinDensity(x, y, z)`, the same trilinear
+  occupancy of the block centres) with occupancy = solid block types (water and air are open; unloaded cells are solid, as
+  before). A point is inside the skin where the density is above 0.3. Queries cost eight block reads.
+- [ ] **13.2** The body mover tests the skin, not the voxels: sample points on the body (feet, middle, head and the eye),
+  and a blocked move is set flush by bisection against the surface. The player and the creatures share it.
+- [ ] **13.3** Walking up slopes: when a horizontal move is blocked, the body steps up to 0.6 blocks and snaps back down to
+  the surface, so a gentle slope is walked, not climbed in a jump. Steep walls still stop the body.
+- [ ] **13.4** The camera never sits inside the skin: the eye is one of the body's sample points, so a wall stops the
+  player with the near plane clear of it. Looking into an overhang stays outside too.
+- [ ] **13.5** Picking follows the skin: the break and place target is found by marching the ray through the density
+  until it crosses the iso-surface, so the outline is on the surface under the crosshair (today it is the block behind it).
+- [ ] **13.6** Measured in Release: the frame time with the player and twelve creatures on the skin, and the cost of a
+  mover step, against the 650 frames a second the block version runs at. Decide whether the surface test needs a cache.
+- Open question: the level-of-detail skin (11.7) is drawn with two samples a block near the camera, while collision uses
+  one. The difference is up to half a block near the player; a finer collision field is possible if it shows.
+
+## Phase 14: light you carry and place (from playtesting: the caves are too dark to explore)
+Goal: torches light caves and the player can carry one. Light is what lets a player read a cave; the sky cannot reach
+underground, so the sky floor (0.2) is all a cave gets today.
+- [ ] **14.1** Torch block: a block type that emits light (full at its cell, falling 0.8 a block through air, the same walk
+  as sky light and within the same 8-block reach). It is not solid, so it does not block movement.
+- [ ] **14.2** Placed torches: a torch goes on the hotbar and is placed like any block. Its light is baked into the chunks
+  around it, which are re-meshed when it is placed or broken (the neighbours within reach are already re-meshed).
+- [ ] **14.3** Held torch: a point light that follows the camera and lights the walls around the player, with a key to
+  light or put it out. It is a shader light, so it needs no re-mesh.
+- [ ] **14.4** The light colour is warm, and a torch flickers a little (cosmetic, per torch).
+- [ ] **14.5** Measured: the cost of the torch channel in the mesher and of a re-mesh after a placement, in Release.
+- Interim (not on the roadmap as a fix): the cave floor (0.2 of the sky) could be raised to make caves readable before the
+  torches land. Decide after 14.1 if they are still too dark.
+
 ## Tooling and quality
 - [x] CI build on Windows (`.github/workflows/build.yml`) with Mesa software OpenGL smoke run
 - [~] Unit tests for pure logic runnable without a GPU. Done for the dungeon generator (`python -I tools/test_dungeon_gen.py`) and for the scene format and command list (`python -I tools/test_scene_format.py`: example scenes, invalid fixtures, documented commands). The C++ parsers in `SceneLoader` and `ControlChannel` are still covered only by the GPU integration test.
