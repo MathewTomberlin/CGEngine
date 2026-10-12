@@ -4,6 +4,7 @@
 #include <SFML/Window/Keyboard.hpp>
 #include <SFML/Window/Mouse.hpp>
 #include <SFML/Graphics/RenderWindow.hpp>
+#include <SFML/Graphics/RectangleShape.hpp>
 #include <SFML/System/Vector3.hpp>
 #include <map>
 #include <optional>
@@ -39,8 +40,9 @@ namespace {
             {"1", sf::Keyboard::Scan::Num1}, {"2", sf::Keyboard::Scan::Num2}, {"3", sf::Keyboard::Scan::Num3},
             {"4", sf::Keyboard::Scan::Num4}, {"5", sf::Keyboard::Scan::Num5}, {"6", sf::Keyboard::Scan::Num6},
             {"7", sf::Keyboard::Scan::Num7}, {"8", sf::Keyboard::Scan::Num8}, {"9", sf::Keyboard::Scan::Num9},
-            {"0", sf::Keyboard::Scan::Num0},
+            {"0", sf::Keyboard::Scan::Num0}, {"-", sf::Keyboard::Scan::Hyphen}, {"=", sf::Keyboard::Scan::Equal},
             {"F5", sf::Keyboard::Scan::F5}, {"F9", sf::Keyboard::Scan::F9}, {"F12", sf::Keyboard::Scan::F12},
+            {"L", sf::Keyboard::Scan::L}, {"I", sf::Keyboard::Scan::I}, {"C", sf::Keyboard::Scan::C},
         };
         return keys;
     }
@@ -288,7 +290,7 @@ void bindGame(py::module_& m) {
     "The sky and fog. sky is the colour at the horizon, zenith the colour straight up (left out, the sky is one colour). fog fades from fog_start to fog_end blocks away; the fog is off while fog_end is not past fog_start. sun_direction points towards the sun, sun_colour draws its disc (black hides it) and sun_size is its angular radius in degrees. shadows turns on the sun's shadows, from a map that covers shadow_radius blocks around the camera. Arguments left out keep their value.");
 
     m.def("set_light", [](const std::string& name, std::optional<sf::Vector3f> direction, std::optional<sf::Vector3f> colour,
-        std::optional<float> brightness, std::optional<float> ambiance) {
+        std::optional<float> brightness, std::optional<float> ambiance, std::optional<sf::Vector3f> position) {
         Light* light = assets.get<Light>(name);
         if (!light) throw std::runtime_error("no light named '" + name + "'");
         // Renderer copies the parameters into the light buffer every frame, so the change applies at once.
@@ -296,9 +298,11 @@ void bindGame(py::module_& m) {
         if (colour) light->parameters.colorIntensities = *colour;
         if (brightness) light->parameters.brightness = *brightness;
         if (ambiance) light->parameters.ambiance = *ambiance;
+        // A point light's position (its w stays 1); a held torch moves its light every frame.
+        if (position) light->position = glm::vec4(position->x, position->y, position->z, light->position.w);
     }, py::arg("name"), py::arg("direction") = py::none(), py::arg("colour") = py::none(), py::arg("brightness") = py::none(),
-    py::arg("ambiance") = py::none(),
-    "Change a light made by the scene: direction (where the light travels, for a directional light), colour, brightness and ambiance. Arguments left out keep their value.");
+    py::arg("ambiance") = py::none(), py::arg("position") = py::none(),
+    "Change a light made by the scene: direction (where the light travels, for a directional light), colour, brightness, ambiance and position (for a point light). Arguments left out keep their value.");
 
     // Text drawn over the scene, in window pixels from the top-left corner: a label for the game's HUD.
     m.def("create_text_body", [](const std::string& name, const std::string& text, const std::string& fontName,
@@ -323,12 +327,47 @@ void bindGame(py::module_& m) {
        "Make a text label at position (window pixels from the top-left) drawn over the scene. Use a font loaded with load_font. "
        "outline_thickness (pixels) draws an outline in outline_colour, which keeps the text readable over any background.");
 
-    m.def("set_text_body", [](const std::string& name, const std::string& text) {
+    m.def("set_text_body", [](const std::string& name, const std::string& text, std::optional<sf::Vector2f> position) {
         Body* body = findBodyByName(name);
         sf::Text* label = body ? body->get<sf::Text*>() : nullptr;
         if (!label) throw std::runtime_error("no text body named '" + name + "'");
         label->setString(text);
-    }, py::arg("name"), py::arg("text"), "Change the text of a label made by create_text_body.");
+        if (position) label->setPosition(*position);
+    }, py::arg("name"), py::arg("text"), py::arg("position") = py::none(),
+       "Change the text of a label made by create_text_body, and optionally its position (window pixels).");
+
+    // A filled rectangle over the scene, in window pixels from the top-left corner: the HUD's boxes, slots and swatches. It is an
+    // overlay body, so it is drawn over the meshes; its z order puts it under the labels (which are 1000).
+    m.def("create_rect_body", [](const std::string& name, sf::Vector2f position, sf::Vector2f size, sf::Color fill,
+        sf::Color outlineColour, float outlineThickness, int zOrder) {
+        sf::RectangleShape rect(size);
+        rect.setPosition(position);
+        rect.setFillColor(fill);
+        rect.setOutlineColor(outlineColour);
+        rect.setOutlineThickness(outlineThickness);
+        auto body = assets.create<Body>("rect:" + name, std::move(rect));
+        if (!body.has_value()) throw std::runtime_error("could not create the rectangle body '" + name + "'");
+        body.value().second->setName(name);
+        body.value().second->zOrder = zOrder;
+        body.value().second->overlay = true;
+        return body.value().second;
+    }, py::arg("name"), py::arg("position"), py::arg("size"), py::arg("fill") = sf::Color::White,
+       py::arg("outline_colour") = sf::Color::Black, py::arg("outline_thickness") = 0.0f, py::arg("z_order") = 999,
+       "Make a rectangle at position with size (window pixels, from the top-left corner), filled with fill (RGBA) and outlined "
+       "in outline_colour. A rectangle with alpha 0 fill and no outline is not seen.");
+
+    m.def("set_rect_body", [](const std::string& name, sf::Vector2f position, sf::Vector2f size, sf::Color fill,
+        sf::Color outlineColour, float outlineThickness) {
+        Body* body = findBodyByName(name);
+        sf::RectangleShape* rect = body ? body->get<sf::RectangleShape*>() : nullptr;
+        if (!rect) throw std::runtime_error("no rectangle body named '" + name + "'");
+        rect->setPosition(position);
+        rect->setSize(size);
+        rect->setFillColor(fill);
+        rect->setOutlineColor(outlineColour);
+        rect->setOutlineThickness(outlineThickness);
+    }, py::arg("name"), py::arg("position"), py::arg("size"), py::arg("fill"), py::arg("outline_colour"),
+       py::arg("outline_thickness") = 0.0f, "Change a rectangle made by create_rect_body: position, size, fill and outline.");
 
     m.def("window_size", []() {
         const sf::Vector2u size = gameWindow().getSize();

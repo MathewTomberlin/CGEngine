@@ -1,6 +1,6 @@
 """
 Movement and block picking for the voxel sample (docs/games/voxels.md). Pure Python: every function takes
-solid(x, y, z) -> bool, the occupancy of a block, so tools/test_voxel_physics.py can run them without the engine.
+solid(x, y, z) -> the block's skin id (0 for air; see TERRAIN_SKIN), so tools/test_voxel_physics.py can run them without the engine.
 
 The player is a box, PLAYER_HALF_WIDTH wide, PLAYER_HEIGHT tall, with its feet at pos. A body collides with the skin the
 terrain is drawn with, not with the blocks: density() is the same trilinear occupancy the mesh is built from, and a point is
@@ -17,13 +17,19 @@ JUMP_SPEED = 9.0        # blocks per second, upwards
 MAX_FALL = 40.0         # terminal fall speed
 REACH = 6.0             # blocks from the eye that a block can be picked
 SKIN_ISO = 0.3          # the skin is where the density is this (VoxelSkinIso in VoxelMesher.h)
+# The skin ids solid() returns (VoxelWorld.skin_at): 0 for air, TERRAIN_SKIN for the terrain (a plain True counts as it), OWN_SKIN
+# + block for a smooth block in its own mesh, and CUBE_SKIN + block for a cube block.
+TERRAIN_SKIN = 1
+OWN_SKIN = 256
+CUBE_SKIN = 512
 STEP_UP = 1.0           # a blocked walk on the ground climbs this high (a block), then snaps back to the surface
 _SUBSTEP = 0.1          # largest move along one axis in one go
 _BISECT_STEPS = 12      # how exactly a blocked move is set flush against the skin
 
 
 def density(solid, x, y, z):
-    """The skin's density at (x, y, z): the occupancy of the eight block centres around the point, weighted trilinearly."""
+    """The skin's density at (x, y, z), the largest of the skins it is in (VoxelWorld::skinDensity). Each smooth skin is the
+    occupancy of its blocks' centres around the point, weighted trilinearly; a cube's skin is 1 in its own cell."""
     bx = x - 0.5
     by = y - 0.5
     bz = z - 0.5
@@ -36,14 +42,26 @@ def density(solid, x, y, z):
     x0 = int(fx)
     y0 = int(fy)
     z0 = int(fz)
-    value = 0.0
+    skins = [0] * 8
+    weights = [0.0] * 8
     for c in range(8):
         dx = c & 1
         dy = (c >> 1) & 1
         dz = (c >> 2) & 1
-        w = (tx if dx else 1.0 - tx) * (ty if dy else 1.0 - ty) * (tz if dz else 1.0 - tz)
-        if solid(x0 + dx, y0 + dy, z0 + dz):
-            value += w
+        weights[c] = (tx if dx else 1.0 - tx) * (ty if dy else 1.0 - ty) * (tz if dz else 1.0 - tz)
+        skins[c] = solid(x0 + dx, y0 + dy, z0 + dz) or 0
+    value = 0.0
+    for c in range(8):
+        skin = skins[c]
+        if not skin or skin >= CUBE_SKIN or skin in skins[:c]:
+            continue
+        total = 0.0
+        for d in range(8):
+            if skins[d] == skin:
+                total += weights[d]
+        value = max(value, total)
+    if (solid(math.floor(x), math.floor(y), math.floor(z)) or 0) >= CUBE_SKIN:
+        value = max(value, 1.0)
     return value
 
 

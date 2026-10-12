@@ -19,6 +19,9 @@ VOXEL_WOOD = 7
 VOXEL_LEAVES = 8
 VOXEL_STONE = 3
 VOXEL_LAMP = 17   # VoxelGen.LAMP
+VOXEL_BRICK = 18  # VoxelGen.BRICK
+VOXEL_COAL = 20   # VoxelTerrain::Coal
+VOXEL_IRON = 21   # VoxelTerrain::Iron
 
 
 def load_chunks(world, chunks, timeout=60.0):
@@ -72,24 +75,104 @@ def surface_y(world, x, z):
     return -1
 
 
-def check_body_parity(world, checks):
-    """The engine's body mover (step_body) and resources/scripts/VoxelPhysics.step agree on random moves."""
+def body_parity(world, seed, count, lo, hi):
+    """How many of count random moves, from positions in the box lo..hi, differ between the engine's mover (step_body) and
+    resources/scripts/VoxelPhysics.step, which reads the same skins (skin_at)."""
     import random
     import VoxelPhysics as physics
-    rng = random.Random(7)
+    rng = random.Random(seed)
     mismatches = 0
-    for _ in range(300):
-        pos = (rng.uniform(-6, 6), rng.uniform(12, 60), rng.uniform(-6, 6))
+    for _ in range(count):
+        pos = tuple(rng.uniform(lo[axis], hi[axis]) for axis in range(3))
         vel = (rng.uniform(-6, 6), rng.uniform(-30, 10), rng.uniform(-6, 6))
         dt = rng.uniform(0.005, 0.05)
         flying = rng.random() < 0.2
         on_ground = rng.random() < 0.5
-        py_pos, py_vel, py_ground = physics.step(world.is_solid, pos, vel, dt, flying, on_ground)
+        py_pos, py_vel, py_ground = physics.step(world.skin_at, pos, vel, dt, flying, on_ground)
         cpp_pos, cpp_vel, cpp_ground = world.step_body(pos, vel, dt, flying, on_ground=on_ground)
         gap = max(abs(a - b) for a, b in zip(py_pos + py_vel, cpp_pos + cpp_vel))
         if gap > 1e-9 or py_ground != cpp_ground:
             mismatches += 1
-    checks["body physics matches the Python version"] = mismatches == 0
+    return mismatches
+
+
+def check_body_parity(world, checks):
+    """The engine's body mover (step_body) and resources/scripts/VoxelPhysics.step agree on random moves."""
+    checks["body physics matches the Python version"] = body_parity(world, 7, 300, (-6, 12, -6), (6, 60, 6)) == 0
+
+
+def check_groups(checks):
+    """Blocks in their own meshes (BlockType::own) and cube blocks (BlockType::cube). A leaf is in its own mesh and not the
+    terrain's, a brick is six cube faces, and ground is in the terrain's mesh. Collision sees each skin: a body lands on a
+    brick at its drawn top, and the engine's mover agrees with the Python physics on a mixed patch of blocks."""
+    world = cge.VoxelWorld(SIZE, HEIGHT, "voxel")
+    # Wood joins the leaves above it and the natural ground under it (stone 3, dirt 2, grass 1, sand 4, gravel 16, snow 6).
+    world.define_block(VOXEL_WOOD, cge.Vector3f(0.44, 0.29, 0.15), group="own", join_above=VOXEL_LEAVES,
+                       join_below=[3, 2, 1, 4, 16, 6])
+    world.define_block(VOXEL_LEAVES, cge.Vector3f(0.20, 0.50, 0.16), group="own", material="voxel_leaves")
+    world.define_block(VOXEL_BRICK, cge.Vector3f(0.66, 0.30, 0.22), shape="cube", group="own")
+    world.set_smoothing(1)
+    chunk = [(0, 0)]
+    load_chunks(world, chunk)
+    for x in range(SIZE):
+        for z in range(SIZE):
+            world.fill_column(x, z, 0, HEIGHT, 0)
+
+    world.set_block(8, 8, 8, VOXEL_LEAVES)
+    wait_meshed(world, chunk)
+    groups = world.chunk_group_quads(0, 0)
+    checks["a leaf alone is in its own mesh, not the terrain's"] = set(groups) == {VOXEL_LEAVES} and groups[VOXEL_LEAVES] > 0
+    checks["a leaf is a skin of its own to collision"] = world.skin_at(8, 8, 8) == 256 + VOXEL_LEAVES
+
+    world.set_block(8, 8, 8, VOXEL_BRICK)
+    wait_meshed(world, chunk)
+    checks["a brick alone is six cube faces in its own mesh"] = world.chunk_group_quads(0, 0) == {VOXEL_BRICK: 6}
+    checks["a brick is a cube skin to collision"] = world.skin_at(8, 8, 8) == 512 + VOXEL_BRICK
+    world.set_block(8, 8, 8, 0)
+
+    for x in range(SIZE):
+        for z in range(SIZE):
+            world.fill_column(x, z, 0, 6, VOXEL_STONE)
+    wait_meshed(world, chunk)
+    checks["ground is in the terrain mesh alone"] = set(world.chunk_group_quads(0, 0)) == {0} and world.chunk_group_quads(0, 0)[0] > 0
+    checks["stone is the terrain skin to collision"] = world.skin_at(8, 5, 8) == 1 and world.skin_at(8, 6, 8) == 0
+
+    world.set_block(8, 6, 8, VOXEL_BRICK)
+    world.set_block(5, 6, 5, VOXEL_WOOD)
+    world.set_block(10, 6, 10, VOXEL_LEAVES)
+    world.set_block(6, 6, 9, VOXEL_BRICK)
+    wait_meshed(world, chunk)
+    groups = world.chunk_group_quads(0, 0)
+    checks["on the ground, the terrain and each own mesh are separate"] = (
+        set(groups) == {0, VOXEL_LEAVES, VOXEL_BRICK} and groups[VOXEL_BRICK] == 12)
+    checks["wood standing on the ground joins the terrain's skin"] = world.skin_at(5, 6, 5) == 1
+
+    # A body falls onto the brick and stands on its drawn top face, at y = 7 (the cell's top).
+    state = ((8.5, 12.0, 8.5), (0.0, 0.0, 0.0), False)
+    for _ in range(600):
+        state = world.step_body(state[0], state[1], 1.0 / 60.0, False, on_ground=state[2])
+        if state[2]:
+            break
+    checks["a body lands on a brick at its drawn top face"] = state[2] and abs(state[0][1] - 7.0) < 0.01
+
+    checks["the engine's mover matches the Python physics on a mixed patch"] = body_parity(world, 11, 300, (4, 5, 4), (12, 9, 12)) == 0
+
+    # Wood joins the leaves above it: a trunk top under a canopy belongs to the canopy's skin. Wood with air above, and wood
+    # beside leaves, keep their own skin.
+    world.set_block(8, 8, 8, VOXEL_WOOD)
+    world.set_block(8, 9, 8, VOXEL_LEAVES)
+    world.set_block(3, 8, 3, VOXEL_WOOD)
+    world.set_block(7, 8, 12, VOXEL_WOOD)
+    world.set_block(8, 8, 12, VOXEL_LEAVES)
+    wait_meshed(world, chunk)
+    checks["wood under leaves joins the leaves' skin"] = world.skin_at(8, 8, 8) == 256 + VOXEL_LEAVES
+    checks["wood with air above keeps its own skin"] = world.skin_at(3, 8, 3) == 256 + VOXEL_WOOD
+    checks["wood beside leaves keeps its own skin"] = world.skin_at(7, 8, 12) == 256 + VOXEL_WOOD
+    world.set_block(6, 7, 9, VOXEL_WOOD)
+    checks["wood standing on a brick keeps its own skin"] = world.skin_at(6, 7, 9) == 256 + VOXEL_WOOD
+    groups = world.chunk_group_quads(0, 0)
+    checks["a joined trunk top is drawn with the leaves' mesh"] = groups.get(VOXEL_LEAVES, 0) > 0 and groups.get(VOXEL_WOOD, 0) > 0
+    world.clear()
 
 
 def check_detail(checks):
@@ -238,10 +321,10 @@ def check_walkers(world, checks, results):
         x, z = pos[0], pos[2]
         # A creature on the ground stands on the skin: it is outside the skin, and nothing moves it on.
         results.setdefault("walkers", []).append({"pos": [round(c, 3) for c in pos], "vel": [round(c, 3) for c in vel],
-                                                 "onGround": on_ground, "inside": physics.inside(world.is_solid, pos)})
+                                                 "onGround": on_ground, "inside": physics.inside(world.skin_at, pos)})
         if not on_ground and abs(vel[1]) < 1e-6:
             stands = False
-        if on_ground and physics.inside(world.is_solid, pos):
+        if on_ground and physics.inside(world.skin_at, pos):
             stands = False
         for y in (pos[1] + 0.1, pos[1] + VoxelWalkers.HEIGHT - 0.1):
             if world.is_solid(int(x // 1), int(y // 1), int(z // 1)):
@@ -270,6 +353,144 @@ def check_skin_surface(world, checks):
             if surface is not None and abs(surface[1] - (top + 0.2)) < 0.25:
                 good += 1
     checks["the view meets the drawn skin (about 0.2 of a block above the top block)"] = total > 0 and good >= 0.9 * total
+
+
+def check_props(world, checks, chunks):
+    """A torch is a prop in an air cell: it lights its cell (0.8 of full light) and the air next to it (0.8 of that), it stays
+    air for collision, it adds geometry to its chunk's terrain mesh, and removing it puts the light out. Tested in a sealed
+    pocket, which is put back afterwards."""
+    cx, cy, cz = 10, 22, 10
+    saved = {}
+    for x in range(cx - 2, cx + 3):
+        for y in range(cy - 2, cy + 3):
+            for z in range(cz - 2, cz + 3):
+                saved[(x, y, z)] = world.get_block(x, y, z)
+                inside = max(abs(x - cx), abs(y - cy), abs(z - cz)) <= 1
+                world.set_block(x, y, z, 0 if inside else VOXEL_STONE)
+    wait_meshed(world, chunks)
+    dark = world.light_at(cx + 1, cy, cz)
+    quads_before = world.chunk_group_quads(0, 0).get(0, 0)
+    placed = world.set_prop(cx + 1, cy, cz, 0)
+    wait_meshed(world, chunks)
+    torch_light = world.light_at(cx + 1, cy, cz)
+    next_light = world.light_at(cx, cy, cz)
+    checks["a sealed pocket has no light before the torch"] = dark == 0
+    checks["a torch is placed in an air cell, and listed"] = placed and world.prop_at(cx + 1, cy, cz) == 0         and (cx + 1, cy, cz, 0) in [tuple(p) for p in world.props()]
+    checks["a torch gives 0.8 of full light in its cell"] = abs(torch_light - 204) <= 2
+    checks["the air beside a torch gets 0.8 of that"] = abs(next_light - 163) <= 2
+    checks["a torch cell stays air to collision"] = world.skin_at(cx + 1, cy, cz) == 0
+    checks["a torch adds geometry to its chunk's terrain mesh"] = world.chunk_group_quads(0, 0).get(0, 0) > quads_before
+    # The wall is stone at +x, so its skin is 0.3 from the torch's cell centre; the stick's outer face must be on that skin.
+    boxes = [b for b in world.prop_boxes() if (b[0], b[1], b[2]) == (cx + 1, cy, cz)]
+    stick_outer = boxes[0][4][0] + boxes[0][5][0] if boxes else None
+    checks["a torch stands on the skin of its wall, not inside it"] = stick_outer is not None and abs(stick_outer - (cx + 1.5 + 0.3)) < 0.03
+    world.remove_prop(cx + 1, cy, cz)
+    checks["removing a torch removes it and its light"] = world.prop_at(cx + 1, cy, cz) == -1         and world.light_at(cx + 1, cy, cz) == 0
+    for (x, y, z), block in saved.items():
+        world.set_block(x, y, z, block)
+    world.clear_edits()
+    wait_meshed(world, chunks)
+
+
+def measure_remesh(world, chunks, results):
+    """How long an edit takes to reach the mesh, in milliseconds (the median of 9 edits): a block, and a torch, in a chunk with
+    no light block, and the same block in a chunk with a lamp in it. The check runs inside the engine, so the build is the
+    one the test runs (Release)."""
+    import statistics
+    edit_cell = (8, 40, 8)
+    def settle():
+        # A busy poll: wait_meshed sleeps between polls, which would be most of a 5 ms measurement.
+        while True:
+            world.update(5.0, 0, 0)
+            stats = world.stats()
+            if stats["dirty"] == 0 and stats["meshing"] == 0:
+                return
+    def timed(edit):
+        samples = []
+        for i in range(9):
+            start = time.perf_counter()
+            edit(i)
+            settle()
+            samples.append((time.perf_counter() - start) * 1000.0)
+        return round(statistics.median(samples), 2)
+    world.set_block(*edit_cell, 0)
+    results["measure"] = {}
+    results["measure"]["block edit, no light block in the chunk"] = timed(
+        lambda i: world.set_block(edit_cell[0], edit_cell[1], edit_cell[2], VOXEL_STONE if i % 2 == 0 else 0))
+    results["measure"]["torch placed and removed, no light block in the chunk"] = timed(
+        lambda i: world.set_prop(edit_cell[0] + 1, edit_cell[1], edit_cell[2], 0) if i % 2 == 0 else world.remove_prop(edit_cell[0] + 1, edit_cell[1], edit_cell[2]))
+    world.set_block(edit_cell[0] - 2, edit_cell[1], edit_cell[2], VOXEL_LAMP)
+    results["measure"]["block edit, with a lamp in the chunk"] = timed(
+        lambda i: world.set_block(edit_cell[0], edit_cell[1], edit_cell[2], VOXEL_STONE if i % 2 == 0 else 0))
+    world.set_block(edit_cell[0] - 2, edit_cell[1], edit_cell[2], 0)
+    world.set_block(edit_cell[0], edit_cell[1], edit_cell[2], 0)
+    world.clear_edits()
+    wait_meshed(world, chunks)
+
+
+def check_rocks(world, chunks, checks, results):
+    """Boulders are stone on the ground. The terrain's own columns end in grass, sand, snow or dirt, so a column whose top block
+    is stone is a boulder. Some are in the chunks checked, and none is in the sea."""
+    sea_level = 14
+    rocks = []
+    xs = range(min(cx for cx, _ in chunks) * SIZE, (max(cx for cx, _ in chunks) + 1) * SIZE)
+    zs = range(min(cz for _, cz in chunks) * SIZE, (max(cz for _, cz in chunks) + 1) * SIZE)
+    for x in xs:
+        for z in zs:
+            top = None
+            for y in range(HEIGHT - 1, 0, -1):
+                if world.get_block(x, y, z) != 0:
+                    top = y
+                    break
+            if top is not None and world.get_block(x, top, z) == VOXEL_STONE:
+                rocks.append((x, top, z))
+    results["boulders"] = len(rocks)
+    checks["boulders are in the chunks checked"] = len(rocks) > 0
+    checks["no boulder is in the sea"] = all(top > sea_level for _, top, _ in rocks)
+
+
+def check_ores(world, chunks, checks):
+    """Ore is in the stone: coal at any depth, and iron only deep (below the terrain's IronDepth of 20)."""
+    coal = iron = iron_high = 0
+    xs = range(min(cx for cx, _ in chunks) * SIZE, (max(cx for cx, _ in chunks) + 1) * SIZE)
+    zs = range(min(cz for _, cz in chunks) * SIZE, (max(cz for _, cz in chunks) + 1) * SIZE)
+    for x in xs:
+        for z in zs:
+            for y in range(1, 40):
+                block = world.get_block(x, y, z)
+                if block == VOXEL_COAL:
+                    coal += 1
+                elif block == VOXEL_IRON:
+                    iron += 1
+                    if y >= 20:
+                        iron_high += 1
+    checks["coal ore is in the stone"] = coal > 0
+    checks["iron ore is in the stone, and only deep"] = iron > 0 and iron_high == 0
+
+
+def check_damage(checks):
+    """A block takes its hits to break (stone takes three here). Each hit before the last leaves a damage stage, the last one
+    breaks it, and the stage goes with the block. A hit marks the chunk to be meshed again, so the stage shows."""
+    world = cge.VoxelWorld(SIZE, HEIGHT, "voxel")
+    world.define_block(VOXEL_STONE, cge.Vector3f(0.5, 0.5, 0.53), hits=3)
+    load_chunks(world, [(0, 0)])
+    world.set_block(4, 30, 4, VOXEL_STONE)
+    wait_meshed(world, [(0, 0)])
+    first = world.hit_block(4, 30, 4)
+    stage = world.damage_at(4, 30, 4)
+    dirty = world.stats()["dirty"]
+    second = world.hit_block(4, 30, 4)
+    third = world.hit_block(4, 30, 4)
+    checks["a block takes its hits to break (stone: three)"] = first == 1 and second == 2 and third == -1 \
+        and world.get_block(4, 30, 4) == 0
+    checks["a hit leaves a damage stage, and the stage goes with the block"] = stage == 1 and world.damage_at(4, 30, 4) == 0
+    checks["a hit marks the chunk to be meshed again"] = dirty > 0
+    world.set_block(4, 31, 4, VOXEL_STONE)
+    world.hit_block(4, 31, 4)
+    world.hit_block(4, 31, 4)
+    healed = [world.heal_block(4, 31, 4), world.heal_block(4, 31, 4), world.heal_block(4, 31, 4)]
+    checks["a damaged block heals one stage at a time, and is whole again"] = healed == [1, 0, 0] and world.damage_at(4, 31, 4) == 0
+    world.clear()
 
 
 def check_lamp(world, checks):
@@ -338,6 +559,12 @@ def run(out_path="cg_control/voxel_check.json"):
     check_walkers(world, results["check"], results)
     check_skin_surface(world, results["check"])
     check_lamp(world, results["check"])
+    check_props(world, results["check"], chunks)
+    check_ores(world, chunks, results["check"])
+    check_rocks(world, chunks, results["check"], results)
+    check_damage(results["check"])
+    measure_remesh(world, chunks, results)
+    check_groups(results["check"])
     biomes ={world.biome_at(x, z) for x in range(-200, 200, 10) for z in range(-200, 200, 10)}
     results["check"]["biomes vary: plains, forest and desert occur"] = biomes == {"plains", "forest", "desert"}
     results["biomes"] = sorted(biomes)
@@ -355,6 +582,27 @@ def run(out_path="cg_control/voxel_check.json"):
     results["check"]["load reads"] = world.load_edits(edit_file)
     results["check"]["edit count after load"] = world.edit_count() == 1
     results["check"]["loaded edit applies at once"] = world.get_block(3, 20, 3) == BLOCK_CHECK
+    # Torches are saved with the edits too: one goes out and comes back from the file.
+    world.set_block(5, 30, 5, 0)
+    world.set_prop(5, 30, 5, 2)
+    world.save_edits(edit_file)
+    world.remove_prop(5, 30, 5)
+    world.clear_edits()
+    world.load_edits(edit_file)
+    results["check"]["a torch is saved and loaded with the edits"] = world.prop_at(5, 30, 5) == 2
+    world.remove_prop(5, 30, 5)
+    world.clear_edits()
+    # Damage is saved with the edits too: a block hit once keeps its stage through a save and a load (stone takes three).
+    world.define_block(VOXEL_STONE, cge.Vector3f(0.5, 0.5, 0.53), hits=3)
+    world.set_block(7, 20, 7, VOXEL_STONE)
+    world.hit_block(7, 20, 7)
+    world.save_edits(edit_file)
+    world.heal_block(7, 20, 7)
+    results["check"]["the damage is healed before the load"] = world.damage_at(7, 20, 7) == 0
+    world.load_edits(edit_file)
+    results["check"]["a damaged block is saved and loaded with its stage"] = world.damage_at(7, 20, 7) == 1
+    world.set_block(7, 20, 7, 0)
+    world.clear_edits()
 
     # The smooth skin meshes the same chunks: every loaded chunk gets a mesh, and switching back to cubes works too.
     world.set_smoothing(1)

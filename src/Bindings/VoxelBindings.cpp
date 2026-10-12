@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <optional>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <SFML/System/Vector3.hpp>
@@ -32,6 +33,33 @@ void bindVoxel(py::module_& m) {
         }, py::arg("seed"), py::arg("sea_level") = 14, py::arg("base_height") = 8, py::arg("height_range") = 44,
            py::arg("snow_level") = 40, py::arg("tree_chance") = 0.01f, py::arg("cave_width") = 0.07f,
            "The generator's settings. Chunks requested after this use them.")
+        .def("set_prop", &VoxelWorld::setProp, py::arg("x"), py::arg("y"), py::arg("z"), py::arg("dir"),
+             "Place a torch in the air cell (x, y, z), leaning on the block in direction dir (0 +x, 1 -x, 2 +y, 3 -y, 4 +z, 5 -z). "
+             "False if the cell is a block or its chunk is not loaded.")
+        .def("remove_prop", &VoxelWorld::removeProp, py::arg("x"), py::arg("y"), py::arg("z"), "Remove the torch in a cell, if any.")
+        .def("prop_at", &VoxelWorld::propAt, py::arg("x"), py::arg("y"), py::arg("z"),
+             "The direction of the torch in a cell (see set_prop), or -1 for none.")
+        .def("props", &VoxelWorld::props, "Every torch as a list of (x, y, z, dir).")
+        .def("hit_block", &VoxelWorld::hitBlock, py::arg("x"), py::arg("y"), py::arg("z"),
+             "Hit the block at (x, y, z). Returns its damage stage (1 to hits - 1), -1 if this hit breaks it, or -2 if there is no block.")
+        .def("damage_at", &VoxelWorld::damageAt, py::arg("x"), py::arg("y"), py::arg("z"),
+             "The damage stage of the block at (x, y, z): 0 for none.")
+        .def("heal_block", &VoxelWorld::healBlock, py::arg("x"), py::arg("y"), py::arg("z"),
+             "Heal the block at (x, y, z) by one damage stage. Returns the stage it is at now.")
+        .def("prop_boxes", [](const VoxelWorld& world) {
+            // The boxes the torches are drawn with, so a hit test can use what the player sees.
+            py::list result;
+            for (const auto& prop : world.props()) {
+                const PropShape shape = propShape(glm::vec3(prop[0] + 0.5f, prop[1] + 0.5f, prop[2] + 0.5f), prop[3],
+                    world.propAnchor(prop[0], prop[1], prop[2], prop[3]));
+                result.append(py::make_tuple(prop[0], prop[1], prop[2], prop[3],
+                    py::make_tuple(shape.stickCentre.x, shape.stickCentre.y, shape.stickCentre.z),
+                    py::make_tuple(shape.stickHalf.x, shape.stickHalf.y, shape.stickHalf.z),
+                    py::make_tuple(shape.flameCentre.x, shape.flameCentre.y, shape.flameCentre.z),
+                    py::make_tuple(shape.flameHalf.x, shape.flameHalf.y, shape.flameHalf.z)));
+            }
+            return result;
+        }, "Each torch's boxes: (x, y, z, dir, stick centre, stick half size, flame centre, flame half size), as drawn.")
         .def("get_block", &VoxelWorld::getBlock, py::arg("x"), py::arg("y"), py::arg("z"),
              "The block id at world coordinates, 0 (air) outside the world height or in chunks that are not loaded.")
         .def("set_block", &VoxelWorld::setBlock, py::arg("x"), py::arg("y"), py::arg("z"), py::arg("block_id"),
@@ -54,13 +82,50 @@ void bindVoxel(py::module_& m) {
         .def("set_smoothing", &VoxelWorld::setSmoothing, py::arg("resolution"),
              "The surface style: 0 for cubes, or the number of samples per block for a smooth skin (1 for the block scale, 2 for half blocks). Loaded chunks are re-meshed.")
         .def("smoothing", &VoxelWorld::smoothing, "The surface style set by set_smoothing: 0 for cubes, else the samples per block.")
-        .def("define_block", [](VoxelWorld& world, int block_id, sf::Vector3f colour, bool solid, bool falls, bool liquid, int emits) {
+        .def("define_block", [](VoxelWorld& world, int block_id, sf::Vector3f colour, bool solid, bool falls, bool liquid, int emits,
+                const std::string& shape, const std::string& group, const std::optional<std::string>& material, int mesh,
+                int join_above, const std::optional<std::vector<int>>& join_below, bool transparent, int hits) {
+            if (shape != "smooth" && shape != "cube") throw py::value_error("shape must be \"smooth\" or \"cube\"");
+            if (group != "terrain" && group != "own") throw py::value_error("group must be \"terrain\" or \"own\"");
+            if (shape == "cube" && group == "terrain") throw py::value_error("a cube block is drawn in its own mesh: group must be \"own\"");
+            if (mesh < 0 || mesh > 255) throw py::value_error("mesh must be a block id, 0 to 255");
+            if (mesh != 0 && group != "own") throw py::value_error("mesh is for a block in its own mesh: group must be \"own\"");
+            if (join_above < 0 || join_above > 255) throw py::value_error("join_above must be a block id, 0 to 255");
+            if (join_above != 0 && (group != "own" || shape != "smooth")) {
+                throw py::value_error("join_above is for a smooth block in its own mesh: shape \"smooth\", group \"own\"");
+            }
             world.setColour(block_id, glm::vec3(colour.x, colour.y, colour.z));
-            world.defineBlock(block_id, BlockType{ solid, falls, liquid, static_cast<uint8_t>(std::clamp(emits, 0, 255)) });
+            BlockType type{ solid, falls, liquid, static_cast<uint8_t>(std::clamp(emits, 0, 255)) };
+            type.own = group == "own";
+            type.cube = shape == "cube";
+            type.mesh = static_cast<uint8_t>(mesh);
+            type.joinAbove = static_cast<uint8_t>(join_above);
+            type.transparent = transparent;
+            type.hits = static_cast<uint8_t>(std::clamp(hits, 1, 255));
+            if (join_below) {
+                for (int below : *join_below) {
+                    if (below < 0 || below > 255) throw py::value_error("join_below must be block ids, 0 to 255");
+                    type.joinBelow.set(static_cast<size_t>(below));
+                }
+                if (!type.joinBelow.any()) throw py::value_error("join_below is empty");
+                if (group != "own" || shape != "smooth") throw py::value_error("join_below is for a smooth block in its own mesh");
+            }
+            world.defineBlock(block_id, type);
+            world.setMaterial(block_id, material.value_or(std::string()));
         }, py::arg("block_id"), py::arg("colour"), py::arg("solid") = true, py::arg("falls") = false, py::arg("liquid") = false,
-           py::arg("emits") = 0,
+           py::arg("emits") = 0, py::arg("shape") = "smooth", py::arg("group") = "terrain", py::arg("material") = py::none(),
+           py::arg("mesh") = 0, py::arg("join_above") = 0, py::arg("join_below") = py::none(), py::arg("transparent") = false, py::arg("hits") = 1,
            "Define a block id: its colour, whether it is solid (blocks movement), falls (sand-like, moves down into air or liquid), "
-           "liquid (flows, as water does) and emits (the light it gives off at its own cell, 0 to 255; a lamp is 255).")
+           "liquid (flows, as water does) and emits (the light it gives off at its own cell, 0 to 255; a lamp is 255). How it is "
+           "drawn: shape is \"smooth\" (the skin) or \"cube\" (a cube that never merges with its neighbours); group is \"terrain\" "
+           "(the chunk's terrain mesh) or \"own\" (a mesh of its own per chunk, drawn with material, a material name, or the "
+           "world's material if None). A cube block must be in its own group.")
+        .def("skin_at", &VoxelWorld::skinAt, py::arg("x"), py::arg("y"), py::arg("z"),
+             "The collision skin of the block at these coordinates: 0 for air and liquids, 1 for the terrain, 256 + id for a smooth "
+             "block drawn in its own mesh, 512 + id for a cube. Solid blocks are the non-zero ones; VoxelPhysics uses it as its solid().")
+        .def("chunk_group_quads", &VoxelWorld::chunkGroupQuads, py::arg("cx"), py::arg("cz"),
+             "The quads of each mesh a loaded chunk has, as a dict: 0 for the terrain, else the block id with its own mesh. Missing "
+             "groups have none.")
         .def("is_solid", &VoxelWorld::isSolid, py::arg("x"), py::arg("y"), py::arg("z"),
              "True if the block at these coordinates is solid. Air and liquids are not.")
         .def("biome_at", &VoxelWorld::biomeName, py::arg("x"), py::arg("z"),
@@ -92,6 +157,8 @@ void bindVoxel(py::module_& m) {
            "does. on_ground is whether it stood on the skin at the last step (it lets the box climb a block). Returns (pos, vel, on_ground).")
         .def("simulate", &VoxelWorld::simulate, py::arg("dt"), py::arg("budget_ms") = 1.0, py::arg("tick_seconds") = 0.1,
              "Advance the block physics by dt seconds, within budget_ms of work. Ticks run every tick_seconds. Returns the cells looked at.")
+        .def("set_far", &VoxelWorld::setFar, py::arg("far_chunks"), py::arg("stride") = 2,
+             "Far skins: the chunks more than far_chunks from the focus are meshed with every stride-th block sampled (a stride of 2 is a quarter of the quads). 0 turns them off.")
         .def("set_detail", &VoxelWorld::setDetail, py::arg("near_chunks"), py::arg("near_samples") = 2,
              "Finer smooth skin near the camera: the chunks within near_chunks of the focus use near_samples per block. 0 turns it off.")
         .def("chunk_quads", &VoxelWorld::chunkQuads, py::arg("cx"), py::arg("cz"),

@@ -66,7 +66,9 @@ Goal: a world with thousands of objects, and procedurally made geometry, drawn i
 ## Phase 8: voxel world sample (`docs/games/voxels.md`)
 A procedural block world with chunks, terrain, collision, block editing and a day/night cycle, built on Phase 7.
 - [x] **8.1** C++ voxel mesher (`cge.VoxelWorld`, `src/Core/Voxel/`): chunks of block ids meshed into runtime meshes, with per-face culling across chunk borders, per-vertex ambient occlusion, and per-block colours. Dirty chunks are re-meshed on demand. Checked offline for the terrain (`tools/test_voxel_gen.py`) and by a screenshot. Greedy meshing came in 9.2. Not yet: a transparent water block.
-- [~] **8.2** Terrain: done are the noise, height and sand, grass, stone, snow and water per column (C++, on worker threads), chunks streamed around the camera, trees (one column in a hundred, drawn across chunk borders), and caves (tunnels and rooms carved by 3D noise, `cave_width`). Biomes came in later: deserts, forests and plains from a slow noise field (`biome_at`). Not yet: rocks and ores per biome.
+- [x] **8.2** Terrain: done are the noise, height and sand, grass, stone, snow and water per column (C++, on worker threads), chunks streamed around the camera, trees (one column in a hundred, drawn across chunk borders), and caves (tunnels and rooms carved by 3D noise, `cave_width`). Biomes came in later: deserts, forests and plains from a slow noise field (`biome_at`). Ores came with the stone: coal at any depth, iron only deep (`VoxelTerrain::Coal`, `Iron`, checked by `check_ores`). Rocks: boulders of stone on the ground, one column in about 700 on the plains, twice as many in the desert, half as many in
+  the forest (`VoxelTerrain::placeRocks`, a ball of radius 1 or 2 that sits on the ground and goes only into air). Checked by
+  `voxel_world_check.py` (some boulders, none in the sea).
 - [x] **8.3** Player: gravity, jumping and collision with the blocks (`VoxelPhysics.py`, pure Python and tested offline), a ray cast to pick the block in view, and break (J) and place (K). Edited chunks are re-meshed. Flying (Enter) for exploring.
 - [x] **8.4** Day and night: the sun's direction and light, the ambient fill, the sky and the fog change over `VOXEL_DAY_SECONDS`, from the script (`cge.set_light`, `cge.set_environment`). Nine block types on keys 1 to 9, with an on-screen hotbar (11.2).
 - [x] **8.5** Save and load of the edited blocks. `VoxelWorld` keeps every edit apart from its chunks, so an edit survives the chunk unloading and is applied when it loads again. `save_edits` and `load_edits` write a binary file; F5 and F9 use it in the sample. Checked by `tools/voxel_world_check.py` from `tools/test_voxels.ps1`.
@@ -109,8 +111,8 @@ Goal: the terrain looks rounded and real, the blocks obey physics the scripts ca
 
 ## Phase 11: making the voxel sample feel right to play (from playing it)
 Goal: the world reads well at a human pace, and the engine's own state is easy to see and to test.
-Next, in order: 11.14 and 11.15 (both wait for a snapshot from the player), then Phase 12 (block rendering rules), and the
-creatures' own behaviour (they only wander now).
+Next, in order: 11.14 and 11.15 (both wait for a snapshot from the player), then Phase 15 (view distance), Phase 16
+(damage) and Phase 17 (inventory). The creatures' own behaviour (they only wander now) comes with Phase 16.
 - [x] **11.1** Mouse look at a quarter of the first setting (0.00625 degrees a pixel, `VOXEL_MOUSE_SENSITIVITY`). Escape
   opens a pause menu: the mouse is freed and the world stands still; Resume locks the mouse; Quit closes the app.
   `tools/test_pause_menu.ps1` checks each step with scripted input.
@@ -166,22 +168,31 @@ creatures' own behaviour (they only wander now).
 ## Phase 12: block rendering rules (from the voxel sample, requested by the lead developer)
 Goal: each block type decides how it is drawn, so cube blocks, smooth blocks, and blocks in their own mesh can sit in one world.
 Today every solid block is part of one smooth skin per chunk, which merges wood and leaves into the ground.
-- [ ] **12.1** A per-type render rule: every block type has a shape (`smooth` for the skin, or `cube` for a normal voxel
-  cube) and a mesh group (`terrain` for the chunk's main mesh, or its own mesh per type). `define_block` takes both. Cube
-  blocks and smooth blocks are told apart by type, not by where they sit.
-- [ ] **12.2** Terrain blocks merge into the chunk's one mesh: ground (stone and dirt), grass, sand, gravel, water and snow.
-  This is what the skin does now.
-- [ ] **12.3** Wood and leaves are separate meshes, one per type and chunk, drawn with their own material. They do not
-  merge into the terrain. Their skin is built from their own blocks only, and the terrain skin treats them as air, so a
-  canopy does not hide the ground under it (and the ground does not hide the canopy).
-- [ ] **12.4** Brick: a new block type that stays a normal cube voxel and never merges, so it keeps sharp edges and its own
-  texture. The cube mesher draws its faces (no greedy merge across types) into a mesh of its own.
-- [ ] **12.5** The rules are data: the Python side sets the rule per block (`cge.VoxelWorld.define_block(id, ..., shape=,
-  group=)`), the hotbar shows the new block, and `tools/voxel_world_check.py` checks each rule (a brick face is a cube
-  face, a leaf is in the leaf mesh and not the terrain mesh, a ground block is in the terrain mesh).
-- Open question: the seams. A separate skin (wood, leaves) meets the terrain skin where they touch. Skirts (11.12) cover the
-  level-of-detail seams today; the same rule would be needed where a separate mesh meets the terrain, or the separate skin
-  would show a crack where the two meet.
+- [x] **12.1** A per-type render rule: `define_block(..., shape="smooth"|"cube", group="terrain"|"own", material=)`. A cube
+  block is always in its own mesh (`BlockType::own` and `cube`). Each chunk meshes its terrain, and one mesh per own block type
+  it contains (`buildChunkMesh` and `buildSmoothMesh` take the group). Collision reads the same rule: `VoxelWorld::skinAt`
+  gives each mesh's skin (`TerrainSkin`, `OwnSkin + id`, `CubeSkin + id`), and `skinDensity` is the largest of them.
+- [x] **12.2** Terrain blocks merge into the chunk's one mesh: ground (stone and dirt), grass, sand, gravel, water and snow.
+- [x] **12.3** Wood and leaves are separate meshes, one per type and chunk, drawn with `voxel_wood` and `voxel_leaves`. Their
+  skin is built from their own blocks only, and the terrain treats them as air, so a canopy does not hide the ground under it.
+- [x] **12.4** Brick: a cube block (`VoxelGen.BRICK`, hotbar key `-`). It never merges, so its faces are six quads, and a body
+  stands on its top face at the drawn height (not 0.2 above it, as a smooth block would).
+- [x] **12.5** The rules are data: `define_block` sets them, the hotbar shows brick, and `tools/voxel_world_check.py` checks
+  them (`check_groups`: a leaf alone is in its own mesh, a brick alone is six cube faces, ground is in the terrain mesh, a body
+  lands on a brick, and the engine's mover matches the Python physics on a mixed patch). `tools/test_voxel_physics.py` checks
+  the cube and largest-skin densities.
+- [x] **12.6** A wood block whose top is covered by leaves joins the leaves' skin (`BlockType::joinAbove`, `join_above=`):
+  the trunk top and the canopy are one surface, while the trunk's sides and bottom stay wood, and so does a trunk with air
+  above it. Checked by `check_groups`; seen in play (the trees worked).
+- [x] **12.7** A wood block standing on natural ground (stone, dirt, grass, sand, gravel, snow) joins the terrain at its bottom
+  (`join_below=`, a list of block ids). A wood block on a brick or on water keeps its own skin. Checked by `check_groups`.
+- [x] **12.8** Water is a semi-transparent mesh: `define_block(..., transparent=True)` draws its mesh after the opaque ones,
+  blended and without writing depth (`Body::transparent`, `Renderer::render`), and the material's `opacity` (0.55 for
+  `voxel_water`, read from the scene file) multiplies the surface's alpha. The shadow map skips transparent meshes.
+- Seams: a separate skin meets the terrain where they touch. The terrain treats a trunk or a leaf as air, so its surface sits
+  where the block's own skin does; in the screenshot the two meet without a crack. Level-of-detail seams between own meshes use
+  the same skirts as the terrain (11.12), not yet checked in play. Light is not split by mesh (every block shades behind
+  it), so the ground under a trunk is shaded: a dark patch, which is what a block overhead should do.
 
 ## Phase 13: collision and the camera on the skin (from playtesting: clipping, and no walking up slopes)
 Goal: the player, the creatures and the camera meet the surface that is drawn, not the blocks under it. The skin is drawn at
@@ -217,22 +228,144 @@ full block, and light blocks (full cells that give light) are wanted too.
   cell and falls 0.8 a block through air, for 8 blocks, the same walk as sky light; each cell takes the brighter of the two.
   The lamp is a solid block drawn as a cube, so it is placed like any block. `check_lamp` in `voxel_world_check.py` checks
   a sealed pocket: the sky floor before the lamp, 0.8 one block away, 0.8 cubed three blocks away. Not on the hotbar yet.
-- [ ] **14.2** Small torch as an item, not a block: a torch is a prop on one face of a block, drawn as a thin mesh, so it
-  takes a fraction of a block and the grid does not change. Its cell stays air for collision, meshing and the walk, and the
-  torch enters the light pass as an emitter at that cell, from a sparse per-chunk list (no block id). Placed from the hotbar
-  on a face, broken by hitting it; the chunks within reach are re-lit as for a block edit.
-- [ ] **14.3** Held torch: a point light that follows the camera and lights the walls around the player, with a key to
-  light or put it out. It is a shader light, so it needs no re-mesh and stays separate from the baked light of 14.1 and 14.2.
-- [ ] **14.4** The light colour is warm, and a torch flickers a little (cosmetic, per torch).
-- [ ] **14.5** Measured: the cost of the light pass in the mesher (a chunk with and without a light block) and of a re-mesh
-  after a placement, in Release.
-- [ ] **14.6** Spike: a prop finer than a block. Can a block cell hold a finer grid where a prop needs one, without finer blocks
-  everywhere? Plan: a sparse 4×4×4 micro-grid per block cell, stored only where set, meshed with the same greedy mesher at
-  micro scale and lit from its cell. Whole-world subdivision is not the route: it multiplies the cells the mesher, the light
-  walk and the collision sample by 4 per axis (64 times the cells). Decide after 14.2 whether a prop needs micro collision.
+- [x] **14.2** Small torch as an item, not a block: a torch is a prop on one face of a block (`VoxelWorld::setProp`), drawn as
+  a thin stick with a flame (`buildPropMesh`), so it takes a fraction of a block and the grid does not change. Its cell stays
+  air for collision, meshing and the walk. It enters the light pass as an emitter at that cell (0.8 of full light, `VoxelTorchLight`),
+  from a sparse list per chunk. Placed from the hotbar (`=`) on a block's face, broken by aiming at it (nearer than the block
+  behind it), and torches leaning on a block that is broken are broken with it. Chunks in reach are re-lit as for a block edit.
+  Limits: torches are kept with the edits in the world but not written to the save file (F5), and the outline is not drawn
+  on a torch. Checked by `check_props` (light in the cell and beside it, air to collision, geometry, removal).
+- [x] **14.3** Held torch: a point light at the eye (`held_torch` in the scene, `set_light(position=)`), lit and put out with
+  L. It is a shader light, so it needs no re-mesh and stays separate from the baked light of 14.1 and 14.2. Point lights are not
+  gated by the sky (the shader's `gate`), so it lights a sealed cave. Not yet seen in play: the lit torch and its walls.
+- [x] **14.7** Items attach to the skin, not the voxel. A torch stands on the drawn surface of the block it leans on: its
+  base is at the skin's crossing (`VoxelWorld::propAnchor`, the same density collision uses), not at the block's face. Before,
+  a torch sat inside the skin on most blocks (the skin bulges 0.2 past each face), so it was hidden. `prop_boxes` gives the
+  boxes the torch is drawn with, and the aim test uses them. Checked by `check_props`.
+- [x] **14.8** Placed torches and lamps light like the held torch: the glow is the warm light colour at 0.8 (it used to be four
+  times the block's colour, which clipped to white), and the light a lamp or torch gives its neighbours is tinted by the same
+  colour. The lamp block's own colour is dark, so its glow shows as light, not as a white block.
+- [x] **14.4** The light colour is warm (the held torch and the placed ones). The held torch flickers, two slow sines a few
+  per cent either way. A placed torch's flame wavers too: its glow is scaled in the shader by two sines on the torch's own
+  phase (a per-vertex `flicker` value, 0 for every other surface). The light a placed torch gives its neighbours is baked into
+  the mesh, so it does not waver; only the flame's glow does. Seen as a still frame only, not in motion yet.
+- [x] **14.5** Measured in Release (the check runs inside the engine, `measure_remesh`, median of 9 edits, busy poll): a block
+  edit reaches the mesh in about 2.6 ms, a torch placed or removed in about 2.9 ms, and a block edit in a chunk with a lamp
+  in it in about 3.0 ms. The light pass adds little next to the meshing itself.
+- [x] **14.6** Decided: a torch needs no micro grid. It is drawn at a fraction of a block by `buildPropMesh` and its cell is
+  air to collision, so the walk, the mesher and the light pass see no finer cells. The 4x4x4 micro-grid is not built; it stays
+  an option for a prop that must collide at its own scale.
+- [x] **14.9** Torches are saved with the edits: the edit file is version 2, with the torches after the blocks (x, y, z and
+  dir for each). Version 1 files still load. Checked by the save and load round trip in `voxel_world_check.py`.
+- [x] **14.10** The aim label names a torch when the crosshair is on one ("Looking at: torch   (left click: take it back)"),
+  and the torch is outlined in the break colour as one box round its stick and flame. The rule is the break's own: a torch
+  nearer than the block behind it is the one a break takes.
 - Interim (not on the roadmap as a fix): the cave floor (0.2 of the sky) could be raised to make caves readable before the
   torches land. Decide after 14.1 if they are still too dark.
 
+## Phase 15: view distance (from playtesting: the view is short)
+Goal: the player chooses how far they can see, and a long view stays cheap enough to walk through.
+- [x] **15.1** A view distance setting on the settings page: arrows from 6 to 40 chunks each way, with 14 (the old default) in
+  the middle. The fog, the chunk requests and the unload radius follow it, and the choice is saved with the other settings.
+  "Unlimited" is the last step and is capped at 40, because each chunk is held in memory (about 6,500 chunks, roughly 2 GB).
+  `tools/test_pause_menu.ps1` checks the arrow and the saved file.
+- [x] **15.2** Far skins: the chunks more than 6 from the player (`VOXEL_FAR_RADIUS`) are meshed with every second block
+  sampled (`buildSmoothMesh` takes a stride; the chunk size is even, so the grids of neighbours line up, and the skirts hide
+  the step between levels). At view 40: 2.2 M quads instead of 8.3 M, and the load takes 15 s instead of 32 s. Frame rate
+  moved only from 23 to 27, so the cost at 40 is the number of chunk draws, not the quads (15.5). Unlimited stays capped at 40
+  until then. Seen in a screenshot at 40 (terraces on the dunes from the coarser sampling, no open seams).
+- [~] **15.3** Frame time per view distance, measured in Release (`tools/voxel_perf.ps1`, standing, turning and walking, this
+  machine): view 6 (169 chunks) 399 / 380 / 334 fps, worst frame 6 to 7 ms; view 14 (841) 179 / 186 / 161 fps, worst 10 to 15 ms;
+  view 24 (2,401) 69 / 70 / 66 fps, worst 24 to 37 ms; view 40 (6,561) 23 / 19 / 17 fps, worst 57 to 70 ms. The "about 650 fps at
+  841 chunks" in the notes did not come back: the build from before this round measured 201 / 199 / 178 on the same machine
+  today, so this round's HUD and game script cost about 10%. Still open: memory per step (the step list is chosen from these
+  numbers, so the memory is the next measurement).
+- [ ] **15.5** Draw calls at a long view: each chunk is one body with its own draws, so at 40 there are 6,561 chunk bodies a frame
+  and the frame rate is 27 whatever the quads are. Analysis (not built): merging 4 by 4 chunks into one body per group means
+  the region's mesh is rebuilt from every chunk's CPU copy when one chunk changes, and those copies are not kept now. At 40 the
+  vertices alone are about 2 GB of GPU memory, so keeping the copies roughly doubles the memory. Either keep the copies in a
+  compact form, or rebuild a region from the chunks' blocks (the mesher is fast: a chunk takes a few ms). Decide before building.
+  Until then "Unlimited" stays at 40.
+- [x] **15.4** Memory on a long walk at 40 (`VOXEL_SEED=1`, Release): the player was moved round a wide circle 40 times, 90 blocks
+  a hop, so the chunks behind unloaded and the ones ahead loaded (about 6,750 to 6,880 chunks held throughout). The working
+  set went from 624 MB to a peak of 1,064 MB around the 24th hop, then fell back to 675 MB by the end. So the churn does not
+  grow without bound: the peak is the chunks being meshed as they come in, and the heap gives most of it back. Not measured:
+  a walk of hours, and the GPU's own memory (the buffers are not in the working set).
+## Phase 16: voxel health and damage (from playtesting: one hit breaks everything)
+Goal: blocks and creatures take several hits, and what the player has hit looks hit.
+- [x] **16.1** Block hardness: each block type has a number of hits to break (stone more than dirt, leaves less than wood,
+  lamps and torches one). `define_block(..., hits=)`. The hardness is data, like the other block rules.
+- [x] **16.2** Visual damage states: a damaged block shows its stage in three ways. Its colour darkens with the stage (the
+  damage is per cell, kept with the edits, so the mesher tints the cell's faces). Its surface gets cracks (a Voronoi border
+  pattern in world space, drawn in the voxel shader from a per-vertex damage value; the lines widen with the hits, and fade
+  out on the triangles that only reach a hit block). The damage is saved with the edits (edit file version 3, after the
+  torches), and a stage change re-meshes only the chunk it is in. Checked by `voxel_world_check.py` (the save and load round
+  trip) and seen in screenshots of a two-hit and a one-hit block. The cracks use a 27-cell search per fragment, so the cost
+  of many damaged blocks in view is not measured yet (15.3).
+- [x] **16.3** Hit feedback: the aimed block's outline flashes white for 0.12 s on each hit; a hit throws three chips of the
+  block's colour from the face that was hit, a break throws ten from the middle, and a creature throws chips when it is hit
+  and twelve when it dies. The chips are a small particle system (`VoxelParticles.py`): each burst is one runtime mesh body,
+  rebuilt each frame, with gravity and shrinking, at most eight bursts at once. Not yet: the engine has no particle system of
+  its own, and a burst costs one mesh upload a frame; checked inside the game (`voxel_game_check.py`), seen in play only.
+- [x] **16.4** Damage heals: a block not hit for a few seconds goes back one stage (so a half-broken wall is a choice, not a
+  trap). The timer is per cell and only runs for damaged cells.
+- [x] **16.5** Creatures take hits: each has `HEALTH` (3) and a left click takes one (the aimed creature is outlined, and its
+  hits left are on the HUD). A hit pushes it away and flashes it red. A dead one is taken out of the world (its walker and its
+  mesh) and leaves a hide for the inventory (`VoxelGen.HIDE`, an item that cannot be placed). One in three is a biter: it chases
+  the player inside 7 blocks and bites at 1 health each 1.2 s when within 1.3 blocks. The others still run from the player.
+  Not yet: the drop lands in the inventory directly, not on the ground to pick up, and the creatures do not fight each other.
+- [x] **16.6** The player has health: ten points on a bar above the hotbar. Bites and falls lower it (a fall past 4 blocks costs
+  1 point a block beyond that; the spawn drop does not count). It heals 0.25 a second after 6 s without a hit, and does not heal
+  while the game is paused. At zero the player is back at the spawn with the inventory kept. Not yet: lava (the sample has none),
+  and the hurt is not shown on screen beyond the bar.
+## Phase 17: inventory and a real hotbar (from playtesting: the hotbar is a line of text)
+Goal: items have quantities, the inventory is a grid the player can see and change, and the hotbar is a UI, not text.
+- [x] **17.1** An item model: an item is a block id (a torch is one too, though it is a prop), held in a slot with a count up to
+  64 (`VoxelInventory.py`, which has no engine calls). Breaking a block gives its item, and a torch on a broken block comes back
+  with it; placing takes one from the selected slot. The player starts with 16 of each hotbar item. Creative mode (C, or
+  `VOXEL_CREATIVE=1`) keeps the unlimited placing and gives nothing for a break. A hit that would finish a block is refused
+  when the inventory has no room for it; a hit that leaves it standing is not. Tools are not items yet (17.5).
+- [x] **17.2** The inventory screen (I): three rows of twelve slots, the hotbar at the bottom and two rows above, each slot a box
+  with a colour swatch and its count, on a panel with the controls. The world stands still and the mouse is free while it is
+  open. Moving a stack is click-to-carry, not a mouse drag: a left click takes a whole stack, a left click on another slot puts
+  it down (onto the same item up to 64, or swapping with a different one), and a right click takes half or puts one down. Esc
+  or I closes it, and a carried stack goes back into the inventory. A real drag can come later.
+- [x] **17.3** A real hotbar UI: twelve boxes at the bottom of the window, each with its key, a colour swatch, and its count when it
+  holds more than one. The selected slot is outlined in yellow and the slot under the mouse in white. It is the first row of
+  the inventory, so the two are one model. The boxes are overlay rectangles, a new engine feature (`create_rect_body` and
+  `set_rect_body`: rectangles over the scene in window pixels, like the labels). Their draw cost is not measured yet; the
+  voxel perf script should record it.
+- [x] **17.4** The inventory is saved with the edits: F5 writes `cg_control/voxel_inventory.json` beside `voxel_edits.bin`, and F9
+  loads both. A missing file keeps the current inventory, and a damaged entry is dropped. It is a JSON file, not part of the
+  binary edit file, because the item model lives in Python. Checked by `voxel_game_check.py` (the save and load round trip).
+- [x] **17.5** Tools: a pickaxe (`VoxelGen.PICKAXE`, a tool: it does not stack, and cannot be placed). It starts in the first
+  row below the hotbar, so the player drags it into the hotbar. When it is the selected slot, a click on stone, coal, iron or
+  brick takes two swings (so stone takes two clicks and iron three, not three to five). It uses the hardness of 16.1, so the
+  ore is quicker to mine with it. Not yet: no crafting, no other tools, and no wear.
+## Phase 18: multi-user interaction (long-term goal; multiplayer voxel is the first stretch goal)
+Goal: several people (or an AI and a person) work in one CG Engine world at the same time.
+- [~] **18.1** Engine assumptions to change first: the engine is single-process by design. The globals (`world`, `renderer`,
+  `assets`, the Python interpreter) are process singletons, and the control channel is one file inbox. Found by building 18.2:
+  two processes do not need the singletons changed, because each one is a separate game (a loopback link is enough). A server
+  in the same process would need them changed. A headless server (18.3) also needs the engine to start without a window, which
+  it does not yet: `World::startWorld` makes the window. Still open: the window-free start, and the state that a presentation
+  draws from (the world is drawn straight from `VoxelWorld`).
+- [x] **18.2** A transport, as a loopback test: `VoxelNet.py` links two game processes over TCP, JSON lines, non-blocking and polled
+  once a frame. One process listens (`VOXEL_NET=listen:7790`), the other connects (`VOXEL_NET=connect:127.0.0.1:7790`), and both
+  run the same `VOXEL_SEED`, since each generates the terrain itself. The messages are block, prop, hit (the damage stage) and
+  position. A remote edit to a chunk that is not loaded waits until it loads. Checked by `tools/test_voxel_net.ps1`: a break, a
+  placement and a hit each show in the other process, and each sees the other's position. Not secure, and only on one machine.
+- [ ] **18.3** A server that owns the world: the voxel edits, props and damage are applied there; clients send requests and draw
+  what the server says. The server is the same engine headless (no window), which the smoke test can already approximate.
+- [~] **18.4** Stretch goal, the multiplayer voxel game, in its first form: the two processes see each other (a box where the other
+  player's feet are, with no name yet), share the edits (blocks, torches, damage), and one breaks what the other placed. Each has
+  its own inventory and health, so the inventory per player is in place by construction. Not yet: a name, the creatures (each
+  process has its own, so a creature hit in one is not seen in the other), the other player's damage on a player, and a server
+  that owns the world (18.3): right now each process is an equal peer, and the edits race if both edit the same cell at once.
+- [~] **18.5** Shared authoring: an AI and a person can change the same world, through the same messages a second player sends.
+  In the loopback this is a script run through the control channel (`run_script`) that calls `game.net_send` after an edit, as
+  `tools/test_voxel_net.ps1` does. Not yet a documented control command (a `voxel_block` message in the inbox would be the
+  next step), and the other process applies an edit only if its chunk is loaded.
 ## Tooling and quality
 - [x] CI build on Windows (`.github/workflows/build.yml`) with Mesa software OpenGL smoke run
 - [~] Unit tests for pure logic runnable without a GPU. Done for the dungeon generator (`python -I tools/test_dungeon_gen.py`) and for the scene format and command list (`python -I tools/test_scene_format.py`: example scenes, invalid fixtures, documented commands). The C++ parsers in `SceneLoader` and `ControlChannel` are still covered only by the GPU integration test.
@@ -246,6 +379,9 @@ full block, and light blocks (full cells that give light) are wanted too.
   external controller (JEV or otherwise) can drive the engine through the file channel.
 
 ## Notes from development (living section)
+- The voxel scene crashed at exit in about half of the smoke runs. At exit the asset manager cleared its types in hash order,
+  so a Body could be freed after the mesh data it refers to. `World::releaseBodies` removes every Body first; ten runs in a row
+  now exit cleanly. The fix is in the order of teardown, found by reading the code (no debugger run).
 - The render cost was not where it looked: a body re-parenting bug quietly doubled the work (fixed). Measure before optimising; the first guess was wrong twice.
 - Undefined behaviour hides until a Debug build runs it. The asset loaders and `Body::deleteBody` each had one. Smoke and control tests are the safety net; add a check whenever a path is touched.
 - The "giant blue shapes" seen around the caveman were not a skinning bug. They came from a scene caveman loaded at too large a scale, so the bodies could not be told apart. Keep scene scales sane when debugging, and name bodies distinctly.
@@ -253,6 +389,15 @@ full block, and light blocks (full cells that give light) are wanted too.
 - A wrong value can hide behind another wrong value. Hue-only colours, an always-on unlit base and a light under the floor each made the others look plausible; fixing one at a time looked worse until all three were fixed. Compare screenshots of every shipped scene before and after any rendering change.
 - Look at the scene before trusting it. The dungeon floor sat half a tile above y = 0 for its whole life, because a plane primitive's surface is offset by its size. Cubes hid it; the first real models sank to the waist. Screenshots through the control channel caught it.
 - Remaining big-ticket items: Phase 5, batching draws by material (3.2 continuation), and the dungeon's next steps (an inventory, a shop for coins, and sound).
+- Voxel notes, overnight round: the two checks that failed first were the test's own state (a stale creature target, a full
+  inventory left behind), not the game. Three looks were wrong before they were right: the boulders at a first density were
+  about six a chunk and read as a wall of rock (cut eight-fold); the cracks from a value noise read as blotches until the mask
+  was a Voronoi border; and the fragment's crack spread over a triangle's whole span until it was weighted by damage. The
+  "650 frames a second at 841 chunks" in these notes did not reproduce: the build from before the round gives about 200 on the
+  same machine, so the number was from a different condition, and the frame rates in 15.3 are the ones to keep.
+- Voxel notes, inventory round: the first in-game check failed three times, and each failure was the check's own state, not the
+  game's. A check that changes shared state (a full inventory, a held stack) has to put it back before the next check reads it.
+  The HUD's boxes are overlay rectangles in the engine now, so a HUD element can be a box and a swatch without a texture.
 - Voxel notes (from the voxel sample, later work): the smooth skin looks much better than the cubes, and shadows read well once the map is cached. The HUD took several passes: the screen's own view is a square in the middle of the window, so window-wide text needs its own view, and text draws over meshes only with a high z order. A closed window used to restart the scene (the run loop now ends).
 - Hypotheses get a run before a fix. The background-run theory for the start-of-game fall was tested (a run with focus in another window) and it landed normally. A bug that cannot be reproduced gets instrumentation that saves the state at the moment of failure, not a guess.
 - A check that counts seconds fails under load, so count frames. The voxel walk and the dungeon walk hold their keys for
@@ -266,4 +411,25 @@ full block, and light blocks (full cells that give light) are wanted too.
   bugs I still cannot reproduce, the start-of-game fall and the square shadow, are where my guesses have been wrong, so I
   want the snapshot before any more theory. I would keep the Release-only frame checks honest, and move bodies without a
   script (11.9) next, since every new creature currently needs its own Python.
+- Asset ids are capped per type (1000 until this round), and an id domain that is full hands out id 0, which is the id of a
+  live body. Once voxel chunks meshed one body per block type too, the Body type passed 1000, new bodies took id 0, and the
+  parent chain looped (`Body: Reached max depth in getGlobalTransform`). Now the cap is 2^20 (ids are handed out lazily, so
+  it costs nothing), and a full type refuses a new resource with an error instead of sharing an id. Found by reading the
+  allocator after a crash with no log; the engine's log is written at shutdown, so a crash loses it.
+- After the rendering rules (Phase 12): the sample reads as a place with things in it now. Trees are their own shapes on the
+  ground, the bricks keep their edges, and the body stands on a brick at the height it is drawn. What I still do not trust is
+  anything I have not seen in play: the leaf and trunk seams, and the dark patch under a trunk, are plausible but not tested
+  beyond a screenshot. The one thing I would do first next is the torch as a prop (14.2), because the caves still have nothing
+  in them that the player brings.
+- Review, after the view distance round (Phase 15). The roadmap has three kinds of open item: the ones waiting on a player
+  (11.14, 11.15), the ones that are real engine work and do not depend on anyone (15.2 far skins, 16 damage, 17 inventory),
+  and the long-term goal (18). The first kind has been waiting longest; I would not invent a fix for either without a snapshot.
+  The gaps I found while reading it, now on the roadmap: torches are not in the save file (14.9), the torch on a face is not
+  named in the aim label (14.10), and the far view has no level of detail (15.2). How I feel about the sample: it has become a
+  place with things in it (caves that read, water to swim in, trees that are their own shapes, torches that light the way),
+  and the thing I trust least is what I have only seen in a screenshot. The biggest technical risk is that the engine's
+  singletons (`world`, `renderer`, `assets`) assume one world in one process, so the multiplayer goal is a change to the
+  engine's shape, not just a feature. I am more excited by the damage and inventory work (it turns the sample from a walk into a
+  game) than by anything else on this list, and I would start there after the far skins, because the view is where the
+  player first notices the sample is empty.
 - The tests run through the control channel with scripted input. They are the best guard against regressions in the game, and they caught a real engine bug (the run loop), so keep adding one for each new interaction.

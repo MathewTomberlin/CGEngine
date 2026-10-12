@@ -12,6 +12,19 @@ namespace CGEngine {
 			return static_cast<float>((h ^ (h >> 16)) & 0xFFFFu) / 65535.0f;
 		}
 
+		// A repeatable number in [0, 1] for a block's position: every chunk that sees the block agrees on it.
+		float blockValue(int32_t wx, int32_t wy, int32_t wz, uint32_t seed) {
+			uint32_t h = static_cast<uint32_t>(wx) * 374761393u + static_cast<uint32_t>(wy) * 2246822519u
+				+ static_cast<uint32_t>(wz) * 668265263u + seed * 1442695041u;
+			h = (h ^ (h >> 13)) * 1274126177u;
+			return static_cast<float>((h ^ (h >> 16)) & 0xFFFFu) / 65535.0f;
+		}
+
+		// Ores: iron is rare and only deep (above IronDepth it is not drawn); coal is more common, at any depth.
+		const float IronChance = 0.006f;
+		const float CoalChance = 0.02f;
+		const int IronDepth = 20;
+
 		// Smooth noise in [0, 1]: lattice values blended with smoothstep.
 		float valueNoise(float x, float z, uint32_t seed) {
 			const float fx = std::floor(x);
@@ -113,7 +126,23 @@ namespace CGEngine {
 				}
 			}
 		}
+		// Ores: a stone block becomes iron or coal by its position's value, so the same block is the same in any chunk.
+		for (int y = 1; y < height; ++y) {
+			for (int lz = 0; lz < size; ++lz) {
+				for (int lx = 0; lx < size; ++lx) {
+					uint8_t& block = blocks[(static_cast<size_t>(y) * size + lz) * size + lx];
+					if (block != Stone) continue;
+					const float r = blockValue(cx * size + lx, y, cz * size + lz, seed);
+					if (r < IronChance && y < IronDepth) {
+						block = Iron;
+					} else if (r < IronChance + CoalChance) {
+						block = Coal;
+					}
+				}
+			}
+		}
 		placeTrees(cx, cz, size, height, blocks);
+		placeRocks(cx, cz, size, height, blocks);
 	}
 
 	bool VoxelTerrain::isCave(int wx, int wy, int wz) const {
@@ -124,6 +153,38 @@ namespace CGEngine {
 		const float b = valueNoise3(x + 17.3f, y + 9.1f, z + 4.7f, seed + 7019u) - 0.5f;
 		if (std::fabs(a) < caveWidth && std::fabs(b) < caveWidth) return true;
 		return valueNoise3(wx / 40.0f, wy / 30.0f, wz / 40.0f, seed + 9011u) > 0.80f;
+	}
+
+	// A boulder sits on the ground of a column: a ball of stone, one or two blocks out from its centre, drawn as the same
+	// shape in every chunk that sees it. It goes only into air, so it never cuts into the ground or a tree.
+	void VoxelTerrain::placeRocks(int cx, int cz, int size, int height, std::vector<uint8_t>& blocks) const {
+		const int margin = 3;   // a boulder is at most two blocks out, so the ones rooted up to 3 blocks outside reach in
+		auto place = [&](int wx, int y, int wz, uint8_t block) {
+			const int lx = wx - cx * size;
+			const int lz = wz - cz * size;
+			if (lx < 0 || lx >= size || lz < 0 || lz >= size || y < 0 || y >= height) return;
+			uint8_t& cell = blocks[(static_cast<size_t>(y) * size + lz) * size + lx];
+			if (cell == Air) cell = block;
+		};
+		for (int wz = cz * size - margin; wz < (cz + 1) * size + margin; ++wz) {
+			for (int wx = cx * size - margin; wx < (cx + 1) * size + margin; ++wx) {
+				const Biome biome = biomeAt(wx, wz);
+				const float chance = biome == Biome::Desert ? rockChance * 2.0f : (biome == Biome::Forest ? rockChance * 0.5f : rockChance);
+				if (latticeValue(wx, wz, seed + 9013u) >= chance) continue;
+				const int ground = columnHeight(wx, wz);
+				if (ground <= seaLevel + 1 || ground >= snowLevel - 2) continue;
+				const int radius = latticeValue(wx, wz, seed + 9019u) < 0.4f ? 2 : 1;
+				// The bottom layer sits on the ground: the boulder is a ball of radius r whose lowest layer is the first air above.
+				for (int dy = 0; dy <= 2 * radius; ++dy) {
+					for (int dz = -radius; dz <= radius; ++dz) {
+						for (int dx = -radius; dx <= radius; ++dx) {
+							if (dx * dx + (dy - radius) * (dy - radius) + dz * dz > radius * radius + radius / 2) continue;
+							place(wx + dx, ground + dy, wz + dz, Stone);
+						}
+					}
+				}
+			}
+		}
 	}
 
 	// A tree stands on a grass column, and whether it does is a hash of the column, so every chunk that sees the tree draws

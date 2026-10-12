@@ -46,9 +46,15 @@ namespace CGEngine {
 		// Level of detail for the smooth skin: the chunks within nearChunks of the focus (see update) use nearSamples per
 		// block, the rest use the smoothing resolution. nearChunks 0 turns it off.
 		void setDetail(int nearChunks, int nearSamples);
+		// Far skins: the chunks more than farChunks from the focus are meshed with every stride-th block sampled (a stride of 2
+		// is a quarter of the quads). 0 chunks turns it off.
+		void setFar(int farChunks, int stride);
 		int resolutionFor(int cx, int cz) const;
-		// The quads in a loaded chunk's mesh as last uploaded (0 if it has none).
+		int strideFor(int cx, int cz) const;
+		// The quads in a loaded chunk's mesh as last uploaded (0 if it has none), all groups together.
 		int chunkQuads(int cx, int cz) const;
+		// The quads of each mesh group a loaded chunk has, by group: 0 is the terrain, else the block id with its own mesh.
+		std::map<int, int> chunkGroupQuads(int cx, int cz) const;
 		// The generator's settings. Chunks requested later use them; loaded chunks keep what they have.
 		void setTerrain(const VoxelTerrain& settings) { terrain = settings; }
 		/// The biome of the column at world (x, z): "plains", "forest" or "desert" (see VoxelTerrain::biomeAt).
@@ -57,22 +63,52 @@ namespace CGEngine {
 		int getBlock(int x, int y, int z) const;
 		// Sets a block, and queues it and its neighbours for the simulation. Unloaded chunks keep the edit for later.
 		void setBlock(int x, int y, int z, int blockId);
+		// A torch: a prop in the air cell (x, y, z), leaning on the block in direction dir (VoxelMesher.h PropDirs, 0 to 5). It
+		// gives light and is drawn, but it is not a block. False if the cell is a block or its chunk is not loaded.
+		bool setProp(int x, int y, int z, int dir);
+		void removeProp(int x, int y, int z);
+		// The dir of the prop at (x, y, z), or -1 for none.
+		int propAt(int x, int y, int z) const;
+		// How far from the cell's centre, toward the block the prop at (x, y, z) leans on (dir), the drawn skin is: a torch stands
+		// on that surface (VoxelMesher.h propShape). 0.5 if there is no solid block there.
+		float propAnchor(int x, int y, int z, int dir) const;
+		// Hits: a block takes BlockType::hits hits to break. Each hit adds one, and the damage shows in the block's colour. Returns the
+		// damage stage the block is at now (1 to hits - 1), -1 when this hit breaks it (it becomes air), or -2 if there is no block.
+		int hitBlock(int x, int y, int z);
+		// Heals the block at (x, y, z) by one stage. Returns the stage it is at now (0 when healed fully or never damaged).
+		int healBlock(int x, int y, int z);
+		// The damage stage of the block at (x, y, z), 0 for none.
+		int damageAt(int x, int y, int z) const;
+		// Every prop as (x, y, z, dir). Props are kept with the edits, so a chunk that unloads keeps them.
+		std::vector<std::array<int, 4>> props() const;
 		// True if the column at (x, z) is in a loaded chunk, so its blocks are real.
 		bool loadedAt(int x, int z) const;
 
-		// What the blocks do (see VoxelBlocks.h): solid for collision, falling, or liquid. Set it for any id, once.
+		// What the blocks do (see VoxelBlocks.h): solid for collision, falling, or liquid, and how they are drawn (own, cube).
+		// Set it for any id, once. A cube block is always drawn in its own mesh, so cube implies own.
 		void defineBlock(int blockId, const BlockType& type);
 		const BlockType& blockType(int blockId) const { return types[static_cast<size_t>(std::clamp(blockId, 0, 255))]; }
 		bool isSolid(int x, int y, int z) const;
+		// The material a block's own mesh is drawn with (BlockType::own). Blocks without one use the world's material.
+		void setMaterial(int blockId, const std::string& name);
+
+		// The skins that collision sees (see skinDensity): 0 is air, TerrainSkin the terrain, OwnSkin + id a smooth block's own
+		// skin and CubeSkin + id a cube block's. A solid block is in exactly one.
+		static constexpr int TerrainSkin = 1;
+		static constexpr int OwnSkin = 256;
+		static constexpr int CubeSkin = 512;
+		int skinAt(int x, int y, int z) const;
 
 		/// The sky light at a block, 0 (none) to 255 (full), as the mesh shades it. Computed on demand, so this is for queries.
 		uint8_t lightAt(int x, int y, int z) const;
 		// Moves a box of this shape through the blocks (see VoxelBody.h). The C++ twin of VoxelPhysics.step.
 		VoxelBodyState stepBody(const VoxelBodyState& body, const VoxelBodyShape& shape, double dt, bool flying) const;
 
-		/// The skin's density at world position (x, y, z): the occupancy of the eight block centres around the point, weighted
-		/// trilinearly. A point is inside the drawn surface where this is above VoxelSkinIso. Solid blocks occupy it (water and
-		/// air do not), and cells of chunks that are not loaded count as solid, so a body cannot walk out of the loaded world.
+		/// The skin's density at world position (x, y, z). Each smooth skin (the terrain, and each block type with its own mesh)
+		/// is the occupancy of its blocks' centres around the point, weighted trilinearly; the density is the largest of them.
+		/// A cube block's skin is 1 in its own cell and 0 outside. A point is inside the drawn surface where this is above
+		/// VoxelSkinIso. Solid blocks occupy it (water and air do not), and cells of chunks that are not loaded count as solid
+		/// terrain, so a body cannot walk out of the loaded world.
 		double skinDensity(double x, double y, double z) const;
 
 		/// The first point along the ray from origin (direction is a unit vector) where the skin begins, within maxDistance. False
@@ -128,9 +164,11 @@ namespace CGEngine {
 			bool dirty = true;              // the mesh is out of date
 			bool meshing = false;           // a mesh for the current version is on a worker
 			uint32_t version = 0;           // bumped by each change to the blocks or their neighbours
-			int quads = 0;
+			int quads = 0;                  // all groups together
 			int resolution = 0;             // the smooth skin's samples per block for this chunk (0: cubes); see resolutionFor
-			std::pair<bool, id_t> body = { false, 0 };   // the body's asset id, once uploaded
+			int stride = 1;                 // the sample grid's stride for this chunk (2 for a far chunk); see strideFor
+			std::map<int, id_t> bodies;     // the body of each mesh group drawn (0: the terrain), by its asset id
+			std::map<int, int> groupQuads;  // the quads of each group's mesh as last uploaded
 		};
 
 		struct TerrainResult {
@@ -140,13 +178,19 @@ namespace CGEngine {
 			std::vector<uint8_t> blocks;
 		};
 
+		// One group's mesh of a chunk (see buildChunkMesh): group 0 is the terrain.
+		struct GroupMesh {
+			uint8_t group = 0;
+			MeshArrays mesh;
+			int quads = 0;
+		};
+
 		struct MeshResult {
 			int cx;
 			int cz;
 			uint32_t generation;
 			uint32_t version;
-			MeshArrays mesh;
-			int quads;
+			std::vector<GroupMesh> groups;
 		};
 
 		int size;
@@ -154,11 +198,15 @@ namespace CGEngine {
 		std::string material;
 		std::array<glm::vec3, 256> palette;
 		std::array<BlockType, 256> types;
+		// The material of each block's own mesh, by block id; empty for the world's material.
+		std::array<std::string, 256> groupMaterials;
 		VoxelSimulation simulation;
 		VoxelTerrain terrain;
 		int smoothResolution = 0;
 		int nearRadius = 0;
 		int nearResolution = 2;
+		int farRadius = 0;              // chunks farther than this from the focus are far skins (setFar)
+		int farStride = 2;
 		int focusCx = 0;
 		int focusCz = 0;
 		bool focusKnown = false;
@@ -170,6 +218,11 @@ namespace CGEngine {
 		std::set<std::pair<int, int>> dirtyKeys;
 		// Edited blocks: chunk (cx, cz) -> index in that chunk -> block id. See setBlock.
 		std::map<std::pair<int, int>, std::map<int, uint8_t>> edits;
+		// Props (torches) by chunk: local index -> dir. See setProp.
+		std::map<std::pair<int, int>, std::map<int, uint8_t>> propsByChunk;
+		// Damage by chunk: local index -> stage (see hitBlock). Saved with the edits (version 3 of the edit file).
+		std::map<std::pair<int, int>, std::map<int, uint8_t>> damageByChunk;
+		void clearDamage(int x, int y, int z);
 		uint32_t nextGeneration = 1;
 		double uploadMs = 0.0;
 
@@ -197,11 +250,13 @@ namespace CGEngine {
 		Chunk* findChunk(int cx, int cz);
 		void markDirty(int cx, int cz);
 		void markNeighboursDirty(int cx, int cz);
+		// Marks the chunks that see the light of the cell at local (lx, lz) in chunk (cx, cz), as setBlock does.
+		void markLight(int cx, int cz, int lx, int lz);
 		void installTerrain(TerrainResult& result);
 		void applyEdits(int cx, int cz, std::vector<uint8_t>& blocks) const;
 		void uploadMesh(MeshResult& result);
 		void startMeshing(int cx, int cz, Chunk& chunk);
 		PaddedChunk snapshot(int cx, int cz, int border) const;
-		std::string bodyName(int cx, int cz) const;
+		std::string bodyName(int cx, int cz, uint8_t group) const;
 	};
 }

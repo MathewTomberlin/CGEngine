@@ -195,11 +195,16 @@ namespace CGEngine {
                         throw std::invalid_argument("material '" + name + "': specular must be between 0 and 1");
                     }
                     std::uint8_t specularByte = static_cast<std::uint8_t>(std::lround(specular * 255.0f));
+                    // Opacity, 0 (invisible) to 1 (solid): a voxel material with less than 1 is drawn blended (see Renderer::render).
+                    float opacity = m.value("opacity", 1.0f);
+                    if (opacity < 0.0f || opacity > 1.0f) {
+                        throw std::invalid_argument("material '" + name + "': opacity must be between 0 and 1");
+                    }
                     bool repeat = m.value("repeat", false);
                     // The texture scale is a Vector2f; a bare float would land in the colour intensity instead.
                     auto created = assets.create<Material>(name,
                         SurfaceParameters(SurfaceDomain(texture, Vector2f(uvScale, uvScale)),
-                            SurfaceDomain(32.0f, Color(specularByte, specularByte, specularByte))),
+                            SurfaceDomain(32.0f, Color(specularByte, specularByte, specularByte)), SurfaceDomain(opacity)),
                         assets.get<Program>(assets.defaultProgramName));
                     if (!created.has_value()) {
                         throw std::runtime_error("failed to create material '" + name + "'");

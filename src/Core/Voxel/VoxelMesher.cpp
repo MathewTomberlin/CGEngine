@@ -16,15 +16,17 @@ namespace CGEngine {
 			uint8_t lamp = 0;
 			// The light the block gives off (BlockType::emits), for the glow of its faces.
 			uint8_t emission = 0;
+			// The damage of the block (PaddedChunk::damage): faces of different damage do not merge.
+			uint8_t damage = 0;
 
 			bool operator==(const MaskCell& other) const {
-				return block == other.block && sign == other.sign && (light >> 5) == (other.light >> 5) && (lamp >> 5) == (other.lamp >> 5)
+				return block == other.block && damage == other.damage && sign == other.sign && (light >> 5) == (other.light >> 5) && (lamp >> 5) == (other.lamp >> 5)
 					&& occlusion[0] == other.occlusion[0] && occlusion[1] == other.occlusion[1]
 					&& occlusion[2] == other.occlusion[2] && occlusion[3] == other.occlusion[3];
 			}
 		};
 
-		// How much a light block's light is multiplied where the sky is at sky (0 to 1): VoxelLampBrightness in a cave, and 1 in
+		// How much a light block's light is multiplied where the sky is at sky (0 to 1): VoxelLampLight in a cave, and 1 in
 		// the open, where the sun already lights the ground, so a lamp does not wash out sunlit grass.
 		float lampGain(float sky) {
 			return 1.0f + (VoxelLampLight - 1.0f) * (1.0f - sky);
@@ -44,9 +46,26 @@ namespace CGEngine {
 		const int cornerU[4] = { 0, 1, 1, 0 };
 		const int cornerV[4] = { 0, 0, 1, 1 };
 
+		// Whether the block at (x, y, z) is in a mesh group: a block whose group is this one (group 0 is the terrain, which holds
+		// every block drawn in no group of its own). Air is in no group. Blocks of other groups count as air to this mesh.
+		bool inGroup(const PaddedChunk& chunk, int x, int y, int z, uint8_t group) {
+			const uint8_t block = chunk.at(x, y, z);
+			if (block == 0) return false;
+			const PaddedChunk::MeshRule& rule = chunk.rule[block];
+			// A block whose top is covered by its join mesh belongs to that mesh instead (the cover is the block above it).
+			if (rule.join && y + 1 < chunk.height + chunk.border && chunk.rule[chunk.at(x, y + 1, z)].group == rule.join) {
+				return group == rule.join;
+			}
+			// A block standing on natural ground joins the terrain (its base only).
+			if (rule.joinBelow.any() && y - 1 >= -chunk.border && rule.joinBelow[chunk.at(x, y - 1, z)]) {
+				return group == 0;
+			}
+			return rule.group == group;
+		}
+
 		// Occlusion of each corner of a face, from the air cell in front of it. Each corner has two cells beside it and
 		// one diagonal, all in the air layer; two solid sides close the corner completely.
-		void cornerOcclusion(const PaddedChunk& chunk, const int air[3], int u, int v, uint8_t out[4]) {
+		void cornerOcclusion(const PaddedChunk& chunk, const int air[3], int u, int v, uint8_t group, uint8_t out[4]) {
 			for (int k = 0; k < 4; ++k) {
 				const int su = cornerU[k] ? 1 : -1;
 				const int sv = cornerV[k] ? 1 : -1;
@@ -57,9 +76,9 @@ namespace CGEngine {
 				side2[v] += sv;
 				corner[u] += su;
 				corner[v] += sv;
-				const bool s1 = chunk.at(side1[0], side1[1], side1[2]) != 0;
-				const bool s2 = chunk.at(side2[0], side2[1], side2[2]) != 0;
-				const bool sc = chunk.at(corner[0], corner[1], corner[2]) != 0;
+				const bool s1 = inGroup(chunk, side1[0], side1[1], side1[2], group);
+				const bool s2 = inGroup(chunk, side2[0], side2[1], side2[2], group);
+				const bool sc = inGroup(chunk, corner[0], corner[1], corner[2], group);
 				out[k] = (s1 && s2) ? 0 : static_cast<uint8_t>(3 - (s1 + s2 + sc));
 			}
 		}
@@ -70,7 +89,7 @@ namespace CGEngine {
 			const unsigned int first = static_cast<unsigned int>(out.vertices.size());
 			glm::vec3 normal(0.0f);
 			normal[d] = static_cast<float>(sign);
-			const glm::vec3 base = palette[face.block] * faceShade(d, sign);
+			const glm::vec3 base = palette[face.block] * faceShade(d, sign) * (1.0f - DamageTint * face.damage / 255.0f);
 			for (int k = 0; k < 4; ++k) {
 				VoxelVertex vertex;
 				glm::vec3 position(0.0f);
@@ -83,8 +102,9 @@ namespace CGEngine {
 				vertex.texCoord = glm::vec2(static_cast<float>(cornerU[k] * w), static_cast<float>(cornerV[k] * h));
 				vertex.colour = base * occlusionLight[face.occlusion[k]];
 				vertex.sky = face.light / 255.0f;
-				vertex.glow = palette[face.block] * (face.emission / 255.0f * VoxelLampBrightness)
-					+ vertex.colour * (face.lamp / 255.0f * lampGain(face.light / 255.0f));
+				vertex.damage = face.damage / 255.0f;
+				vertex.glow = VoxelLightTint * (face.emission / 255.0f * VoxelGlow)
+					+ vertex.colour * VoxelLightTint * (face.lamp / 255.0f * lampGain(face.light / 255.0f));
 				out.vertices.push_back(vertex);
 			}
 			// Split the quad along the diagonal between its less occluded corners, so the shading does not streak.
@@ -163,6 +183,14 @@ namespace CGEngine {
 				}
 			}
 		}
+		// Torches: a prop lights its own cell, which is air, so it joins the walk like a light block.
+		for (const PaddedChunk::Prop& prop : chunk.props) {
+			if (emitted.empty()) emitted.assign(chunk.blocks.size(), 0.0f);
+			const size_t i = chunk.index(prop.x, prop.y, prop.z);
+			if (emitted[i] >= VoxelTorchLight) continue;
+			emitted[i] = VoxelTorchLight;
+			sources.push_back({ prop.x, prop.y, prop.z });
+		}
 		for (int round = 0; round < VoxelLightReach && !sources.empty(); ++round) {
 			next.clear();
 			for (const Cell& cell : sources) {
@@ -204,7 +232,7 @@ namespace CGEngine {
 		}
 	}
 
-	void buildChunkMesh(const PaddedChunk& chunk, const std::array<glm::vec3, 256>& palette, MeshArrays& out) {
+	void buildChunkMesh(const PaddedChunk& chunk, const std::array<glm::vec3, 256>& palette, uint8_t group, MeshArrays& out) {
 		out.vertices.clear();
 		out.indices.clear();
 		const int dims[3] = { chunk.size, chunk.height, chunk.size };
@@ -237,12 +265,13 @@ namespace CGEngine {
 
 							MaskCell& cell = mask[static_cast<size_t>(j) * du + i];
 							cell = MaskCell();
+							if (!inGroup(chunk, solid[0], solid[1], solid[2], group) || inGroup(chunk, air[0], air[1], air[2], group)) continue;
 							const uint8_t block = chunk.at(solid[0], solid[1], solid[2]);
-							if (block == 0 || chunk.at(air[0], air[1], air[2]) != 0) continue;
 							cell.block = block;
 							cell.emission = chunk.emission[block];
+							cell.damage = chunk.damage.empty() ? 0 : chunk.damage[chunk.index(solid[0], solid[1], solid[2])];
 							cell.sign = static_cast<int8_t>(sign);
-							cornerOcclusion(chunk, air, u, v, cell.occlusion);
+							cornerOcclusion(chunk, air, u, v, group, cell.occlusion);
 							cell.light = chunk.lightAt(air[0], air[1], air[2]);
 							cell.lamp = chunk.lampAt(air[0], air[1], air[2]);
 						}
@@ -291,17 +320,17 @@ namespace CGEngine {
 		const int CubeEdges[12][2] = { { 0, 1 }, { 2, 3 }, { 4, 5 }, { 6, 7 }, { 0, 2 }, { 1, 3 }, { 4, 6 }, { 5, 7 },
 			{ 0, 4 }, { 1, 5 }, { 2, 6 }, { 3, 7 } };
 
-		// Whether the block at (x, y, z) is solid. Outside the padded chunk it is air.
-		bool solidAt(const PaddedChunk& chunk, int x, int y, int z) {
+		// Whether the block at (x, y, z) is in the group. Outside the padded chunk it is air.
+		bool solidAt(const PaddedChunk& chunk, uint8_t group, int x, int y, int z) {
 			const int b = chunk.border;
 			if (x < -b || y < -b || z < -b || x >= chunk.size + b || y >= chunk.height + b || z >= chunk.size + b) return false;
-			return chunk.at(x, y, z) != 0;
+			return inGroup(chunk, x, y, z, group);
 		}
 
 		// The density at p (block units): the blocks' occupancy, interpolated between block centres (a block's centre is
 		// its corner + 0.5). It falls from 1 to 0 across each block face, so the iso-surface at 0.5 runs along the faces
 		// and rounds the convex edges and corners.
-		float densityAt(const PaddedChunk& chunk, glm::vec3 p) {
+		float densityAt(const PaddedChunk& chunk, uint8_t group, glm::vec3 p) {
 			const glm::vec3 b = p - glm::vec3(0.5f);
 			const glm::vec3 base = glm::floor(b);
 			const glm::vec3 t = b - base;
@@ -310,19 +339,19 @@ namespace CGEngine {
 			for (int c = 0; c < 8; ++c) {
 				const int dx = c & 1, dy = (c >> 1) & 1, dz = (c >> 2) & 1;
 				const float w = (dx ? t.x : 1.0f - t.x) * (dy ? t.y : 1.0f - t.y) * (dz ? t.z : 1.0f - t.z);
-				if (solidAt(chunk, x0 + dx, y0 + dy, z0 + dz)) value += w;
+				if (solidAt(chunk, group,x0 + dx, y0 + dy, z0 + dz)) value += w;
 			}
 			return value;
 		}
 
 		// The vertex at p (chunk block units): a normal from the density gradient, the colour of the solid block that
 		// weighs most there, darkened where the air beside it is walled in, and a texture coordinate from the normal's axis.
-		VoxelVertex smoothVertex(const PaddedChunk& chunk, const std::array<glm::vec3, 256>& palette, glm::vec3 p) {
+		VoxelVertex smoothVertex(const PaddedChunk& chunk, const std::array<glm::vec3, 256>& palette, uint8_t group, glm::vec3 p) {
 			const float h = 0.25f;
 			const glm::vec3 gradient(
-				densityAt(chunk, p + glm::vec3(h, 0, 0)) - densityAt(chunk, p - glm::vec3(h, 0, 0)),
-				densityAt(chunk, p + glm::vec3(0, h, 0)) - densityAt(chunk, p - glm::vec3(0, h, 0)),
-				densityAt(chunk, p + glm::vec3(0, 0, h)) - densityAt(chunk, p - glm::vec3(0, 0, h)));
+				densityAt(chunk, group,p + glm::vec3(h, 0, 0)) - densityAt(chunk, group,p - glm::vec3(h, 0, 0)),
+				densityAt(chunk, group,p + glm::vec3(0, h, 0)) - densityAt(chunk, group,p - glm::vec3(0, h, 0)),
+				densityAt(chunk, group,p + glm::vec3(0, 0, h)) - densityAt(chunk, group,p - glm::vec3(0, 0, h)));
 			const float length = glm::length(gradient);
 			const glm::vec3 normal = length > 1e-6f ? -gradient / length : glm::vec3(0.0f, 1.0f, 0.0f);
 
@@ -332,19 +361,21 @@ namespace CGEngine {
 			const glm::vec3 t = b - base;
 			int block = 0;
 			float blockWeight = -1.0f;
+			size_t dominant = 0;
 			for (int c = 0; c < 8; ++c) {
 				const int dx = c & 1, dy = (c >> 1) & 1, dz = (c >> 2) & 1;
 				const int x = static_cast<int>(base.x) + dx, y = static_cast<int>(base.y) + dy, z = static_cast<int>(base.z) + dz;
 				const float w = (dx ? t.x : 1.0f - t.x) * (dy ? t.y : 1.0f - t.y) * (dz ? t.z : 1.0f - t.z);
-				if (solidAt(chunk, x, y, z) && w > blockWeight) {
+				if (solidAt(chunk, group,x, y, z) && w > blockWeight) {
 					blockWeight = w;
+					dominant = chunk.index(x, y, z);
 					block = chunk.at(x, y, z);
 				}
 			}
 			if (block == 0) block = 1;
 
 			// Ambient occlusion: the density a little way out along the normal. Walls close by darken the corner.
-			const float outside = densityAt(chunk, p + normal * 0.25f);
+			const float outside = densityAt(chunk, group,p + normal * 0.25f);
 			const float occlusion = std::clamp(1.0f - 0.6f * outside, 0.5f, 1.0f);
 
 			VoxelVertex vertex;
@@ -362,37 +393,45 @@ namespace CGEngine {
 			const glm::vec3 air = glm::floor(p + normal * 0.5f);
 			const float sky = chunk.lightAt(static_cast<int>(air.x), static_cast<int>(air.y), static_cast<int>(air.z)) / 255.0f;
 			const float lamp = chunk.lampAt(static_cast<int>(air.x), static_cast<int>(air.y), static_cast<int>(air.z)) / 255.0f;
-			vertex.colour = palette[static_cast<size_t>(block)] * occlusion;
+			vertex.colour = palette[static_cast<size_t>(block)] * occlusion
+				* (chunk.damage.empty() ? 1.0f : 1.0f - DamageTint * chunk.damage[dominant] / 255.0f);
 			vertex.sky = sky;
-			vertex.glow = palette[static_cast<size_t>(block)] * (chunk.emission[block] / 255.0f * VoxelLampBrightness)
-				+ vertex.colour * (lamp * lampGain(sky));
+			vertex.damage = chunk.damage.empty() ? 0.0f : chunk.damage[dominant] / 255.0f;
+			vertex.glow = VoxelLightTint * (chunk.emission[block] / 255.0f * VoxelGlow)
+				+ vertex.colour * VoxelLightTint * (lamp * lampGain(sky));
 			return vertex;
 		}
 	}
 
-	void buildSmoothMesh(const PaddedChunk& chunk, const std::array<glm::vec3, 256>& palette, int resolution,
-		unsigned skirtSides, MeshArrays& out) {
+	void buildSmoothMesh(const PaddedChunk& chunk, const std::array<glm::vec3, 256>& palette, int resolution, int stride,
+		unsigned skirtSides, uint8_t group, MeshArrays& out) {
 		out.vertices.clear();
 		out.indices.clear();
 		const int R = std::max(1, resolution);
+		// A stride above 1 samples every stride-th block (a far chunk, meshed coarser). It needs one sample a block, and the
+		// chunk's size must divide by it: the chunks are 16 blocks, so 2 is the largest stride the sample grid lines up on.
+		const int T = R == 1 ? std::max(1, stride) : 1;
 		const int S = chunk.size;
 		const int H = chunk.height;
+		// The sample grid's steps across the chunk: the size times R over T along x and z, and the height times R over T up.
+		const int NX = S * R / T;
+		const int NY = H * R / T;
 
 		// Density samples, for i, k in [-1, S * R + 1] and j in [-1, H * R + 1]; array index = sample + 1. With one sample a
 		// block, the samples sit at block centres, so a block one wide (a tree trunk) keeps its surface. With more, they sit at
 		// i / R, which puts samples on block faces too and rounds the edges further.
-		auto position = [R](int i, int j, int k) {
-			const glm::vec3 p = glm::vec3(i, j, k);
-			return R == 1 ? p + glm::vec3(0.5f) : p / static_cast<float>(R);
+		auto position = [R, T](int i, int j, int k) {
+			if (R == 1) return glm::vec3(i * T, j * T, k * T) + glm::vec3(0.5f);
+			return glm::vec3(i, j, k) / static_cast<float>(R);
 		};
-		const int sx = S * R + 3;
-		const int sy = H * R + 3;
+		const int sx = NX + 3;
+		const int sy = NY + 3;
 		std::vector<float> samples(static_cast<size_t>(sx) * sy * sx);
 		auto sampleIndex = [sx](int i, int j, int k) { return static_cast<size_t>(((j + 1) * sx + (k + 1)) * sx + (i + 1)); };
-		for (int j = -1; j <= H * R + 1; ++j) {
-			for (int k = -1; k <= S * R + 1; ++k) {
-				for (int i = -1; i <= S * R + 1; ++i) {
-					samples[sampleIndex(i, j, k)] = densityAt(chunk, position(i, j, k));
+		for (int j = -1; j <= NY + 1; ++j) {
+			for (int k = -1; k <= NX + 1; ++k) {
+				for (int i = -1; i <= NX + 1; ++i) {
+					samples[sampleIndex(i, j, k)] = densityAt(chunk, group,position(i, j, k));
 				}
 			}
 		}
@@ -400,13 +439,13 @@ namespace CGEngine {
 
 		// Cells: the cube whose lowest corner is sample (i, j, k), for i and k in [-1, S * R] and j in [-1, H * R]. A cell
 		// the surface crosses gets one vertex, at the average of its crossed edges.
-		const int cn = S * R + 2;
-		const int cyn = H * R + 2;
+		const int cn = NX + 2;
+		const int cyn = NY + 2;
 		auto cellIndex = [cn](int i, int j, int k) { return static_cast<size_t>(((j + 1) * cn + (k + 1)) * cn + (i + 1)); };
 		std::vector<glm::vec3> cellPosition(static_cast<size_t>(cn) * cyn * cn);
-		for (int j = -1; j <= H * R; ++j) {
-			for (int k = -1; k <= S * R; ++k) {
-				for (int i = -1; i <= S * R; ++i) {
+		for (int j = -1; j <= NY; ++j) {
+			for (int k = -1; k <= NX; ++k) {
+				for (int i = -1; i <= NX; ++i) {
 					float value[8];
 					glm::vec3 corner[8];
 					int inside = 0;
@@ -438,7 +477,7 @@ namespace CGEngine {
 			const size_t index = cellIndex(i, j, k);
 			if (emitted[index] < 0) {
 				emitted[index] = static_cast<int>(out.vertices.size());
-				out.vertices.push_back(smoothVertex(chunk, palette, cellPosition[index]));
+				out.vertices.push_back(smoothVertex(chunk, palette, group,cellPosition[index]));
 			}
 			return static_cast<unsigned int>(emitted[index]);
 		};
@@ -455,9 +494,9 @@ namespace CGEngine {
 		};
 
 		// Each edge belongs to the chunk that owns its lowest sample, so chunks share no quads.
-		for (int j = 0; j < H * R; ++j) {
-			for (int k = 0; k < S * R; ++k) {
-				for (int i = 0; i < S * R; ++i) {
+		for (int j = 0; j < NY; ++j) {
+			for (int k = 0; k < NX; ++k) {
+				for (int i = 0; i < NX; ++i) {
 					const bool here = sample(i, j, k) > SmoothIso;
 					// x edge: the cells around it have lowest corners (i, j-1, k-1), (i, j, k-1), (i, j, k), (i, j-1, k).
 					if (here != (sample(i + 1, j, k) > SmoothIso)) {
@@ -481,12 +520,13 @@ namespace CGEngine {
 		// Skirts: where the surface crosses a chunk's side, a strip runs a block down from it. A neighbour at another level
 		// of detail has its surface a little off the same line, and the strip covers the gap, so the seam is hidden.
 		auto topOfColumn = [&](const auto& value, float& height) {
-			for (int j = H * R - 1; j >= -1; --j) {
+			for (int j = NY - 1; j >= -1; --j) {
 				const float lower = value(j);
 				const float upper = value(j + 1);
 				if (lower > SmoothIso && upper <= SmoothIso) {
 					// Only a surface with solid under it gets a skirt: over air, the strip would hang in the open.
-					if (j - R < -1 || value(j - R) <= SmoothIso) return false;
+					const int down = std::max(1, R / T);   // one block down: a step of the sample grid
+					if (j - down < -1 || value(j - down) <= SmoothIso) return false;
 					const float t = (lower - SmoothIso) / (lower - upper);
 					const float y0 = position(0, j, 0).y;
 					const float y1 = position(0, j + 1, 0).y;
@@ -501,7 +541,7 @@ namespace CGEngine {
 			const unsigned int first = static_cast<unsigned int>(out.vertices.size());
 			const glm::vec3 corners[4] = { a, b, b + down, a + down };
 			for (const glm::vec3& corner : corners) {
-				VoxelVertex vertex = smoothVertex(chunk, palette, corner);
+				VoxelVertex vertex = smoothVertex(chunk, palette, group,corner);
 				vertex.normal = normal;
 				out.vertices.push_back(vertex);
 			}
@@ -514,7 +554,7 @@ namespace CGEngine {
 				out.indices.insert(out.indices.end(), { first, first + 2, first + 1, first, first + 3, first + 2 });
 			}
 		};
-		const int last = S * R;
+		const int last = NX;
 		// The two sides at x = first and last sample, along z.
 		for (int side = 0; side < 2; ++side) {
 			if (!(skirtSides & (side == 0 ? 1u : 2u))) continue;
@@ -546,6 +586,77 @@ namespace CGEngine {
 			}
 		}
 	}
+	namespace {
+		// A box of six faces, with one colour, glow and sky light, appended to out.
+		void addBox(MeshArrays& out, glm::vec3 centre, glm::vec3 half, glm::vec3 colour, glm::vec3 glow, float sky, float flicker = 0.0f) {
+			for (int axis = 0; axis < 3; ++axis) {
+				const int u = (axis + 1) % 3;
+				const int v = (axis + 2) % 3;
+				for (int sign = -1; sign <= 1; sign += 2) {
+					glm::vec3 normal(0.0f);
+					normal[axis] = static_cast<float>(sign);
+					const unsigned int first = static_cast<unsigned int>(out.vertices.size());
+					for (int k = 0; k < 4; ++k) {
+						glm::vec3 position = centre;
+						position[axis] += normal[axis] * half[axis];
+						position[u] += (cornerU[k] ? 1.0f : -1.0f) * half[u];
+						position[v] += (cornerV[k] ? 1.0f : -1.0f) * half[v];
+						VoxelVertex vertex;
+						vertex.position = position;
+						vertex.normal = normal;
+						vertex.texCoord = glm::vec2(position[u], position[v]);
+						vertex.colour = colour;
+						vertex.glow = glow;
+						vertex.flicker = flicker;
+						vertex.sky = sky;
+						out.vertices.push_back(vertex);
+					}
+					out.indices.insert(out.indices.end(), { first, first + 1, first + 2, first, first + 2, first + 3 });
+				}
+			}
+		}
+	}
+
+	PropShape propShape(glm::vec3 cell, int dir, float anchor) {
+		const glm::vec3 wall(PropDirs[dir][0], PropDirs[dir][1], PropDirs[dir][2]);
+		// The base is on the skin of the wall, at anchor toward it. A floor torch stands up from the skin, a ceiling one hangs
+		// from it, and a torch on a side wall stands against it, low in its cell, with the stick's outer face on the skin.
+		const bool ceiling = wall.y > 0.5f;
+		const bool floor = wall.y < -0.5f;
+		glm::vec3 base = cell + wall * anchor;
+		glm::vec3 up(0.0f, 1.0f, 0.0f);
+		glm::vec3 offset(0.0f);
+		if (ceiling) {
+			up = glm::vec3(0.0f, -1.0f, 0.0f);
+		} else if (!floor) {
+			base.y -= 0.2f;
+			offset = -wall * 0.06f;
+		}
+		PropShape shape;
+		shape.stickCentre = base + offset + up * 0.25f;
+		shape.stickHalf = glm::vec3(0.06f, 0.25f, 0.06f);
+		shape.flameCentre = base + offset + up * 0.55f;
+		shape.flameHalf = glm::vec3(0.1f, 0.08f, 0.1f);
+		return shape;
+	}
+
+	void buildPropMesh(const PaddedChunk& chunk, MeshArrays& out) {
+		const glm::vec3 wood(0.25f, 0.15f, 0.07f);
+		// The flame's own colour is dark, so its glow (the light colour) is what shows: it stays warm, not white.
+		const glm::vec3 flame(0.25f, 0.15f, 0.06f);
+		for (const PaddedChunk::Prop& prop : chunk.props) {
+			if (prop.x < 0 || prop.x >= chunk.size || prop.y < 0 || prop.y >= chunk.height || prop.z < 0 || prop.z >= chunk.size) continue;
+			const float sky = chunk.lightAt(prop.x, prop.y, prop.z) / 255.0f;
+			const glm::vec3 cell(prop.x + 0.5f, prop.y + 0.5f, prop.z + 0.5f);
+			const PropShape shape = propShape(cell, prop.dir, prop.anchor);
+			addBox(out, shape.stickCentre, shape.stickHalf, wood, glm::vec3(0.0f), sky);
+			// Each torch's flame wavers on its own phase, from its cell (a fraction in 0 to 1, then 1 added so it is never 0).
+			const float seed = std::sin(prop.x * 12.9898f + prop.y * 37.719f + prop.z * 78.233f) * 43758.5453f;
+			const float phase = 1.0f + (seed - std::floor(seed));
+			addBox(out, shape.flameCentre, shape.flameHalf, flame, VoxelLightTint * VoxelGlow, sky, phase);
+		}
+	}
+
 	void buildBlob(const std::array<glm::vec3, 256>& palette, uint8_t block, glm::vec3 centre, float radius, MeshArrays& out) {
 		// A round ball of the block's colour: the look of a block in flight, which is smooth rather than cubic.
 		const int rings = 8;

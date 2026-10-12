@@ -19,12 +19,15 @@ namespace CGEngine {
 		static constexpr uint8_t Wood = 7;
 		static constexpr uint8_t Leaves = 8;
 		static constexpr uint8_t Lamp = 17;     // a full block that gives off light (see BlockType::emits); defined in VoxelGen.py
+		static constexpr uint8_t Coal = 20;     // ore in the stone: common, at any depth
+		static constexpr uint8_t Iron = 21;     // ore in the stone: rare, deep only (see fillChunk)
 
 		uint32_t seed = 1;
 		int seaLevel = 14;      // columns below this are filled with water up to it
 		int baseHeight = 8;     // the lowest column is this high (in blocks)
 		int heightRange = 44;   // a column is at most baseHeight + heightRange high
 		int snowLevel = 40;     // columns at or above this are capped with snow
+		float rockChance = 0.0015f; // the chance that a column holds a boulder on the plains (forests a half, deserts twice): about one a chunk in the desert
 		float treeChance = 0.01f; // the chance that a grass column grows a tree (about two or three a chunk)
 		float caveWidth = 0.07f;  // how wide the tunnels are, as a band of the noise (0 turns caves off); rooms come with them
 
@@ -41,6 +44,8 @@ namespace CGEngine {
 
 	private:
 		void placeTrees(int cx, int cz, int size, int height, std::vector<uint8_t>& blocks) const;
+		// Boulders of stone on the ground: a hash of the column decides, by biome, so every chunk that sees one draws the same.
+		void placeRocks(int cx, int cz, int size, int height, std::vector<uint8_t>& blocks) const;
 		// Whether the block at world (x, y, z) is carved out as cave: a tunnel where two noise fields are both near their middle,
 		// or a room where a third is high.
 		bool isCave(int wx, int wy, int wz) const;

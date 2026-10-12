@@ -96,6 +96,37 @@ check("the density is 1 inside a solid block", p.density(one_block, 3.5, 0.5, 0.
 check("the density is 0 well outside a block", p.density(one_block, 6.5, 0.5, 0.5) == 0.0)
 check("the density is 0.5 on a block's face", abs(p.density(one_block, 3.0, 0.5, 0.5) - 0.5) < 1e-12)
 
+# Skins (VoxelWorld::skinAt): a cube's skin is the cell it is in, so the density is 1 inside and 0 at the next cell's edge.
+def one_brick(x, y, z):
+    return p.CUBE_SKIN + 18 if (x, y, z) == (3, 0, 0) else 0
+
+
+check("a cube's density is 1 inside its cell", p.density(one_brick, 3.9999, 0.5, 0.5) == 1.0)
+check("a cube's density is 0 in the next cell", p.density(one_brick, 4.0, 0.5, 0.5) == 0.0)
+
+
+# Each smooth skin is its own: where a stone meets a leaf (its own skin), the density is the larger of the two, not their sum.
+def stone_and_leaf(x, y, z):
+    if (x, y, z) == (0, 0, 0):
+        return p.TERRAIN_SKIN
+    if (x, y, z) == (1, 0, 0):
+        return p.OWN_SKIN + 8
+    return 0
+
+
+check("skins take the largest density, they do not add up", abs(p.density(stone_and_leaf, 1.0, 0.5, 0.5) - 0.5) < 1e-12)
+
+
+# A body lands on a brick at the brick's drawn top face (y = 6), not 0.2 above it as a smooth block would.
+def brick_on_floor(x, y, z):
+    if y < 5:
+        return p.TERRAIN_SKIN
+    return p.CUBE_SKIN + 18 if (x, y, z) == (3, 5, 0) else 0
+
+
+pos, vel, on_ground = run(brick_on_floor, (3.5, 10.0, 0.5), (0.0, 0.0, 0.0), 2.0)
+check("a falling player stops on a brick's top face", on_ground and abs(pos[1] - 6.0) < 1e-3)
+
 # Picking: a ray along +x from inside the cell at (0, 0, 0) hits the block at (3, 0, 0) from the -x side.
 hit = p.raycast(one_block, (0.5, 0.5, 0.5), (1.0, 0.0, 0.0))
 check("a ray hits the first solid block", hit is not None and hit[0] == (3, 0, 0))

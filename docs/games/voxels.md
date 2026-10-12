@@ -29,11 +29,29 @@ rate, build and run the Release configuration.
   to 500% of the base) and a time-of-day slider (drag it along the track), and Back (or Escape) returns to the menu. The choice is saved in `voxel_settings.json` beside the
   game, and applies at once. `VOXEL_MOUSE_SENSITIVITY` sets the base look speed in degrees per pixel (0.00625 by default),
   and `VOXEL_SETTINGS` moves the settings file.
-- Without the mouse: the arrow keys turn and look, J breaks, K places.
-- Keys 1 to 9 and 0 choose the block to place (the hotbar: stone, dirt, grass, wood, leaves, sand, gravel, snow, water, and
-  0 for the lamp, a light block). Sand and
-  gravel fall, and water falls and flows. F5 saves the edited blocks to `cg_control/voxel_edits.bin`, and F9 loads them back. F12 saves a screenshot and the
-  game state to `cg_control/snapshots/` (use it when something looks wrong).
+- Without the mouse: the arrow keys turn and look, J hits, K places. A block takes several hits (stone three, wood four, coal four, iron five, the rest one), and a
+  damaged block is shown darker and gets cracks; the last hit breaks it. The damage is kept with the edits (F5). The aimed block's outline flashes white on a hit, and chips fly from the face (a break throws more). L lights or puts out the torch you carry, which
+  lights the cave around you.
+- Keys 1 to 9, 0, - and = choose a hotbar slot (the first row of the inventory: 12 slots, drawn as boxes at the bottom of the
+  window). The player starts with 16 each of stone, dirt, grass, wood, leaves, sand, gravel, snow, water, the lamp, brick and
+  torches, one kind to a slot. Breaking a block puts it in the inventory, and placing takes one from the selected slot, so
+  the stock runs out and has to be mined; a stack holds 64, and a break that would finish a block is refused when the
+  inventory has no room for it (the HUD says "Inventory full"). A torch goes on the face of a block you aim at; aim at it to
+  break it, and it goes back into the inventory. Sand and gravel fall, and water falls and flows.
+- I opens the inventory: the two rows above the hotbar, with a panel and the mouse free (the world stands still while it is
+  open). A left click takes a whole stack from a slot, and a left click on another slot puts it down (onto the same item up
+  to 64, or swapping with a different one). A right click takes half a stack, or puts one down. I or Escape closes it, and
+  the stack in the cursor goes back into the inventory. The swatches are the blocks' colours until there are textures.
+- A pickaxe starts in the first row below the hotbar (drag it into the hotbar with I). With it selected, a click on stone, coal,
+  iron or brick takes two swings. It does not stack and cannot be placed.
+- Creatures wander the terrain. A left click on one takes a hit (three hits kill it, and it leaves a hide). One in three is a
+  dark red biter: it chases you inside 7 blocks and bites, 1 health a bite. The bar above the hotbar is your health (ten
+  points): it heals after a few seconds without a hit, a fall past 4 blocks hurts, and at zero you are back at the spawn with
+  the inventory kept.
+- C toggles creative mode: placing takes nothing from the slots and breaking adds nothing to them (the old unlimited
+  building). `VOXEL_CREATIVE=1` starts in it.
+- F5 saves the edited blocks to `cg_control/voxel_edits.bin` and the inventory to `cg_control/voxel_inventory.json`; F9 loads
+  them back. F12 saves a screenshot and the game state to `cg_control/snapshots/` (use it when something looks wrong).
 
 ## The look: day, night and fog
 
@@ -55,11 +73,36 @@ rate, build and run the Release configuration.
   eight blocks. The lamp's light is added to the sky's in the mesh colours, so it brightens sunlit ground as well as caves
   (`light_at` gives the brighter of the two). Its light is twice the sky's in a cave (`VoxelLampLight`), and
   about the sky's in the open, where the sun already lights the ground. A lamp is a solid block, drawn as a cube, and its
-  faces glow at four times their colour whatever the sun and the shadows do (the glow is `VoxelVertex::glow`, added after the lighting). Carried
-  and small torches are on the roadmap (Phase 14); they will be props on a block's face, not full blocks.
+  faces glow with the warm light colour at 0.8 whatever the sun and the shadows do (the glow is `VoxelVertex::glow`, added after the lighting; it stays under 1 so it does not clip to white, and the light a lamp gives its neighbours is tinted the same warm colour). Carried
+  Small torches are props on a block's face (see the controls above), not full blocks.
 - The sun casts shadows (`VOXEL_SHADOWS=0` turns them off; `VOXEL_SHADOW_RADIUS`, 40 blocks by default, sets how far
   they reach). The map is drawn again when the camera moves, the sun turns, or a tenth of a second passes, and not at
   all while the sun is down.
+
+## How blocks are drawn
+
+Each block type says how it is drawn, with `define_block(..., shape=, group=, material=)`:
+
+- `shape="smooth"` (the default) is drawn as the rounded skin; `shape="cube"` is a cube that never merges with its neighbours,
+  so it keeps sharp edges (brick).
+- `group="terrain"` (the default) puts the block in the chunk's terrain mesh: stone, dirt, grass, sand, gravel, snow.
+- `group="own"` gives the block a mesh of its own in each chunk, drawn with `material` (a material in the scene file, here
+  `voxel_wood`, `voxel_leaves`, `voxel_brick`). Wood and leaves are own: a canopy is its own skin, and the terrain treats its
+  blocks as air, so a canopy does not hide the ground under it, and the ground does not hide the canopy. A cube is always own.
+- A wood block whose top is covered by leaves joins the leaves' skin (`join_above=`): the trunk top and the canopy are one
+  surface, while the trunk's sides and bottom stay wood. The join is only through the cell above, so a leaf beside the trunk
+  top still meets the trunk's side with a seam, not a merge.
+- A wood block standing on natural ground (stone, dirt, grass, sand, gravel, snow) joins the terrain at its bottom
+  (`join_below=`), so a trunk base merges into the ground. Wood on a brick or on water keeps its own skin.
+- Water is own too, in one mesh shared by the source and its flow (`mesh=` names the shared id). The ground under water has
+  its own skin, so the seabed and the shore are seen from the water, and the water surface is seen from below as well.
+  Under the water the sun's shadows are off: the surface would otherwise shade everything below it. The water is drawn
+  see-through (`opacity` 0.55 in the scene file, `transparent=True` in the block), after the opaque meshes.
+
+Collision follows the same rule: a body meets the skin of each mesh, so it stands on a brick's top face and on a leaf's
+rounded top. `voxel_world_check.py` checks the rules (a leaf alone is in its own mesh and not the terrain's, a brick is six
+cube faces, ground is in the terrain's mesh). Light is not split by mesh: every block still shades what is behind it, so
+the ground under a trunk or a leaf is in shade.
 
 ## Block physics
 
@@ -177,9 +220,18 @@ where the player stands.
 
 ## Performance
 
-Release, 841 chunks in view (about 1.2 million quads with the near detail): about 560 frames a second while standing
-still (11.7 in the roadmap). `tools/test_voxels.ps1` checks the load, the walk,
-the view's level and the worst frame.
+Release, 841 chunks in view: about 180 frames a second standing still on this machine, with about 0.55 million quads (the
+chunks more than 6 from the player are far skins, sampled every second block; `VOXEL_FAR_RADIUS` moves that line). The view
+distance is set on the settings page. Measured with `tools/voxel_perf.ps1` at each step (see the roadmap, 15.3 and 15.5): at
+24 about 80 frames a second, at 40 about 27, and the cost there is the number of chunk draws. `tools/test_voxels.ps1` checks
+the load, the walk, the view's level and the worst frame.
+
+## Two players on one machine (roadmap 18.2)
+
+Start one game with `VOXEL_NET=listen:7790` and a second with `VOXEL_NET=connect:127.0.0.1:7790`, both with the same
+`VOXEL_SEED`. Each shows the other as a box where its feet are, and the edits (blocks, torches, hits) are shared. Each game
+keeps its own inventory and health, and the creatures are not shared yet. `tools/test_voxel_net.ps1` runs the two processes and
+checks the sharing. There is no server and nothing is secure: this is the first step of the multi-user goal (Phase 18).
 
 ## Limits
 

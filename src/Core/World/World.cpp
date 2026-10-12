@@ -400,6 +400,18 @@ namespace CGEngine {
         }
     }
 
+    // The asset manager clears its types in hash order at exit, so a Body could be freed after the mesh data it still refers
+    // to (a voxel world has hundreds of them). Bodies go first, while their meshes, materials and scripts still exist.
+    void World::releaseBodies() {
+        vector<id_t> ids;
+        for (Body* body : assets.getAllResources<Body>()) {
+            if (body && body->getId().has_value()) ids.push_back(body->getId().value());
+        }
+        for (id_t id : ids) {
+            if (Body* body = assets.get<Body>(id)) body->deleteBody(ChildrenTermination::Terminate);
+        }
+    }
+
     void World::runWorld() {
         while (running) {
             renderer->initializeOpenGL();
@@ -449,6 +461,7 @@ namespace CGEngine {
             }
             // The window closed (the close button, Quit in the game, or endWorld): the game is over. Without this the outer
             // loop would start the scene again on a closed window.
+            releaseBodies();
             running = false;
         }
     }

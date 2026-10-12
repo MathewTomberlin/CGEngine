@@ -27,12 +27,44 @@ namespace CGEngine {
 	}
 
 	void VoxelWorld::defineBlock(int blockId, const BlockType& type) {
-		types[static_cast<size_t>(std::clamp(blockId, 0, 255))] = type;
+		BlockType stored = type;
+		if (stored.cube) stored.own = true;   // a cube is drawn in its own mesh (see BlockType)
+		types[static_cast<size_t>(std::clamp(blockId, 0, 255))] = stored;
+	}
+
+	void VoxelWorld::setMaterial(int blockId, const std::string& name) {
+		groupMaterials[static_cast<size_t>(std::clamp(blockId, 0, 255))] = name;
 	}
 
 	bool VoxelWorld::isSolid(int x, int y, int z) const {
 		const int block = getBlock(x, y, z);
 		return block != 0 && types[static_cast<size_t>(block)].solid;
+	}
+
+	int VoxelWorld::skinAt(int x, int y, int z) const {
+		if (y < 0) return TerrainSkin;                  // the world's floor is solid
+		if (y >= height) return 0;
+		if (!loadedAt(x, z)) return TerrainSkin;        // unloaded cells are solid, so a body stays in the loaded world
+		const int block = getBlock(x, y, z);
+		if (block == 0) return 0;
+		const BlockType& type = types[static_cast<size_t>(block)];
+		if (!type.solid) return 0;
+		if (!type.own) return TerrainSkin;
+		// A block whose top is covered by its join mesh is in that mesh's skin (the same rule as the mesher's inGroup).
+		uint8_t mesh = meshGroup(type, static_cast<uint8_t>(block));
+		bool joinedAbove = false;
+		if (type.joinAbove && y + 1 < height) {
+			const int above = getBlock(x, y + 1, z);
+			if (above != 0 && meshGroup(types[static_cast<size_t>(above)], static_cast<uint8_t>(above)) == type.joinAbove) {
+				mesh = type.joinAbove;
+				joinedAbove = true;
+			}
+		}
+		// A block standing on a block of its join-below set is in the terrain's skin (the same rule as the mesher's inGroup).
+		if (!joinedAbove && type.joinBelow.any() && y - 1 >= 0 && type.joinBelow[static_cast<size_t>(getBlock(x, y - 1, z))]) {
+			return TerrainSkin;
+		}
+		return (type.cube ? CubeSkin : OwnSkin) + mesh;
 	}
 
 	const char* VoxelWorld::biomeName(int x, int z) const {
@@ -58,30 +90,39 @@ namespace CGEngine {
 	}
 
 	double VoxelWorld::skinDensity(double x, double y, double z) const {
-		// The same weights as the mesh's density (VoxelMesher.cpp), on the occupancy of solid blocks, with the unloaded
-		// cells solid and the world's ends solid below and open above. Python's copy (VoxelPhysics.py) matches it operation for
-		// operation, so the parity check can compare them exactly.
+		// The same weights as the mesh's density (VoxelMesher.cpp), per skin (see skinAt): each smooth skin adds up the weights
+		// of the corners it is in, and the density is the largest. The world's ends are solid below and open above, and the
+		// unloaded cells are solid terrain. Python's copy (VoxelPhysics.py) matches it operation for operation, so the parity
+		// check can compare them exactly.
 		const double bx = x - 0.5, by = y - 0.5, bz = z - 0.5;
 		const double fx = std::floor(bx), fy = std::floor(by), fz = std::floor(bz);
 		const double tx = bx - fx, ty = by - fy, tz = bz - fz;
 		const int x0 = static_cast<int>(fx), y0 = static_cast<int>(fy), z0 = static_cast<int>(fz);
-		double value = 0.0;
+		int skin[8];
+		double weight[8];
 		for (int c = 0; c < 8; ++c) {
 			const int dx = c & 1, dy = (c >> 1) & 1, dz = (c >> 2) & 1;
-			const double w = (dx ? tx : 1.0 - tx) * (dy ? ty : 1.0 - ty) * (dz ? tz : 1.0 - tz);
-			const int ix = x0 + dx, iy = y0 + dy, iz = z0 + dz;
-			bool occupied;
-			if (iy < 0) {
-				occupied = true;
-			} else if (iy >= height) {
-				occupied = false;
-			} else if (!loadedAt(ix, iz)) {
-				occupied = true;
-			} else {
-				occupied = isSolid(ix, iy, iz);
-			}
-			if (occupied) value += w;
+			weight[c] = (dx ? tx : 1.0 - tx) * (dy ? ty : 1.0 - ty) * (dz ? tz : 1.0 - tz);
+			skin[c] = skinAt(x0 + dx, y0 + dy, z0 + dz);
 		}
+		double value = 0.0;
+		for (int c = 0; c < 8; ++c) {
+			if (skin[c] == 0 || skin[c] >= CubeSkin) continue;
+			// Each smooth skin is summed once, at its first corner.
+			bool first = true;
+			for (int earlier = 0; earlier < c; ++earlier) {
+				if (skin[earlier] == skin[c]) first = false;
+			}
+			if (!first) continue;
+			double sum = 0.0;
+			for (int d = 0; d < 8; ++d) {
+				if (skin[d] == skin[c]) sum += weight[d];
+			}
+			value = std::max(value, sum);
+		}
+		// A cube block's skin is the cell the point is in: full there, nothing outside it.
+		const int cell = skinAt(static_cast<int>(std::floor(x)), static_cast<int>(std::floor(y)), static_cast<int>(std::floor(z)));
+		if (cell >= CubeSkin) value = std::max(value, 1.0);
 		return value;
 	}
 
@@ -189,6 +230,17 @@ namespace CGEngine {
 		refreshResolutions(focusCx, focusCz, true);
 	}
 
+	void VoxelWorld::setFar(int farChunks, int stride) {
+		farRadius = std::max(0, farChunks);
+		farStride = std::max(1, stride);
+		refreshResolutions(focusCx, focusCz, true);
+	}
+
+	int VoxelWorld::strideFor(int cx, int cz) const {
+		if (farRadius > 0 && focusKnown && std::max(std::abs(cx - focusCx), std::abs(cz - focusCz)) > farRadius) return farStride;
+		return 1;
+	}
+
 	int VoxelWorld::resolutionFor(int cx, int cz) const {
 		if (smoothResolution <= 0) return 0;
 		if (nearRadius > 0 && focusKnown && std::max(std::abs(cx - focusCx), std::abs(cz - focusCz)) <= nearRadius) {
@@ -206,8 +258,10 @@ namespace CGEngine {
 			Chunk& chunk = entry.second;
 			if (!chunk.loaded) continue;   // a chunk gets its level when its terrain is installed
 			const int wanted = resolutionFor(entry.first.first, entry.first.second);
-			if (wanted != chunk.resolution) {
+			const int wantedStride = strideFor(entry.first.first, entry.first.second);
+			if (wanted != chunk.resolution || wantedStride != chunk.stride) {
 				chunk.resolution = wanted;
+				chunk.stride = wantedStride;
 				markDirty(entry.first.first, entry.first.second);
 				// The neighbours' seams with this chunk change, so they are meshed again too.
 				markNeighboursDirty(entry.first.first, entry.first.second);
@@ -218,6 +272,11 @@ namespace CGEngine {
 	int VoxelWorld::chunkQuads(int cx, int cz) const {
 		const Chunk* chunk = findChunk(cx, cz);
 		return chunk && chunk->loaded ? chunk->quads : 0;
+	}
+
+	std::map<int, int> VoxelWorld::chunkGroupQuads(int cx, int cz) const {
+		const Chunk* chunk = findChunk(cx, cz);
+		return chunk && chunk->loaded ? chunk->groupQuads : std::map<int, int>();
 	}
 
 	int VoxelWorld::floorDiv(int a, int b) {
@@ -252,6 +311,7 @@ namespace CGEngine {
 		const int lx = x - cx * size;
 		const int lz = z - cz * size;
 		const uint8_t block = static_cast<uint8_t>(std::clamp(blockId, 0, 255));
+		clearDamage(x, y, z);
 		// The edit is recorded even if the chunk is not loaded, so it is in place when the chunk loads.
 		edits[std::make_pair(cx, cz)][localIndex(lx, y, lz)] = block;
 		Chunk* chunk = findChunk(cx, cz);
@@ -276,6 +336,136 @@ namespace CGEngine {
 		simulation.activate(x, y - 1, z);
 		simulation.activate(x, y, z + 1);
 		simulation.activate(x, y, z - 1);
+	}
+
+	bool VoxelWorld::setProp(int x, int y, int z, int dir) {
+		if (y < 0 || y >= height || dir < 0 || dir > 5 || !loadedAt(x, z) || getBlock(x, y, z) != 0) return false;
+		const int cx = floorDiv(x, size);
+		const int cz = floorDiv(z, size);
+		const int lx = x - cx * size;
+		const int lz = z - cz * size;
+		propsByChunk[std::make_pair(cx, cz)][localIndex(lx, y, lz)] = static_cast<uint8_t>(dir);
+		markLight(cx, cz, lx, lz);
+		return true;
+	}
+
+	void VoxelWorld::removeProp(int x, int y, int z) {
+		if (y < 0 || y >= height) return;
+		const int cx = floorDiv(x, size);
+		const int cz = floorDiv(z, size);
+		auto chunk = propsByChunk.find(std::make_pair(cx, cz));
+		if (chunk == propsByChunk.end()) return;
+		const int lx = x - cx * size;
+		const int lz = z - cz * size;
+		if (chunk->second.erase(localIndex(lx, y, lz)) == 0) return;
+		if (chunk->second.empty()) propsByChunk.erase(chunk);
+		markLight(cx, cz, lx, lz);
+	}
+
+	int VoxelWorld::propAt(int x, int y, int z) const {
+		if (y < 0 || y >= height) return -1;
+		const int cx = floorDiv(x, size);
+		const int cz = floorDiv(z, size);
+		auto chunk = propsByChunk.find(std::make_pair(cx, cz));
+		if (chunk == propsByChunk.end()) return -1;
+		auto entry = chunk->second.find(localIndex(x - cx * size, y, z - cz * size));
+		return entry == chunk->second.end() ? -1 : entry->second;
+	}
+
+	int VoxelWorld::hitBlock(int x, int y, int z) {
+		const int block = getBlock(x, y, z);
+		if (block == 0) return -2;
+		const int hits = std::max(1, static_cast<int>(types[static_cast<size_t>(block)].hits));
+		const int stage = damageAt(x, y, z) + 1;
+		if (stage >= hits) {
+			setBlock(x, y, z, 0);   // setBlock also clears the block's damage
+			return -1;
+		}
+		const int cx = floorDiv(x, size);
+		const int cz = floorDiv(z, size);
+		damageByChunk[std::make_pair(cx, cz)][localIndex(x - cx * size, y, z - cz * size)] = static_cast<uint8_t>(stage);
+		markLight(cx, cz, x - cx * size, z - cz * size);   // the stage shows in this chunk's mesh, and in the neighbours that draw its skin
+		return stage;
+	}
+
+	int VoxelWorld::healBlock(int x, int y, int z) {
+		const int stage = damageAt(x, y, z);
+		if (stage <= 1) {
+			clearDamage(x, y, z);
+			return 0;
+		}
+		const int cx = floorDiv(x, size);
+		const int cz = floorDiv(z, size);
+		damageByChunk[std::make_pair(cx, cz)][localIndex(x - cx * size, y, z - cz * size)] = static_cast<uint8_t>(stage - 1);
+		markLight(cx, cz, x - cx * size, z - cz * size);
+		return stage - 1;
+	}
+
+	int VoxelWorld::damageAt(int x, int y, int z) const {
+		if (y < 0 || y >= height) return 0;
+		const int cx = floorDiv(x, size);
+		const int cz = floorDiv(z, size);
+		auto chunk = damageByChunk.find(std::make_pair(cx, cz));
+		if (chunk == damageByChunk.end()) return 0;
+		auto entry = chunk->second.find(localIndex(x - cx * size, y, z - cz * size));
+		return entry == chunk->second.end() ? 0 : entry->second;
+	}
+
+	void VoxelWorld::clearDamage(int x, int y, int z) {
+		if (y < 0 || y >= height) return;
+		const int cx = floorDiv(x, size);
+		const int cz = floorDiv(z, size);
+		auto chunk = damageByChunk.find(std::make_pair(cx, cz));
+		if (chunk == damageByChunk.end()) return;
+		if (chunk->second.erase(localIndex(x - cx * size, y, z - cz * size)) == 0) return;
+		if (chunk->second.empty()) damageByChunk.erase(chunk);
+		markLight(cx, cz, x - cx * size, z - cz * size);
+	}
+
+	float VoxelWorld::propAnchor(int x, int y, int z, int dir) const {
+		// March from the centre of the block the prop leans on toward the prop's cell, to where the skin stops being inside.
+		// The skin is the one collision uses, which is the drawn surface.
+		const double wx = x + 0.5 + PropDirs[dir][0];
+		const double wy = y + 0.5 + PropDirs[dir][1];
+		const double wz = z + 0.5 + PropDirs[dir][2];
+		if (skinDensity(wx, wy, wz) <= VoxelSkinIso) return 0.5f;
+		const double cx = x + 0.5;
+		const double cy = y + 0.5;
+		const double cz = z + 0.5;
+		for (int i = 1; i <= 100; ++i) {
+			const double t = i / 100.0;   // 0 at the block's centre, 1 at the prop's cell centre
+			const double px = wx + (cx - wx) * t;
+			const double py = wy + (cy - wy) * t;
+			const double pz = wz + (cz - wz) * t;
+			if (skinDensity(px, py, pz) <= VoxelSkinIso) return static_cast<float>(1.0 - t);
+		}
+		return 0.5f;
+	}
+
+	std::vector<std::array<int, 4>> VoxelWorld::props() const {
+		std::vector<std::array<int, 4>> list;
+		for (const auto& chunk : propsByChunk) {
+			for (const auto& entry : chunk.second) {
+				const int lx = entry.first % size;
+				const int lz = (entry.first / size) % size;
+				const int y = entry.first / (size * size);
+				list.push_back({ chunk.first.first * size + lx, y, chunk.first.second * size + lz, entry.second });
+			}
+		}
+		return list;
+	}
+
+	void VoxelWorld::markLight(int cx, int cz, int lx, int lz) {
+		// The same neighbours as setBlock: a cell's light reaches VoxelLightReach blocks, so the chunks it is that close to.
+		for (int dx = -1; dx <= 1; ++dx) {
+			for (int dz = -1; dz <= 1; ++dz) {
+				if (dx == -1 && lx >= VoxelLightReach) continue;
+				if (dx == 1 && lx < size - VoxelLightReach) continue;
+				if (dz == -1 && lz >= VoxelLightReach) continue;
+				if (dz == 1 && lz < size - VoxelLightReach) continue;
+				markDirty(cx + dx, cz + dz);
+			}
+		}
 	}
 
 	void VoxelWorld::fillColumn(int x, int z, int yFrom, int yTo, int blockId) {
@@ -333,8 +523,8 @@ namespace CGEngine {
 	void VoxelWorld::unloadChunk(int cx, int cz) {
 		auto it = chunks.find(std::make_pair(cx, cz));
 		if (it == chunks.end()) return;
-		if (it->second.body.first) {
-			if (Body* body = assets.get<Body>(it->second.body.second)) removeRuntimeMesh(body);
+		for (const auto& body : it->second.bodies) {
+			if (Body* mesh = assets.get<Body>(body.second)) removeRuntimeMesh(mesh);
 		}
 		dirtyKeys.erase(std::make_pair(cx, cz));
 		chunks.erase(it);
@@ -349,6 +539,7 @@ namespace CGEngine {
 		applyEdits(result.cx, result.cz, chunk.blocks);
 		chunk.loaded = true;
 		chunk.resolution = resolutionFor(result.cx, result.cz);
+		chunk.stride = strideFor(result.cx, result.cz);
 		// The chunk's faces, and those of the neighbours that face it, are meshed from the new blocks.
 		markDirty(result.cx, result.cz);
 		markNeighboursDirty(result.cx, result.cz);
@@ -371,7 +562,7 @@ namespace CGEngine {
 		if (!out) return false;
 		const auto put32 = [&out](uint32_t v) { out.write(reinterpret_cast<const char*>(&v), 4); };
 		out.write("CGVE", 4);
-		put32(1);
+		put32(3);   // version 3: the blocks, then the torches, then the damage
 		put32(static_cast<uint32_t>(editCount()));
 		for (const auto& chunkEdits : edits) {
 			const int cx = chunkEdits.first.first;
@@ -386,6 +577,40 @@ namespace CGEngine {
 				out.put(static_cast<char>(edit.second));
 			}
 		}
+		// The torches, after the blocks: a count, then x, y, z (int32) and dir (a byte) for each.
+		uint32_t torches = 0;
+		for (const auto& chunkProps : propsByChunk) torches += static_cast<uint32_t>(chunkProps.second.size());
+		put32(torches);
+		for (const auto& chunkProps : propsByChunk) {
+			const int cx = chunkProps.first.first;
+			const int cz = chunkProps.first.second;
+			for (const auto& entry : chunkProps.second) {
+				const int y = entry.first / (size * size);
+				const int lz = (entry.first % (size * size)) / size;
+				const int lx = entry.first % size;
+				put32(static_cast<uint32_t>(cx * size + lx));
+				put32(static_cast<uint32_t>(y));
+				put32(static_cast<uint32_t>(cz * size + lz));
+				out.put(static_cast<char>(entry.second));
+			}
+		}
+		// The damage, after the torches: a count, then x, y, z (int32) and the stage (a byte) for each damaged block.
+		uint32_t damaged = 0;
+		for (const auto& chunkDamage : damageByChunk) damaged += static_cast<uint32_t>(chunkDamage.second.size());
+		put32(damaged);
+		for (const auto& chunkDamage : damageByChunk) {
+			const int cx = chunkDamage.first.first;
+			const int cz = chunkDamage.first.second;
+			for (const auto& entry : chunkDamage.second) {
+				const int y = entry.first / (size * size);
+				const int lz = (entry.first % (size * size)) / size;
+				const int lx = entry.first % size;
+				put32(static_cast<uint32_t>(cx * size + lx));
+				put32(static_cast<uint32_t>(y));
+				put32(static_cast<uint32_t>(cz * size + lz));
+				out.put(static_cast<char>(entry.second));
+			}
+		}
 		return static_cast<bool>(out);
 	}
 
@@ -397,7 +622,7 @@ namespace CGEngine {
 		uint32_t version = 0;
 		uint32_t count = 0;
 		in.read(magic, 4);
-		if (!in || std::string(magic, 4) != "CGVE" || !get32(version) || version != 1 || !get32(count)) return false;
+		if (!in || std::string(magic, 4) != "CGVE" || !get32(version) || (version < 1 || version > 3) || !get32(count)) return false;
 		for (uint32_t i = 0; i < count; ++i) {
 			uint32_t x = 0, y = 0, z = 0;
 			if (!get32(x) || !get32(y) || !get32(z)) return false;
@@ -411,6 +636,51 @@ namespace CGEngine {
 			const int cz = floorDiv(wz, size);
 			edits[std::make_pair(cx, cz)][localIndex(wx - cx * size, wy, wz - cz * size)] = static_cast<uint8_t>(block);
 		}
+		// Version 2 carries the torches after the blocks (see saveEdits). They are kept like the edits, by chunk.
+		if (version >= 2) {
+			uint32_t torches = 0;
+			if (!get32(torches)) return false;
+			for (uint32_t i = 0; i < torches; ++i) {
+				uint32_t x = 0, y = 0, z = 0;
+				if (!get32(x) || !get32(y) || !get32(z)) return false;
+				const int dir = in.get();
+				if (dir == std::char_traits<char>::eof()) return false;
+				const int wx = static_cast<int>(x);
+				const int wy = static_cast<int>(y);
+				const int wz = static_cast<int>(z);
+				if (wy < 0 || wy >= height || dir > 5) continue;
+				const int cx = floorDiv(wx, size);
+				const int cz = floorDiv(wz, size);
+				propsByChunk[std::make_pair(cx, cz)][localIndex(wx - cx * size, wy, wz - cz * size)] = static_cast<uint8_t>(dir);
+			}
+			for (const auto& chunkProps : propsByChunk) {
+				if (isLoaded(chunkProps.first.first, chunkProps.first.second)) markNeighboursDirty(chunkProps.first.first, chunkProps.first.second);
+				if (isLoaded(chunkProps.first.first, chunkProps.first.second)) markDirty(chunkProps.first.first, chunkProps.first.second);
+			}
+		}
+
+		// Version 3 carries the damage after the torches: the stage of each damaged block, kept by chunk like the torches.
+		if (version >= 3) {
+			uint32_t damaged = 0;
+			if (!get32(damaged)) return false;
+			for (uint32_t i = 0; i < damaged; ++i) {
+				uint32_t x = 0, y = 0, z = 0;
+				if (!get32(x) || !get32(y) || !get32(z)) return false;
+				const int stage = in.get();
+				if (stage == std::char_traits<char>::eof()) return false;
+				const int wx = static_cast<int>(x);
+				const int wy = static_cast<int>(y);
+				const int wz = static_cast<int>(z);
+				if (wy < 0 || wy >= height || stage <= 0) continue;
+				const int cx = floorDiv(wx, size);
+				const int cz = floorDiv(wz, size);
+				damageByChunk[std::make_pair(cx, cz)][localIndex(wx - cx * size, wy, wz - cz * size)] = static_cast<uint8_t>(stage);
+			}
+			for (const auto& chunkDamage : damageByChunk) {
+				if (isLoaded(chunkDamage.first.first, chunkDamage.first.second)) markNeighboursDirty(chunkDamage.first.first, chunkDamage.first.second);
+			}
+		}
+
 		// Loaded chunks take the edits now; the rest take them when they load.
 		for (const auto& chunkEdits : edits) {
 			Chunk* chunk = findChunk(chunkEdits.first.first, chunkEdits.first.second);
@@ -460,7 +730,50 @@ namespace CGEngine {
 				}
 			}
 		}
-		for (size_t id = 0; id < 256; ++id) padded.emission[id] = types[id].emits;
+		// The torches of the chunk and its neighbours that reach into the padded area (PaddedChunk::props).
+		for (int dz = -1; dz <= 1; ++dz) {
+			for (int dx = -1; dx <= 1; ++dx) {
+				auto chunk = propsByChunk.find(std::make_pair(cx + dx, cz + dz));
+				if (chunk == propsByChunk.end()) continue;
+				for (const auto& entry : chunk->second) {
+					const int px = dx * size + entry.first % size;
+					const int pz = dz * size + (entry.first / size) % size;
+					const int py = entry.first / (size * size);
+					if (px < -border || px >= size + border || pz < -border || pz >= size + border) continue;
+					const float anchor = propAnchor(cx * size + px, py, cz * size + pz, entry.second);
+					padded.props.push_back({ px, py, pz, entry.second, anchor });
+				}
+			}
+		}
+		// The damage of the blocks in the padded area, as the fraction of their hits taken (PaddedChunk::damage).
+		bool anyDamage = false;
+		for (int dz = -1; dz <= 1; ++dz) {
+			for (int dx = -1; dx <= 1; ++dx) anyDamage = anyDamage || damageByChunk.count(std::make_pair(cx + dx, cz + dz));
+		}
+		if (anyDamage) {
+			padded.damage.assign(padded.blocks.size(), 0);
+			for (int dz = -1; dz <= 1; ++dz) {
+				for (int dx = -1; dx <= 1; ++dx) {
+					auto chunk = damageByChunk.find(std::make_pair(cx + dx, cz + dz));
+					if (chunk == damageByChunk.end()) continue;
+					for (const auto& entry : chunk->second) {
+						const int px = dx * size + entry.first % size;
+						const int pz = dz * size + (entry.first / size) % size;
+						const int py = entry.first / (size * size);
+						if (px < -border || px >= size + border || pz < -border || pz >= size + border) continue;
+						const int hits = std::max(1, static_cast<int>(types[static_cast<size_t>(getBlock(cx * size + px, py, cz * size + pz))].hits));
+						padded.damage[padded.index(px, py, pz)] = static_cast<uint8_t>(std::min(255, entry.second * 255 / hits));
+					}
+				}
+			}
+		}
+		for (size_t id = 0; id < 256; ++id) {
+			padded.emission[id] = types[id].emits;
+			padded.rule[id].group = meshGroup(types[id], static_cast<uint8_t>(id));
+			padded.rule[id].join = types[id].joinAbove;
+			padded.rule[id].joinBelow = types[id].joinBelow;
+			padded.rule[id].cube = types[id].cube;
+		}
 		return padded;
 	}
 
@@ -469,6 +782,7 @@ namespace CGEngine {
 		chunk.meshing = true;
 		dirtyKeys.erase(std::make_pair(cx, cz));
 		const int resolution = chunk.resolution;
+		const int stride = chunk.stride;
 		PaddedChunk padded = snapshot(cx, cz, VoxelLightReach);
 		// Skirts on the sides that meet a neighbour at another level of detail (bit 1: -x, 2: +x, 4: -z, 8: +z).
 		unsigned skirtSides = 0;
@@ -477,32 +791,54 @@ namespace CGEngine {
 			const int dzs[4] = { 0, 0, -1, 1 };
 			for (int side = 0; side < 4; ++side) {
 				const Chunk* neighbour = findChunk(cx + dxs[side], cz + dzs[side]);
-				if (neighbour && neighbour->loaded && neighbour->resolution != resolution) skirtSides |= 1u << side;
+				if (neighbour && neighbour->loaded && (neighbour->resolution != resolution || neighbour->stride != stride)) skirtSides |= 1u << side;
 			}
 		}
 		const std::array<glm::vec3, 256> colours = palette;
+		std::array<bool, 256> cubeShape{};
+		for (size_t id = 0; id < 256; ++id) cubeShape[id] = types[id].cube;
 		const uint32_t generation = chunk.generation;
 		const uint32_t version = chunk.version;
-		enqueue([this, cx, cz, generation, version, resolution, skirtSides, padded = std::move(padded), colours]() mutable {
+		enqueue([this, cx, cz, generation, version, resolution, stride, skirtSides, padded = std::move(padded), colours, cubeShape]() mutable {
 			MeshResult result;
 			result.cx = cx;
 			result.cz = cz;
 			result.generation = generation;
 			result.version = version;
 			computeLight(padded);
-			if (resolution > 0) {
-				buildSmoothMesh(padded, colours, resolution, skirtSides, result.mesh);
-			} else {
-				buildChunkMesh(padded, colours, result.mesh);
+			// The terrain, and a mesh of its own for each block type in the chunk that has one (see PaddedChunk::rule).
+			std::array<bool, 256> present{};
+			for (uint8_t block : padded.blocks) {
+				if (padded.rule[block].group != 0) present[padded.rule[block].group] = true;
 			}
-			result.quads = static_cast<int>(result.mesh.indices.size() / 6);
+			std::vector<uint8_t> groups = { 0 };
+			for (size_t id = 1; id < 256; ++id) {
+				if (present[id]) groups.push_back(static_cast<uint8_t>(id));
+			}
+			for (uint8_t group : groups) {
+				GroupMesh part;
+				part.group = group;
+				// A cube block is always cubes; the others are cubes only while the world draws cubes (smoothing 0).
+				const bool cubes = resolution <= 0 || (group != 0 && cubeShape[group]);
+				if (cubes) {
+					buildChunkMesh(padded, colours, group, part.mesh);
+				} else {
+					buildSmoothMesh(padded, colours, resolution, stride, skirtSides, group, part.mesh);
+				}
+				// The torches are drawn with the terrain (their cells are air to it, so they are not part of any block's mesh).
+				if (group == 0) buildPropMesh(padded, part.mesh);
+				part.quads = static_cast<int>(part.mesh.indices.size() / 6);
+				result.groups.push_back(std::move(part));
+			}
 			std::lock_guard<std::mutex> lock(resultMutex);
 			meshResults.push_back(std::move(result));
 		});
 	}
 
-	std::string VoxelWorld::bodyName(int cx, int cz) const {
-		return "voxel_chunk_" + std::to_string(cx) + "_" + std::to_string(cz);
+	std::string VoxelWorld::bodyName(int cx, int cz, uint8_t group) const {
+		std::string name = "voxel_chunk_" + std::to_string(cx) + "_" + std::to_string(cz);
+		if (group != 0) name += "_" + std::to_string(group);
+		return name;
 	}
 
 	void VoxelWorld::uploadMesh(MeshResult& result) {
@@ -513,22 +849,43 @@ namespace CGEngine {
 		// The chunk changed while it was being meshed. It is dirty again, so the next update meshes it again.
 		if (result.version != chunk.version) return;
 
-		std::vector<id_t> materials;
-		if (auto materialId = assets.getId<Material>(material)) {
-			materials.push_back(materialId.value());
-		} else {
-			materials.push_back(assets.getDefaultId<Material>().value_or(0));
+		std::set<int> drawn;
+		for (GroupMesh& part : result.groups) {
+			if (part.mesh.vertices.empty()) continue;
+			drawn.insert(part.group);
+			const std::string& materialName = part.group != 0 && !groupMaterials[part.group].empty() ? groupMaterials[part.group] : material;
+			std::vector<id_t> materials;
+			if (auto materialId = assets.getId<Material>(materialName)) {
+				materials.push_back(materialId.value());
+			} else {
+				materials.push_back(assets.getDefaultId<Material>().value_or(0));
+			}
+			Body* body = nullptr;
+			const auto existing = chunk.bodies.find(part.group);
+			if (existing != chunk.bodies.end()) body = assets.get<Body>(existing->second);
+			if (body) {
+				updateCompactMeshBody(body, std::move(part.mesh.vertices), std::move(part.mesh.indices));
+			} else {
+				const Vector3f position(static_cast<float>(result.cx * size), 0.0f, static_cast<float>(result.cz * size));
+				body = createCompactMeshBody(bodyName(result.cx, result.cz, part.group), std::move(part.mesh.vertices),
+					std::move(part.mesh.indices), materials, position);
+				if (body) chunk.bodies[part.group] = body->getId().value_or(0);
+			}
+			if (body) body->transparent = types[part.group].transparent;
+			chunk.groupQuads[part.group] = part.quads;
 		}
-		Body* body = chunk.body.first ? assets.get<Body>(chunk.body.second) : nullptr;
-		if (body) {
-			updateCompactMeshBody(body, std::move(result.mesh.vertices), std::move(result.mesh.indices));
-		} else if (!result.mesh.vertices.empty()) {
-			const Vector3f position(static_cast<float>(result.cx * size), 0.0f, static_cast<float>(result.cz * size));
-			body = createCompactMeshBody(bodyName(result.cx, result.cz), std::move(result.mesh.vertices),
-				std::move(result.mesh.indices), materials, position);
-			if (body) chunk.body = { true, body->getId().value_or(0) };
+		// A group that is drawn no more (its blocks were taken away) loses its body.
+		for (auto drawnBody = chunk.bodies.begin(); drawnBody != chunk.bodies.end();) {
+			if (drawn.count(drawnBody->first)) {
+				++drawnBody;
+				continue;
+			}
+			if (Body* body = assets.get<Body>(drawnBody->second)) removeRuntimeMesh(body);
+			chunk.groupQuads.erase(drawnBody->first);
+			drawnBody = chunk.bodies.erase(drawnBody);
 		}
-		chunk.quads = result.quads;
+		chunk.quads = 0;
+		for (const auto& group : chunk.groupQuads) chunk.quads += group.second;
 	}
 
 	int VoxelWorld::update(double budgetMs, int focusX, int focusZ) {
@@ -618,8 +975,8 @@ namespace CGEngine {
 
 	void VoxelWorld::clear() {
 		for (auto& entry : chunks) {
-			if (entry.second.body.first) {
-				if (Body* body = assets.get<Body>(entry.second.body.second)) removeRuntimeMesh(body);
+			for (const auto& body : entry.second.bodies) {
+				if (Body* mesh = assets.get<Body>(body.second)) removeRuntimeMesh(mesh);
 			}
 		}
 		chunks.clear();

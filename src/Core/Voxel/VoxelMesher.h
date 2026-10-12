@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <bitset>
 #include <cstdint>
 #include <vector>
 #include "../World/Renderer.h"
@@ -14,13 +15,27 @@ namespace CGEngine {
 	// chunk with this much border computes the same light for a shared cell as its neighbour does.
 	constexpr int VoxelLightReach = 8;
 
-	// How bright a light block is: its glow is this many times its colour, its light in a cave is VoxelLampLight (below), and
-	// the open gets less; see lampGain. The glow is clamped only where it is shown.
-	constexpr float VoxelLampBrightness = 4.0f;
+	// The glow of a light block or a torch: its light colour times this, added after the lighting. It stays under 1 in each
+	// channel, so a glowing face keeps its warm colour instead of clipping to white (the held torch is lit the same way).
+	constexpr float VoxelGlow = 0.8f;
+	// The colour of the light the blocks give (the held torch's colour). The light a block gives its neighbours is tinted by it,
+	// so a wall near a lamp is lit by a warm light, as the held torch lights it.
+	const glm::vec3 VoxelLightTint(1.0f, 0.72f, 0.4f);
 
 	// How much a light block's light is multiplied in a cave, where the sky gives none (see lampGain in VoxelMesher.cpp). In
 	// the open it is 1, so sunlit ground is not washed out.
 	constexpr float VoxelLampLight = 2.0f;
+
+	// The light a torch gives at its own cell (0 to 1). A torch is a prop, not a block: it lights the air around it the way a
+	// light block does, but less.
+	constexpr float VoxelTorchLight = 0.8f;
+
+	// How dark a block gets at its last damage stage (0 to 1 of its colour is taken away): a damaged block is shown darker as it
+	// takes hits, so the player sees which blocks have been hit (VoxelWorld::hitBlock).
+	constexpr float DamageTint = 0.45f;
+
+	// The direction from a prop to the block it leans on, by its dir (VoxelWorld::setProp): +x, -x, +y, -y, +z, -z.
+	constexpr int PropDirs[6][3] = { { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 }, { 0, 0, 1 }, { 0, 0, -1 } };
 
 	// A chunk's blocks with a border of blocks copied from its neighbours (air where a neighbour is not loaded). The
 	// mesher reads only from this, so it can run on any thread while the world changes. The block mesher needs a border
@@ -42,6 +57,26 @@ namespace CGEngine {
 		std::vector<uint8_t> lamp;
 		// The light each block id gives off at its own cell, 0 to 255. Set from the world's block types (BlockType::emits).
 		std::array<uint8_t, 256> emission{};
+		// How each block id is drawn: the mesh it goes in (group 0 is the terrain, else the block's own id) and whether it is
+		// cubes. Set from the world's block types (BlockType::own and cube). A mesh holds only the blocks of its group.
+		struct MeshRule {
+			uint8_t group = 0;
+			bool cube = false;
+			uint8_t join = 0;   // the mesh this block joins when the block above is in it (BlockType::joinAbove), else 0
+			std::bitset<256> joinBelow;   // the blocks below that make this block join the terrain (BlockType::joinBelow)
+		};
+		std::array<MeshRule, 256> rule{};
+		// The props (torches) in the chunk and its border, in chunk coordinates. A prop's cell is air: it gives light there, and
+		// the terrain mesh draws it (buildPropMesh), but it is not a block, so collision and the faces around it do not change.
+		struct Prop {
+			int x, y, z;
+			uint8_t dir;
+			float anchor = 0.5f;   // how far from the cell's centre, toward the block it leans on, the drawn skin is (VoxelWorld::propAnchor)
+		};
+		std::vector<Prop> props;
+		// The damage of each block position, in the layout of blocks: the fraction of its hits taken, 0 to 255. Empty if no block
+		// in the padded chunk is damaged.
+		std::vector<uint8_t> damage;
 
 		size_t index(int x, int y, int z) const {
 			const int p = size + 2 * border;
@@ -73,19 +108,32 @@ namespace CGEngine {
 		std::vector<unsigned int> indices;
 	};
 
-	// Meshes the solid faces of a chunk. A face is drawn only where the block beside it is air. Faces that lie in one
-	// plane, with the same block, shade and occlusion, are merged into one quad (greedy meshing), so flat ground is a few
-	// quads rather than one per block. Each vertex colour is the block colour times the face shade times ambient occlusion.
-	void buildChunkMesh(const PaddedChunk& chunk, const std::array<glm::vec3, 256>& palette, MeshArrays& out);
+	// Meshes the cube faces of one group of a chunk: group 0 is the terrain, else a block id's own mesh (PaddedChunk::rule).
+	// A face is drawn only where the block beside it is not in the group, so a face against another group's block is drawn
+	// here too. Faces that lie in one plane, with the same block, shade and occlusion, are merged into one quad (greedy
+	// meshing), so flat ground is a few quads rather than one per block. Each vertex colour is the block colour times the
+	// face shade times ambient occlusion.
+	void buildChunkMesh(const PaddedChunk& chunk, const std::array<glm::vec3, 256>& palette, uint8_t group, MeshArrays& out);
 
-	// A smooth skin over the blocks: a surface through the solid blocks, rounded at the edges and corners, that the
-	// chunk's own mesh is shaped to. Surface nets (one vertex per cell the surface crosses, quads across the crossed
-	// edges) on a density that is the blocks' occupancy, interpolated between block centres. resolution is the number of
-	// samples per block: 1 is the block scale, 2 gives half-block detail. Chunks join without cracks, since every vertex
-	// is a function of the blocks around it. The chunk needs a border of 3 (PaddedChunk::border).
-	void buildSmoothMesh(const PaddedChunk& chunk, const std::array<glm::vec3, 256>& palette, int resolution,
-		unsigned skirtSides, MeshArrays& out);
+	// A smooth skin over one group of the blocks (see buildChunkMesh): a surface through the group's solid blocks, rounded
+	// at the edges and corners. Surface nets (one vertex per cell the surface crosses, quads across the crossed edges) on
+	// a density that is the group's occupancy, interpolated between block centres. resolution is the number of samples per
+	// block: 1 is the block scale, 2 gives half-block detail. Chunks join without cracks, since every vertex is a function
+	// of the blocks around it. The chunk needs a border of 3 (PaddedChunk::border).
+	void buildSmoothMesh(const PaddedChunk& chunk, const std::array<glm::vec3, 256>& palette, int resolution, int stride,
+		unsigned skirtSides, uint8_t group, MeshArrays& out);
 
 	// A round ball of a block's colour, centred at centre and appended to out. The moving blocks are drawn with it.
 	void buildBlob(const std::array<glm::vec3, 256>& palette, uint8_t block, glm::vec3 centre, float radius, MeshArrays& out);
+
+	// The boxes of a torch: its stick (centre and half size) and its flame. A torch stands on the skin of the block it leans on,
+	// at distance anchor from its cell's centre, so the stick is outside the drawn surface and not hidden in it.
+	struct PropShape {
+		glm::vec3 stickCentre, stickHalf, flameCentre, flameHalf;
+	};
+	PropShape propShape(glm::vec3 cell, int dir, float anchor);
+
+	// The geometry of the chunk's props (torches): a stick leaning on its block and a flame on top, for the props in the chunk
+	// itself (not its border, which the neighbour draws). Appended to out, which is the terrain mesh.
+	void buildPropMesh(const PaddedChunk& chunk, MeshArrays& out);
 }

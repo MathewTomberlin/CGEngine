@@ -864,10 +864,10 @@ namespace CGEngine {
             } else if (const sf::Drawable* drawable = dynamic_cast<const sf::Drawable*>(entity.get())) {
                 // Shapes, text and sprites are drawn through their Drawable base, whatever their concrete type.
                 renderer->commitGL();
-                // Text is an overlay: drawn over the scene whatever its depth, and in window pixels (the screen's own view is a
-                // square in the middle of the window, which would clip a label that runs past it).
-                const bool overlay = dynamic_cast<const sf::Text*>(entity.get()) != nullptr;
-                if (overlay) {
+                // Text and bodies marked overlay are drawn over the scene whatever their depth, and in window pixels (the screen's
+                // own view is a square in the middle of the window, which would clip a label that runs past it).
+                const bool drawOverlay = overlay || dynamic_cast<const sf::Text*>(entity.get()) != nullptr;
+                if (drawOverlay) {
                     const sf::View scene = target.getView();
                     glDisable(GL_DEPTH_TEST);
                     target.setView(target.getDefaultView());

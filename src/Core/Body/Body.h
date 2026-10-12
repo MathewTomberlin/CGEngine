@@ -606,6 +606,10 @@ namespace CGEngine {
         /// in front of their parents
         /// </summary>
         int zOrder = 0;
+        // Drawn after the opaque bodies, blended and without writing depth, so what is behind it still shows (the voxel water).
+        bool transparent = false;
+        /// Drawn over the scene in window pixels, like a text label (the HUD's rectangles are overlays).
+        bool overlay = false;
         /// <summary>
         /// The amount of time between calling scripts in the "update" domain for this Body
         /// </summary>
