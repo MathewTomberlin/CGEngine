@@ -269,8 +269,12 @@ Goal: the player chooses how far they can see, and a long view stays cheap enoug
   `tools/test_pause_menu.ps1` checks the arrow and the saved file.
 - [ ] **15.2** Far skins: the chunks beyond the near ring are meshed coarser (a sample every two blocks or more), so a long view
   costs a fraction of the quads. This is what makes "Unlimited" honest; the cap of 40 is the stand-in until then.
-- [ ] **15.3** Measure the frame time at each view distance in Release (`tools/voxel_perf.ps1`), and record the memory per step,
-  so the step list is chosen from numbers. The current numbers are only for 14 (about 650 frames a second at 841 chunks).
+- [~] **15.3** Frame time per view distance, measured in Release (`tools/voxel_perf.ps1`, standing, turning and walking, this
+  machine): view 6 (169 chunks) 399 / 380 / 334 fps, worst frame 6 to 7 ms; view 14 (841) 179 / 186 / 161 fps, worst 10 to 15 ms;
+  view 24 (2,401) 69 / 70 / 66 fps, worst 24 to 37 ms; view 40 (6,561) 23 / 19 / 17 fps, worst 57 to 70 ms. The "about 650 fps at
+  841 chunks" in the notes did not come back: the build from before this round measured 201 / 199 / 178 on the same machine
+  today, so this round's HUD and game script cost about 10%. Still open: memory per step (the step list is chosen from these
+  numbers, so the memory is the next measurement).
 - [ ] **15.4** Chunks beyond the view are unloaded as the player moves, but the edits are kept (they are already); check that a
   long walk at 40 does not leave the process growing (the unload path, and the meshes' GPU buffers).
 
