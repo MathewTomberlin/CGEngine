@@ -142,7 +142,7 @@ try {
     Check "load_scene reports a missing file" ((-not $missing.ok) -and ($missing.error -match "cannot open"))
 
     $prims = Wait-Result "07_primitives"
-    Check "primitive scene loads (2 bodies)" ($prims.ok -and $prims.result.bodies -eq 2)
+    Check "primitive scene loads (3 bodies: a cube, a bigger cube and a sphere)" ($prims.ok -and $prims.result.bodies -eq 3)
     $described = Wait-Result "08_describe_primitives"
     $pnames = @($described.result.bodies | ForEach-Object { $_.name })
     Check "primitives appear by name in describe_scene" (($pnames -contains "block") -and ($pnames -contains "block_big"))

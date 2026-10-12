@@ -1,5 +1,7 @@
 """
-Checks the voxel player physics and block picking (resources/scripts/VoxelPhysics.py) without the engine.
+Checks the voxel player physics and block picking (resources/scripts/VoxelPhysics.py) without the engine. The body collides
+with the skin the terrain is drawn with: with a solid block under it, the surface is SKIN_ISO (0.3) of a block above the
+block's top face, and beside a wall it is 0.2 of a block out from the wall's face.
 Usage (from the repo root): python -I tools/test_voxel_physics.py
 Exits 0 on success, 1 on any failed check.
 """
@@ -11,6 +13,8 @@ sys.path.insert(0, os.path.join(HERE, "..", "resources", "scripts"))
 import VoxelPhysics as p  # noqa: E402
 
 failures = []
+TOP = 5.0 + (0.5 - p.SKIN_ISO)     # the skin above a floor whose top face is at y = 5
+WALL = 3.0 - (0.5 - p.SKIN_ISO)    # the skin in front of a wall whose face is at x = 3
 
 
 def check(name, ok):
@@ -27,40 +31,70 @@ def floor_world(x, y, z):
 def run(solid, pos, vel, seconds, flying=False, dt=1.0 / 60.0):
     on_ground = False
     for _ in range(int(seconds / dt)):
-        pos, vel, on_ground = p.step(solid, pos, vel, dt, flying)
+        pos, vel, on_ground = p.step(solid, pos, vel, dt, flying, on_ground)
     return pos, vel, on_ground
 
 
-# Falling lands on the ground: the feet stop at the top of the floor (y = 5).
+# Falling lands on the ground: the feet stop on the skin above the floor.
 pos, vel, on_ground = run(floor_world, (0.5, 10.0, 0.5), (0.0, 0.0, 0.0), 2.0)
-check("a falling player lands on the ground", on_ground and abs(pos[1] - 5.0) < 1e-6)
+check("a falling player lands on the ground's skin", on_ground and abs(pos[1] - TOP) < 1e-3)
 check("landing stops the fall", vel[1] == 0.0)
 
-# Walking into the wall stops at its face: the box's near side touches x = 3 from the left.
-pos, vel, _ = run(floor_world, (1.0, 5.0, 0.5), (8.0, 0.0, 0.0), 1.0)
-check("a wall stops the player", abs(pos[0] - (3.0 - p.PLAYER_HALF_WIDTH)) < 0.11)
+# Walking into the wall stops at its skin: the box's near side touches the skin in front of x = 3.
+pos, vel, _ = run(floor_world, (1.0, TOP + 0.1, 0.5), (8.0, 0.0, 0.0), 1.0)
+check("a wall stops the player at its skin", abs(pos[0] + p.PLAYER_HALF_WIDTH - WALL) < 1e-3)
 check("a wall stops the horizontal speed", vel[0] == 0.0)
 
 # A jump leaves the ground and comes back down to the same height.
-pos, vel, on_ground = run(floor_world, (0.5, 5.0, 0.5), (0.0, p.JUMP_SPEED, 0.0), 0.1)
-check("a jump leaves the ground", not on_ground and pos[1] > 5.2)
+pos, vel, on_ground = run(floor_world, (0.5, TOP, 0.5), (0.0, p.JUMP_SPEED, 0.0), 0.1)
+check("a jump leaves the ground", not on_ground and pos[1] > TOP + 0.2)
 top = pos[1]
 pos, vel, on_ground = run(floor_world, pos, (0.0, 0.0, 0.0), 2.0)
-check("the player falls back to the ground after a jump", on_ground and abs(pos[1] - 5.0) < 1e-6 and top > 5.0)
+check("the player falls back to the ground after a jump", on_ground and abs(pos[1] - TOP) < 1e-3 and top > TOP)
 
 # Flying ignores gravity.
 pos, vel, on_ground = run(floor_world, (0.5, 12.0, 0.5), (0.0, 0.0, 0.0), 1.0, flying=True)
 check("flying does not fall", abs(pos[1] - 12.0) < 1e-6)
 
-# A box overlaps blocks it stands in and touches, not blocks beside it.
-check("a box inside the ground overlaps", p.overlaps(floor_world, 0.5, 4.0, 0.5))
-check("a box standing on the ground does not overlap", not p.overlaps(floor_world, 0.5, 5.0, 0.5))
-check("a box next to the wall does not overlap", not p.overlaps(floor_world, 2.0, 5.0, 0.5))
+
+# A ramp the body can walk up: the ground rises one block for every two blocks along x (block columns, so the skin makes a
+# slope of about one block in two). The body walks along +x and must climb it, not stop at the first riser.
+def ramp(x, y, z):
+    return y < 5 + x // 2
+
+
+pos, vel, on_ground = run(ramp, (0.5, 8.0, 0.5), (0.0, 0.0, 0.0), 1.0)
+pos, vel, on_ground = run(ramp, pos, (2.0, 0.0, 0.0), 4.0, flying=False)
+check("a player walks up a ramp of blocks", pos[0] > 6.0 and pos[1] > 5.0 + 0.3 * (pos[0] - 2.0) and on_ground)
+check("walking up a ramp keeps the body on its surface (outside the skin, on the ground)",
+      on_ground and not p.inside(ramp, pos))
+
+# A ledge one block high can be climbed by walking into it; a wall four blocks high cannot.
+def ledge(x, y, z):
+    return y < 5 or (3 <= x < 6 and y < 6)
+
+
+pos, vel, on_ground = run(ledge, (1.0, TOP, 0.5), (3.0, 0.0, 0.0), 1.2)
+check("a player walks up onto a one-block ledge (its top is at 6, the skin at 6.2)",
+      pos[0] > 4.0 and abs(pos[1] - (6.0 + (0.5 - p.SKIN_ISO))) < 1e-3 and on_ground)
+pos, vel, on_ground = run(floor_world, (1.0, TOP, 0.5), (3.0, 0.0, 0.0), 2.0)
+check("a four-block wall is not climbed", pos[0] < WALL and pos[1] < TOP + 0.5)
+
+# A box inside the ground is inside the skin, and one standing on the ground is not.
+check("a box inside the ground is inside the skin", p.inside(floor_world, (0.5, 4.0, 0.5)))
+check("a box standing on the ground is outside the skin", not p.inside(floor_world, (0.5, TOP, 0.5)))
+check("a box next to the wall is outside the skin", not p.inside(floor_world, (1.5, TOP, 0.5)))
+check("the eye is part of the body: a box with its eye in a wall is inside", p.inside(floor_world, (2.9, 5.5, 0.5)))
 
 
 def one_block(x, y, z):
     return (x, y, z) == (3, 0, 0)
 
+
+# The skin density is 0.5 on a block face and falls to 0 across a block: the iso-surface is 0.2 of a block out.
+check("the density is 1 inside a solid block", p.density(one_block, 3.5, 0.5, 0.5) == 1.0)
+check("the density is 0 well outside a block", p.density(one_block, 6.5, 0.5, 0.5) == 0.0)
+check("the density is 0.5 on a block's face", abs(p.density(one_block, 3.0, 0.5, 0.5) - 0.5) < 1e-12)
 
 # Picking: a ray along +x from inside the cell at (0, 0, 0) hits the block at (3, 0, 0) from the -x side.
 hit = p.raycast(one_block, (0.5, 0.5, 0.5), (1.0, 0.0, 0.0))

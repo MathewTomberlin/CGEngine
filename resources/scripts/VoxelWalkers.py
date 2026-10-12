@@ -94,7 +94,9 @@ class Walkers:
                 continue
             for y in range(VoxelGen.HEIGHT - 2, 0, -1):
                 if world.is_solid(x, y, z):
-                    if world.get_block(x, y + 1, z) == 0 and world.get_block(x, y + 2, z) == 0 and y + 1 > VoxelGen.SEA_LEVEL:
+                    # The creature's box must have room above the ground: no leaves or walls within a block of it.
+                    clear = all(not world.is_solid(x + dx, y + 1 + k, z + dz) for dx in (-1, 0, 1) for dz in (-1, 0, 1) for k in (0, 1))
+                    if clear and y + 1 > VoxelGen.SEA_LEVEL:
                         return (x + 0.5, float(y + 1), z + 0.5)
                     break
         return None

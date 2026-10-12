@@ -76,7 +76,7 @@ world.active_count()                     # cells queued: 0 when everything has s
   841 in all), moves the player and the camera, edits blocks, runs the day and night cycle, and writes
   `cg_control/voxel_state.json` four times a second: chunk counts, quads, the player, the frame time, the time of day, the
   sun, the fog, and the camera's own basis.
-- `resources/scripts/VoxelPhysics.py`: the Python reference for the player's mover (the game runs `world.step_body` in C++), and block
+- `resources/scripts/VoxelPhysics.py`: the Python reference for the body mover on the skin (the game runs `world.step_body` in C++), and block
   picking. Pure Python: `python -I tools/test_voxel_physics.py` checks it without the engine.
 - `resources/scripts/VoxelWalkers.py`: creatures that wander the terrain (`VOXEL_WALKERS`, 12 by default). Each is a box
   mesh that the engine's voxel walker moves once per update, so it stands on the ground, turns at walls, jumps a block, and
@@ -153,10 +153,15 @@ Only bodies made this way can be updated. Each vertex's colour multiplies the su
 
 ## Player
 
-The player is a box 0.6 wide and 1.8 tall, with its feet at `pos`. `world.step_body` (C++) moves it one axis at a time, in
-steps of at most 0.1 blocks, and sets it flush against any block it runs into, so it stands on the ground without
-hovering. Gravity is 28 blocks per second squared; a jump is 9 blocks per second. The eye is 1.6 above the feet. The
-block picked is the first solid one along the view, within 6 blocks. A block is not placed where the player stands.
+The player is a box 0.6 wide and 1.8 tall, with its feet at `pos`. It collides with the skin the terrain is drawn with,
+not with the blocks under it: the skin is the surface at density 0.3 of the blocks' occupancy, so the feet stand on the
+visible ground and the eye (1.6 above the feet, a point of the box) stays out of the walls. `world.step_body` (C++) moves
+the box one axis at a time, in steps of at most 0.1 blocks, and sets it flush against the surface by bisection. A walk
+that is blocked on the ground climbs one block and snaps back down, so the player walks up hills and over one-block
+steps; a four-block wall stops it. The camera follows the eye's height over a few frames, so a step is seen as a step.
+Gravity is 28 blocks per second squared; a jump is 9 blocks per second. The block picked is the first solid one along
+the view, within 6 blocks (picking still walks the blocks; following the skin is on the roadmap). A block is not placed
+where the player stands.
 
 ## Performance
 
@@ -168,8 +173,9 @@ the view's level and the worst frame.
 
 - Light is baked when a chunk is meshed, so an edit that lets the sky into a cave shows once the chunks around it are
   re-meshed, a few frames later.
-- The simulation runs on the loaded chunks only. The player's collision is in C++ (`world.step_body`), and the Python
-  version (`VoxelPhysics.step`) stays as the reference that the tests compare with.
+- The simulation runs on the loaded chunks only. The player's collision is the skin, in C++ (`world.step_body`), and the
+  Python version (`VoxelPhysics.step`) stays as the reference that the tests and `tools/voxel_world_check.py` compare with.
+  Unloaded chunks count as solid, so a body cannot walk out of the loaded world.
 - Water is opaque, and the player cannot climb out of a pool onto its bank. The smooth skin has two levels of detail: two samples a block within 3 chunks of the player, and one a block beyond that.
 - Each chunk is one draw call. Region batching (several chunks in one mesh) is the next step if the draw count
   becomes the limit.

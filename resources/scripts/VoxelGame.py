@@ -39,6 +39,7 @@ WATER_FOG_START = 1.0
 WATER_FOG_END = 22.0
 TURN_SPEED = 90.0           # degrees per second, for the arrow keys
 MOUSE_SENSITIVITY = float(os.environ.get("VOXEL_MOUSE_SENSITIVITY", "0.00625"))   # degrees per pixel at 100%
+VIEW_SMOOTH = 14.0          # how quickly the camera follows the eye's height (per second): a climbed block is seen as a step, not a jump
 # The settings the player chose, kept between runs in the game's folder. VOXEL_SETTINGS moves the file (the tests use one of their own).
 SETTINGS_FILE = os.environ.get("VOXEL_SETTINGS", "voxel_settings.json")
 SENSITIVITY_STEPS = [25, 50, 75, 100, 125, 150, 200, 250, 300, 400, 500]   # mouse sensitivity, as a percent of MOUSE_SENSITIVITY
@@ -145,6 +146,8 @@ class VoxelGame(PyScript):
         self.broken = False
         self.hud_ready = False          # the label and the outline bodies exist (made on the second frame)
         self.paused = False             # the pause menu is open: the world stands still and the mouse is free
+        self.frame_dt = 0.0             # the time this frame advances the game (0 while paused)
+        self.view_y = None              # the height the camera is at, which follows the eye's height smoothly
         self.menu_page = "pause"        # the page of the pause menu: "pause" or "settings"
         saved = load_settings()
         self.sensitivity = saved["mouse_sensitivity"]   # mouse sensitivity, a percent of MOUSE_SENSITIVITY
@@ -214,6 +217,7 @@ class VoxelGame(PyScript):
         self.update_outlines()
         self.update_hud()
         self.update_sky(dt)
+        self.frame_dt = dt
         self.place_camera()
 
         self.state_timer -= raw_dt   # the state keeps being written while paused, so tests can read the menu
@@ -522,7 +526,7 @@ class VoxelGame(PyScript):
             # The engine's mover is the same as physics.step (tests check they agree), and it is faster.
             # Swimming has no gravity of its own: the swim speed above takes its place, so the mover runs without it.
             pos, vel, self.on_ground = self.world.step_body(tuple(self.pos), tuple(self.vel), dt,
-                                                           self.flying or self.swimming)
+                                                           self.flying or self.swimming, on_ground=self.on_ground)
             self.pos = list(pos)
             self.vel = list(vel)
         if self.pos[1] < RESPAWN_DEPTH:
@@ -659,9 +663,15 @@ class VoxelGame(PyScript):
 
     def place_camera(self):
         eye = self.eye()
+        if self.view_y is None:
+            self.view_y = eye[1]
+        # The camera follows the eye's height over a few frames, so climbing a block is a step up, not a jump. Picking and the
+        # water check use the eye itself.
+        self.view_y += (eye[1] - self.view_y) * min(1.0, VIEW_SMOOTH * self.frame_dt)
         look = self.look_direction()
-        target = [eye[0] + look[0], eye[1] + look[1], eye[2] + look[2]]
-        cge.set_camera(cge.Vector3f(*eye), cge.Vector3f(*target))
+        origin = [eye[0], self.view_y, eye[2]]
+        target = [origin[0] + look[0], origin[1] + look[1], origin[2] + look[2]]
+        cge.set_camera(cge.Vector3f(*origin), cge.Vector3f(*target))
 
     # ----- state for tests and agents -----------------------------------------------------
 

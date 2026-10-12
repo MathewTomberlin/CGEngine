@@ -6,6 +6,10 @@
 #include "../World/Renderer.h"
 
 namespace CGEngine {
+	// The skin is the surface where the blocks' occupancy, interpolated between block centres, is this (see buildSmoothMesh).
+	// Collision uses the same surface, so the drawn ground and the ground a body stands on are one.
+	constexpr float VoxelSkinIso = 0.3f;
+
 	// How far light and shade reach through air, in blocks. A cell's light depends only on blocks this close to it, so a
 	// chunk with this much border computes the same light for a shared cell as its neighbour does.
 	constexpr int VoxelLightReach = 8;

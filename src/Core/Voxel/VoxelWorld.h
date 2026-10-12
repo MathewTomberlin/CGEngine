@@ -69,6 +69,11 @@ namespace CGEngine {
 		uint8_t lightAt(int x, int y, int z) const;
 		// Moves a box of this shape through the blocks (see VoxelBody.h). The C++ twin of VoxelPhysics.step.
 		VoxelBodyState stepBody(const VoxelBodyState& body, const VoxelBodyShape& shape, double dt, bool flying) const;
+
+		/// The skin's density at world position (x, y, z): the occupancy of the eight block centres around the point, weighted
+		/// trilinearly. A point is inside the drawn surface where this is above VoxelSkinIso. Solid blocks occupy it (water and
+		/// air do not), and cells of chunks that are not loaded count as solid, so a body cannot walk out of the loaded world.
+		double skinDensity(double x, double y, double z) const;
 		// Runs the simulation for dt seconds, within budgetMs of work (see VoxelSimulation). Returns the cells looked at.
 		int simulate(double dt, double budgetMs, double tickSeconds = 0.1) {
 			return simulation.simulate(*this, dt, budgetMs, tickSeconds);

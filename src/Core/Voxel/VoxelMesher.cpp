@@ -235,7 +235,7 @@ namespace CGEngine {
 
 	namespace {
 		// The surface is where the density crosses this: a sample inside the solid blocks is above it.
-		const float SmoothIso = 0.3f;
+		const float SmoothIso = VoxelSkinIso;
 
 		// The 12 edges of a cell's cube, as pairs of corner indices (corner bit 0 is x, bit 1 is y, bit 2 is z).
 		const int CubeEdges[12][2] = { { 0, 1 }, { 2, 3 }, { 4, 5 }, { 6, 7 }, { 0, 2 }, { 1, 3 }, { 4, 6 }, { 5, 7 },

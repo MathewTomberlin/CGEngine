@@ -66,20 +66,21 @@ void bindVoxel(py::module_& m) {
         .def("light_at", &VoxelWorld::lightAt, py::arg("x"), py::arg("y"), py::arg("z"),
              "The sky light at a block, 0 to 255, as the mesh shades it (255 is open to the sky, dark caves are low).")
         .def("step_body", [](const VoxelWorld& world, std::array<double, 3> pos, std::array<double, 3> vel, double dt,
-                bool flying, double halfWidth, double height) {
+                bool flying, double halfWidth, double height, bool onGround) {
             VoxelBodyShape shape;
             shape.halfWidth = halfWidth;
             shape.height = height;
             VoxelBodyState body;
             body.pos = pos;
             body.vel = vel;
+            body.onGround = onGround;
             const VoxelBodyState next = world.stepBody(body, shape, dt, flying);
             return py::make_tuple(py::make_tuple(next.pos[0], next.pos[1], next.pos[2]),
                 py::make_tuple(next.vel[0], next.vel[1], next.vel[2]), next.onGround);
         }, py::arg("pos"), py::arg("vel"), py::arg("dt"), py::arg("flying") = false, py::arg("half_width") = 0.3,
-           py::arg("height") = 1.8,
-           "Move a box with its feet at pos (x, y, z) and speed vel, for dt seconds, through the solid blocks, as VoxelPhysics.step "
-           "does. Returns (pos, vel, on_ground).")
+           py::arg("height") = 1.8, py::arg("on_ground") = false,
+           "Move a box with its feet at pos (x, y, z) and speed vel, for dt seconds, over the terrain's skin, as VoxelPhysics.step "
+           "does. on_ground is whether it stood on the skin at the last step (it lets the box climb a block). Returns (pos, vel, on_ground).")
         .def("simulate", &VoxelWorld::simulate, py::arg("dt"), py::arg("budget_ms") = 1.0, py::arg("tick_seconds") = 0.1,
              "Advance the block physics by dt seconds, within budget_ms of work. Ticks run every tick_seconds. Returns the cells looked at.")
         .def("set_detail", &VoxelWorld::setDetail, py::arg("near_chunks"), py::arg("near_samples") = 2,

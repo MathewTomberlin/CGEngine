@@ -55,6 +55,34 @@ namespace CGEngine {
 		return padded.lightAt(x - cx * size, y, z - cz * size);
 	}
 
+	double VoxelWorld::skinDensity(double x, double y, double z) const {
+		// The same weights as the mesh's density (VoxelMesher.cpp), on the occupancy of solid blocks, with the unloaded
+		// cells solid and the world's ends solid below and open above. Python's copy (VoxelPhysics.py) matches it operation for
+		// operation, so the parity check can compare them exactly.
+		const double bx = x - 0.5, by = y - 0.5, bz = z - 0.5;
+		const double fx = std::floor(bx), fy = std::floor(by), fz = std::floor(bz);
+		const double tx = bx - fx, ty = by - fy, tz = bz - fz;
+		const int x0 = static_cast<int>(fx), y0 = static_cast<int>(fy), z0 = static_cast<int>(fz);
+		double value = 0.0;
+		for (int c = 0; c < 8; ++c) {
+			const int dx = c & 1, dy = (c >> 1) & 1, dz = (c >> 2) & 1;
+			const double w = (dx ? tx : 1.0 - tx) * (dy ? ty : 1.0 - ty) * (dz ? tz : 1.0 - tz);
+			const int ix = x0 + dx, iy = y0 + dy, iz = z0 + dz;
+			bool occupied;
+			if (iy < 0) {
+				occupied = true;
+			} else if (iy >= height) {
+				occupied = false;
+			} else if (!loadedAt(ix, iz)) {
+				occupied = true;
+			} else {
+				occupied = isSolid(ix, iy, iz);
+			}
+			if (occupied) value += w;
+		}
+		return value;
+	}
+
 	bool VoxelWorld::loadedAt(int x, int z) const {
 		const Chunk* chunk = findChunk(floorDiv(x, size), floorDiv(z, size));
 		return chunk && chunk->loaded;

@@ -81,8 +81,9 @@ def check_body_parity(world, checks):
         vel = (rng.uniform(-6, 6), rng.uniform(-30, 10), rng.uniform(-6, 6))
         dt = rng.uniform(0.005, 0.05)
         flying = rng.random() < 0.2
-        py_pos, py_vel, py_ground = physics.step(world.is_solid, pos, vel, dt, flying)
-        cpp_pos, cpp_vel, cpp_ground = world.step_body(pos, vel, dt, flying)
+        on_ground = rng.random() < 0.5
+        py_pos, py_vel, py_ground = physics.step(world.is_solid, pos, vel, dt, flying, on_ground)
+        cpp_pos, cpp_vel, cpp_ground = world.step_body(pos, vel, dt, flying, on_ground=on_ground)
         gap = max(abs(a - b) for a, b in zip(py_pos + py_vel, cpp_pos + cpp_vel))
         if gap > 1e-9 or py_ground != cpp_ground:
             mismatches += 1
@@ -213,7 +214,7 @@ def check_light(world, checks, chunks, results):
     checks["air is never fully dark"] = bool(deep) and min(deep) >= 50
 
 
-def check_walkers(world, checks):
+def check_walkers(world, checks, results):
     """Creatures stand on the ground, walk about, and never end up inside a block. The engine moves them through
     cge.step_voxel_walker here, since this check runs inside a frame and no frames pass while it works."""
     import VoxelWalkers
@@ -227,36 +228,25 @@ def check_walkers(world, checks):
         for w in walkers:
             cge.step_voxel_walker(w.name, dt)
 
-    def column_top(x, z, feet):
-        # The top of the highest solid block in this column at or below the feet (0 if there is none).
-        for y in range(min(HEIGHT - 1, math.floor(feet + 0.05)), -1, -1):
-            if world.is_solid(x, y, z):
-                return y + 1
-        return 0
-
-    def ground_under(x, z, feet):
-        # A creature stands on the highest block under its footprint.
-        half = VoxelWalkers.HALF_WIDTH
-        return max(column_top(cx, cz, feet) for cx in {math.floor(x - half), math.floor(x + half - 1e-6)}
-                   for cz in {math.floor(z - half), math.floor(z + half - 1e-6)})
-
+    import VoxelPhysics as physics
     stands = True
     inside = False
     moved = 0.0
     for w, spawn in zip(walkers, spawns):
         pos, vel, on_ground = w.state()
         x, z = pos[0], pos[2]
-        ground = ground_under(x, z, pos[1])
-        # A creature mid-jump or mid-fall is in the air; the others must stand on the top block of their column.
+        # A creature on the ground stands on the skin: it is outside the skin, and nothing moves it on.
+        results.setdefault("walkers", []).append({"pos": [round(c, 3) for c in pos], "vel": [round(c, 3) for c in vel],
+                                                 "onGround": on_ground, "inside": physics.inside(world.is_solid, pos)})
         if not on_ground and abs(vel[1]) < 1e-6:
             stands = False
-        if on_ground and abs(pos[1] - ground) > 0.05:
+        if on_ground and physics.inside(world.is_solid, pos):
             stands = False
         for y in (pos[1] + 0.1, pos[1] + VoxelWalkers.HEIGHT - 0.1):
             if world.is_solid(int(x // 1), int(y // 1), int(z // 1)):
                 inside = True
         moved = max(moved, ((x - spawn[0]) ** 2 + (z - spawn[2]) ** 2) ** 0.5)
-    checks["walkers stand on the ground after 4 s"] = stands
+    checks["walkers stand on the skin after 4 s"] = stands
     checks["walkers never end up inside a block"] = not inside
     checks["walkers wander"] = moved > 0.5
     for w in walkers:
@@ -300,7 +290,7 @@ def run(out_path="cg_control/voxel_check.json"):
     results["underground"] = underground
     results["check"]["caves carved"] = air > underground * 0.01
     check_light(world, results["check"], chunks, results)
-    check_walkers(world, results["check"])
+    check_walkers(world, results["check"], results)
     biomes = {world.biome_at(x, z) for x in range(-200, 200, 10) for z in range(-200, 200, 10)}
     results["check"]["biomes vary: plains, forest and desert occur"] = biomes == {"plains", "forest", "desert"}
     results["biomes"] = sorted(biomes)
