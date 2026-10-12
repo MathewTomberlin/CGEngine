@@ -63,6 +63,13 @@ void bindVoxel(py::module_& m) {
              "True if the block at these coordinates is solid. Air and liquids are not.")
         .def("biome_at", &VoxelWorld::biomeName, py::arg("x"), py::arg("z"),
              "The biome of the column at x, z: \"plains\", \"forest\" or \"desert\". Set by the terrain settings and the seed.")
+        .def("skin_surface", [](const VoxelWorld& world, std::array<double, 3> origin, std::array<double, 3> direction,
+                double maxDistance) -> py::object {
+            std::array<double, 3> surface{};
+            if (!world.skinSurface(origin, direction, maxDistance, surface)) return py::none();
+            return py::make_tuple(surface[0], surface[1], surface[2]);
+        }, py::arg("origin"), py::arg("direction"), py::arg("max_distance"),
+           "The first point where the drawn terrain surface is along the ray (a unit direction), within max_distance, or None.")
         .def("light_at", &VoxelWorld::lightAt, py::arg("x"), py::arg("y"), py::arg("z"),
              "The sky light at a block, 0 to 255, as the mesh shades it (255 is open to the sky, dark caves are low).")
         .def("step_body", [](const VoxelWorld& world, std::array<double, 3> pos, std::array<double, 3> vel, double dt,

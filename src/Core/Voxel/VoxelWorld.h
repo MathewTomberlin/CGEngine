@@ -74,6 +74,11 @@ namespace CGEngine {
 		/// trilinearly. A point is inside the drawn surface where this is above VoxelSkinIso. Solid blocks occupy it (water and
 		/// air do not), and cells of chunks that are not loaded count as solid, so a body cannot walk out of the loaded world.
 		double skinDensity(double x, double y, double z) const;
+
+		/// The first point along the ray from origin (direction is a unit vector) where the skin begins, within maxDistance. False
+		/// if the origin is already inside the skin or nothing is hit. It is the surface the player sees under the crosshair.
+		bool skinSurface(const std::array<double, 3>& origin, const std::array<double, 3>& direction, double maxDistance,
+			std::array<double, 3>& surface) const;
 		// Runs the simulation for dt seconds, within budgetMs of work (see VoxelSimulation). Returns the cells looked at.
 		int simulate(double dt, double budgetMs, double tickSeconds = 0.1) {
 			return simulation.simulate(*this, dt, budgetMs, tickSeconds);

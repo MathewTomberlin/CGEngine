@@ -160,7 +160,8 @@ the box one axis at a time, in steps of at most 0.1 blocks, and sets it flush ag
 that is blocked on the ground climbs one block and snaps back down, so the player walks up hills and over one-block
 steps; a four-block wall stops it. The camera follows the eye's height over a few frames, so a step is seen as a step.
 Gravity is 28 blocks per second squared; a jump is 9 blocks per second. The block picked is the first solid one along
-the view, within 6 blocks (picking still walks the blocks; following the skin is on the roadmap). A block is not placed
+the view, within 6 blocks. Picking follows the drawn surface: the ray is marched through the skin to the surface under the
+crosshair, then the block behind it is the one picked. A block is not placed
 where the player stands.
 
 ## Performance

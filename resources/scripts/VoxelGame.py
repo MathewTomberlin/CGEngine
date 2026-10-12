@@ -551,7 +551,16 @@ class VoxelGame(PyScript):
         return (math.sin(yaw) * math.cos(pitch), math.sin(pitch), -math.cos(yaw) * math.cos(pitch))
 
     def update_target(self):
-        self.target = physics.raycast(self.solid, tuple(self.eye()), self.look_direction())
+        """The block under the crosshair: the first block behind the drawn surface the view meets. The surface is found on the
+        skin, then the blocks are walked from half a block in front of it, so the outline is on the ground that is drawn."""
+        eye = tuple(self.eye())
+        look = self.look_direction()
+        surface = self.world.skin_surface(eye, look, physics.REACH)
+        if surface is None:
+            self.target = physics.raycast(self.solid, eye, look)
+            return
+        start = tuple(surface[i] - look[i] * 0.5 for i in range(3))
+        self.target = physics.raycast(self.solid, start, look, max_distance=physics.REACH + 0.5)
 
     def show_outline(self, name, box, colour):
         """Show the outline of box (lo, hi) in colour as the runtime mesh called name, or hide it when box is None."""

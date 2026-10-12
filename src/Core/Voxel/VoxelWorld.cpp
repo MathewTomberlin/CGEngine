@@ -83,6 +83,40 @@ namespace CGEngine {
 		return value;
 	}
 
+	bool VoxelWorld::skinSurface(const std::array<double, 3>& origin, const std::array<double, 3>& direction, double maxDistance,
+		std::array<double, 3>& surface) const {
+		const auto at = [&](double t) {
+			return std::array<double, 3>{ origin[0] + direction[0] * t, origin[1] + direction[1] * t, origin[2] + direction[2] * t };
+		};
+		const auto inside = [&](double t) {
+			const auto p = at(t);
+			return skinDensity(p[0], p[1], p[2]) > VoxelSkinIso;
+		};
+		if (inside(0.0)) return false;
+		const double step = 0.05;
+		double outside = 0.0;
+		for (double t = step; t <= maxDistance + step; t += step) {
+			if (!inside(t)) {
+				outside = t;
+				continue;
+			}
+			// The surface lies between the last point outside and this one: bisect it.
+			double free = outside;
+			double blocked = t;
+			for (int i = 0; i < 12; ++i) {
+				const double mid = (free + blocked) * 0.5;
+				if (inside(mid)) {
+					blocked = mid;
+				} else {
+					free = mid;
+				}
+			}
+			surface = at(free);
+			return true;
+		}
+		return false;
+	}
+
 	bool VoxelWorld::loadedAt(int x, int z) const {
 		const Chunk* chunk = findChunk(floorDiv(x, size), floorDiv(z, size));
 		return chunk && chunk->loaded;

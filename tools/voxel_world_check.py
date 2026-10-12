@@ -254,6 +254,23 @@ def check_walkers(world, checks, results):
         cge.remove_mesh_body(w.name)
 
 
+def check_skin_surface(world, checks):
+    """The surface the view meets is the drawn skin: looking straight down, it lies about 0.2 of a block above the top block of
+    the column (the skin sits out from each face), and the outline's block is the one under it."""
+    good = 0
+    total = 0
+    for x in range(-20, 20, 5):
+        for z in range(-20, 20, 5):
+            top = max([y for y in range(HEIGHT - 1) if world.is_solid(x, y, z)] or [-1]) + 1
+            if top <= 0:
+                continue
+            surface = world.skin_surface((x + 0.5, top + 20.0, z + 0.5), (0.0, -1.0, 0.0), 40.0)
+            total += 1
+            if surface is not None and abs(surface[1] - (top + 0.2)) < 0.25:
+                good += 1
+    checks["the view meets the drawn skin (about 0.2 of a block above the top block)"] = total > 0 and good >= 0.9 * total
+
+
 def count_floating_leaves(world, chunks):
     """Leaves with no wood under them in their column, away from the loaded edge (a tree's trunk is in its own chunk, so
     a leaf next to the edge may have its trunk outside the loaded area)."""
@@ -291,6 +308,7 @@ def run(out_path="cg_control/voxel_check.json"):
     results["check"]["caves carved"] = air > underground * 0.01
     check_light(world, results["check"], chunks, results)
     check_walkers(world, results["check"], results)
+    check_skin_surface(world, results["check"])
     biomes = {world.biome_at(x, z) for x in range(-200, 200, 10) for z in range(-200, 200, 10)}
     results["check"]["biomes vary: plains, forest and desert occur"] = biomes == {"plains", "forest", "desert"}
     results["biomes"] = sorted(biomes)

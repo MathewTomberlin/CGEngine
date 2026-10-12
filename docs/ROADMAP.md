@@ -200,9 +200,9 @@ collision leaves the feet 0.2 blocks inside the visible ground and the eye close
 - [x] **13.4** The eye is one of the body's sample points, so the box stops with its eye outside the skin: a wall keeps the
   near plane clear of it, and an overhang stops the head. Not yet seen in play: the camera at a wall corner (a check in a
   screenshot is the next step).
-- [ ] **13.5** Picking follows the skin: the break and place target is found by marching the ray through the density until it
-  crosses the iso-surface, so the outline is on the surface under the crosshair. Today it is the block behind the surface
-  (the skin sits about 0.2 of a block out from each face).
+- [x] **13.5** Picking follows the skin: the break and place target is found by marching the ray through the density until it
+  crosses the iso-surface, so the outline is on the surface under the crosshair. The block is then walked from half a block
+  in front of that surface (`VoxelWorld::skinSurface`, `skin_surface` in Python). Checked by `check_skin_surface` and by eye.
 - [x] **13.6** Measured on the skin, in the engine: a walk step of one body takes about 25 microseconds and a fall step about
   10 (the Python call included), so the twelve creatures and the player cost well under a millisecond a frame. No cache is
   needed yet. Still to measure: the frame time of the whole game beside the 650 frames a second of the block version.
