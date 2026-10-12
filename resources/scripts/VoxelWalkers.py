@@ -15,6 +15,7 @@ HEIGHT = 1.2
 PACE = 1.4                  # blocks per second
 FLEE_RANGE = 4.5            # a creature this close to the player runs away from it
 FLEE_PACE = 3.0             # blocks per second while it runs
+BUMP_RANGE = 0.8            # two creatures this close turn away from each other
 RESPAWN_DEPTH = -10.0       # below this a creature is put back at its spawn point
 CHUNK = VoxelGen.CHUNK
 PALETTE = [(0.92, 0.90, 0.85), (0.55, 0.36, 0.22), (0.20, 0.20, 0.24), (0.85, 0.62, 0.30)]
@@ -63,6 +64,12 @@ class Walker:
         """The creature's feet, velocity and ground contact, as the engine has them now."""
         return cge.voxel_walker_state(self.name)
 
+    def turn_away(self, x, z):
+        """Head away from the point (x, z), a little off straight, so two creatures do not turn towards each other."""
+        pos = self.state()[0]
+        self.heading = math.atan2(pos[2] - z, pos[0] - x) + self.rng.uniform(-0.3, 0.3)
+        self.timer = self.rng.uniform(1.0, 2.0)
+
 
 class Walkers:
     """A herd of creatures spread over the loaded terrain near centre, each standing on the ground where it is put."""
@@ -93,6 +100,12 @@ class Walkers:
         return None
 
     def update(self, dt, player=None):
-        """player is the (x, z) of the player, which the creatures run from when it comes close."""
-        for walker in self.walkers:
+        """player is the (x, z) of the player, which the creatures run from when it comes close. A creature that is about to
+        bump another turns away from it, so the herd does not stack up in one place."""
+        spots = [w.state()[0] for w in self.walkers]
+        for i, walker in enumerate(self.walkers):
             walker.update(dt, player)
+            for j, other in enumerate(spots):
+                if i != j and math.hypot(spots[i][0] - other[0], spots[i][2] - other[2]) < BUMP_RANGE:
+                    walker.turn_away(other[0], other[2])
+                    break

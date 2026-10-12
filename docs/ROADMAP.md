@@ -135,8 +135,8 @@ creatures' own behaviour (they only wander now).
   frames a second, so it is not a performance build.
 - [x] **11.9** Entities that walk the terrain: `cge.add_voxel_walker` makes a mesh body a walker in C++, moved once per
   update by the same mover as the player (`VoxelWalker.cpp`). Scripts set the velocity and jumps; the engine does gravity,
-  collisions and the position. `VoxelWalkers.py` makes twelve creatures that wander near the spawn. Still open: bodies
-  that collide with each other, and a walker for any body without a script of its own.
+  collisions and the position. `VoxelWalkers.py` makes twelve creatures that wander near the spawn, run from the player,
+  and turn away from each other. Still open: bodies that push each other, and a walker for any body without a script.
 - [x] **11.10** Player in water: in a liquid block at the feet or chest the player sinks at 1.2 blocks a second, swims up
   at 3 while Space is held, and walks at 60%. The mover runs without gravity while swimming. At the surface, Space jumps
   out onto a bank a block high. The view under the water is a blue-green murk. `tools/test_swimming.ps1` checks the
