@@ -11,6 +11,7 @@ functions are replaced for the run and put back afterwards. The result goes to c
 """
 import gc
 import json
+import math
 import os
 import random
 import time
@@ -275,6 +276,10 @@ def main():
             inv.count(VoxelGen.HIDE) == hides0 and len(game.drops.live) == drops0 + 1 and game.drops.live[-1].item == VoxelGen.HIDE)
         # Walking up to the hide takes it into the inventory, and standing away from it does not.
         drop_feet = game.drops.live[-1].feet
+        # The test creature died in the air, at the height it was spawned at: the hide falls to the ground under it.
+        checks["a hide made in the air falls to the ground"] = (
+            drop_feet[1] < spawn[1] and game.world.get_block(math.floor(drop_feet[0]), int(drop_feet[1]) - 1,
+                                                             math.floor(drop_feet[2])) != VoxelGen.AIR)
         player_pos = list(game.pos)
         game.pos = [drop_feet[0] + 4.0, drop_feet[1], drop_feet[2]]
         game.collect_drops()

@@ -883,6 +883,18 @@ class VoxelGame(PyScript):
         if not self.creative:
             self.inventory.add(item, amount)
 
+    def ground_under(self, x, y, z):
+        """The height a dropped item at (x, y, z) comes to rest at: the top of the first solid block below it, so an item dropped in
+        the air falls to the ground. Water does not hold it up."""
+        column = (math.floor(x), math.floor(z))
+        cell = math.floor(y)
+        while cell > 0:
+            below = self.world.get_block(column[0], cell - 1, column[1])
+            if below != VoxelGen.AIR and below not in VoxelGen.LIQUIDS:
+                break
+            cell -= 1
+        return float(cell)
+
     def collect_drops(self):
         """Walking up to an item on the ground takes it, when the inventory has room. Creative mode leaves the drops where they are,
         since it keeps no stock: an item taken there would be lost."""
@@ -1060,7 +1072,8 @@ class VoxelGame(PyScript):
                 self.walker_target = None
                 if not self.creative:
                     # The hide lies where the creature fell, on the ground under its middle, for the player to walk up to.
-                    self.drops.add(VoxelGen.HIDE, VoxelGen.ITEM_COLOURS[VoxelGen.HIDE], (centre[0], lo[1], centre[2]))
+                    rest = self.ground_under(centre[0], lo[1], centre[2])
+                    self.drops.add(VoxelGen.HIDE, VoxelGen.ITEM_COLOURS[VoxelGen.HIDE], (centre[0], rest, centre[2]))
                 self.notify("A creature died: a hide on the ground" if not self.creative else "A creature died")
             else:
                 self.bursts.add(centre, (0.85, 0.25, 0.2), 4, 0.12, 0.4)
