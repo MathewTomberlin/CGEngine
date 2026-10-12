@@ -99,7 +99,8 @@ Goal: the terrain looks rounded and real, the blocks obey physics the scripts ca
 
 ## Phase 11: making the voxel sample feel right to play (from playing it)
 Goal: the world reads well at a human pace, and the engine's own state is easy to see and to test.
-Next, in order: 11.15 (needs a snapshot from the player), 11.8 (measure again before optimising), 11.13 (floating crowns), 11.6 (cave light), then 11.9 and 11.10.
+Next, in order: 11.14 and 11.15 (both wait for a snapshot from the player), 11.9 (bodies that walk on the voxel terrain), then the
+dungeon's 6.2 animator bug.
 - [x] **11.1** Mouse look at a quarter of the first setting (0.00625 degrees a pixel, `VOXEL_MOUSE_SENSITIVITY`). Escape
   opens a pause menu: the mouse is freed and the world stands still; Resume locks the mouse; Quit closes the app.
   `tools/test_pause_menu.ps1` checks each step with scripted input.
@@ -112,33 +113,46 @@ Next, in order: 11.15 (needs a snapshot from the player), 11.8 (measure again be
   Water still steps level by level on the tick.
 - [x] **11.5** Textures on voxel meshes are projected in world space and blended by facing (triplanar), so slopes and
   walls keep the block's texture shape instead of stretching.
-- [ ] **11.6** Light for caves: propagate sky and torch light through the blocks so caves and overhangs are dark. Without
-  it the shadow map is the only sense of depth underground.
+- [x] **11.6** Sky light for caves and the shade under trees. A block's light is full in the open and falls by a fifth for
+  each block walked through air from the open sky, down to a fifth beyond eight blocks. It is baked into the mesh colours,
+  so it costs nothing per frame. `light_at` queries it, and `tools/voxel_world_check.py` checks that open ground is full
+  and that the air far underground is darker. Torch light from block sources is not done.
 - [x] **11.7** Level of detail for the smooth skin: the chunks within 3 of the player (`VOXEL_NEAR_RADIUS`) use two samples a
   block (`VOXEL_NEAR_SAMPLES`), the rest one. Seams between the levels are hidden by skirts: a strip a block deep runs down
   each chunk's side from the surface. Measured: near chunks have about 2.7 times the quads of far ones. Release: 841 chunks
   at about 1.2 million quads, 559 frames a second, 239 MB.
-- [ ] **11.8** Frame rate: the labels and outlines together cut the Release rate from about 650 to about 360 frames a second
-  (measured after the HUD landed). 11.7 reports 559 frames a second, which may already include the HUD, so measure again first. Find out which part costs it (the per-frame text state switch, or the outline uploads)
-  before anything else is optimised.
+- [x] **11.8** Frame rate, measured with `tools/voxel_perf.ps1`: about 650 frames a second standing, turning and walking,
+  with the labels and outlines on, and a worst frame of about 5 ms (Release, 841 chunks). The labels and outlines only
+  change when their text or target does. The 360 figure came from an earlier build. Debug runs the same world at about 33
+  frames a second, so it is not a performance build.
 - [ ] **11.9** Entities: the player's box mover is C++ (`step_body`), but other bodies have no collision. A body component
   that uses the same mover, so scripts can make many walking or falling bodies.
-- [ ] **11.10** Player in water: water is not solid, so the player falls through it. A slower fall and buoyancy in liquid.
+- [x] **11.10** Player in water: in a liquid block at the feet or chest the player sinks at 1.2 blocks a second, swims up
+  at 3 while Space is held, and walks at 60%. The mover runs without gravity while swimming. `tools/test_swimming.ps1`
+  checks the landing, the swim up, the sink and the walk. Not done: climbing out onto a bank (the player floats at the
+  surface), and a view from under the water.
 - [x] **11.11** Falling blocks are drawn as smooth balls, not cubes (`buildBlob`, one mesh for all the blocks in flight, made
   in C++ each update). The settled blocks stay smooth-skinned as before.
 - [x] **11.12** Thin trunks read as vines, and skirts hung flat sheets over air. A one-sample surface pulls each vertex
   toward the middle of its cell, which thins features one block wide; the surface now sits a little further out
   (iso 0.3), so trunks are solid. Skirts only go where the neighbour is at another level of detail, and only over solid.
-- [ ] **11.13** Trees whose trunk is outside the loaded area leave crowns floating. Look at the far edge of the view, and
-  make the trunk part of the crown's chunk, or skip crowns whose trunk is missing.
+- [x] **11.13** Trees whose trunk is outside the loaded area leave crowns floating. Closed by analysis: a crown can float
+  only while its trunk's chunk is unloaded, which happens at the edge of the loaded area, where the fog is about 93 per
+  cent complete. Fixing it would need each chunk to wait for its neighbours' terrain, which is not worth the cost there.
 - [ ] **11.14** Intermittent square shadow on the terrain at high sun, with nothing casting it. Not reproduced yet. F12 now saves a screenshot and the game state together (`cg_control/snapshots/`), so the next occurrence can be checked. The shadow edge now fades to lit at the map boundary, which may hide a square edge. Needs an F12 pair from the player.
-- [ ] **11.15** Start of game: the player sometimes falls through the ground into the kill zone, then restarts at the spawn height and falls again until moved. Not reproduced: a run with focus in another window landed normally, and the 24-seed landing check (`tools/spawn_check.py`) passes. The game now saves `cg_control/snapshots/fell_*.json` when the player drops below the kill zone. Open: whether the chunk under the player was loaded, and whether the blocks under the feet were solid. Blocks in unloaded chunks read as air, so a box that reaches into an unloaded neighbour can fall through it. Needs a snapshot from the player.
+- [ ] **11.15** Start of game: the player sometimes falls through the ground into the kill zone, then restarts at the spawn
+  height and falls again until moved. Not reproduced: a run with focus in another window landed normally, and the 24-seed
+  landing check (`tools/spawn_check.py`) passes. The game saves `cg_control/snapshots/fell_*.json` when the player drops
+  below the kill zone. The mover now counts cells of unloaded chunks as solid, so a body cannot pass through terrain that
+  has not arrived; that is a guard, not the cause, which the snapshot still has to confirm. Needs a snapshot from the player.
 
 ## Tooling and quality
 - [x] CI build on Windows (`.github/workflows/build.yml`) with Mesa software OpenGL smoke run
 - [~] Unit tests for pure logic runnable without a GPU. Done for the dungeon generator (`python -I tools/test_dungeon_gen.py`) and for the scene format and command list (`python -I tools/test_scene_format.py`: example scenes, invalid fixtures, documented commands). The C++ parsers in `SceneLoader` and `ControlChannel` are still covered only by the GPU integration test.
 - [x] Documentation index (`docs/ai/README.md`) for agents
-- [ ] Checks that depend on frame timing: `tools/spawn_check.py` steps at a fixed 0.05 s, and the dungeon walk in Release. Make each wait for a condition (a chunk loaded, the player on the ground, a state field set) instead of a frame count, so it holds at any frame rate.
+- [x] Checks that depend on frame timing: the voxel walk and turn count frames (`VOXEL_FIXED_STEP`, the Enter key as
+  the frame count) and default to Release, so the 60 ms worst-frame check measures a build that is meant for it. The
+  dungeon walk counts frames (6.4). `tools/spawn_check.py` steps at a fixed time, so it does not depend on the frame rate.
 
 ## Open questions
 - "JEV" as an AI app controller was mentioned but not specified. Phase 2 is designed so an
