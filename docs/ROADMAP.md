@@ -45,7 +45,10 @@ Making real models showed where the engine misrepresents content. These come fir
   `dungeon.json` as a workaround. Not reproduced on the current build: a body made from Python after its clips load
   plays every clip, and so does the dungeon's player, which is back in `DungeonGame.setup` (the scene has no bodies now).
   `tools/test_dungeon_game.ps1` checks the knight clips. The cause of the old failure is not known.
-- [ ] **6.3** Bodies that share a model share one animator, so every slime hops in step. Give instances their own pose, or accept it and make the sync part of the look.
+- [x] **6.3** Bodies that share a model had one animator, so every slime hopped in step. Each model instance now copies
+  the model's animator onto its root body (`Body::setInstanceAnimator`), and its child meshes use it. `play_clip` and the
+  control commands use the body's instance. `cge.animation_time(name)` reads the clock; two slimes started a second apart
+  read different times. Instances made from one model still share its clip data.
 - [x] **6.4** Frame-rate independent test. `DUNGEON_FIXED_STEP` (seconds) makes every frame advance the same game time, and the state file reports `frames`. `tools/test_dungeon_game.ps1` counts its scripted keys in frames and waits on the frame count, so the walk checks hold at any frame rate. Found while doing it: the old checks only passed on slow frames, because the dungeon caps the frame delta.
 - [ ] **6.5** Archers and brutes are still static OBJ models. Rig them like the knight and the slime; give the archer a bow-draw clip for its shots.
 - [ ] **6.6** The game process exited twice between tool calls with no crash record. Watch for it; if it recurs, capture a dump.

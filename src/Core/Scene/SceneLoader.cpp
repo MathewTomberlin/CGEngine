@@ -273,7 +273,9 @@ namespace CGEngine {
                     if (b.contains("animation")) {
                         std::string clip = requireString(b, "animation", "body '" + name + "'");
                         Model* loaded = model.value().second;
-                        Animator* animator = loaded->getAnimator();
+                        Body* root = assets.get<Body>(rootId.value());
+                        Animator* animator = root ? root->findInstanceAnimator() : nullptr;
+                        if (!animator) animator = loaded->getAnimator();
                         const auto& clips = loaded->getAnimationNames();
                         if (!animator || std::find(clips.begin(), clips.end(), clip) == clips.end()) {
                             throw std::invalid_argument("body '" + name + "' references unknown animation '" + clip + "' in model '" + modelPath + "'");

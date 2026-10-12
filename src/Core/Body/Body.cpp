@@ -1,5 +1,6 @@
 #include "Body.h"
 #include "../Engine/Engine.h"
+#include "../Animation/Animator.h"
 
 namespace CGEngine {
     Body::Body(string displayName) : ScriptController(this) {
@@ -14,6 +15,7 @@ namespace CGEngine {
     
     Body::~Body() {
         valid = false;
+        delete instanceAnimator;
         //A Body deleted before its start pass must not reach World::callUninitializedStart after it is freed.
         if (world) world->removeUninitialized(this);
         //The render order is rebuilt each frame, but a Body removed mid-frame would otherwise stay in it until then.
@@ -147,6 +149,18 @@ namespace CGEngine {
             callStaticScripts(StartDomain);
             initialized = true;
         }
+    }
+
+    void Body::setInstanceAnimator(Animator* animator) {
+        delete instanceAnimator;
+        instanceAnimator = animator;
+    }
+
+    Animator* Body::findInstanceAnimator() const {
+        for (const Body* body = this; body; body = body->getParent()) {
+            if (body->instanceAnimator) return body->instanceAnimator;
+        }
+        return nullptr;
     }
 
     Body* Body::getParent() const {

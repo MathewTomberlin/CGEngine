@@ -352,7 +352,7 @@ namespace CGEngine {
 		/// If enabled, Bodies are sorted by their zOrder before rendering each frame.
 		/// </summary>
 		bool zSortingEnabled = true;
-		set<id_t> updatedModels;
+		set<Animator*> updatedAnimators;
 		GLenum initGlew();
 		Program* program;
 		int boundTextures = 0;

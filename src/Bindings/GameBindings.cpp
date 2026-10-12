@@ -157,7 +157,8 @@ void bindGame(py::module_& m) {
                 if (mesh->getModelId().has_value()) model = assets.get<Model>(mesh->getModelId().value());
             }
         });
-        Animator* animator = model ? model->getAnimator() : nullptr;
+        Animator* animator = body->findInstanceAnimator();
+        if (!animator && model) animator = model->getAnimator();
         if (!animator) throw std::runtime_error("body '" + name + "' is not part of a model with animation clips");
         const auto& clips = model->getAnimationNames();
         if (std::find(clips.begin(), clips.end(), clip) == clips.end()) throw std::invalid_argument("no clip named '" + clip + "' on body '" + name + "'");
@@ -166,7 +167,25 @@ void bindGame(py::module_& m) {
         animator->setLooping(looping);
         animator->setPaused(false);
     }, py::arg("name"), py::arg("clip"), py::arg("looping") = true, py::arg("speed") = 1.0f,
-        "Start a clip on the model that a body belongs to. Restarts the clip if it is already playing.");
+        "Start a clip on the model that a body belongs to. Restarts the clip if it is already playing. Each model instance "
+        "(each body made from a model) plays on its own animator, so instances started at different times stay out of step.");
+    m.def("animation_time", [](const std::string& name) {
+        Body* body = findBody(name);
+        if (!body) throw std::runtime_error("no body named '" + name + "'");
+        Animator* animator = body->findInstanceAnimator();
+        if (!animator) {
+            Model* model = nullptr;
+            body->apply([&model](Body* b) {
+                if (model) return;
+                if (Mesh* mesh = b->get<Mesh*>()) {
+                    if (mesh->getModelId().has_value()) model = assets.get<Model>(mesh->getModelId().value());
+                }
+            });
+            animator = model ? model->getAnimator() : nullptr;
+        }
+        if (!animator) throw std::runtime_error("body '" + name + "' is not part of a model with animation clips");
+        return animator->getTimeSeconds();
+    }, py::arg("name"), "Position in the body's current clip, in seconds (its model instance's clock).");
     m.def("create_mesh_body", [](const std::string& name, py::buffer positions, py::buffer normals, py::buffer colours,
                                   py::buffer uvs, py::buffer materialIds, py::buffer indices, std::vector<std::string> materials,
                                   sf::Vector3f position) {
