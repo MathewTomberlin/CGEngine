@@ -44,8 +44,14 @@ walk = clip("brute_walk", 0.9, [
     bone("Body", position=[(0.0, (0, 0, 0)), (0.225, (0, 0, 0.04)), (0.45, (0, 0, 0)), (0.675, (0, 0, 0.04)), (0.9, (0, 0, 0))]),
 ])
 
+# Slam: the club arm swings up and down once, when the brute reaches the player. Holds its last pose.
+slam = clip("brute_slam", 0.7, [
+    bone("ArmR", rotation=[(0.0, (0, 0, 0)), (0.25, (-120, 0, 0)), (0.4, (60, 0, 0)), (0.7, (0, 0, 0))]),
+    bone("Body", rotation=[(0.0, (0, 0, 0)), (0.4, (8, 0, 0)), (0.7, (0, 0, 0))]),
+])
+
 os.makedirs(OUT, exist_ok=True)
-for c in (idle, walk):
+for c in (idle, walk, slam):
     path = os.path.join(OUT, c["name"] + ".json")
     with open(path, "w", encoding="utf-8", newline="\n") as f:
         json.dump(c, f, indent=2)

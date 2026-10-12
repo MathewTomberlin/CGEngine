@@ -52,6 +52,7 @@ ENEMY_STATS = {
 ARCHER_RANGE = (3.0, 5.0)   # an archer backs off inside the first distance and closes in beyond the second
 ARCHER_SHOT_TIME = 2.0      # seconds between shots
 ARCHER_DRAW_TIME = 0.6      # seconds an archer draws its bow for a shot (the archer_draw clip)
+BRUTE_SLAM_TIME = 0.7       # seconds the brute's slam plays when it reaches the player (the brute_slam clip)
 ARCHER_SIGHT = 7.0          # an archer only shoots at a player this close
 BOLT_SPEED = 5.0
 BOLT_HIT_DISTANCE = 0.4
@@ -353,6 +354,9 @@ class DungeonGame(PyScript):
             # Slimes and brutes walk straight at the player. Archers keep to a band of distances and shoot.
             direction = 1.0
             enemy["drawing"] = max(0.0, enemy.get("drawing", 0.0) - dt)
+            if enemy["kind"] == "brute" and distance < CONTACT_DISTANCE + stats["size"] - ENEMY_STATS["slime"]["size"] and enemy.get("drawing", 0.0) <= 0.0:
+                enemy["drawing"] = BRUTE_SLAM_TIME     # the slam shows the blow; the blow itself is the contact below
+                enemy["clip"] = None
             if enemy["kind"] == "archer":
                 if distance < ARCHER_RANGE[0]:
                     direction = -1.0
@@ -488,6 +492,8 @@ class DungeonGame(PyScript):
                 clip, looping = "archer_draw", False
             else:
                 clip, looping = ("archer_walk", True) if moving else ("archer_idle", True)
+        elif enemy.get("drawing", 0.0) > 0.0:
+            clip, looping = "brute_slam", False
         else:
             clip, looping = ("brute_walk", True) if moving else ("brute_idle", True)
         if enemy.get("clip") == clip:
