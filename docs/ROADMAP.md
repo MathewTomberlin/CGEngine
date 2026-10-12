@@ -107,7 +107,7 @@ Goal: the terrain looks rounded and real, the blocks obey physics the scripts ca
 
 ## Phase 11: making the voxel sample feel right to play (from playing it)
 Goal: the world reads well at a human pace, and the engine's own state is easy to see and to test.
-Next, in order: 11.14 and 11.15 (both wait for a snapshot from the player), a C++ body component for 11.9, then the
+Next, in order: 11.14 and 11.15 (both wait for a snapshot from the player), then Phase 12 (block rendering rules), and the
 creatures' own behaviour (they only wander now).
 - [x] **11.1** Mouse look at a quarter of the first setting (0.00625 degrees a pixel, `VOXEL_MOUSE_SENSITIVITY`). Escape
   opens a pause menu: the mouse is freed and the world stands still; Resume locks the mouse; Quit closes the app.
@@ -133,10 +133,10 @@ creatures' own behaviour (they only wander now).
   with the labels and outlines on, and a worst frame of about 5 ms (Release, 841 chunks). The labels and outlines only
   change when their text or target does. The 360 figure came from an earlier build. Debug runs the same world at about 33
   frames a second, so it is not a performance build.
-- [x] **11.9** Entities that walk the terrain: `VoxelWalkers.py` makes creatures that are box meshes moved by the engine's
-  mover (`world.step_body`), so they fall onto the ground, stop at walls, jump a block, and do not pass through terrain
-  that has not loaded. Twelve wander near the spawn. Still open: a C++ body component, so the engine moves any body
-  without a script, and bodies that collide with each other.
+- [x] **11.9** Entities that walk the terrain: `cge.add_voxel_walker` makes a mesh body a walker in C++, moved once per
+  update by the same mover as the player (`VoxelWalker.cpp`). Scripts set the velocity and jumps; the engine does gravity,
+  collisions and the position. `VoxelWalkers.py` makes twelve creatures that wander near the spawn. Still open: bodies
+  that collide with each other, and a walker for any body without a script of its own.
 - [x] **11.10** Player in water: in a liquid block at the feet or chest the player sinks at 1.2 blocks a second, swims up
   at 3 while Space is held, and walks at 60%. The mover runs without gravity while swimming. At the surface, Space jumps
   out onto a bank a block high. The view under the water is a blue-green murk. `tools/test_swimming.ps1` checks the
