@@ -294,12 +294,22 @@ Goal: the player chooses how far they can see, and a long view stays cheap enoug
   set went from 624 MB to a peak of 1,064 MB around the 24th hop, then fell back to 675 MB by the end. So the churn does not
   grow without bound: the peak is the chunks being meshed as they come in, and the heap gives most of it back. Not measured:
   a walk of hours, and the GPU's own memory (the buffers are not in the working set).
-- [x] **15.6** The cap rises from 40 to 60 chunks: `VIEW_STEPS` and `UNLIMITED_VIEW` in `VoxelGame.py`. Measured in Release on
-  this machine, after the region merge (15.5): view 40 is 6,561 chunks, 2.2 million quads, 0.77 GB private memory, 201 frames a
-  second standing; view 60 is 14,641 chunks, 4.5 million quads, 1.46 GB, 94 frames a second standing and 102 walking, loaded in
-  12 s; view 80 is 25,921 chunks, 7.6 million quads, 2.4 GB, 72 frames a second standing, 63 walking and one 132 ms frame, loaded
-  in 28 s. So 80 stays out until the far skins get a coarser tier (a stride of 4 past about 20 chunks), which would cut the quads
-  there. The fog's end follows the view (`VoxelGame.py`), so the far edge stays hazy, not cut off.
+- [x] **15.6** The cap rises from 40 to 60 chunks: `VIEW_STEPS` and `UNLIMITED_VIEW` in `VoxelGame.py`. The memory figures below
+  were taken before 15.7, when the camera clipped at 100 blocks: view 40 is 6,561 chunks, 0.77 GB private memory; view 60 is
+  14,641 chunks, 1.46 GB; view 80 is 25,921 chunks, 2.4 GB. View 80 stays out: its memory and frame rate are too heavy for the cap.
+  The frame rates in this item were not right, see 15.7.
+- [x] **15.7** The camera clipped at 100 blocks, about six chunks, so nothing past it was drawn at any view distance. The camera is
+  now built with a far plane of (view + 1) chunks and a near plane of 0.1 blocks (`Camera::setPlanes`, `set_camera_planes`, and
+  `VoxelGame.set_clip_planes`). The fog still hides the far edge, which is the same distance as before. Screenshots at noon with
+  seed 1 (`VOXEL_SEED=1`) show the terrain fading into the haze at view 14, and forest out to the horizon at view 40.
+  Corrected frame rates, Release on this machine, standing / walking, worst frame:
+  view 14 (841 chunks, 0.56 M quads) 369 to 462 / 354 to 416 fps, worst 5 to 9 ms in two runs; one walking run had a single 114 ms
+  frame that did not come back in two later runs (a second single frame of 108 ms was seen earlier at view 14);
+  view 40 (6,642 chunks, 2.2 M quads) 150 / 150 fps, worst 10 to 14 ms;
+  view 60 (15,004 chunks, 4.6 M quads) 77 / 64 fps, worst 19 to 52 ms, loaded in 15 s.
+  The 15.5 numbers were also measured with the 100-block plane, so the speed-up there (26 to 201 fps at view 40) is real for
+  the same plane but not what the player sees now. Memory was not re-measured with the plane at its new distance.
+
 ## Phase 16: voxel health and damage (from playtesting: one hit breaks everything)
 Goal: blocks and creatures take several hits, and what the player has hit looks hit.
 - [x] **16.1** Block hardness: each block type has a number of hits to break (stone more than dirt, leaves less than wood,

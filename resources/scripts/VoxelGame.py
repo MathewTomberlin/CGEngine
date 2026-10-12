@@ -142,6 +142,7 @@ SMOOTH_RESOLUTION = int(os.environ.get("VOXEL_SMOOTH", "1"))   # samples per blo
 DAY_SECONDS = float(os.environ.get("VOXEL_DAY_SECONDS", "240"))   # real seconds for one day and night
 START_TIME = float(os.environ.get("VOXEL_TIME", "0.3"))           # time of day at the start: 0 sunrise, 0.25 noon, 0.5 sunset
 FOG_START_FRACTION = 0.5             # the fog starts at this fraction of its end distance
+CAMERA_NEAR = 0.1                    # blocks: the nearest surface the camera draws (the engine's default was 0.01)
 
 # Colours of the sky, the fog and the light, blended by the sun's height.
 DAY_SKY = (0.56, 0.76, 0.95)
@@ -262,6 +263,7 @@ class VoxelGame(PyScript):
             self.clock = saved["time_of_day"]
         self.sun = (0.0, -1.0, 0.0)     # the direction the sun's light travels
         self.fog = (0.0, 0.0)           # fog start and end distances, in blocks
+        self.clip_planes = None         # the camera's (near, far) clipping distances, as last set
 
     # ----- engine entry point -------------------------------------------------------------
 
@@ -1367,6 +1369,15 @@ class VoxelGame(PyScript):
                             sun_size=1.6, shadows=SHADOWS and not (self.world is not None and self.eye_in_water()))
         self.sun = travel
         self.fog = (fog_end * FOG_START_FRACTION, fog_end)
+        self.set_clip_planes((self.view_radius + 1) * VoxelGen.CHUNK)
+
+    def set_clip_planes(self, far):
+        """The camera draws out to the edge of the loaded chunks and no farther: the fog hides everything past its end, so the
+        engine's default far plane (100 blocks, about six chunks) was cutting the view short at every setting."""
+        planes = (CAMERA_NEAR, far)
+        if planes != self.clip_planes:
+            cge.set_camera_planes(*planes)
+            self.clip_planes = planes
 
     def place_camera(self):
         eye = self.eye()

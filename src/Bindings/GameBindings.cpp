@@ -268,6 +268,11 @@ void bindGame(py::module_& m) {
         camera->lookAt(target);
     }, py::arg("position"), py::arg("target"), "Place the camera at position (world coordinates, y up) and aim it at target.");
 
+    m.def("set_camera_planes", [](float nearDistance, float farDistance) {
+        if (!renderer) throw std::runtime_error("the renderer is not running yet");
+        renderer->getCurrentCamera()->setPlanes(nearDistance, farDistance);
+    }, py::arg("near"), py::arg("far"), "Set the camera's clipping distances in blocks. Nothing past far is drawn.");
+
     m.def("set_environment", [](std::optional<sf::Vector3f> sky, std::optional<sf::Vector3f> fog, std::optional<float> fogStart,
         std::optional<float> fogEnd, std::optional<sf::Vector3f> zenith, std::optional<sf::Vector3f> sunDirection,
         std::optional<sf::Vector3f> sunColour, std::optional<float> sunSize, std::optional<bool> shadows,
