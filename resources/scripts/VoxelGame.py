@@ -50,9 +50,15 @@ MAX_PITCH = 85.0            # the engine's camera stops at this angle
 FIXED_STEP = float(os.environ["VOXEL_FIXED_STEP"]) if os.environ.get("VOXEL_FIXED_STEP") else None
 SPAWN_HEIGHT = 60.0         # above the tallest column, so the player drops onto the terrain
 RESPAWN_DEPTH = -20.0       # below this the player is put back at the spawn height
-# The blocks the number keys 1 to 7 choose from when placing (the hotbar), and the file the F5 and F9 keys save and load.
+# The blocks the number keys choose from when placing (the hotbar: 1 to 9, then 0 for the tenth), and the file the F5 and F9
+# keys save and load.
 HOTBAR = [VoxelGen.STONE, VoxelGen.DIRT, VoxelGen.GRASS, VoxelGen.WOOD, VoxelGen.LEAVES, VoxelGen.SAND, VoxelGen.GRAVEL,
-          VoxelGen.SNOW, VoxelGen.WATER]
+          VoxelGen.SNOW, VoxelGen.WATER, VoxelGen.LAMP]
+
+
+def hotbar_key(slot):
+    """The number key for a hotbar slot: 1 to 9, then 0 for the tenth."""
+    return str((slot + 1) % 10)
 WALKERS = int(os.environ.get("VOXEL_WALKERS", "12"))   # creatures that wander the terrain near the spawn
 SHADOWS = os.environ.get("VOXEL_SHADOWS", "1") != "0"   # the sun casts shadows (the map covers SHADOW_RADIUS around the camera)
 SHADOW_RADIUS = float(os.environ.get("VOXEL_SHADOW_RADIUS", "40"))
@@ -68,7 +74,7 @@ EDITS_FILE = "cg_control/voxel_edits.bin"
 STATE_INTERVAL = 0.25       # seconds between writes to cg_control/voxel_state.json
 # The outline of the block the crosshair is on (yellow: it is broken), and of the cell a block would be placed in
 # (its own colour, brightened). Both are thin bars around the cube's edges, made as runtime meshes.
-HELP_TEXT = "LMB break  RMB place  WASD move  Space jump  Enter fly  1-9 block  F5/F9 save/load  Esc release"
+HELP_TEXT = "LMB break  RMB place  WASD move  Space jump  Enter fly  0-9 block  F5/F9 save/load  Esc release"
 BREAK_COLOUR = (1.0, 0.85, 0.2)
 HIDDEN_BOX = ((-1.0e6, -1.0e6, -1.0e6), (-1.0e6 + 1.0, -1.0e6 + 1.0, -1.0e6 + 1.0))   # where an outline is put when not shown
 SMOOTH_RESOLUTION = int(os.environ.get("VOXEL_SMOOTH", "1"))   # samples per block for the smooth skin; 0 draws cubes
@@ -413,7 +419,7 @@ class VoxelGame(PyScript):
             self.set_target_text(text)
         slots = []
         for slot, block in enumerate(HOTBAR):
-            label = "%d %s" % (slot + 1, VoxelGen.NAMES[block])
+            label = "%s %s" % (hotbar_key(slot), VoxelGen.NAMES[block])
             slots.append("[%s]" % label if slot == self.slot else label)
         self.set_hotbar("  ".join(slots))
 
@@ -596,7 +602,7 @@ class VoxelGame(PyScript):
 
     def choose_hotbar(self):
         for slot in range(len(HOTBAR)):
-            if self.pressed("Slot%d" % slot, bool(cge.key_down(str(slot + 1)))):
+            if self.pressed("Slot%d" % slot, bool(cge.key_down(hotbar_key(slot)))):
                 self.slot = slot
 
     def snapshot_key(self):
