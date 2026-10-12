@@ -8,7 +8,7 @@ the chunks near the player, unloads far ones, moves the player, and handles mous
 Controls: W A S D walk, Space jumps, Enter toggles flying (then Space rises and R falls). Mouse: left-click captures
 the mouse; move it to look, left-click breaks the block under the crosshair, right-click places the selected item against
 it, and Escape releases the mouse. Without the mouse: arrow keys turn and look, J breaks, K places. I opens the inventory,
-C toggles creative mode (placing takes nothing from the slots). VOXEL_SEED chooses a world.
+C toggles creative mode (placing takes nothing from the slots, and the player cannot be hurt). VOXEL_SEED chooses a world.
 """
 import json
 import math
@@ -1211,8 +1211,9 @@ class VoxelGame(PyScript):
                     self.hurt_player((fall - FALL_SAFE) * FALL_DAMAGE)
 
     def hurt_player(self, amount):
-        """The player loses health (a bite, a fall). At zero the player is back at the spawn, healed, with the inventory kept."""
-        if amount <= 0.0:
+        """The player loses health (a bite, a fall). At zero the player is back at the spawn, healed, with the inventory kept.
+        Creative mode is invincible: nothing hurts the player."""
+        if amount <= 0.0 or self.creative:
             return
         self.health -= amount
         self.hurt_at = time.time()
