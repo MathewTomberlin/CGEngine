@@ -6,8 +6,9 @@ terrain, meshes the chunks and uploads them on background threads, within a time
 the chunks near the player, unloads far ones, moves the player, and handles mouse look and breaking and placing.
 
 Controls: W A S D walk, Space jumps, Enter toggles flying (then Space rises and R falls). Mouse: left-click captures
-the mouse; move it to look, left-click breaks the block under the crosshair, right-click places stone against it, and
-Escape releases the mouse. Without the mouse: arrow keys turn and look, J breaks, K places. VOXEL_SEED chooses a world.
+the mouse; move it to look, left-click breaks the block under the crosshair, right-click places the selected item against
+it, and Escape releases the mouse. Without the mouse: arrow keys turn and look, J breaks, K places. I opens the inventory,
+C toggles creative mode (placing takes nothing from the slots). VOXEL_SEED chooses a world.
 """
 import json
 import math
@@ -19,6 +20,7 @@ import cg_engine_bindings as cge
 from PyScript import PyScript
 import StateFile
 import VoxelGen
+import VoxelInventory
 import VoxelPhysics as physics
 from VoxelShapes import mix, outline_arrays
 import VoxelWalkers
@@ -55,12 +57,25 @@ MAX_PITCH = 85.0            # the engine's camera stops at this angle
 FIXED_STEP = float(os.environ["VOXEL_FIXED_STEP"]) if os.environ.get("VOXEL_FIXED_STEP") else None
 SPAWN_HEIGHT = 60.0         # above the tallest column, so the player drops onto the terrain
 RESPAWN_DEPTH = -20.0       # below this the player is put back at the spawn height
-# The blocks the keys choose from when placing (the hotbar: 1 to 9, then 0, - and = for the tenth to twelfth), and the file the
-# F5 and F9 keys save and load.
-HOTBAR = [VoxelGen.STONE, VoxelGen.DIRT, VoxelGen.GRASS, VoxelGen.WOOD, VoxelGen.LEAVES, VoxelGen.SAND, VoxelGen.GRAVEL,
-          VoxelGen.SNOW, VoxelGen.WATER, VoxelGen.LAMP, VoxelGen.BRICK, VoxelGen.TORCH]
+# The items the player starts with, in the hotbar (keys 1 to 9, then 0, - and = for the tenth to twelfth slot), and how many
+# of each. The inventory (VoxelInventory) holds them from there. The files the F5 and F9 keys save and load are the edits and,
+# beside them, the inventory.
+START_ITEMS = [VoxelGen.STONE, VoxelGen.DIRT, VoxelGen.GRASS, VoxelGen.WOOD, VoxelGen.LEAVES, VoxelGen.SAND, VoxelGen.GRAVEL,
+               VoxelGen.SNOW, VoxelGen.WATER, VoxelGen.LAMP, VoxelGen.BRICK, VoxelGen.TORCH]
+START_COUNT = 16
 DIRECTION_INDEX = {d: i for i, d in enumerate(VoxelGen.DIRECTIONS)}   # a direction to the dir that a prop uses for it
 HOTBAR_KEYS = "1234567890-="
+COLUMNS = VoxelInventory.COLUMNS
+ROWS = VoxelInventory.ROWS
+SLOTS = VoxelInventory.SLOTS
+SLOT_SIZE = 52              # pixels, a side, of a slot on the hotbar and the inventory screen
+SLOT_GAP = 6                # pixels between slots
+HUD_BOTTOM = 14             # pixels between the hotbar and the bottom of the window
+NOTICE_SECONDS = 1.5        # how long a notice ("Inventory full") stays on screen
+WHITE = (1.0, 1.0, 1.0)
+HIT_FLASH_SECONDS = 0.12    # the aimed block's outline is white this long after a hit
+INVENTORY_FILE = "cg_control/voxel_inventory.json"
+EDITS_FILE = "cg_control/voxel_edits.bin"
 
 
 def ray_box(origin, direction, centre, half):
@@ -100,11 +115,10 @@ SIM_BUDGET_MS = 1.5          # time per frame for the block physics (falling san
 SIM_TICK = float(os.environ.get("VOXEL_SIM_TICK", "0.25"))
 NEAR_RADIUS = int(os.environ.get("VOXEL_NEAR_RADIUS", "3"))     # chunks around the player that get the finer skin
 NEAR_SAMPLES = int(os.environ.get("VOXEL_NEAR_SAMPLES", "2"))   # samples per block there (the far chunks use VOXEL_SMOOTH)
-EDITS_FILE = "cg_control/voxel_edits.bin"
 STATE_INTERVAL = 0.25       # seconds between writes to cg_control/voxel_state.json
 # The outline of the block the crosshair is on (yellow: it is broken), and of the cell a block would be placed in
 # (its own colour, brightened). Both are thin bars around the cube's edges, made as runtime meshes.
-HELP_TEXT = "LMB break  RMB place  WASD move  Space jump  Enter fly  1-0 - = block  F5/F9 save/load  Esc release"
+HELP_TEXT = "LMB break  RMB place  WASD move  Space jump  Enter fly  1-0 - = slot  I inventory  C creative  F5/F9 save/load  Esc release"
 BREAK_COLOUR = (1.0, 0.85, 0.2)
 HIDDEN_BOX = ((-1.0e6, -1.0e6, -1.0e6), (-1.0e6 + 1.0, -1.0e6 + 1.0, -1.0e6 + 1.0))   # where an outline is put when not shown
 SMOOTH_RESOLUTION = int(os.environ.get("VOXEL_SMOOTH", "1"))   # samples per block for the smooth skin; 0 draws cubes
@@ -199,6 +213,17 @@ class VoxelGame(PyScript):
         self.outline_keys = {}          # the last outline shown under each name, so unchanged ones are not re-uploaded
         self.outline_bodies = set()     # the outlines already made as runtime meshes
         self.slot = 0                   # the hotbar slot placing uses
+        self.inventory = VoxelInventory.Inventory()   # what the player holds, by slot (the hotbar is the first row)
+        self.creative = os.environ.get("VOXEL_CREATIVE", "0") == "1"   # placing takes nothing, breaking gives nothing
+        self.inventory_open = False     # the inventory screen is up: the world stands still and the mouse is free
+        self.inventory_hover = None     # the slot under the mouse on the inventory screen
+        self.mouse_before_inventory = False   # the mouse was captured when the screen opened, so it is again when it closes
+        self.notice = ""                # a short message on the HUD ("Inventory full"), shown until notice_until
+        self.notice_until = 0.0
+        self.flash_until = 0.0          # the aimed block's outline is white until this time, after a hit
+        self.window = None              # the window's size, set when the HUD is made
+        self.bodies = set()             # the HUD's rectangle and text bodies, made once each
+        self.drawn = {}                 # the last value set on each HUD body, so unchanged ones are not set again
         # The time of day: VOXEL_TIME if it is set, else the time the player last chose on the settings page, else START_TIME.
         if "VOXEL_TIME" in os.environ or saved["time_of_day"] is None:
             self.clock = START_TIME % 1.0   # fraction of a day
@@ -247,9 +272,14 @@ class VoxelGame(PyScript):
             self.setup_hud()
             self.hud_ready = True
         self.update_pause_key()
+        self.update_inventory_key()
         if self.paused:
             # The world stands still while the menu is open: no time passes, no block moves, the player does not move.
             self.update_pause_menu()
+            dt = 0.0
+        elif self.inventory_open:
+            # The inventory screen stands the world still too, and frees the mouse for its slots.
+            self.update_inventory()
             dt = 0.0
         else:
             self.world.simulate(dt, SIM_BUDGET_MS, SIM_TICK)
@@ -294,6 +324,7 @@ class VoxelGame(PyScript):
         cge.set_environment(shadows=SHADOWS, shadow_radius=SHADOW_RADIUS)
         self.world.set_terrain(self.seed, VoxelGen.SEA_LEVEL, 8, 44, VoxelGen.SNOW_LEVEL, VoxelGen.TREE_CHANCE,
                           VoxelGen.CAVE_WIDTH)
+        self.inventory.start(START_ITEMS, START_COUNT)
 
     def setup_hud(self):
         """Two labels: the top left holds what the crosshair is on and the controls; the hotbar sits along the bottom."""
@@ -302,14 +333,12 @@ class VoxelGame(PyScript):
         cge.create_text_body("hud_target", "", "hud", cge.Vector2f(14, 10), 16, outline_thickness=HUD_OUTLINE)
         cge.create_text_body("hud_help", HELP_TEXT, "hud", cge.Vector2f(14, 34), 14, cge.Color(200, 200, 200),
                              outline_thickness=HUD_OUTLINE)
-        cge.create_text_body("hud_hotbar", "", "hud", cge.Vector2f(14, cge.window_size().y - 34), 16,
-                             outline_thickness=HUD_OUTLINE)
         # A small cross at the middle of the window: the block the crosshair is on is outlined, and this shows where the aim is.
         size = cge.window_size()
+        self.window = size
         cge.create_text_body("hud_cross", "+", "hud", cge.Vector2f(size.x / 2 - 6, size.y / 2 - 13), 22,
                              outline_thickness=HUD_OUTLINE)
         self.target_text = ""
-        self.hotbar_text = ""
         # The pause menu, drawn only while the game is paused (its labels are empty otherwise). Each item has a click
         # rectangle (left, top, right, bottom) in window pixels, or None if it is not clickable, and a text position.
         self.menu_text = {}
@@ -365,6 +394,11 @@ class VoxelGame(PyScript):
         return text
 
     def update_pause_key(self):
+        if self.inventory_open:
+            # Escape closes the inventory screen first; the menu opens on the next press.
+            if self.pressed("Pause", bool(cge.key_down("Escape"))):
+                self.close_inventory()
+            return
         if self.pressed("Pause", bool(cge.key_down("Escape"))):
             if not self.paused:
                 self.pause()
@@ -460,21 +494,18 @@ class VoxelGame(PyScript):
             self.target_text = text
             cge.set_text_body("hud_target", text)
 
-    def set_hotbar(self, text):
-        if self.hotbar_text != text:
-            self.hotbar_text = text
-            cge.set_text_body("hud_hotbar", text)
-
     def update_hud(self):
         if not self.hud_ready:
             return
-        # The crosshair is for aiming, so it is hidden while the pause menu is open.
-        self.set_menu_text("hud_cross", "" if self.paused else "+")
+        # The crosshair is for aiming, so it is hidden while a menu or the inventory is open.
+        self.set_menu_text("hud_cross", "" if self.paused or self.inventory_open else "+")
         biome = self.world.biome_at(math.floor(self.pos[0]), math.floor(self.pos[2])).capitalize()
-        if self.paused:
+        if self.paused or self.inventory_open:
             self.set_target_text("")
         elif not self.mouse_captured:
             self.set_target_text("%s.  Click the game to capture the mouse" % biome)
+        elif self.aims_at_torch():
+            self.set_target_text("%s.  Looking at: torch   (left click: take it back)" % biome)
         elif self.target is None:
             self.set_target_text("%s.  Looking at: nothing in reach" % biome)
         else:
@@ -482,13 +513,137 @@ class VoxelGame(PyScript):
             text = "%s.  Looking at: %s" % (biome, VoxelGen.NAMES.get(self.world.get_block(*block), "?"))
             cell = (block[0] + normal[0], block[1] + normal[1], block[2] + normal[2])
             if normal != (0, 0, 0) and not physics.cell_in_player(cell, self.pos):
-                text += "   (right click: %s)" % VoxelGen.NAMES[HOTBAR[self.slot]]
+                text += "   (right click: %s)" % self.selected_name()
             self.set_target_text(text)
-        slots = []
-        for slot, block in enumerate(HOTBAR):
-            label = "%s %s" % (hotbar_key(slot), VoxelGen.NAMES[block])
-            slots.append("[%s]" % label if slot == self.slot else label)
-        self.set_hotbar("  ".join(slots))
+        self.update_slots()
+        self.update_inventory_screen()
+        self.update_notice()
+
+    # ----- the HUD's boxes: the hotbar, the inventory screen, the held stack and notices -----------
+
+    def draw_rect(self, name, box, fill, outline=(0, 0, 0, 0), thickness=0, layer=990):
+        """A rectangle on the HUD, made the first time at the layer (its z order). box is (x, y, width, height) in window pixels;
+        fill and outline are (r, g, b, a) with 0 to 255 channels. It is only moved or recoloured when its value changes."""
+        key = (box, fill, outline, thickness)
+        if self.drawn.get(name) == key:
+            return
+        self.drawn[name] = key
+        position, size = cge.Vector2f(box[0], box[1]), cge.Vector2f(box[2], box[3])
+        if name in self.bodies:
+            cge.set_rect_body(name, position, size, cge.Color(*fill), cge.Color(*outline), float(thickness))
+        else:
+            self.bodies.add(name)
+            cge.create_rect_body(name, position, size, cge.Color(*fill), cge.Color(*outline), float(thickness), z_order=layer)
+
+    def draw_text(self, name, text, position, size, colour=(255, 255, 255, 255)):
+        """A label on the HUD at position (window pixels). Its text, and its position, change only when they differ from last time."""
+        key = (text, position)
+        if self.drawn.get(name) == key:
+            return
+        self.drawn[name] = key
+        if name in self.bodies:
+            cge.set_text_body(name, text, position=cge.Vector2f(position[0], position[1]))
+        else:
+            self.bodies.add(name)
+            cge.create_text_body(name, text, "hud", cge.Vector2f(position[0], position[1]), size, cge.Color(*colour),
+                                 outline_thickness=HUD_OUTLINE)
+
+    def hide_rect(self, name, box):
+        self.draw_rect(name, box, (0, 0, 0, 0))
+
+    def item_colour(self, item):
+        """An item's colour as (r, g, b, 255), for its swatch."""
+        r, g, b = VoxelGen.COLOURS.get(item, WHITE)
+        return (int(r * 255), int(g * 255), int(b * 255), 255)
+
+    def slot_origin(self, index):
+        """The top left corner of a slot, in window pixels. Row 0, the hotbar, is at the bottom of the window; rows 1 and 2
+        (slots 12 to 35) stand above it when the inventory is open."""
+        row, column = divmod(index, COLUMNS)
+        row_width = COLUMNS * SLOT_SIZE + (COLUMNS - 1) * SLOT_GAP
+        left = (self.window.x - row_width) / 2 + column * (SLOT_SIZE + SLOT_GAP)
+        top = self.window.y - HUD_BOTTOM - SLOT_SIZE - row * (SLOT_SIZE + SLOT_GAP)
+        return left, top
+
+    def slot_at(self, x, y):
+        """The slot under a window point, or None. Only the rows on screen count: the hotbar, or all three rows with the inventory open."""
+        rows = ROWS if self.inventory_open else 1
+        for index in range(COLUMNS * rows):
+            left, top = self.slot_origin(index)
+            if left <= x < left + SLOT_SIZE and top <= y < top + SLOT_SIZE:
+                return index
+        return None
+
+    def update_slots(self):
+        """The hotbar, and with the inventory open its two other rows: a box per slot, a swatch of the item's colour and the count.
+        The selected slot is outlined in yellow and the slot under the mouse in white. Under the pause menu they are not drawn."""
+        rows = ROWS if self.inventory_open else 1
+        for index in range(SLOTS):
+            row = index // COLUMNS
+            left, top = self.slot_origin(index)
+            box = (left, top, SLOT_SIZE, SLOT_SIZE)
+            shown = row < rows and not self.paused
+            stack = self.inventory.slots[index] if shown else None
+            if not shown:
+                self.hide_rect("slot_%d" % index, box)
+                self.hide_rect("swatch_%d" % index, box)
+                self.draw_text("count_%d" % index, "", (left, top), 14)
+                self.draw_text("key_%d" % index, "", (left, top), 12)
+                continue
+            if index == self.slot and row == 0:
+                edge, width = (255, 217, 51, 255), 3
+            elif index == self.inventory_hover:
+                edge, width = (255, 255, 255, 255), 2
+            else:
+                edge, width = (90, 90, 100, 255), 2
+            self.draw_rect("slot_%d" % index, box, (20, 20, 26, 190), edge, width, layer=991)
+            inset = 7
+            swatch = (left + inset, top + inset, SLOT_SIZE - 2 * inset, SLOT_SIZE - 2 * inset)
+            if stack:
+                self.draw_rect("swatch_%d" % index, swatch, self.item_colour(stack[0]), (0, 0, 0, 170), 1, layer=992)
+            else:
+                self.hide_rect("swatch_%d" % index, swatch)
+            count = str(stack[1]) if stack and stack[1] > 1 else ""
+            self.draw_text("count_%d" % index, count, (left + 5, top + SLOT_SIZE - 21), 14)
+            key = hotbar_key(index) if row == 0 else ""
+            self.draw_text("key_%d" % index, key, (left + 4, top + 1), 12, (200, 200, 200, 255))
+
+    def update_inventory_screen(self):
+        """The inventory screen: a panel over the two rows above the hotbar, its title and how to use it, and the held stack, which
+        follows the mouse. All of it is hidden while the screen is closed."""
+        width = COLUMNS * SLOT_SIZE + (COLUMNS - 1) * SLOT_GAP
+        left, top = self.slot_origin(2 * COLUMNS)
+        bottom = self.slot_origin(0)[1] + SLOT_SIZE
+        panel = (left - 14, top - 46, width + 28, bottom + 8 - (top - 46))
+        if self.inventory_open:
+            self.draw_rect("inv_panel", panel, (12, 12, 16, 225), (130, 130, 140, 255), 2, layer=980)
+            self.draw_text("inv_title", "Inventory", (panel[0] + 14, panel[1] + 4), 22)
+            self.draw_text("inv_hint", "Left click: take or put down a stack    Right click: half, or one    I or Esc: close",
+                           (panel[0] + 14, panel[1] + 28), 13, (200, 200, 200, 255))
+        else:
+            self.hide_rect("inv_panel", panel)
+            self.draw_text("inv_title", "", (0, 0), 22)
+            self.draw_text("inv_hint", "", (0, 0), 13)
+        held = self.inventory.held if self.inventory_open else None
+        if held is None:
+            self.hide_rect("held", (0, 0, 1, 1))
+            self.draw_text("held_count", "", (0, 0), 14)
+            return
+        mouse_x, mouse_y = cge.mouse_position()
+        size = SLOT_SIZE - 14
+        self.draw_rect("held", (mouse_x - size / 2, mouse_y - size / 2, size, size), self.item_colour(held[0]),
+                       (0, 0, 0, 200), 1, layer=995)
+        count = str(held[1]) if held[1] > 1 else ""
+        self.draw_text("held_count", count, (mouse_x - size / 2 + 4, mouse_y + size / 2 - 16), 14)
+
+    def notify(self, text):
+        """Show a short message on the HUD, under the crosshair, for NOTICE_SECONDS."""
+        self.notice = text
+        self.notice_until = time.time() + NOTICE_SECONDS
+
+    def update_notice(self):
+        text = self.notice if time.time() < self.notice_until else ""
+        self.draw_text("hud_notice", text, (self.window.x / 2 - 90, self.window.y / 2 + 26), 18, (255, 220, 120, 255))
 
     def request_chunks(self, centre):
         """Ask for every chunk in the view that is not requested yet, nearest first. Unload the far ones."""
@@ -638,22 +793,56 @@ class VoxelGame(PyScript):
         self.target = physics.raycast(self.solid, start, look, max_distance=physics.REACH + 0.5)
 
     def torch_under_aim(self, eye, look):
-        """The nearest torch the look ray meets within reach, as (distance, cell), or None. The boxes are the ones the torch is
-        drawn with (VoxelWorld.prop_boxes), so the player aims at what they see."""
+        """The nearest torch the look ray meets within reach, as (distance, cell, lo, hi), or None: lo and hi are the corners of
+        the box round the whole torch (its stick and its flame). The boxes are the ones the torch is drawn with
+        (VoxelWorld.prop_boxes), so the player aims at what they see."""
         best = None
         for x, y, z, dir, stick, stick_half, flame, flame_half in self.world.prop_boxes():
             for centre, half in ((stick, stick_half), (flame, flame_half)):
                 t = ray_box(eye, look, centre, half)
                 if t is not None and t <= physics.REACH and (best is None or t < best[0]):
-                    best = (t, (x, y, z))
+                    lo = tuple(min(stick[i] - stick_half[i], flame[i] - flame_half[i]) for i in range(3))
+                    hi = tuple(max(stick[i] + stick_half[i], flame[i] + flame_half[i]) for i in range(3))
+                    best = (t, (x, y, z), lo, hi)
         return best
 
+    def aims_at_torch(self):
+        """True when the crosshair is on a torch that is nearer than the block behind it: a break takes the torch then."""
+        if self.torch_target is None:
+            return False
+        if self.target is None:
+            return True
+        block = self.target[0]
+        eye = self.eye()
+        block_distance = math.dist(eye, (block[0] + 0.5, block[1] + 0.5, block[2] + 0.5))
+        return self.torch_target[0] < block_distance
+
+    def selected(self):
+        """The item in the hotbar slot placing uses, or None when that slot is empty."""
+        return self.inventory.item(self.slot)
+
+    def selected_name(self):
+        item = self.selected()
+        return "empty slot" if item is None else VoxelGen.NAMES[item]
+
+    def gain(self, item, amount=1):
+        """Put broken blocks (or torches) into the inventory. Creative mode keeps no stock, so nothing is added."""
+        if not self.creative:
+            self.inventory.add(item, amount)
+
+    def spend(self):
+        """Placing takes one from the selected slot. Creative mode takes nothing."""
+        if not self.creative:
+            self.inventory.take(self.slot, 1)
+
     def drop_torches_on(self, block):
-        """Torches leaning on a block that is broken are broken too: each one is in a cell beside it, pointing at it."""
+        """Torches leaning on a block that is broken are broken too, and go back into the inventory: each one is in a cell beside
+        it, pointing at it."""
         for dir, d in enumerate(VoxelGen.DIRECTIONS):
             cell = (block[0] + d[0], block[1] + d[1], block[2] + d[2])
             if self.world.prop_at(*cell) == DIRECTION_INDEX[(-d[0], -d[1], -d[2])]:
                 self.world.remove_prop(*cell)
+                self.gain(VoxelGen.TORCH)
 
     def show_outline(self, name, box, colour):
         """Show the outline of box (lo, hi) in colour as the runtime mesh called name, or hide it when box is None."""
@@ -670,24 +859,35 @@ class VoxelGame(PyScript):
             self.outline_bodies.add(name)
 
     def update_outlines(self):
-        """Outline the block the crosshair is on, and the cell a block would go into, in the colour it would have."""
-        if self.target is None or self.paused:
+        """Outline what a break takes (the block the crosshair is on, or the torch it is on), and the cell the selected item
+        would go into, in the colour it would have. A hit flashes the break outline white for a moment."""
+        if self.paused or self.inventory_open:
+            self.show_outline("target_break", None, None)
+            self.show_outline("target_place", None, None)
+            return
+        if self.aims_at_torch():
+            self.show_outline("target_break", (self.torch_target[2], self.torch_target[3]), BREAK_COLOUR)
+            self.show_outline("target_place", None, None)
+            return
+        if self.target is None:
             self.show_outline("target_break", None, None)
             self.show_outline("target_place", None, None)
             return
         block, normal = self.target
+        flash = time.time() < self.flash_until
         self.show_outline("target_break", (tuple(float(v) for v in block),
-                                           tuple(float(v + 1) for v in block)), BREAK_COLOUR)
+                                           tuple(float(v + 1) for v in block)), WHITE if flash else BREAK_COLOUR)
         cell = (block[0] + normal[0], block[1] + normal[1], block[2] + normal[2])
-        if normal == (0, 0, 0) or physics.cell_in_player(cell, self.pos):
+        item = self.selected()
+        if normal == (0, 0, 0) or physics.cell_in_player(cell, self.pos) or item is None:
             self.show_outline("target_place", None, None)
             return
-        colour = mix(VoxelGen.COLOURS.get(HOTBAR[self.slot], (1.0, 1.0, 1.0)), (1.0, 1.0, 1.0), 0.4)
+        colour = mix(VoxelGen.COLOURS.get(item, (1.0, 1.0, 1.0)), (1.0, 1.0, 1.0), 0.4)
         self.show_outline("target_place", (tuple(float(v) for v in cell),
                                            tuple(float(v + 1) for v in cell)), colour)
 
     def choose_hotbar(self):
-        for slot in range(len(HOTBAR)):
+        for slot in range(COLUMNS):
             if self.pressed("Slot%d" % slot, bool(cge.key_down(hotbar_key(slot)))):
                 self.slot = slot
 
@@ -701,53 +901,127 @@ class VoxelGame(PyScript):
             self.write_state(os.path.join(folder, "state_%s.json" % stamp))
 
     def save_and_load(self):
+        """F5 saves the edits and the inventory, F9 loads them. The held stack goes back into the inventory first, so a save
+        does not lose it."""
         if self.pressed("Save", bool(cge.key_down("F5"))):
             os.makedirs("cg_control", exist_ok=True)
             self.world.settle_moves()   # blocks in flight land first, so none is missing from the file
             self.world.save_edits(EDITS_FILE)
+            self.inventory.return_held()
+            StateFile.write_json(INVENTORY_FILE, {"slots": self.inventory.to_list(), "slot": self.slot})
+            self.notify("Saved")
         if self.pressed("Load", bool(cge.key_down("F9"))):
             self.world.load_edits(EDITS_FILE)
+            self.load_inventory()
+            self.notify("Loaded")
+
+    def load_inventory(self):
+        """The inventory saved with the edits. A missing or unreadable file keeps the inventory the player has."""
+        try:
+            with open(INVENTORY_FILE) as f:
+                data = json.load(f)
+            self.inventory.load_list(data.get("slots", []))
+            self.slot = int(data.get("slot", self.slot)) % COLUMNS
+        except (OSError, ValueError, TypeError, AttributeError):
+            pass
+
+    def update_modes(self):
+        """C toggles creative mode: placing takes nothing from the slots, and breaking adds nothing to them."""
+        if self.pressed("Creative", bool(cge.key_down("C"))):
+            self.creative = not self.creative
+            self.notify("Creative mode on" if self.creative else "Creative mode off")
+
+    def update_inventory_key(self):
+        """I opens the inventory screen, or closes it. It does not open over the pause menu."""
+        if self.pressed("Inventory", bool(cge.key_down("I"))):
+            if self.inventory_open:
+                self.close_inventory()
+            elif not self.paused:
+                self.open_inventory()
+
+    def open_inventory(self):
+        self.inventory_open = True
+        self.inventory_hover = None
+        self.mouse_before_inventory = self.mouse_captured
+        cge.set_mouse_captured(False)
+        self.mouse_captured = False
+
+    def close_inventory(self):
+        self.inventory_open = False
+        self.inventory_hover = None
+        self.inventory.return_held()
+        if self.mouse_before_inventory:
+            cge.set_mouse_captured(True)
+            self.mouse_captured = True
+
+    def update_inventory(self):
+        """The inventory screen: the left button takes or puts down a whole stack in the slot under the mouse, and the right takes
+        half or puts one down (VoxelInventory.click). The buttons are read every frame, so a press is counted once."""
+        mouse_x, mouse_y = cge.mouse_position()
+        self.inventory_hover = self.slot_at(mouse_x, mouse_y)
+        left = self.pressed("InventoryLeft", bool(cge.mouse_down("Left")))
+        right = self.pressed("InventoryRight", bool(cge.mouse_down("Right")))
+        if self.inventory_hover is None:
+            return
+        if left:
+            self.inventory.click(self.inventory_hover)
+        if right:
+            self.inventory.click(self.inventory_hover, secondary=True)
 
     def edit_blocks(self):
         self.choose_hotbar()
+        self.update_modes()
         self.save_and_load()
         self.snapshot_key()
         break_down = self.mouse_captured and bool(cge.mouse_down("Left"))
         place_down = self.mouse_captured and bool(cge.mouse_down("Right"))
         breaking = self.pressed("Break", break_down or bool(cge.key_down("J")))
         placing = self.pressed("Place", place_down or bool(cge.key_down("K")))
-        torch = self.torch_target
-        if breaking and torch is not None:
-            # A torch the crosshair is on, nearer than the block behind it, is the one broken.
-            block_distance = None
-            if self.target is not None:
-                eye = self.eye()
-                block = self.target[0]
-                block_distance = math.dist(eye, (block[0] + 0.5, block[1] + 0.5, block[2] + 0.5))
-            if block_distance is None or torch[0] < block_distance:
-                self.world.remove_prop(*torch[1])
-                return
+        if breaking and self.aims_at_torch():
+            # A torch the crosshair is on, nearer than the block behind it, is the one broken, and it goes into the inventory.
+            if self.creative or self.inventory.fits(VoxelGen.TORCH):
+                self.world.remove_prop(*self.torch_target[1])
+                self.gain(VoxelGen.TORCH)
+            else:
+                self.notify("Inventory full")
+            return
         if self.target is None or not (breaking or placing):
             return
         block, normal = self.target
         if breaking:
-            # A block takes its hits (VoxelGen.HITS) to break: this hit breaks it when hit_block says -1.
+            # A block takes its hits (VoxelGen.HITS) to break. The hit that would break it needs room for it in the inventory;
+            # a hit that leaves it standing does not, so a full inventory can still damage a block.
+            kind = self.world.get_block(*block)
+            breaks = self.world.damage_at(*block) + 1 >= VoxelGen.HITS.get(kind, 1)
+            if breaks and not self.creative and not self.inventory.fits(kind):
+                self.notify("Inventory full")
+                return
             stage = self.world.hit_block(block[0], block[1], block[2])
+            if stage != -2:
+                self.flash_until = time.time() + HIT_FLASH_SECONDS
             if stage == -1:
                 self.hit_times.pop(tuple(block), None)
                 self.drop_torches_on(block)
+                self.gain(kind)
             elif stage > 0:
                 self.hit_times[tuple(block)] = time.time()
         elif placing:
             cell = (block[0] + normal[0], block[1] + normal[1], block[2] + normal[2])
             if physics.cell_in_player(cell, self.pos):
                 return
-            if HOTBAR[self.slot] == VoxelGen.TORCH:
+            item = self.selected()
+            if item is None:
+                if not self.creative:
+                    self.notify("This slot is empty")
+                return
+            if item == VoxelGen.TORCH:
                 # A torch goes on a face: into the air cell in front of a solid block, leaning on it.
                 if self.world.is_solid(block[0], block[1], block[2]) and self.world.get_block(cell[0], cell[1], cell[2]) == VoxelGen.AIR:
                     self.world.set_prop(cell[0], cell[1], cell[2], DIRECTION_INDEX[(-normal[0], -normal[1], -normal[2])])
+                    self.spend()
             else:
-                self.world.set_block(cell[0], cell[1], cell[2], HOTBAR[self.slot])
+                self.world.set_block(cell[0], cell[1], cell[2], item)
+                self.spend()
 
     # ----- sky ----------------------------------------------------------------------------
 
@@ -833,7 +1107,8 @@ class VoxelGame(PyScript):
                  "upload_ms": round(stats["upload_ms"], 3), "edits": stats["edits"], "slot": self.slot,
                  "smoothing": self.world.smoothing(), "active": self.world.active_count(), "paused": self.paused,
                  "menu": self.menu_page if self.paused else None, "sensitivity": self.sensitivity, "view_radius": self.view_radius,
-                 "seed": self.seed, "frames": self.frames,
+                 "seed": self.seed, "frames": self.frames, "inventory": self.inventory.to_list(), "creative": self.creative,
+                 "inventory_open": self.inventory_open,
                  "player": [round(v, 3) for v in self.pos], "on_ground": self.on_ground, "flying": self.flying,
                  "swimming": self.swimming, "walkers": len(self.walkers.walkers) if self.walkers else 0,
                  "biome": self.world.biome_at(math.floor(self.pos[0]), math.floor(self.pos[2])),

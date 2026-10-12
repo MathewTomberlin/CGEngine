@@ -30,12 +30,22 @@ rate, build and run the Release configuration.
   game, and applies at once. `VOXEL_MOUSE_SENSITIVITY` sets the base look speed in degrees per pixel (0.00625 by default),
   and `VOXEL_SETTINGS` moves the settings file.
 - Without the mouse: the arrow keys turn and look, J hits, K places. A block takes several hits (stone three, wood four, coal four, iron five, the rest one), and a
-  damaged block is shown darker; the last hit breaks it. L lights or puts out the torch you carry, which
+  damaged block is shown darker; the last hit breaks it. The aimed block's outline flashes white on a hit. L lights or puts out the torch you carry, which
   lights the cave around you.
-- Keys 1 to 9, 0, - and = choose the block to place (the hotbar: stone, dirt, grass, wood, leaves, sand, gravel, snow, water,
-  the lamp (0, a light block), brick (-), and a torch (=)). A torch goes on the face of a block you aim at; aim at it to break
-  it. Sand and gravel fall, and water falls and flows. F5 saves the edited blocks to `cg_control/voxel_edits.bin`, and F9 loads them back. F12 saves a screenshot and the
-  game state to `cg_control/snapshots/` (use it when something looks wrong).
+- Keys 1 to 9, 0, - and = choose a hotbar slot (the first row of the inventory: 12 slots, drawn as boxes at the bottom of the
+  window). The player starts with 16 each of stone, dirt, grass, wood, leaves, sand, gravel, snow, water, the lamp, brick and
+  torches, one kind to a slot. Breaking a block puts it in the inventory, and placing takes one from the selected slot, so
+  the stock runs out and has to be mined; a stack holds 64, and a break that would finish a block is refused when the
+  inventory has no room for it (the HUD says "Inventory full"). A torch goes on the face of a block you aim at; aim at it to
+  break it, and it goes back into the inventory. Sand and gravel fall, and water falls and flows.
+- I opens the inventory: the two rows above the hotbar, with a panel and the mouse free (the world stands still while it is
+  open). A left click takes a whole stack from a slot, and a left click on another slot puts it down (onto the same item up
+  to 64, or swapping with a different one). A right click takes half a stack, or puts one down. I or Escape closes it, and
+  the stack in the cursor goes back into the inventory. The swatches are the blocks' colours until there are textures.
+- C toggles creative mode: placing takes nothing from the slots and breaking adds nothing to them (the old unlimited
+  building). `VOXEL_CREATIVE=1` starts in it.
+- F5 saves the edited blocks to `cg_control/voxel_edits.bin` and the inventory to `cg_control/voxel_inventory.json`; F9 loads
+  them back. F12 saves a screenshot and the game state to `cg_control/snapshots/` (use it when something looks wrong).
 
 ## The look: day, night and fog
 
@@ -58,7 +68,7 @@ rate, build and run the Release configuration.
   (`light_at` gives the brighter of the two). Its light is twice the sky's in a cave (`VoxelLampLight`), and
   about the sky's in the open, where the sun already lights the ground. A lamp is a solid block, drawn as a cube, and its
   faces glow with the warm light colour at 0.8 whatever the sun and the shadows do (the glow is `VoxelVertex::glow`, added after the lighting; it stays under 1 so it does not clip to white, and the light a lamp gives its neighbours is tinted the same warm colour). Carried
-  and small torches are on the roadmap (Phase 14); they will be props on a block's face, not full blocks.
+  Small torches are props on a block's face (see the controls above), not full blocks.
 - The sun casts shadows (`VOXEL_SHADOWS=0` turns them off; `VOXEL_SHADOW_RADIUS`, 40 blocks by default, sets how far
   they reach). The map is drawn again when the camera moves, the sun turns, or a tenth of a second passes, and not at
   all while the sun is down.

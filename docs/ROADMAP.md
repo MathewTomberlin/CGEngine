@@ -254,8 +254,9 @@ full block, and light blocks (full cells that give light) are wanted too.
   an option for a prop that must collide at its own scale.
 - [x] **14.9** Torches are saved with the edits: the edit file is version 2, with the torches after the blocks (x, y, z and
   dir for each). Version 1 files still load. Checked by the save and load round trip in `voxel_world_check.py`.
-- [ ] **14.10** The aim label names a torch when the crosshair is on one ("Looking at: torch"), and the torch is outlined like
-  a block is, so the player can see what a break will take.
+- [x] **14.10** The aim label names a torch when the crosshair is on one ("Looking at: torch   (left click: take it back)"),
+  and the torch is outlined in the break colour as one box round its stick and flame. The rule is the break's own: a torch
+  nearer than the block behind it is the one a break takes.
 - Interim (not on the roadmap as a fix): the cave floor (0.2 of the sky) could be raised to make caves readable before the
   torches land. Decide after 14.1 if they are still too dark.
 
@@ -279,8 +280,8 @@ Goal: blocks and creatures take several hits, and what the player has hit looks 
 - [~] **16.2** Visual damage states (darkening per stage is in; cracks and the save file are not yet): a damaged block shows its stage, from a darker tint to cracks on its faces. Damage is a
   per-cell value kept with the edits (like props), so the mesher can tint the cell's faces; a stage change re-meshes only the
   chunk it is in. Measure the re-mesh cost (14.5 is the baseline: about 3 ms).
-- [ ] **16.3** Hit feedback: the aimed block shakes or flashes on a hit, and a broken block gives a short particle burst in its
-  colour (particles are a new engine feature, so this may wait for a small particle system).
+- [~] **16.3** Hit feedback: the aimed block's outline flashes white for 0.12 s on each hit (done). Still open: a short particle
+  burst in the block's colour when a block breaks (particles are a new engine feature, so this may wait for a small particle system).
 - [x] **16.4** Damage heals: a block not hit for a few seconds goes back one stage (so a half-broken wall is a choice, not a
   trap). The timer is per cell and only runs for damaged cells.
 - [ ] **16.5** Creatures take hits: the walkers (11.9) have health, a hit pushes them back, and a dead one leaves a drop. This is
@@ -290,14 +291,24 @@ Goal: blocks and creatures take several hits, and what the player has hit looks 
 
 ## Phase 17: inventory and a real hotbar (from playtesting: the hotbar is a line of text)
 Goal: items have quantities, the inventory is a grid the player can see and change, and the hotbar is a UI, not text.
-- [ ] **17.1** An item model: an item is a block id or a tool/torch id, with a quantity and a stack limit. Breaking a block
-  gives its item to the inventory; placing takes one from the stack. Torches are items with quantities (a torch is no longer
-  free). Creative mode (a flag) keeps the old unlimited placing for building.
-- [ ] **17.2** An inventory screen (I): a grid of slots, each with an icon (the block's colour swatch until textures exist),
-  the quantity, and a drag to move or split stacks. Opened and closed without losing the place in the world.
-- [ ] **17.3** A real hotbar UI: nine or ten slots drawn as boxes with icons and quantities, the selected one highlighted, and
-  the number keys selecting them. It is the first row of the inventory, so the two are one model.
-- [ ] **17.4** Save the inventory with the edits (the save file has blocks, props and damage, and now the inventory too).
+- [x] **17.1** An item model: an item is a block id (a torch is one too, though it is a prop), held in a slot with a count up to
+  64 (`VoxelInventory.py`, which has no engine calls). Breaking a block gives its item, and a torch on a broken block comes back
+  with it; placing takes one from the selected slot. The player starts with 16 of each hotbar item. Creative mode (C, or
+  `VOXEL_CREATIVE=1`) keeps the unlimited placing and gives nothing for a break. A hit that would finish a block is refused
+  when the inventory has no room for it; a hit that leaves it standing is not. Tools are not items yet (17.5).
+- [x] **17.2** The inventory screen (I): three rows of twelve slots, the hotbar at the bottom and two rows above, each slot a box
+  with a colour swatch and its count, on a panel with the controls. The world stands still and the mouse is free while it is
+  open. Moving a stack is click-to-carry, not a mouse drag: a left click takes a whole stack, a left click on another slot puts
+  it down (onto the same item up to 64, or swapping with a different one), and a right click takes half or puts one down. Esc
+  or I closes it, and a carried stack goes back into the inventory. A real drag can come later.
+- [x] **17.3** A real hotbar UI: twelve boxes at the bottom of the window, each with its key, a colour swatch, and its count when it
+  holds more than one. The selected slot is outlined in yellow and the slot under the mouse in white. It is the first row of
+  the inventory, so the two are one model. The boxes are overlay rectangles, a new engine feature (`create_rect_body` and
+  `set_rect_body`: rectangles over the scene in window pixels, like the labels). Their draw cost is not measured yet; the
+  voxel perf script should record it.
+- [x] **17.4** The inventory is saved with the edits: F5 writes `cg_control/voxel_inventory.json` beside `voxel_edits.bin`, and F9
+  loads both. A missing file keeps the current inventory, and a damaged entry is dropped. It is a JSON file, not part of the
+  binary edit file, because the item model lives in Python. Checked by `voxel_game_check.py` (the save and load round trip).
 - [ ] **17.5** Tools: a pickaxe speeds up breaking stone and ore (uses 16.1 hardness), so ore is worth a tool. Later, not first.
 
 ## Phase 18: multi-user interaction (long-term goal; multiplayer voxel is the first stretch goal)
@@ -337,6 +348,9 @@ Goal: several people (or an AI and a person) work in one CG Engine world at the 
 - A wrong value can hide behind another wrong value. Hue-only colours, an always-on unlit base and a light under the floor each made the others look plausible; fixing one at a time looked worse until all three were fixed. Compare screenshots of every shipped scene before and after any rendering change.
 - Look at the scene before trusting it. The dungeon floor sat half a tile above y = 0 for its whole life, because a plane primitive's surface is offset by its size. Cubes hid it; the first real models sank to the waist. Screenshots through the control channel caught it.
 - Remaining big-ticket items: Phase 5, batching draws by material (3.2 continuation), and the dungeon's next steps (an inventory, a shop for coins, and sound).
+- Voxel notes, inventory round: the first in-game check failed three times, and each failure was the check's own state, not the
+  game's. A check that changes shared state (a full inventory, a held stack) has to put it back before the next check reads it.
+  The HUD's boxes are overlay rectangles in the engine now, so a HUD element can be a box and a swatch without a texture.
 - Voxel notes (from the voxel sample, later work): the smooth skin looks much better than the cubes, and shadows read well once the map is cached. The HUD took several passes: the screen's own view is a square in the middle of the window, so window-wide text needs its own view, and text draws over meshes only with a high z order. A closed window used to restart the scene (the run loop now ends).
 - Hypotheses get a run before a fix. The background-run theory for the start-of-game fall was tested (a run with focus in another window) and it landed normally. A bug that cannot be reproduced gets instrumentation that saves the state at the moment of failure, not a guess.
 - A check that counts seconds fails under load, so count frames. The voxel walk and the dungeon walk hold their keys for

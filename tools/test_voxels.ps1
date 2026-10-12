@@ -93,6 +93,15 @@ try {
     if ($worldCheck.measure) { $worldCheck.measure.PSObject.Properties | ForEach-Object { Write-Host ("      remesh ms, {0}: {1}" -f $_.Name, $_.Value) } }
     Write-Host ("      light: {0} open-ground samples, {1} underground samples with a mean of {2} (255 is full sky)" -f $worldCheck.light.surfaceSamples, $worldCheck.light.deepSamples, $worldCheck.light.deepMean)
 
+    # The sample game's inventory and block use, checked inside the running game by tools/voxel_game_check.py.
+    $gameCheck = (Resolve-Path "tools/voxel_game_check.py").Path -replace '\\', '/'
+    Send-Command "00b_game_check" ('{"command":"run_script","params":{"path":"' + $gameCheck + '"}}')
+    $ranGame = Wait-Result "00b_game_check" 120
+    Check "the game check script runs" ($ranGame -and $ranGame.ok)
+    $gameResult = Get-Content (Join-Path $control "voxel_game_check.json") -Raw | ConvertFrom-Json
+    $gameResult.check.PSObject.Properties | ForEach-Object { Check ("game: " + $_.Name) ([bool]$_.Value) }
+    $gameResult.errors | ForEach-Object { Check ("game check error: " + $_) $false }
+
     # Walk forward for 240 frames (4 seconds), then turn right for 120 frames (2 seconds): 90 degrees a second is 180
     # degrees of turn. The frames are counted by the Enter key, which the game asks for once a frame, before the walk.
     # Mouse input is scripted to nothing so that the real mouse cannot turn the view during the test.
