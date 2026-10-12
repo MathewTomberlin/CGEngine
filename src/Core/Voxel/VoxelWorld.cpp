@@ -27,12 +27,30 @@ namespace CGEngine {
 	}
 
 	void VoxelWorld::defineBlock(int blockId, const BlockType& type) {
-		types[static_cast<size_t>(std::clamp(blockId, 0, 255))] = type;
+		BlockType stored = type;
+		if (stored.cube) stored.own = true;   // a cube is drawn in its own mesh (see BlockType)
+		types[static_cast<size_t>(std::clamp(blockId, 0, 255))] = stored;
+	}
+
+	void VoxelWorld::setMaterial(int blockId, const std::string& name) {
+		groupMaterials[static_cast<size_t>(std::clamp(blockId, 0, 255))] = name;
 	}
 
 	bool VoxelWorld::isSolid(int x, int y, int z) const {
 		const int block = getBlock(x, y, z);
 		return block != 0 && types[static_cast<size_t>(block)].solid;
+	}
+
+	int VoxelWorld::skinAt(int x, int y, int z) const {
+		if (y < 0) return TerrainSkin;                  // the world's floor is solid
+		if (y >= height) return 0;
+		if (!loadedAt(x, z)) return TerrainSkin;        // unloaded cells are solid, so a body stays in the loaded world
+		const int block = getBlock(x, y, z);
+		if (block == 0) return 0;
+		const BlockType& type = types[static_cast<size_t>(block)];
+		if (!type.solid) return 0;
+		if (!type.own) return TerrainSkin;
+		return (type.cube ? CubeSkin : OwnSkin) + block;
 	}
 
 	const char* VoxelWorld::biomeName(int x, int z) const {
@@ -58,30 +76,39 @@ namespace CGEngine {
 	}
 
 	double VoxelWorld::skinDensity(double x, double y, double z) const {
-		// The same weights as the mesh's density (VoxelMesher.cpp), on the occupancy of solid blocks, with the unloaded
-		// cells solid and the world's ends solid below and open above. Python's copy (VoxelPhysics.py) matches it operation for
-		// operation, so the parity check can compare them exactly.
+		// The same weights as the mesh's density (VoxelMesher.cpp), per skin (see skinAt): each smooth skin adds up the weights
+		// of the corners it is in, and the density is the largest. The world's ends are solid below and open above, and the
+		// unloaded cells are solid terrain. Python's copy (VoxelPhysics.py) matches it operation for operation, so the parity
+		// check can compare them exactly.
 		const double bx = x - 0.5, by = y - 0.5, bz = z - 0.5;
 		const double fx = std::floor(bx), fy = std::floor(by), fz = std::floor(bz);
 		const double tx = bx - fx, ty = by - fy, tz = bz - fz;
 		const int x0 = static_cast<int>(fx), y0 = static_cast<int>(fy), z0 = static_cast<int>(fz);
-		double value = 0.0;
+		int skin[8];
+		double weight[8];
 		for (int c = 0; c < 8; ++c) {
 			const int dx = c & 1, dy = (c >> 1) & 1, dz = (c >> 2) & 1;
-			const double w = (dx ? tx : 1.0 - tx) * (dy ? ty : 1.0 - ty) * (dz ? tz : 1.0 - tz);
-			const int ix = x0 + dx, iy = y0 + dy, iz = z0 + dz;
-			bool occupied;
-			if (iy < 0) {
-				occupied = true;
-			} else if (iy >= height) {
-				occupied = false;
-			} else if (!loadedAt(ix, iz)) {
-				occupied = true;
-			} else {
-				occupied = isSolid(ix, iy, iz);
-			}
-			if (occupied) value += w;
+			weight[c] = (dx ? tx : 1.0 - tx) * (dy ? ty : 1.0 - ty) * (dz ? tz : 1.0 - tz);
+			skin[c] = skinAt(x0 + dx, y0 + dy, z0 + dz);
 		}
+		double value = 0.0;
+		for (int c = 0; c < 8; ++c) {
+			if (skin[c] == 0 || skin[c] >= CubeSkin) continue;
+			// Each smooth skin is summed once, at its first corner.
+			bool first = true;
+			for (int earlier = 0; earlier < c; ++earlier) {
+				if (skin[earlier] == skin[c]) first = false;
+			}
+			if (!first) continue;
+			double sum = 0.0;
+			for (int d = 0; d < 8; ++d) {
+				if (skin[d] == skin[c]) sum += weight[d];
+			}
+			value = std::max(value, sum);
+		}
+		// A cube block's skin is the cell the point is in: full there, nothing outside it.
+		const int cell = skinAt(static_cast<int>(std::floor(x)), static_cast<int>(std::floor(y)), static_cast<int>(std::floor(z)));
+		if (cell >= CubeSkin) value = std::max(value, 1.0);
 		return value;
 	}
 
@@ -220,6 +247,11 @@ namespace CGEngine {
 		return chunk && chunk->loaded ? chunk->quads : 0;
 	}
 
+	std::map<int, int> VoxelWorld::chunkGroupQuads(int cx, int cz) const {
+		const Chunk* chunk = findChunk(cx, cz);
+		return chunk && chunk->loaded ? chunk->groupQuads : std::map<int, int>();
+	}
+
 	int VoxelWorld::floorDiv(int a, int b) {
 		int q = a / b;
 		if ((a % b != 0) && ((a < 0) != (b < 0))) --q;
@@ -333,8 +365,8 @@ namespace CGEngine {
 	void VoxelWorld::unloadChunk(int cx, int cz) {
 		auto it = chunks.find(std::make_pair(cx, cz));
 		if (it == chunks.end()) return;
-		if (it->second.body.first) {
-			if (Body* body = assets.get<Body>(it->second.body.second)) removeRuntimeMesh(body);
+		for (const auto& body : it->second.bodies) {
+			if (Body* mesh = assets.get<Body>(body.second)) removeRuntimeMesh(mesh);
 		}
 		dirtyKeys.erase(std::make_pair(cx, cz));
 		chunks.erase(it);
@@ -460,7 +492,11 @@ namespace CGEngine {
 				}
 			}
 		}
-		for (size_t id = 0; id < 256; ++id) padded.emission[id] = types[id].emits;
+		for (size_t id = 0; id < 256; ++id) {
+			padded.emission[id] = types[id].emits;
+			padded.rule[id].group = types[id].own ? static_cast<uint8_t>(id) : 0;
+			padded.rule[id].cube = types[id].cube;
+		}
 		return padded;
 	}
 
@@ -481,28 +517,48 @@ namespace CGEngine {
 			}
 		}
 		const std::array<glm::vec3, 256> colours = palette;
+		std::array<bool, 256> cubeShape{};
+		for (size_t id = 0; id < 256; ++id) cubeShape[id] = types[id].cube;
 		const uint32_t generation = chunk.generation;
 		const uint32_t version = chunk.version;
-		enqueue([this, cx, cz, generation, version, resolution, skirtSides, padded = std::move(padded), colours]() mutable {
+		enqueue([this, cx, cz, generation, version, resolution, skirtSides, padded = std::move(padded), colours, cubeShape]() mutable {
 			MeshResult result;
 			result.cx = cx;
 			result.cz = cz;
 			result.generation = generation;
 			result.version = version;
 			computeLight(padded);
-			if (resolution > 0) {
-				buildSmoothMesh(padded, colours, resolution, skirtSides, result.mesh);
-			} else {
-				buildChunkMesh(padded, colours, result.mesh);
+			// The terrain, and a mesh of its own for each block type in the chunk that has one (see PaddedChunk::rule).
+			std::array<bool, 256> present{};
+			for (uint8_t block : padded.blocks) {
+				if (padded.rule[block].group != 0) present[padded.rule[block].group] = true;
 			}
-			result.quads = static_cast<int>(result.mesh.indices.size() / 6);
+			std::vector<uint8_t> groups = { 0 };
+			for (size_t id = 1; id < 256; ++id) {
+				if (present[id]) groups.push_back(static_cast<uint8_t>(id));
+			}
+			for (uint8_t group : groups) {
+				GroupMesh part;
+				part.group = group;
+				// A cube block is always cubes; the others are cubes only while the world draws cubes (smoothing 0).
+				const bool cubes = resolution <= 0 || (group != 0 && cubeShape[group]);
+				if (cubes) {
+					buildChunkMesh(padded, colours, group, part.mesh);
+				} else {
+					buildSmoothMesh(padded, colours, resolution, skirtSides, group, part.mesh);
+				}
+				part.quads = static_cast<int>(part.mesh.indices.size() / 6);
+				result.groups.push_back(std::move(part));
+			}
 			std::lock_guard<std::mutex> lock(resultMutex);
 			meshResults.push_back(std::move(result));
 		});
 	}
 
-	std::string VoxelWorld::bodyName(int cx, int cz) const {
-		return "voxel_chunk_" + std::to_string(cx) + "_" + std::to_string(cz);
+	std::string VoxelWorld::bodyName(int cx, int cz, uint8_t group) const {
+		std::string name = "voxel_chunk_" + std::to_string(cx) + "_" + std::to_string(cz);
+		if (group != 0) name += "_" + std::to_string(group);
+		return name;
 	}
 
 	void VoxelWorld::uploadMesh(MeshResult& result) {
@@ -513,22 +569,42 @@ namespace CGEngine {
 		// The chunk changed while it was being meshed. It is dirty again, so the next update meshes it again.
 		if (result.version != chunk.version) return;
 
-		std::vector<id_t> materials;
-		if (auto materialId = assets.getId<Material>(material)) {
-			materials.push_back(materialId.value());
-		} else {
-			materials.push_back(assets.getDefaultId<Material>().value_or(0));
+		std::set<int> drawn;
+		for (GroupMesh& part : result.groups) {
+			if (part.mesh.vertices.empty()) continue;
+			drawn.insert(part.group);
+			const std::string& materialName = part.group != 0 && !groupMaterials[part.group].empty() ? groupMaterials[part.group] : material;
+			std::vector<id_t> materials;
+			if (auto materialId = assets.getId<Material>(materialName)) {
+				materials.push_back(materialId.value());
+			} else {
+				materials.push_back(assets.getDefaultId<Material>().value_or(0));
+			}
+			Body* body = nullptr;
+			const auto existing = chunk.bodies.find(part.group);
+			if (existing != chunk.bodies.end()) body = assets.get<Body>(existing->second);
+			if (body) {
+				updateCompactMeshBody(body, std::move(part.mesh.vertices), std::move(part.mesh.indices));
+			} else {
+				const Vector3f position(static_cast<float>(result.cx * size), 0.0f, static_cast<float>(result.cz * size));
+				body = createCompactMeshBody(bodyName(result.cx, result.cz, part.group), std::move(part.mesh.vertices),
+					std::move(part.mesh.indices), materials, position);
+				if (body) chunk.bodies[part.group] = body->getId().value_or(0);
+			}
+			chunk.groupQuads[part.group] = part.quads;
 		}
-		Body* body = chunk.body.first ? assets.get<Body>(chunk.body.second) : nullptr;
-		if (body) {
-			updateCompactMeshBody(body, std::move(result.mesh.vertices), std::move(result.mesh.indices));
-		} else if (!result.mesh.vertices.empty()) {
-			const Vector3f position(static_cast<float>(result.cx * size), 0.0f, static_cast<float>(result.cz * size));
-			body = createCompactMeshBody(bodyName(result.cx, result.cz), std::move(result.mesh.vertices),
-				std::move(result.mesh.indices), materials, position);
-			if (body) chunk.body = { true, body->getId().value_or(0) };
+		// A group that is drawn no more (its blocks were taken away) loses its body.
+		for (auto drawnBody = chunk.bodies.begin(); drawnBody != chunk.bodies.end();) {
+			if (drawn.count(drawnBody->first)) {
+				++drawnBody;
+				continue;
+			}
+			if (Body* body = assets.get<Body>(drawnBody->second)) removeRuntimeMesh(body);
+			chunk.groupQuads.erase(drawnBody->first);
+			drawnBody = chunk.bodies.erase(drawnBody);
 		}
-		chunk.quads = result.quads;
+		chunk.quads = 0;
+		for (const auto& group : chunk.groupQuads) chunk.quads += group.second;
 	}
 
 	int VoxelWorld::update(double budgetMs, int focusX, int focusZ) {
@@ -618,8 +694,8 @@ namespace CGEngine {
 
 	void VoxelWorld::clear() {
 		for (auto& entry : chunks) {
-			if (entry.second.body.first) {
-				if (Body* body = assets.get<Body>(entry.second.body.second)) removeRuntimeMesh(body);
+			for (const auto& body : entry.second.bodies) {
+				if (Body* mesh = assets.get<Body>(body.second)) removeRuntimeMesh(mesh);
 			}
 		}
 		chunks.clear();

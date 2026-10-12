@@ -30,9 +30,8 @@ rate, build and run the Release configuration.
   game, and applies at once. `VOXEL_MOUSE_SENSITIVITY` sets the base look speed in degrees per pixel (0.00625 by default),
   and `VOXEL_SETTINGS` moves the settings file.
 - Without the mouse: the arrow keys turn and look, J breaks, K places.
-- Keys 1 to 9 and 0 choose the block to place (the hotbar: stone, dirt, grass, wood, leaves, sand, gravel, snow, water, and
-  0 for the lamp, a light block). Sand and
-  gravel fall, and water falls and flows. F5 saves the edited blocks to `cg_control/voxel_edits.bin`, and F9 loads them back. F12 saves a screenshot and the
+- Keys 1 to 9, 0, - and = choose the block to place (the hotbar: stone, dirt, grass, wood, leaves, sand, gravel, snow, water,
+  the lamp (0, a light block), and brick (-)). Sand and gravel fall, and water falls and flows. F5 saves the edited blocks to `cg_control/voxel_edits.bin`, and F9 loads them back. F12 saves a screenshot and the
   game state to `cg_control/snapshots/` (use it when something looks wrong).
 
 ## The look: day, night and fog
@@ -60,6 +59,22 @@ rate, build and run the Release configuration.
 - The sun casts shadows (`VOXEL_SHADOWS=0` turns them off; `VOXEL_SHADOW_RADIUS`, 40 blocks by default, sets how far
   they reach). The map is drawn again when the camera moves, the sun turns, or a tenth of a second passes, and not at
   all while the sun is down.
+
+## How blocks are drawn
+
+Each block type says how it is drawn, with `define_block(..., shape=, group=, material=)`:
+
+- `shape="smooth"` (the default) is drawn as the rounded skin; `shape="cube"` is a cube that never merges with its neighbours,
+  so it keeps sharp edges (brick).
+- `group="terrain"` (the default) puts the block in the chunk's terrain mesh: stone, dirt, grass, sand, gravel, water, snow.
+- `group="own"` gives the block a mesh of its own in each chunk, drawn with `material` (a material in the scene file, here
+  `voxel_wood`, `voxel_leaves`, `voxel_brick`). Wood and leaves are own: a canopy is its own skin, and the terrain treats its
+  blocks as air, so a canopy does not hide the ground under it, and the ground does not hide the canopy. A cube is always own.
+
+Collision follows the same rule: a body meets the skin of each mesh, so it stands on a brick's top face and on a leaf's
+rounded top. `voxel_world_check.py` checks the rules (a leaf alone is in its own mesh and not the terrain's, a brick is six
+cube faces, ground is in the terrain's mesh). Light is not split by mesh: every block still shades what is behind it, so
+the ground under a trunk or a leaf is in shade.
 
 ## Block physics
 

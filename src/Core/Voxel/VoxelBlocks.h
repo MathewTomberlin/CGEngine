@@ -9,6 +9,11 @@ namespace CGEngine {
 		bool falls = false;     // moves down into air, or swaps down with a liquid (sand, gravel)
 		bool liquid = false;    // flows (water); see the water levels below
 		uint8_t emits = 0;      // light the block gives off at its own cell, 0 to 255 (a lamp is 255); it falls off through air
+		// How it is drawn (see the render rules in docs/games/voxels.md). A block is in the chunk's terrain mesh (the default),
+		// or in a mesh of its own, one per block type and chunk, drawn with the material set for it. Its shape is the smooth
+		// skin, or a cube that never merges with its neighbours, which is what a cube block always is (own is forced).
+		bool own = false;       // drawn in its own mesh, not the terrain mesh
+		bool cube = false;      // drawn as cubes, even where the terrain is smooth
 	};
 
 	// Water: block 5 is a full source. Flowing water has a level from 7 down to 1, kept as block ids 9 to 15 (id = 16 -

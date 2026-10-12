@@ -44,9 +44,16 @@ namespace CGEngine {
 		const int cornerU[4] = { 0, 1, 1, 0 };
 		const int cornerV[4] = { 0, 0, 1, 1 };
 
+		// Whether the block at (x, y, z) is in a mesh group: a block whose group is this one (group 0 is the terrain, which holds
+		// every block drawn in no group of its own). Air is in no group. Blocks of other groups count as air to this mesh.
+		bool inGroup(const PaddedChunk& chunk, int x, int y, int z, uint8_t group) {
+			const uint8_t block = chunk.at(x, y, z);
+			return block != 0 && chunk.rule[block].group == group;
+		}
+
 		// Occlusion of each corner of a face, from the air cell in front of it. Each corner has two cells beside it and
 		// one diagonal, all in the air layer; two solid sides close the corner completely.
-		void cornerOcclusion(const PaddedChunk& chunk, const int air[3], int u, int v, uint8_t out[4]) {
+		void cornerOcclusion(const PaddedChunk& chunk, const int air[3], int u, int v, uint8_t group, uint8_t out[4]) {
 			for (int k = 0; k < 4; ++k) {
 				const int su = cornerU[k] ? 1 : -1;
 				const int sv = cornerV[k] ? 1 : -1;
@@ -57,9 +64,9 @@ namespace CGEngine {
 				side2[v] += sv;
 				corner[u] += su;
 				corner[v] += sv;
-				const bool s1 = chunk.at(side1[0], side1[1], side1[2]) != 0;
-				const bool s2 = chunk.at(side2[0], side2[1], side2[2]) != 0;
-				const bool sc = chunk.at(corner[0], corner[1], corner[2]) != 0;
+				const bool s1 = inGroup(chunk, side1[0], side1[1], side1[2], group);
+				const bool s2 = inGroup(chunk, side2[0], side2[1], side2[2], group);
+				const bool sc = inGroup(chunk, corner[0], corner[1], corner[2], group);
 				out[k] = (s1 && s2) ? 0 : static_cast<uint8_t>(3 - (s1 + s2 + sc));
 			}
 		}
@@ -204,7 +211,7 @@ namespace CGEngine {
 		}
 	}
 
-	void buildChunkMesh(const PaddedChunk& chunk, const std::array<glm::vec3, 256>& palette, MeshArrays& out) {
+	void buildChunkMesh(const PaddedChunk& chunk, const std::array<glm::vec3, 256>& palette, uint8_t group, MeshArrays& out) {
 		out.vertices.clear();
 		out.indices.clear();
 		const int dims[3] = { chunk.size, chunk.height, chunk.size };
@@ -237,12 +244,12 @@ namespace CGEngine {
 
 							MaskCell& cell = mask[static_cast<size_t>(j) * du + i];
 							cell = MaskCell();
+							if (!inGroup(chunk, solid[0], solid[1], solid[2], group) || inGroup(chunk, air[0], air[1], air[2], group)) continue;
 							const uint8_t block = chunk.at(solid[0], solid[1], solid[2]);
-							if (block == 0 || chunk.at(air[0], air[1], air[2]) != 0) continue;
 							cell.block = block;
 							cell.emission = chunk.emission[block];
 							cell.sign = static_cast<int8_t>(sign);
-							cornerOcclusion(chunk, air, u, v, cell.occlusion);
+							cornerOcclusion(chunk, air, u, v, group, cell.occlusion);
 							cell.light = chunk.lightAt(air[0], air[1], air[2]);
 							cell.lamp = chunk.lampAt(air[0], air[1], air[2]);
 						}
@@ -291,17 +298,17 @@ namespace CGEngine {
 		const int CubeEdges[12][2] = { { 0, 1 }, { 2, 3 }, { 4, 5 }, { 6, 7 }, { 0, 2 }, { 1, 3 }, { 4, 6 }, { 5, 7 },
 			{ 0, 4 }, { 1, 5 }, { 2, 6 }, { 3, 7 } };
 
-		// Whether the block at (x, y, z) is solid. Outside the padded chunk it is air.
-		bool solidAt(const PaddedChunk& chunk, int x, int y, int z) {
+		// Whether the block at (x, y, z) is in the group. Outside the padded chunk it is air.
+		bool solidAt(const PaddedChunk& chunk, uint8_t group, int x, int y, int z) {
 			const int b = chunk.border;
 			if (x < -b || y < -b || z < -b || x >= chunk.size + b || y >= chunk.height + b || z >= chunk.size + b) return false;
-			return chunk.at(x, y, z) != 0;
+			return inGroup(chunk, x, y, z, group);
 		}
 
 		// The density at p (block units): the blocks' occupancy, interpolated between block centres (a block's centre is
 		// its corner + 0.5). It falls from 1 to 0 across each block face, so the iso-surface at 0.5 runs along the faces
 		// and rounds the convex edges and corners.
-		float densityAt(const PaddedChunk& chunk, glm::vec3 p) {
+		float densityAt(const PaddedChunk& chunk, uint8_t group, glm::vec3 p) {
 			const glm::vec3 b = p - glm::vec3(0.5f);
 			const glm::vec3 base = glm::floor(b);
 			const glm::vec3 t = b - base;
@@ -310,19 +317,19 @@ namespace CGEngine {
 			for (int c = 0; c < 8; ++c) {
 				const int dx = c & 1, dy = (c >> 1) & 1, dz = (c >> 2) & 1;
 				const float w = (dx ? t.x : 1.0f - t.x) * (dy ? t.y : 1.0f - t.y) * (dz ? t.z : 1.0f - t.z);
-				if (solidAt(chunk, x0 + dx, y0 + dy, z0 + dz)) value += w;
+				if (solidAt(chunk, group,x0 + dx, y0 + dy, z0 + dz)) value += w;
 			}
 			return value;
 		}
 
 		// The vertex at p (chunk block units): a normal from the density gradient, the colour of the solid block that
 		// weighs most there, darkened where the air beside it is walled in, and a texture coordinate from the normal's axis.
-		VoxelVertex smoothVertex(const PaddedChunk& chunk, const std::array<glm::vec3, 256>& palette, glm::vec3 p) {
+		VoxelVertex smoothVertex(const PaddedChunk& chunk, const std::array<glm::vec3, 256>& palette, uint8_t group, glm::vec3 p) {
 			const float h = 0.25f;
 			const glm::vec3 gradient(
-				densityAt(chunk, p + glm::vec3(h, 0, 0)) - densityAt(chunk, p - glm::vec3(h, 0, 0)),
-				densityAt(chunk, p + glm::vec3(0, h, 0)) - densityAt(chunk, p - glm::vec3(0, h, 0)),
-				densityAt(chunk, p + glm::vec3(0, 0, h)) - densityAt(chunk, p - glm::vec3(0, 0, h)));
+				densityAt(chunk, group,p + glm::vec3(h, 0, 0)) - densityAt(chunk, group,p - glm::vec3(h, 0, 0)),
+				densityAt(chunk, group,p + glm::vec3(0, h, 0)) - densityAt(chunk, group,p - glm::vec3(0, h, 0)),
+				densityAt(chunk, group,p + glm::vec3(0, 0, h)) - densityAt(chunk, group,p - glm::vec3(0, 0, h)));
 			const float length = glm::length(gradient);
 			const glm::vec3 normal = length > 1e-6f ? -gradient / length : glm::vec3(0.0f, 1.0f, 0.0f);
 
@@ -336,7 +343,7 @@ namespace CGEngine {
 				const int dx = c & 1, dy = (c >> 1) & 1, dz = (c >> 2) & 1;
 				const int x = static_cast<int>(base.x) + dx, y = static_cast<int>(base.y) + dy, z = static_cast<int>(base.z) + dz;
 				const float w = (dx ? t.x : 1.0f - t.x) * (dy ? t.y : 1.0f - t.y) * (dz ? t.z : 1.0f - t.z);
-				if (solidAt(chunk, x, y, z) && w > blockWeight) {
+				if (solidAt(chunk, group,x, y, z) && w > blockWeight) {
 					blockWeight = w;
 					block = chunk.at(x, y, z);
 				}
@@ -344,7 +351,7 @@ namespace CGEngine {
 			if (block == 0) block = 1;
 
 			// Ambient occlusion: the density a little way out along the normal. Walls close by darken the corner.
-			const float outside = densityAt(chunk, p + normal * 0.25f);
+			const float outside = densityAt(chunk, group,p + normal * 0.25f);
 			const float occlusion = std::clamp(1.0f - 0.6f * outside, 0.5f, 1.0f);
 
 			VoxelVertex vertex;
@@ -371,7 +378,7 @@ namespace CGEngine {
 	}
 
 	void buildSmoothMesh(const PaddedChunk& chunk, const std::array<glm::vec3, 256>& palette, int resolution,
-		unsigned skirtSides, MeshArrays& out) {
+		unsigned skirtSides, uint8_t group, MeshArrays& out) {
 		out.vertices.clear();
 		out.indices.clear();
 		const int R = std::max(1, resolution);
@@ -392,7 +399,7 @@ namespace CGEngine {
 		for (int j = -1; j <= H * R + 1; ++j) {
 			for (int k = -1; k <= S * R + 1; ++k) {
 				for (int i = -1; i <= S * R + 1; ++i) {
-					samples[sampleIndex(i, j, k)] = densityAt(chunk, position(i, j, k));
+					samples[sampleIndex(i, j, k)] = densityAt(chunk, group,position(i, j, k));
 				}
 			}
 		}
@@ -438,7 +445,7 @@ namespace CGEngine {
 			const size_t index = cellIndex(i, j, k);
 			if (emitted[index] < 0) {
 				emitted[index] = static_cast<int>(out.vertices.size());
-				out.vertices.push_back(smoothVertex(chunk, palette, cellPosition[index]));
+				out.vertices.push_back(smoothVertex(chunk, palette, group,cellPosition[index]));
 			}
 			return static_cast<unsigned int>(emitted[index]);
 		};
@@ -501,7 +508,7 @@ namespace CGEngine {
 			const unsigned int first = static_cast<unsigned int>(out.vertices.size());
 			const glm::vec3 corners[4] = { a, b, b + down, a + down };
 			for (const glm::vec3& corner : corners) {
-				VoxelVertex vertex = smoothVertex(chunk, palette, corner);
+				VoxelVertex vertex = smoothVertex(chunk, palette, group,corner);
 				vertex.normal = normal;
 				out.vertices.push_back(vertex);
 			}

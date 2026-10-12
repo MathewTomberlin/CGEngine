@@ -2,7 +2,10 @@
   "version": 1,
   "replaceWorld": true,
   "materials": [
-    { "name": "voxel", "diffuseTexture": "voxel_noise.png", "specular": 0, "repeat": true }
+    { "name": "voxel", "diffuseTexture": "voxel_noise.png", "specular": 0, "repeat": true },
+    { "name": "voxel_wood", "diffuseTexture": "voxel_noise.png", "specular": 0, "repeat": true },
+    { "name": "voxel_leaves", "diffuseTexture": "voxel_noise.png", "specular": 0, "repeat": true },
+    { "name": "voxel_brick", "diffuseTexture": "voxel_noise.png", "specular": 0, "repeat": true }
   ],
   "environment": { "skyColour": [0.56, 0.76, 0.95], "fogColour": [0.56, 0.76, 0.95], "fogStart": 84, "fogEnd": 168 },
   "lights": [

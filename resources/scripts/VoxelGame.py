@@ -50,15 +50,16 @@ MAX_PITCH = 85.0            # the engine's camera stops at this angle
 FIXED_STEP = float(os.environ["VOXEL_FIXED_STEP"]) if os.environ.get("VOXEL_FIXED_STEP") else None
 SPAWN_HEIGHT = 60.0         # above the tallest column, so the player drops onto the terrain
 RESPAWN_DEPTH = -20.0       # below this the player is put back at the spawn height
-# The blocks the number keys choose from when placing (the hotbar: 1 to 9, then 0 for the tenth), and the file the F5 and F9
-# keys save and load.
+# The blocks the keys choose from when placing (the hotbar: 1 to 9, then 0, - and = for the tenth to twelfth), and the file the
+# F5 and F9 keys save and load.
 HOTBAR = [VoxelGen.STONE, VoxelGen.DIRT, VoxelGen.GRASS, VoxelGen.WOOD, VoxelGen.LEAVES, VoxelGen.SAND, VoxelGen.GRAVEL,
-          VoxelGen.SNOW, VoxelGen.WATER, VoxelGen.LAMP]
+          VoxelGen.SNOW, VoxelGen.WATER, VoxelGen.LAMP, VoxelGen.BRICK]
+HOTBAR_KEYS = "1234567890-="
 
 
 def hotbar_key(slot):
-    """The number key for a hotbar slot: 1 to 9, then 0 for the tenth."""
-    return str((slot + 1) % 10)
+    """The key for a hotbar slot: 1 to 9, then 0, - and =."""
+    return HOTBAR_KEYS[slot]
 WALKERS = int(os.environ.get("VOXEL_WALKERS", "12"))   # creatures that wander the terrain near the spawn
 SHADOWS = os.environ.get("VOXEL_SHADOWS", "1") != "0"   # the sun casts shadows (the map covers SHADOW_RADIUS around the camera)
 SHADOW_RADIUS = float(os.environ.get("VOXEL_SHADOW_RADIUS", "40"))
@@ -74,7 +75,7 @@ EDITS_FILE = "cg_control/voxel_edits.bin"
 STATE_INTERVAL = 0.25       # seconds between writes to cg_control/voxel_state.json
 # The outline of the block the crosshair is on (yellow: it is broken), and of the cell a block would be placed in
 # (its own colour, brightened). Both are thin bars around the cube's edges, made as runtime meshes.
-HELP_TEXT = "LMB break  RMB place  WASD move  Space jump  Enter fly  0-9 block  F5/F9 save/load  Esc release"
+HELP_TEXT = "LMB break  RMB place  WASD move  Space jump  Enter fly  1-0 - = block  F5/F9 save/load  Esc release"
 BREAK_COLOUR = (1.0, 0.85, 0.2)
 HIDDEN_BOX = ((-1.0e6, -1.0e6, -1.0e6), (-1.0e6 + 1.0, -1.0e6 + 1.0, -1.0e6 + 1.0))   # where an outline is put when not shown
 SMOOTH_RESOLUTION = int(os.environ.get("VOXEL_SMOOTH", "1"))   # samples per block for the smooth skin; 0 draws cubes
@@ -238,7 +239,10 @@ class VoxelGame(PyScript):
         for block, rgb in VoxelGen.COLOURS.items():
             self.world.define_block(block, cge.Vector3f(*rgb), solid=block not in VoxelGen.LIQUIDS,
                                     falls=block in VoxelGen.FALLS, liquid=block in VoxelGen.LIQUIDS,
-                                    emits=VoxelGen.EMITS.get(block, 0))
+                                    emits=VoxelGen.EMITS.get(block, 0),
+                                    shape="cube" if block in VoxelGen.CUBES else "smooth",
+                                    group="own" if block in VoxelGen.OWN else "terrain",
+                                    material=VoxelGen.MATERIALS.get(block))
         self.world.set_smoothing(SMOOTH_RESOLUTION)
         self.world.set_move_seconds(SIM_TICK * 0.9)   # a falling block lands just before the next tick
         # Smooth skin nearest the camera is finer: NEAR_SAMPLES per block within NEAR_RADIUS chunks.
@@ -547,7 +551,7 @@ class VoxelGame(PyScript):
             self.vel = [0.0, 0.0, 0.0]
 
     def solid(self, x, y, z):
-        return self.world.is_solid(x, y, z)
+        return self.world.skin_at(x, y, z)
 
     def eye(self):
         return [self.pos[0], self.pos[1] + physics.EYE_HEIGHT, self.pos[2]]

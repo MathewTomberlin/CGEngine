@@ -42,6 +42,13 @@ namespace CGEngine {
 		std::vector<uint8_t> lamp;
 		// The light each block id gives off at its own cell, 0 to 255. Set from the world's block types (BlockType::emits).
 		std::array<uint8_t, 256> emission{};
+		// How each block id is drawn: the mesh it goes in (group 0 is the terrain, else the block's own id) and whether it is
+		// cubes. Set from the world's block types (BlockType::own and cube). A mesh holds only the blocks of its group.
+		struct MeshRule {
+			uint8_t group = 0;
+			bool cube = false;
+		};
+		std::array<MeshRule, 256> rule{};
 
 		size_t index(int x, int y, int z) const {
 			const int p = size + 2 * border;
@@ -73,18 +80,20 @@ namespace CGEngine {
 		std::vector<unsigned int> indices;
 	};
 
-	// Meshes the solid faces of a chunk. A face is drawn only where the block beside it is air. Faces that lie in one
-	// plane, with the same block, shade and occlusion, are merged into one quad (greedy meshing), so flat ground is a few
-	// quads rather than one per block. Each vertex colour is the block colour times the face shade times ambient occlusion.
-	void buildChunkMesh(const PaddedChunk& chunk, const std::array<glm::vec3, 256>& palette, MeshArrays& out);
+	// Meshes the cube faces of one group of a chunk: group 0 is the terrain, else a block id's own mesh (PaddedChunk::rule).
+	// A face is drawn only where the block beside it is not in the group, so a face against another group's block is drawn
+	// here too. Faces that lie in one plane, with the same block, shade and occlusion, are merged into one quad (greedy
+	// meshing), so flat ground is a few quads rather than one per block. Each vertex colour is the block colour times the
+	// face shade times ambient occlusion.
+	void buildChunkMesh(const PaddedChunk& chunk, const std::array<glm::vec3, 256>& palette, uint8_t group, MeshArrays& out);
 
-	// A smooth skin over the blocks: a surface through the solid blocks, rounded at the edges and corners, that the
-	// chunk's own mesh is shaped to. Surface nets (one vertex per cell the surface crosses, quads across the crossed
-	// edges) on a density that is the blocks' occupancy, interpolated between block centres. resolution is the number of
-	// samples per block: 1 is the block scale, 2 gives half-block detail. Chunks join without cracks, since every vertex
-	// is a function of the blocks around it. The chunk needs a border of 3 (PaddedChunk::border).
+	// A smooth skin over one group of the blocks (see buildChunkMesh): a surface through the group's solid blocks, rounded
+	// at the edges and corners. Surface nets (one vertex per cell the surface crosses, quads across the crossed edges) on
+	// a density that is the group's occupancy, interpolated between block centres. resolution is the number of samples per
+	// block: 1 is the block scale, 2 gives half-block detail. Chunks join without cracks, since every vertex is a function
+	// of the blocks around it. The chunk needs a border of 3 (PaddedChunk::border).
 	void buildSmoothMesh(const PaddedChunk& chunk, const std::array<glm::vec3, 256>& palette, int resolution,
-		unsigned skirtSides, MeshArrays& out);
+		unsigned skirtSides, uint8_t group, MeshArrays& out);
 
 	// A round ball of a block's colour, centred at centre and appended to out. The moving blocks are drawn with it.
 	void buildBlob(const std::array<glm::vec3, 256>& palette, uint8_t block, glm::vec3 centre, float radius, MeshArrays& out);

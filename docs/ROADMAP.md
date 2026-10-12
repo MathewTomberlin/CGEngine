@@ -109,8 +109,8 @@ Goal: the terrain looks rounded and real, the blocks obey physics the scripts ca
 
 ## Phase 11: making the voxel sample feel right to play (from playing it)
 Goal: the world reads well at a human pace, and the engine's own state is easy to see and to test.
-Next, in order: 11.14 and 11.15 (both wait for a snapshot from the player), then Phase 12 (block rendering rules), and the
-creatures' own behaviour (they only wander now).
+Next, in order: 11.14 and 11.15 (both wait for a snapshot from the player), then Phase 14 (torches), and the creatures' own
+behaviour (they only wander now).
 - [x] **11.1** Mouse look at a quarter of the first setting (0.00625 degrees a pixel, `VOXEL_MOUSE_SENSITIVITY`). Escape
   opens a pause menu: the mouse is freed and the world stands still; Resume locks the mouse; Quit closes the app.
   `tools/test_pause_menu.ps1` checks each step with scripted input.
@@ -166,22 +166,23 @@ creatures' own behaviour (they only wander now).
 ## Phase 12: block rendering rules (from the voxel sample, requested by the lead developer)
 Goal: each block type decides how it is drawn, so cube blocks, smooth blocks, and blocks in their own mesh can sit in one world.
 Today every solid block is part of one smooth skin per chunk, which merges wood and leaves into the ground.
-- [ ] **12.1** A per-type render rule: every block type has a shape (`smooth` for the skin, or `cube` for a normal voxel
-  cube) and a mesh group (`terrain` for the chunk's main mesh, or its own mesh per type). `define_block` takes both. Cube
-  blocks and smooth blocks are told apart by type, not by where they sit.
-- [ ] **12.2** Terrain blocks merge into the chunk's one mesh: ground (stone and dirt), grass, sand, gravel, water and snow.
-  This is what the skin does now.
-- [ ] **12.3** Wood and leaves are separate meshes, one per type and chunk, drawn with their own material. They do not
-  merge into the terrain. Their skin is built from their own blocks only, and the terrain skin treats them as air, so a
-  canopy does not hide the ground under it (and the ground does not hide the canopy).
-- [ ] **12.4** Brick: a new block type that stays a normal cube voxel and never merges, so it keeps sharp edges and its own
-  texture. The cube mesher draws its faces (no greedy merge across types) into a mesh of its own.
-- [ ] **12.5** The rules are data: the Python side sets the rule per block (`cge.VoxelWorld.define_block(id, ..., shape=,
-  group=)`), the hotbar shows the new block, and `tools/voxel_world_check.py` checks each rule (a brick face is a cube
-  face, a leaf is in the leaf mesh and not the terrain mesh, a ground block is in the terrain mesh).
-- Open question: the seams. A separate skin (wood, leaves) meets the terrain skin where they touch. Skirts (11.12) cover the
-  level-of-detail seams today; the same rule would be needed where a separate mesh meets the terrain, or the separate skin
-  would show a crack where the two meet.
+- [x] **12.1** A per-type render rule: `define_block(..., shape="smooth"|"cube", group="terrain"|"own", material=)`. A cube
+  block is always in its own mesh (`BlockType::own` and `cube`). Each chunk meshes its terrain, and one mesh per own block type
+  it contains (`buildChunkMesh` and `buildSmoothMesh` take the group). Collision reads the same rule: `VoxelWorld::skinAt`
+  gives each mesh's skin (`TerrainSkin`, `OwnSkin + id`, `CubeSkin + id`), and `skinDensity` is the largest of them.
+- [x] **12.2** Terrain blocks merge into the chunk's one mesh: ground (stone and dirt), grass, sand, gravel, water and snow.
+- [x] **12.3** Wood and leaves are separate meshes, one per type and chunk, drawn with `voxel_wood` and `voxel_leaves`. Their
+  skin is built from their own blocks only, and the terrain treats them as air, so a canopy does not hide the ground under it.
+- [x] **12.4** Brick: a cube block (`VoxelGen.BRICK`, hotbar key `-`). It never merges, so its faces are six quads, and a body
+  stands on its top face at the drawn height (not 0.2 above it, as a smooth block would).
+- [x] **12.5** The rules are data: `define_block` sets them, the hotbar shows brick, and `tools/voxel_world_check.py` checks
+  them (`check_groups`: a leaf alone is in its own mesh, a brick alone is six cube faces, ground is in the terrain mesh, a body
+  lands on a brick, and the engine's mover matches the Python physics on a mixed patch). `tools/test_voxel_physics.py` checks
+  the cube and largest-skin densities.
+- Seams: a separate skin meets the terrain where they touch. The terrain treats a trunk or a leaf as air, so its surface sits
+  where the block's own skin does; in the screenshot the two meet without a crack. Level-of-detail seams between own meshes use
+  the same skirts as the terrain (11.12), not yet checked in play. Light is not split by mesh (every block shades behind
+  it), so the ground under a trunk is shaded: a dark patch, which is what a block overhead should do.
 
 ## Phase 13: collision and the camera on the skin (from playtesting: clipping, and no walking up slopes)
 Goal: the player, the creatures and the camera meet the surface that is drawn, not the blocks under it. The skin is drawn at
@@ -266,4 +267,14 @@ full block, and light blocks (full cells that give light) are wanted too.
   bugs I still cannot reproduce, the start-of-game fall and the square shadow, are where my guesses have been wrong, so I
   want the snapshot before any more theory. I would keep the Release-only frame checks honest, and move bodies without a
   script (11.9) next, since every new creature currently needs its own Python.
+- Asset ids are capped per type (1000 until this round), and an id domain that is full hands out id 0, which is the id of a
+  live body. Once voxel chunks meshed one body per block type too, the Body type passed 1000, new bodies took id 0, and the
+  parent chain looped (`Body: Reached max depth in getGlobalTransform`). Now the cap is 2^20 (ids are handed out lazily, so
+  it costs nothing), and a full type refuses a new resource with an error instead of sharing an id. Found by reading the
+  allocator after a crash with no log; the engine's log is written at shutdown, so a crash loses it.
+- After the rendering rules (Phase 12): the sample reads as a place with things in it now. Trees are their own shapes on the
+  ground, the bricks keep their edges, and the body stands on a brick at the height it is drawn. What I still do not trust is
+  anything I have not seen in play: the leaf and trunk seams, and the dark patch under a trunk, are plausible but not tested
+  beyond a screenshot. The one thing I would do first next is the torch as a prop (14.2), because the caves still have nothing
+  in them that the player brings.
 - The tests run through the control channel with scripted input. They are the best guard against regressions in the game, and they caught a real engine bug (the run loop), so keep adding one for each new interaction.

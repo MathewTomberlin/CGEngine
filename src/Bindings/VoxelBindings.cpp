@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <optional>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <SFML/System/Vector3.hpp>
@@ -54,13 +55,30 @@ void bindVoxel(py::module_& m) {
         .def("set_smoothing", &VoxelWorld::setSmoothing, py::arg("resolution"),
              "The surface style: 0 for cubes, or the number of samples per block for a smooth skin (1 for the block scale, 2 for half blocks). Loaded chunks are re-meshed.")
         .def("smoothing", &VoxelWorld::smoothing, "The surface style set by set_smoothing: 0 for cubes, else the samples per block.")
-        .def("define_block", [](VoxelWorld& world, int block_id, sf::Vector3f colour, bool solid, bool falls, bool liquid, int emits) {
+        .def("define_block", [](VoxelWorld& world, int block_id, sf::Vector3f colour, bool solid, bool falls, bool liquid, int emits,
+                const std::string& shape, const std::string& group, const std::optional<std::string>& material) {
+            if (shape != "smooth" && shape != "cube") throw py::value_error("shape must be \"smooth\" or \"cube\"");
+            if (group != "terrain" && group != "own") throw py::value_error("group must be \"terrain\" or \"own\"");
+            if (shape == "cube" && group == "terrain") throw py::value_error("a cube block is drawn in its own mesh: group must be \"own\"");
             world.setColour(block_id, glm::vec3(colour.x, colour.y, colour.z));
-            world.defineBlock(block_id, BlockType{ solid, falls, liquid, static_cast<uint8_t>(std::clamp(emits, 0, 255)) });
+            BlockType type{ solid, falls, liquid, static_cast<uint8_t>(std::clamp(emits, 0, 255)) };
+            type.own = group == "own";
+            type.cube = shape == "cube";
+            world.defineBlock(block_id, type);
+            world.setMaterial(block_id, material.value_or(std::string()));
         }, py::arg("block_id"), py::arg("colour"), py::arg("solid") = true, py::arg("falls") = false, py::arg("liquid") = false,
-           py::arg("emits") = 0,
+           py::arg("emits") = 0, py::arg("shape") = "smooth", py::arg("group") = "terrain", py::arg("material") = py::none(),
            "Define a block id: its colour, whether it is solid (blocks movement), falls (sand-like, moves down into air or liquid), "
-           "liquid (flows, as water does) and emits (the light it gives off at its own cell, 0 to 255; a lamp is 255).")
+           "liquid (flows, as water does) and emits (the light it gives off at its own cell, 0 to 255; a lamp is 255). How it is "
+           "drawn: shape is \"smooth\" (the skin) or \"cube\" (a cube that never merges with its neighbours); group is \"terrain\" "
+           "(the chunk's terrain mesh) or \"own\" (a mesh of its own per chunk, drawn with material, a material name, or the "
+           "world's material if None). A cube block must be in its own group.")
+        .def("skin_at", &VoxelWorld::skinAt, py::arg("x"), py::arg("y"), py::arg("z"),
+             "The collision skin of the block at these coordinates: 0 for air and liquids, 1 for the terrain, 256 + id for a smooth "
+             "block drawn in its own mesh, 512 + id for a cube. Solid blocks are the non-zero ones; VoxelPhysics uses it as its solid().")
+        .def("chunk_group_quads", &VoxelWorld::chunkGroupQuads, py::arg("cx"), py::arg("cz"),
+             "The quads of each mesh a loaded chunk has, as a dict: 0 for the terrain, else the block id with its own mesh. Missing "
+             "groups have none.")
         .def("is_solid", &VoxelWorld::isSolid, py::arg("x"), py::arg("y"), py::arg("z"),
              "True if the block at these coordinates is solid. Air and liquids are not.")
         .def("biome_at", &VoxelWorld::biomeName, py::arg("x"), py::arg("z"),

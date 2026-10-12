@@ -39,7 +39,7 @@ namespace {
             {"1", sf::Keyboard::Scan::Num1}, {"2", sf::Keyboard::Scan::Num2}, {"3", sf::Keyboard::Scan::Num3},
             {"4", sf::Keyboard::Scan::Num4}, {"5", sf::Keyboard::Scan::Num5}, {"6", sf::Keyboard::Scan::Num6},
             {"7", sf::Keyboard::Scan::Num7}, {"8", sf::Keyboard::Scan::Num8}, {"9", sf::Keyboard::Scan::Num9},
-            {"0", sf::Keyboard::Scan::Num0},
+            {"0", sf::Keyboard::Scan::Num0}, {"-", sf::Keyboard::Scan::Hyphen}, {"=", sf::Keyboard::Scan::Equal},
             {"F5", sf::Keyboard::Scan::F5}, {"F9", sf::Keyboard::Scan::F9}, {"F12", sf::Keyboard::Scan::F12},
         };
         return keys;
