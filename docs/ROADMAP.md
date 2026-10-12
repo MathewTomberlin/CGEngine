@@ -236,6 +236,13 @@ full block, and light blocks (full cells that give light) are wanted too.
 - [x] **14.3** Held torch: a point light at the eye (`held_torch` in the scene, `set_light(position=)`), lit and put out with
   L. It is a shader light, so it needs no re-mesh and stays separate from the baked light of 14.1 and 14.2. Point lights are not
   gated by the sky (the shader's `gate`), so it lights a sealed cave. Not yet seen in play: the lit torch and its walls.
+- [x] **14.7** Items attach to the skin, not the voxel. A torch stands on the drawn surface of the block it leans on: its
+  base is at the skin's crossing (`VoxelWorld::propAnchor`, the same density collision uses), not at the block's face. Before,
+  a torch sat inside the skin on most blocks (the skin bulges 0.2 past each face), so it was hidden. `prop_boxes` gives the
+  boxes the torch is drawn with, and the aim test uses them. Checked by `check_props`.
+- [x] **14.8** Placed torches and lamps light like the held torch: the glow is the warm light colour at 0.8 (it used to be four
+  times the block's colour, which clipped to white), and the light a lamp or torch gives its neighbours is tinted by the same
+  colour. The lamp block's own colour is dark, so its glow shows as light, not as a white block.
 - [~] **14.4** The light colour is warm (the held torch and the placed ones). The held torch flickers, two slow sines a few
   per cent either way. Placed torches do not flicker yet: their light is baked into the mesh, so a flicker would need a
   re-mesh each frame; it waits for a shader term that reads a per-torch time.
