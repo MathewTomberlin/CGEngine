@@ -27,6 +27,11 @@ namespace CGEngine {
             return next().value_or(0U);
         }
 
+        // True when no id is left: take() would return 0, which is an id in use.
+        bool full() const {
+            return returnedIds.empty() && nextUnused >= count;
+        }
+
         void give(IntType key) {
             if (removedIds.find(key) != removedIds.end()) {
                 returnedIds.insert(key);

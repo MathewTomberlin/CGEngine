@@ -50,7 +50,9 @@ namespace CGEngine {
 	};
 
 	struct ResourceContainer {
-		UniqueDomain<id_t, ResourceEntry> resources{ 1000 };
+		// Ids are handed out lazily, so a large cap costs nothing. Voxel worlds take a body per chunk and mesh group, which
+		// passed the old cap of 1000 and made ids collide.
+		UniqueDomain<id_t, ResourceEntry> resources{ size_t(1) << 20 };
 		unordered_map<string, id_t> nameToId;
 	};
 
@@ -498,6 +500,12 @@ namespace CGEngine {
 					container.resources.remove(existingResourceId.value());
 					logMessage(LogWarn, "Invalid resource mapping. Deleting '" + resourceName + "'");
 				}
+			}
+
+			//A full type has no id to give: refuse the resource rather than share an id with another.
+			if (getContainer<T>().resources.full()) {
+				logMessage(LogError, "No ids left for '" + string(resourceContainers[resourceTypeId].first) + "': '" + resourceName + "' was not created");
+				return nullopt;
 			}
 
 			//Create the resource with unpacked Args...

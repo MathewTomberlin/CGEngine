@@ -17,6 +17,10 @@ namespace CGEngine {
 			return key;
 		}
 
+		bool full() const {
+			return ids.full();
+		}
+
 		void remove(DomainKey key) {
 			if (domain.find(key) != domain.end()) {
 				ids.give(key);
