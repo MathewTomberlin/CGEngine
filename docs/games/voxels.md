@@ -30,7 +30,7 @@ rate, build and run the Release configuration.
   game, and applies at once. `VOXEL_MOUSE_SENSITIVITY` sets the base look speed in degrees per pixel (0.00625 by default),
   and `VOXEL_SETTINGS` moves the settings file.
 - Without the mouse: the arrow keys turn and look, J hits, K places. A block takes several hits (stone three, wood four, coal four, iron five, the rest one), and a
-  damaged block is shown darker and gets cracks; the last hit breaks it. The damage is kept with the edits (F5). The aimed block's outline flashes white on a hit. L lights or puts out the torch you carry, which
+  damaged block is shown darker and gets cracks; the last hit breaks it. The damage is kept with the edits (F5). The aimed block's outline flashes white on a hit, and chips fly from the face (a break throws more). L lights or puts out the torch you carry, which
   lights the cave around you.
 - Keys 1 to 9, 0, - and = choose a hotbar slot (the first row of the inventory: 12 slots, drawn as boxes at the bottom of the
   window). The player starts with 16 each of stone, dirt, grass, wood, leaves, sand, gravel, snow, water, the lamp, brick and

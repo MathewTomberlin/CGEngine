@@ -110,6 +110,13 @@ def main():
         hit(base)
         checks["the third hit breaks the stone and adds it to the inventory"] = (
             world.get_block(*base) == 0 and inv.count(STONE) == stone0 + 1)
+        checks["a break throws chips (a burst is live)"] = len(game.bursts.live) > 0
+        live_before = len(game.bursts.live)
+        game.bursts.add((2.5, 58.5, 2.5), (0.5, 0.5, 0.5), 4, 0.14, 0.5)
+        game.bursts.update(0.05)
+        checks["a live burst moves and is rebuilt without an error"] = len(game.bursts.live) == live_before + 1
+        game.bursts.update(10.0)
+        checks["the chips are gone once their time is up"] = len(game.bursts.live) == 0
 
         # A placed block takes one from the selected slot.
         floor = (2, 58, 6)
@@ -300,6 +307,9 @@ def main():
     finally:
         for cell in test_cells:
             world.set_block(cell[0], cell[1], cell[2], 0)
+        for burst in game.bursts.live:
+            burst.remove()
+        game.bursts.live = []
         for name in ("test_creature", "test_biter"):
             if cge.find_body(name) is not None:
                 cge.remove_mesh_body(name)

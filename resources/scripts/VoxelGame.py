@@ -13,6 +13,7 @@ C toggles creative mode (placing takes nothing from the slots). VOXEL_SEED choos
 import json
 import math
 import os
+import random
 import time
 import traceback
 
@@ -21,6 +22,7 @@ from PyScript import PyScript
 import StateFile
 import VoxelGen
 import VoxelInventory
+import VoxelParticles
 import VoxelPhysics as physics
 from VoxelShapes import mix, outline_arrays
 import VoxelWalkers
@@ -233,6 +235,7 @@ class VoxelGame(PyScript):
         self.landed_once = False        # a fall counts only after the player has stood on the ground (the spawn drop does not)
         self.spawn_pos = list(self.pos)
         self.walker_target = None       # (distance, walker) of the creature under the crosshair, or None
+        self.bursts = VoxelParticles.Bursts(random.Random(self.seed))   # the chips a hit or a break throws
         self.window = None              # the window's size, set when the HUD is made
         self.bodies = set()             # the HUD's rectangle and text bodies, made once each
         self.drawn = {}                 # the last value set on each HUD body, so unchanged ones are not set again
@@ -306,6 +309,7 @@ class VoxelGame(PyScript):
         self.update_held_torch()
         self.update_healing()
         self.update_health(dt)
+        self.bursts.update(dt)
         self.frame_dt = dt
         self.place_camera()
 
@@ -1010,11 +1014,16 @@ class VoxelGame(PyScript):
             # one that kills it leaves a hide for the inventory.
             walker = self.walker_target[1]
             self.flash_until = time.time() + HIT_FLASH_SECONDS
+            lo, hi = walker.box()
+            centre = [(lo[i] + hi[i]) / 2 for i in range(3)]
             if walker.hurt((self.pos[0], self.pos[2])):
+                self.bursts.add(centre, (0.55, 0.45, 0.40), 12, 0.14, 0.7)
                 self.walkers.remove(walker)
                 self.walker_target = None
                 self.gain(VoxelGen.HIDE)
                 self.notify("A creature died: a hide" if not self.creative else "A creature died")
+            else:
+                self.bursts.add(centre, (0.85, 0.25, 0.2), 4, 0.12, 0.4)
             return
         if breaking and self.aims_at_torch():
             # A torch the crosshair is on, nearer than the block behind it, is the one broken, and it goes into the inventory.
@@ -1036,14 +1045,20 @@ class VoxelGame(PyScript):
                 self.notify("Inventory full")
                 return
             stage = self.world.hit_block(block[0], block[1], block[2])
+            colour = VoxelGen.COLOURS.get(kind, (0.5, 0.5, 0.5))
+            centre = [block[i] + 0.5 for i in range(3)]
             if stage != -2:
                 self.flash_until = time.time() + HIT_FLASH_SECONDS
             if stage == -1:
                 self.hit_times.pop(tuple(block), None)
                 self.drop_torches_on(block)
                 self.gain(kind)
+                self.bursts.add(centre, colour, 10, 0.16, 0.6)
             elif stage > 0:
                 self.hit_times[tuple(block)] = time.time()
+                # The chips fly from the face that was hit, not from the middle of the block.
+                face = [centre[i] + normal[i] * 0.5 for i in range(3)]
+                self.bursts.add(face, tuple(c * 0.7 for c in colour), 3, 0.14, 0.35)
         elif placing:
             cell = (block[0] + normal[0], block[1] + normal[1], block[2] + normal[2])
             if physics.cell_in_player(cell, self.pos):

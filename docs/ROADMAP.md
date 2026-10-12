@@ -285,8 +285,11 @@ Goal: blocks and creatures take several hits, and what the player has hit looks 
   torches), and a stage change re-meshes only the chunk it is in. Checked by `voxel_world_check.py` (the save and load round
   trip) and seen in screenshots of a two-hit and a one-hit block. The cracks use a 27-cell search per fragment, so the cost
   of many damaged blocks in view is not measured yet (15.3).
-- [~] **16.3** Hit feedback: the aimed block's outline flashes white for 0.12 s on each hit (done). Still open: a short particle
-  burst in the block's colour when a block breaks (particles are a new engine feature, so this may wait for a small particle system).
+- [x] **16.3** Hit feedback: the aimed block's outline flashes white for 0.12 s on each hit; a hit throws three chips of the
+  block's colour from the face that was hit, a break throws ten from the middle, and a creature throws chips when it is hit
+  and twelve when it dies. The chips are a small particle system (`VoxelParticles.py`): each burst is one runtime mesh body,
+  rebuilt each frame, with gravity and shrinking, at most eight bursts at once. Not yet: the engine has no particle system of
+  its own, and a burst costs one mesh upload a frame; checked inside the game (`voxel_game_check.py`), seen in play only.
 - [x] **16.4** Damage heals: a block not hit for a few seconds goes back one stage (so a half-broken wall is a choice, not a
   trap). The timer is per cell and only runs for damaged cells.
 - [x] **16.5** Creatures take hits: each has `HEALTH` (3) and a left click takes one (the aimed creature is outlined, and its
