@@ -78,6 +78,7 @@ in float matId;
 in vec3 vertexColour;
 in vec3 vertexGlow;
 in float vertexSky;
+in float vertexFlicker;     //The phase of a wavering flame (a placed torch), 0 for every other surface
 in float vertexDamage;      //How much of the voxel's block has been hit, 0 to 1 (see crackMask)
 
 out vec4 FragColor;
@@ -291,7 +292,9 @@ void main() {
     }
     
     //Emission: a light block's own glow, added after the lighting so the sun and the shadows do not dim it. Fog still applies.
-    fragColor += vertexGlow;
+    //A torch's flame wavers: its glow is scaled by two slow sines, each torch on its own phase (vertexFlicker is 0 elsewhere).
+    float flameWaver = vertexFlicker > 0.0 ? 0.88 + 0.12 * sin(timeSec * 7.3 + vertexFlicker * 6.283) * sin(timeSec * 2.9 + vertexFlicker * 3.7) : 1.0;
+    fragColor += vertexGlow * flameWaver;
 
     //Distance fog: fades the surface into the fog colour between the start and end distances
     if(fogRange.y > fogRange.x){

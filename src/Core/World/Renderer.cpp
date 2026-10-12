@@ -257,6 +257,7 @@ namespace CGEngine {
 		bind("vertGlow", 3, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, glow));
 		bind("vertSky", 1, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, sky));
 		bind("vertDamage", 1, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, damage));
+		bind("vertFlicker", 1, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, flicker));
 		bind("materialId", 1, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, materialId));
 		bind("vertColour", 3, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, colour));
 		GL_CHECK(glBindVertexArray(0));

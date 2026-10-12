@@ -581,7 +581,7 @@ namespace CGEngine {
 	}
 	namespace {
 		// A box of six faces, with one colour, glow and sky light, appended to out.
-		void addBox(MeshArrays& out, glm::vec3 centre, glm::vec3 half, glm::vec3 colour, glm::vec3 glow, float sky) {
+		void addBox(MeshArrays& out, glm::vec3 centre, glm::vec3 half, glm::vec3 colour, glm::vec3 glow, float sky, float flicker = 0.0f) {
 			for (int axis = 0; axis < 3; ++axis) {
 				const int u = (axis + 1) % 3;
 				const int v = (axis + 2) % 3;
@@ -600,6 +600,7 @@ namespace CGEngine {
 						vertex.texCoord = glm::vec2(position[u], position[v]);
 						vertex.colour = colour;
 						vertex.glow = glow;
+						vertex.flicker = flicker;
 						vertex.sky = sky;
 						out.vertices.push_back(vertex);
 					}
@@ -642,7 +643,10 @@ namespace CGEngine {
 			const glm::vec3 cell(prop.x + 0.5f, prop.y + 0.5f, prop.z + 0.5f);
 			const PropShape shape = propShape(cell, prop.dir, prop.anchor);
 			addBox(out, shape.stickCentre, shape.stickHalf, wood, glm::vec3(0.0f), sky);
-			addBox(out, shape.flameCentre, shape.flameHalf, flame, VoxelLightTint * VoxelGlow, sky);
+			// Each torch's flame wavers on its own phase, from its cell (a fraction in 0 to 1, then 1 added so it is never 0).
+			const float seed = std::sin(prop.x * 12.9898f + prop.y * 37.719f + prop.z * 78.233f) * 43758.5453f;
+			const float phase = 1.0f + (seed - std::floor(seed));
+			addBox(out, shape.flameCentre, shape.flameHalf, flame, VoxelLightTint * VoxelGlow, sky, phase);
 		}
 	}
 

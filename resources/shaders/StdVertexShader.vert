@@ -66,6 +66,7 @@ in float materialId;
 in mat4 instanceMatrix;	//Read only when instanced is set (see Renderer::drawInstances)
 in vec3 vertColour;
 in vec3 vertGlow;
+in float vertFlicker;	//The phase of a flame that wavers (see VoxelVertex::flicker), 0 for other surfaces
 in float vertDamage;	//How much of the block has been hit, 0 to 1 (voxel meshes; see VoxelVertex::damage)
 in float vertSky;	//How much of the sun and ambient light reaches the surface, 0 to 1 (voxel meshes; see VoxelVertex::sky)	//Light the surface gives off (black unless the mesh sets it; see VoxelVertex::glow)
 uniform bool instanced;
@@ -81,6 +82,7 @@ out vec3 vertexColour;
 out vec3 vertexGlow;
 out float vertexSky;
 out float vertexDamage;
+out float vertexFlicker;
 
 void main() {
     vec4 bonePosition = vec4(0.0f);
@@ -120,6 +122,7 @@ void main() {
 	vertexGlow = vertGlow;
 	vertexSky = vertSky;
 	vertexDamage = vertDamage;
+	vertexFlicker = vertFlicker;
 
 	gl_Position = camera * worldPos;
 }

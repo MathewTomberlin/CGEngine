@@ -243,9 +243,10 @@ full block, and light blocks (full cells that give light) are wanted too.
 - [x] **14.8** Placed torches and lamps light like the held torch: the glow is the warm light colour at 0.8 (it used to be four
   times the block's colour, which clipped to white), and the light a lamp or torch gives its neighbours is tinted by the same
   colour. The lamp block's own colour is dark, so its glow shows as light, not as a white block.
-- [~] **14.4** The light colour is warm (the held torch and the placed ones). The held torch flickers, two slow sines a few
-  per cent either way. Placed torches do not flicker yet: their light is baked into the mesh, so a flicker would need a
-  re-mesh each frame; it waits for a shader term that reads a per-torch time.
+- [x] **14.4** The light colour is warm (the held torch and the placed ones). The held torch flickers, two slow sines a few
+  per cent either way. A placed torch's flame wavers too: its glow is scaled in the shader by two sines on the torch's own
+  phase (a per-vertex `flicker` value, 0 for every other surface). The light a placed torch gives its neighbours is baked into
+  the mesh, so it does not waver; only the flame's glow does. Seen as a still frame only, not in motion yet.
 - [x] **14.5** Measured in Release (the check runs inside the engine, `measure_remesh`, median of 9 edits, busy poll): a block
   edit reaches the mesh in about 2.6 ms, a torch placed or removed in about 2.9 ms, and a block edit in a chunk with a lamp
   in it in about 3.0 ms. The light pass adds little next to the meshing itself.

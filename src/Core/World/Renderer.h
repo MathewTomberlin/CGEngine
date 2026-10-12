@@ -103,6 +103,8 @@ namespace CGEngine {
 		float sky = 1.0f;
 		// How much of the block has been hit (0 for none, up to 1 just before it breaks): the cracks on the surface grow with it.
 		float damage = 0.0f;
+		// The phase of a flame that wavers (a placed torch's flame, 1 to 2, so each torch wavers on its own); 0 for other surfaces.
+		float flicker = 0.0f;
 	};
 
 	struct MeshData : public IResource {
