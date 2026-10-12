@@ -220,9 +220,11 @@ where the player stands.
 
 ## Performance
 
-Release, 841 chunks in view (about 1.2 million quads with the near detail): about 560 frames a second while standing
-still (11.7 in the roadmap). `tools/test_voxels.ps1` checks the load, the walk,
-the view's level and the worst frame.
+Release, 841 chunks in view: about 180 frames a second standing still on this machine, with about 0.55 million quads (the
+chunks more than 6 from the player are far skins, sampled every second block; `VOXEL_FAR_RADIUS` moves that line). The view
+distance is set on the settings page. Measured with `tools/voxel_perf.ps1` at each step (see the roadmap, 15.3 and 15.5): at
+24 about 80 frames a second, at 40 about 27, and the cost there is the number of chunk draws. `tools/test_voxels.ps1` checks
+the load, the walk, the view's level and the worst frame.
 
 ## Limits
 

@@ -267,14 +267,20 @@ Goal: the player chooses how far they can see, and a long view stays cheap enoug
   the middle. The fog, the chunk requests and the unload radius follow it, and the choice is saved with the other settings.
   "Unlimited" is the last step and is capped at 40, because each chunk is held in memory (about 6,500 chunks, roughly 2 GB).
   `tools/test_pause_menu.ps1` checks the arrow and the saved file.
-- [ ] **15.2** Far skins: the chunks beyond the near ring are meshed coarser (a sample every two blocks or more), so a long view
-  costs a fraction of the quads. This is what makes "Unlimited" honest; the cap of 40 is the stand-in until then.
+- [x] **15.2** Far skins: the chunks more than 6 from the player (`VOXEL_FAR_RADIUS`) are meshed with every second block
+  sampled (`buildSmoothMesh` takes a stride; the chunk size is even, so the grids of neighbours line up, and the skirts hide
+  the step between levels). At view 40: 2.2 M quads instead of 8.3 M, and the load takes 15 s instead of 32 s. Frame rate
+  moved only from 23 to 27, so the cost at 40 is the number of chunk draws, not the quads (15.5). Unlimited stays capped at 40
+  until then. Seen in a screenshot at 40 (terraces on the dunes from the coarser sampling, no open seams).
 - [~] **15.3** Frame time per view distance, measured in Release (`tools/voxel_perf.ps1`, standing, turning and walking, this
   machine): view 6 (169 chunks) 399 / 380 / 334 fps, worst frame 6 to 7 ms; view 14 (841) 179 / 186 / 161 fps, worst 10 to 15 ms;
   view 24 (2,401) 69 / 70 / 66 fps, worst 24 to 37 ms; view 40 (6,561) 23 / 19 / 17 fps, worst 57 to 70 ms. The "about 650 fps at
   841 chunks" in the notes did not come back: the build from before this round measured 201 / 199 / 178 on the same machine
   today, so this round's HUD and game script cost about 10%. Still open: memory per step (the step list is chosen from these
   numbers, so the memory is the next measurement).
+- [ ] **15.5** Draw calls at a long view: each chunk is one body with its own draws, so at 40 there are 6,561 chunk bodies a frame
+  and the frame rate is 27 whatever the quads are. Merge the far chunks into a few bodies (say, 4 by 4 chunks, rebuilt when one of
+  them changes), or cull them earlier, and measure with 15.3.
 - [ ] **15.4** Chunks beyond the view are unloaded as the player moves, but the edits are kept (they are already); check that a
   long walk at 40 does not leave the process growing (the unload path, and the meshes' GPU buffers).
 

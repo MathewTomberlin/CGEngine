@@ -113,6 +113,8 @@ HEAL_AFTER = 4.0                 # seconds a damaged block is left alone before 
 HEAL_STEP = 1.0                  # seconds per damage stage it heals once it does
 HELD_TORCH_BRIGHTNESS = 2.5     # the light of the torch the player carries (L lights and puts it out)
 WALKERS = int(os.environ.get("VOXEL_WALKERS", "12"))   # creatures that wander the terrain near the spawn
+FAR_RADIUS = int(os.environ.get("VOXEL_FAR_RADIUS", "6"))   # chunks more than this from the player get far skins
+FAR_STRIDE = 2             # the far skins sample every second block: a quarter of the quads
 SHADOWS = os.environ.get("VOXEL_SHADOWS", "1") != "0"   # the sun casts shadows (the map covers SHADOW_RADIUS around the camera)
 SHADOW_RADIUS = float(os.environ.get("VOXEL_SHADOW_RADIUS", "40"))
 HUD_OUTLINE = 2.0                 # pixels of black outline round each label, so it reads over sand and grass
@@ -338,6 +340,7 @@ class VoxelGame(PyScript):
         self.world.set_move_seconds(SIM_TICK * 0.9)   # a falling block lands just before the next tick
         # Smooth skin nearest the camera is finer: NEAR_SAMPLES per block within NEAR_RADIUS chunks.
         self.world.set_detail(NEAR_RADIUS, NEAR_SAMPLES)
+        self.world.set_far(FAR_RADIUS, FAR_STRIDE)
         cge.set_environment(shadows=SHADOWS, shadow_radius=SHADOW_RADIUS)
         self.world.set_terrain(self.seed, VoxelGen.SEA_LEVEL, 8, 44, VoxelGen.SNOW_LEVEL, VoxelGen.TREE_CHANCE,
                           VoxelGen.CAVE_WIDTH)

@@ -157,6 +157,8 @@ void bindVoxel(py::module_& m) {
            "does. on_ground is whether it stood on the skin at the last step (it lets the box climb a block). Returns (pos, vel, on_ground).")
         .def("simulate", &VoxelWorld::simulate, py::arg("dt"), py::arg("budget_ms") = 1.0, py::arg("tick_seconds") = 0.1,
              "Advance the block physics by dt seconds, within budget_ms of work. Ticks run every tick_seconds. Returns the cells looked at.")
+        .def("set_far", &VoxelWorld::setFar, py::arg("far_chunks"), py::arg("stride") = 2,
+             "Far skins: the chunks more than far_chunks from the focus are meshed with every stride-th block sampled (a stride of 2 is a quarter of the quads). 0 turns them off.")
         .def("set_detail", &VoxelWorld::setDetail, py::arg("near_chunks"), py::arg("near_samples") = 2,
              "Finer smooth skin near the camera: the chunks within near_chunks of the focus use near_samples per block. 0 turns it off.")
         .def("chunk_quads", &VoxelWorld::chunkQuads, py::arg("cx"), py::arg("cz"),

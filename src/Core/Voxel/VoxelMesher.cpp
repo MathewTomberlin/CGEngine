@@ -403,28 +403,34 @@ namespace CGEngine {
 		}
 	}
 
-	void buildSmoothMesh(const PaddedChunk& chunk, const std::array<glm::vec3, 256>& palette, int resolution,
+	void buildSmoothMesh(const PaddedChunk& chunk, const std::array<glm::vec3, 256>& palette, int resolution, int stride,
 		unsigned skirtSides, uint8_t group, MeshArrays& out) {
 		out.vertices.clear();
 		out.indices.clear();
 		const int R = std::max(1, resolution);
+		// A stride above 1 samples every stride-th block (a far chunk, meshed coarser). It needs one sample a block, and the
+		// chunk's size must divide by it: the chunks are 16 blocks, so 2 is the largest stride the sample grid lines up on.
+		const int T = R == 1 ? std::max(1, stride) : 1;
 		const int S = chunk.size;
 		const int H = chunk.height;
+		// The sample grid's steps across the chunk: the size times R over T along x and z, and the height times R over T up.
+		const int NX = S * R / T;
+		const int NY = H * R / T;
 
 		// Density samples, for i, k in [-1, S * R + 1] and j in [-1, H * R + 1]; array index = sample + 1. With one sample a
 		// block, the samples sit at block centres, so a block one wide (a tree trunk) keeps its surface. With more, they sit at
 		// i / R, which puts samples on block faces too and rounds the edges further.
-		auto position = [R](int i, int j, int k) {
-			const glm::vec3 p = glm::vec3(i, j, k);
-			return R == 1 ? p + glm::vec3(0.5f) : p / static_cast<float>(R);
+		auto position = [R, T](int i, int j, int k) {
+			if (R == 1) return glm::vec3(i * T, j * T, k * T) + glm::vec3(0.5f);
+			return glm::vec3(i, j, k) / static_cast<float>(R);
 		};
-		const int sx = S * R + 3;
-		const int sy = H * R + 3;
+		const int sx = NX + 3;
+		const int sy = NY + 3;
 		std::vector<float> samples(static_cast<size_t>(sx) * sy * sx);
 		auto sampleIndex = [sx](int i, int j, int k) { return static_cast<size_t>(((j + 1) * sx + (k + 1)) * sx + (i + 1)); };
-		for (int j = -1; j <= H * R + 1; ++j) {
-			for (int k = -1; k <= S * R + 1; ++k) {
-				for (int i = -1; i <= S * R + 1; ++i) {
+		for (int j = -1; j <= NY + 1; ++j) {
+			for (int k = -1; k <= NX + 1; ++k) {
+				for (int i = -1; i <= NX + 1; ++i) {
 					samples[sampleIndex(i, j, k)] = densityAt(chunk, group,position(i, j, k));
 				}
 			}
@@ -433,13 +439,13 @@ namespace CGEngine {
 
 		// Cells: the cube whose lowest corner is sample (i, j, k), for i and k in [-1, S * R] and j in [-1, H * R]. A cell
 		// the surface crosses gets one vertex, at the average of its crossed edges.
-		const int cn = S * R + 2;
-		const int cyn = H * R + 2;
+		const int cn = NX + 2;
+		const int cyn = NY + 2;
 		auto cellIndex = [cn](int i, int j, int k) { return static_cast<size_t>(((j + 1) * cn + (k + 1)) * cn + (i + 1)); };
 		std::vector<glm::vec3> cellPosition(static_cast<size_t>(cn) * cyn * cn);
-		for (int j = -1; j <= H * R; ++j) {
-			for (int k = -1; k <= S * R; ++k) {
-				for (int i = -1; i <= S * R; ++i) {
+		for (int j = -1; j <= NY; ++j) {
+			for (int k = -1; k <= NX; ++k) {
+				for (int i = -1; i <= NX; ++i) {
 					float value[8];
 					glm::vec3 corner[8];
 					int inside = 0;
@@ -488,9 +494,9 @@ namespace CGEngine {
 		};
 
 		// Each edge belongs to the chunk that owns its lowest sample, so chunks share no quads.
-		for (int j = 0; j < H * R; ++j) {
-			for (int k = 0; k < S * R; ++k) {
-				for (int i = 0; i < S * R; ++i) {
+		for (int j = 0; j < NY; ++j) {
+			for (int k = 0; k < NX; ++k) {
+				for (int i = 0; i < NX; ++i) {
 					const bool here = sample(i, j, k) > SmoothIso;
 					// x edge: the cells around it have lowest corners (i, j-1, k-1), (i, j, k-1), (i, j, k), (i, j-1, k).
 					if (here != (sample(i + 1, j, k) > SmoothIso)) {
@@ -514,12 +520,13 @@ namespace CGEngine {
 		// Skirts: where the surface crosses a chunk's side, a strip runs a block down from it. A neighbour at another level
 		// of detail has its surface a little off the same line, and the strip covers the gap, so the seam is hidden.
 		auto topOfColumn = [&](const auto& value, float& height) {
-			for (int j = H * R - 1; j >= -1; --j) {
+			for (int j = NY - 1; j >= -1; --j) {
 				const float lower = value(j);
 				const float upper = value(j + 1);
 				if (lower > SmoothIso && upper <= SmoothIso) {
 					// Only a surface with solid under it gets a skirt: over air, the strip would hang in the open.
-					if (j - R < -1 || value(j - R) <= SmoothIso) return false;
+					const int down = std::max(1, R / T);   // one block down: a step of the sample grid
+					if (j - down < -1 || value(j - down) <= SmoothIso) return false;
 					const float t = (lower - SmoothIso) / (lower - upper);
 					const float y0 = position(0, j, 0).y;
 					const float y1 = position(0, j + 1, 0).y;
@@ -547,7 +554,7 @@ namespace CGEngine {
 				out.indices.insert(out.indices.end(), { first, first + 2, first + 1, first, first + 3, first + 2 });
 			}
 		};
-		const int last = S * R;
+		const int last = NX;
 		// The two sides at x = first and last sample, along z.
 		for (int side = 0; side < 2; ++side) {
 			if (!(skirtSides & (side == 0 ? 1u : 2u))) continue;

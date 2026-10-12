@@ -46,7 +46,11 @@ namespace CGEngine {
 		// Level of detail for the smooth skin: the chunks within nearChunks of the focus (see update) use nearSamples per
 		// block, the rest use the smoothing resolution. nearChunks 0 turns it off.
 		void setDetail(int nearChunks, int nearSamples);
+		// Far skins: the chunks more than farChunks from the focus are meshed with every stride-th block sampled (a stride of 2
+		// is a quarter of the quads). 0 chunks turns it off.
+		void setFar(int farChunks, int stride);
 		int resolutionFor(int cx, int cz) const;
+		int strideFor(int cx, int cz) const;
 		// The quads in a loaded chunk's mesh as last uploaded (0 if it has none), all groups together.
 		int chunkQuads(int cx, int cz) const;
 		// The quads of each mesh group a loaded chunk has, by group: 0 is the terrain, else the block id with its own mesh.
@@ -162,6 +166,7 @@ namespace CGEngine {
 			uint32_t version = 0;           // bumped by each change to the blocks or their neighbours
 			int quads = 0;                  // all groups together
 			int resolution = 0;             // the smooth skin's samples per block for this chunk (0: cubes); see resolutionFor
+			int stride = 1;                 // the sample grid's stride for this chunk (2 for a far chunk); see strideFor
 			std::map<int, id_t> bodies;     // the body of each mesh group drawn (0: the terrain), by its asset id
 			std::map<int, int> groupQuads;  // the quads of each group's mesh as last uploaded
 		};
@@ -200,6 +205,8 @@ namespace CGEngine {
 		int smoothResolution = 0;
 		int nearRadius = 0;
 		int nearResolution = 2;
+		int farRadius = 0;              // chunks farther than this from the focus are far skins (setFar)
+		int farStride = 2;
 		int focusCx = 0;
 		int focusCz = 0;
 		bool focusKnown = false;

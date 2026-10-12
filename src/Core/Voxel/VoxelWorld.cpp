@@ -230,6 +230,17 @@ namespace CGEngine {
 		refreshResolutions(focusCx, focusCz, true);
 	}
 
+	void VoxelWorld::setFar(int farChunks, int stride) {
+		farRadius = std::max(0, farChunks);
+		farStride = std::max(1, stride);
+		refreshResolutions(focusCx, focusCz, true);
+	}
+
+	int VoxelWorld::strideFor(int cx, int cz) const {
+		if (farRadius > 0 && focusKnown && std::max(std::abs(cx - focusCx), std::abs(cz - focusCz)) > farRadius) return farStride;
+		return 1;
+	}
+
 	int VoxelWorld::resolutionFor(int cx, int cz) const {
 		if (smoothResolution <= 0) return 0;
 		if (nearRadius > 0 && focusKnown && std::max(std::abs(cx - focusCx), std::abs(cz - focusCz)) <= nearRadius) {
@@ -247,8 +258,10 @@ namespace CGEngine {
 			Chunk& chunk = entry.second;
 			if (!chunk.loaded) continue;   // a chunk gets its level when its terrain is installed
 			const int wanted = resolutionFor(entry.first.first, entry.first.second);
-			if (wanted != chunk.resolution) {
+			const int wantedStride = strideFor(entry.first.first, entry.first.second);
+			if (wanted != chunk.resolution || wantedStride != chunk.stride) {
 				chunk.resolution = wanted;
+				chunk.stride = wantedStride;
 				markDirty(entry.first.first, entry.first.second);
 				// The neighbours' seams with this chunk change, so they are meshed again too.
 				markNeighboursDirty(entry.first.first, entry.first.second);
@@ -526,6 +539,7 @@ namespace CGEngine {
 		applyEdits(result.cx, result.cz, chunk.blocks);
 		chunk.loaded = true;
 		chunk.resolution = resolutionFor(result.cx, result.cz);
+		chunk.stride = strideFor(result.cx, result.cz);
 		// The chunk's faces, and those of the neighbours that face it, are meshed from the new blocks.
 		markDirty(result.cx, result.cz);
 		markNeighboursDirty(result.cx, result.cz);
@@ -768,6 +782,7 @@ namespace CGEngine {
 		chunk.meshing = true;
 		dirtyKeys.erase(std::make_pair(cx, cz));
 		const int resolution = chunk.resolution;
+		const int stride = chunk.stride;
 		PaddedChunk padded = snapshot(cx, cz, VoxelLightReach);
 		// Skirts on the sides that meet a neighbour at another level of detail (bit 1: -x, 2: +x, 4: -z, 8: +z).
 		unsigned skirtSides = 0;
@@ -776,7 +791,7 @@ namespace CGEngine {
 			const int dzs[4] = { 0, 0, -1, 1 };
 			for (int side = 0; side < 4; ++side) {
 				const Chunk* neighbour = findChunk(cx + dxs[side], cz + dzs[side]);
-				if (neighbour && neighbour->loaded && neighbour->resolution != resolution) skirtSides |= 1u << side;
+				if (neighbour && neighbour->loaded && (neighbour->resolution != resolution || neighbour->stride != stride)) skirtSides |= 1u << side;
 			}
 		}
 		const std::array<glm::vec3, 256> colours = palette;
@@ -784,7 +799,7 @@ namespace CGEngine {
 		for (size_t id = 0; id < 256; ++id) cubeShape[id] = types[id].cube;
 		const uint32_t generation = chunk.generation;
 		const uint32_t version = chunk.version;
-		enqueue([this, cx, cz, generation, version, resolution, skirtSides, padded = std::move(padded), colours, cubeShape]() mutable {
+		enqueue([this, cx, cz, generation, version, resolution, stride, skirtSides, padded = std::move(padded), colours, cubeShape]() mutable {
 			MeshResult result;
 			result.cx = cx;
 			result.cz = cz;
@@ -808,7 +823,7 @@ namespace CGEngine {
 				if (cubes) {
 					buildChunkMesh(padded, colours, group, part.mesh);
 				} else {
-					buildSmoothMesh(padded, colours, resolution, skirtSides, group, part.mesh);
+					buildSmoothMesh(padded, colours, resolution, stride, skirtSides, group, part.mesh);
 				}
 				// The torches are drawn with the terrain (their cells are air to it, so they are not part of any block's mesh).
 				if (group == 0) buildPropMesh(padded, part.mesh);
