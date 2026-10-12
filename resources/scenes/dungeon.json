@@ -9,7 +9,7 @@
   "lights": [
     { "name": "sun", "directional": true, "direction": [0.3, -1, -0.6], "brightness": 0.65, "ambiance": 0.4, "color": [1, 1, 0.95] }
   ],
-  "bodies": [ { "name": "dg_player", "model": "models/dungeon/knight_rig.fbx", "position": [0, 0, 0] } ],
+  "bodies": [],
   "scripts": [
     { "body": "Root", "module": "DungeonGame", "domain": "update" }
   ]
