@@ -98,6 +98,9 @@ namespace CGEngine {
 		// The light the surface gives off, added after the lighting so a lamp glows in the dark and in the sun. Black for
 		// most blocks.
 		glm::vec3 glow = { 0,0,0 };
+		// How much of the sun and the ambient light reaches the surface (0 to 1). The lighting is multiplied by it, so a sealed
+		// cave gets none whatever the time of day. Meshes that are not voxels ignore it (see the fragment shader).
+		float sky = 1.0f;
 	};
 
 	struct MeshData : public IResource {

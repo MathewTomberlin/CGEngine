@@ -47,9 +47,10 @@ rate, build and run the Release configuration.
   draws the parts of the trees that reach it, so the trees have no seams.
 - Caves are tunnels and rooms carved out of the stone, below the surface, from two 3D noise fields. The sky is a
   gradient from the horizon to the zenith, with the sun's disc and glow, and the fog takes the horizon colour.
-- Sky light darkens the caves and the ground under trees. A block's light is full in the open and falls by a fifth for
-  each block walked through air from the sky, down to a fifth beyond eight blocks. It is baked into the mesh colours, so
-  it costs nothing per frame.
+- Sky light darkens the caves and the ground under trees. A block's sky light is full in the open and falls by a fifth
+  for each block walked through air from the sky, and is nothing beyond eight blocks. It is baked into each vertex
+  (`VoxelVertex::sky`), so it costs nothing per frame. The sun and the ambient light are multiplied by it on voxel meshes,
+  so a sealed cave gets none of either, at any hour of the day.
 - A light block (the lamp, `VoxelGen.LAMP`, id 17) gives 255 at its own cell and falls by the same 0.8 a block through air, for
   eight blocks. The lamp's light is added to the sky's in the mesh colours, so it brightens sunlit ground as well as caves
   (`light_at` gives the brighter of the two). Its light is four times the sky's in a cave (`VoxelLampBrightness`), and

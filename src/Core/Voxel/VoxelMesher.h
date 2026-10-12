@@ -58,7 +58,7 @@ namespace CGEngine {
 	};
 
 	// Fills chunk.light. A block is open to the sky if no block is above it in its column; the light of open air is full,
-	// and each block walked through air from there multiplies it by 0.8, down to a floor of 0.2 beyond VoxelLightReach steps.
+	// and each block walked through air from there multiplies it by 0.8, and nothing beyond VoxelLightReach steps, so a sealed cave has no sky light at any hour.
 	// A light block (chunk.emission) is full at its own cell, and the light it gives multiplies by 0.8 for each block walked
 	// through air, for VoxelLightReach blocks; it goes to chunk.lamp, apart from the sky's. Any block counts as opaque, the same
 	// as in the meshes, so caves and the ground under trees are dark until a light block is in them.

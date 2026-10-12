@@ -77,6 +77,7 @@ in vec3 vertex;
 in float matId;
 in vec3 vertexColour;
 in vec3 vertexGlow;
+in float vertexSky;
 
 out vec4 FragColor;
 
@@ -224,6 +225,9 @@ void main() {
     //Unlit materials show their surface colour. Lit ones get only what the lights give (ambient fill + direct light);
     //adding the full unlit colour as well made every lit surface at least as bright as its texture and overexposed white ones.
     vec3 linearColor = surfColor.rgb;
+    //The sun and the ambient light reach a voxel only as far as the sky does, so a sealed cave gets none at any hour. Other
+    //meshes are not voxels and get all of it.
+    float skyVisible = triplanar != 0 ? vertexSky : 1.0;
     if(materials[mtl].useLighting != 0){
         linearColor = vec3(0.0);
         vec3 surfNormal = normalize(normal);
@@ -231,7 +235,7 @@ void main() {
 
         for(int i = 0; i < lightCount; ++i){
             if(lights[i].brightness > 0){
-                linearColor += applyLight(lights[i], surfColor.rgb, surfNormal, surfPos, surfViewDir, mtl);
+                linearColor += applyLight(lights[i], surfColor.rgb * skyVisible, surfNormal, surfPos, surfViewDir, mtl);
             }
         }
     }

@@ -81,8 +81,10 @@ namespace CGEngine {
 				vertex.normal = normal;
 				// Texture repeats once per block across the quad, so a big quad tiles like its blocks would.
 				vertex.texCoord = glm::vec2(static_cast<float>(cornerU[k] * w), static_cast<float>(cornerV[k] * h));
-				vertex.colour = base * occlusionLight[face.occlusion[k]] * (face.light / 255.0f + face.lamp / 255.0f * lampGain(face.light / 255.0f));
-				vertex.glow = palette[face.block] * (face.emission / 255.0f * VoxelLampBrightness);
+				vertex.colour = base * occlusionLight[face.occlusion[k]];
+				vertex.sky = face.light / 255.0f;
+				vertex.glow = palette[face.block] * (face.emission / 255.0f * VoxelLampBrightness)
+					+ vertex.colour * (face.lamp / 255.0f * lampGain(face.light / 255.0f));
 				out.vertices.push_back(vertex);
 			}
 			// Split the quad along the diagonal between its less occluded corners, so the shading does not streak.
@@ -97,7 +99,7 @@ namespace CGEngine {
 	namespace {
 		// Light kept per block walked through air from the open sky, and the least a cell gets beyond that reach.
 		const float LightPerStep = 0.8f;
-		const float LightFloor = 0.2f;
+		const float LightFloor = 0.0f;
 	}
 
 	void computeLight(PaddedChunk& chunk) {
@@ -360,8 +362,10 @@ namespace CGEngine {
 			const glm::vec3 air = glm::floor(p + normal * 0.5f);
 			const float sky = chunk.lightAt(static_cast<int>(air.x), static_cast<int>(air.y), static_cast<int>(air.z)) / 255.0f;
 			const float lamp = chunk.lampAt(static_cast<int>(air.x), static_cast<int>(air.y), static_cast<int>(air.z)) / 255.0f;
-			vertex.colour = palette[static_cast<size_t>(block)] * occlusion * (sky + lamp * lampGain(sky));
-			vertex.glow = palette[static_cast<size_t>(block)] * (chunk.emission[block] / 255.0f * VoxelLampBrightness);
+			vertex.colour = palette[static_cast<size_t>(block)] * occlusion;
+			vertex.sky = sky;
+			vertex.glow = palette[static_cast<size_t>(block)] * (chunk.emission[block] / 255.0f * VoxelLampBrightness)
+				+ vertex.colour * (lamp * lampGain(sky));
 			return vertex;
 		}
 	}

@@ -213,7 +213,6 @@ def check_light(world, checks, chunks, results):
                         "deepMean": round(sum(deep) / max(1, len(deep)), 1)}
     checks["open ground is full light"] = bool(tops) and all(v == 255 for v in tops)
     checks["air far underground is darker than open ground"] = bool(deep) and sum(deep) / len(deep) < 0.5 * 255
-    checks["air is never fully dark"] = bool(deep) and min(deep) >= 50
 
 
 def check_walkers(world, checks, results):
@@ -275,7 +274,7 @@ def check_skin_surface(world, checks):
 
 def check_lamp(world, checks):
     """A light block lights the air round it: full at its cell, and 0.8 less for each block walked through air. Tested in a
-    sealed pocket of stone, which the sky cannot reach, so the air is at the sky floor (0.2) until the lamp is placed. The
+    sealed pocket of stone, which the sky cannot reach, so the air has no sky light until the lamp is placed. The
     pocket is put back afterwards, so the checks after it see the same world."""
     world.define_block(VOXEL_LAMP, cge.Vector3f(1.0, 0.8, 0.42), solid=True, emits=255)
     cx, cy, cz = 4, 20, 4
@@ -290,7 +289,7 @@ def check_lamp(world, checks):
     world.set_block(cx, cy, cz, VOXEL_LAMP)
     near = world.light_at(cx + 1, cy, cz)            # one block through air: 0.8
     far = world.light_at(cx + 1, cy + 1, cz + 1)     # three blocks through air: 0.8 cubed, about 0.5
-    checks["a sealed pocket is at the sky floor before the lamp"] = abs(dark - 51) <= 2
+    checks["a sealed pocket has no sky light before the lamp"] = dark == 0
     checks["a lamp is a block, and it is not walkable air"] = world.get_block(cx, cy, cz) == VOXEL_LAMP and world.is_solid(cx, cy, cz)
     checks["one block from a lamp is 0.8 of full light"] = abs(near - 204) <= 2
     checks["three blocks from a lamp, through air, is 0.8 cubed"] = abs(far - 131) <= 2
