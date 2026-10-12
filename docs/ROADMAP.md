@@ -156,6 +156,26 @@ creatures' own behaviour (they only wander now).
   below the kill zone. The mover now counts cells of unloaded chunks as solid, so a body cannot pass through terrain that
   has not arrived; that is a guard, not the cause, which the snapshot still has to confirm. Needs a snapshot from the player.
 
+## Phase 12: block rendering rules (from the voxel sample, requested by the lead developer)
+Goal: each block type decides how it is drawn, so cube blocks, smooth blocks, and blocks in their own mesh can sit in one world.
+Today every solid block is part of one smooth skin per chunk, which merges wood and leaves into the ground.
+- [ ] **12.1** A per-type render rule: every block type has a shape (`smooth` for the skin, or `cube` for a normal voxel
+  cube) and a mesh group (`terrain` for the chunk's main mesh, or its own mesh per type). `define_block` takes both. Cube
+  blocks and smooth blocks are told apart by type, not by where they sit.
+- [ ] **12.2** Terrain blocks merge into the chunk's one mesh: ground (stone and dirt), grass, sand, gravel, water and snow.
+  This is what the skin does now.
+- [ ] **12.3** Wood and leaves are separate meshes, one per type and chunk, drawn with their own material. They do not
+  merge into the terrain. Their skin is built from their own blocks only, and the terrain skin treats them as air, so a
+  canopy does not hide the ground under it (and the ground does not hide the canopy).
+- [ ] **12.4** Brick: a new block type that stays a normal cube voxel and never merges, so it keeps sharp edges and its own
+  texture. The cube mesher draws its faces (no greedy merge across types) into a mesh of its own.
+- [ ] **12.5** The rules are data: the Python side sets the rule per block (`cge.VoxelWorld.define_block(id, ..., shape=,
+  group=)`), the hotbar shows the new block, and `tools/voxel_world_check.py` checks each rule (a brick face is a cube
+  face, a leaf is in the leaf mesh and not the terrain mesh, a ground block is in the terrain mesh).
+- Open question: the seams. A separate skin (wood, leaves) meets the terrain skin where they touch. Skirts (11.12) cover the
+  level-of-detail seams today; the same rule would be needed where a separate mesh meets the terrain, or the separate skin
+  would show a crack where the two meet.
+
 ## Tooling and quality
 - [x] CI build on Windows (`.github/workflows/build.yml`) with Mesa software OpenGL smoke run
 - [~] Unit tests for pure logic runnable without a GPU. Done for the dungeon generator (`python -I tools/test_dungeon_gen.py`) and for the scene format and command list (`python -I tools/test_scene_format.py`: example scenes, invalid fixtures, documented commands). The C++ parsers in `SceneLoader` and `ControlChannel` are still covered only by the GPU integration test.
