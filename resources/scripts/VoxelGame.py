@@ -23,8 +23,13 @@ import VoxelPhysics as physics
 from VoxelShapes import mix, outline_arrays
 import VoxelWalkers
 
-VIEW_RADIUS = 14            # chunks requested around the player in each direction: (2 * 14 + 1)^2 = 841 chunks
-UNLOAD_RADIUS = 16          # chunks farther than this are unloaded
+# The view distance, in chunks each way from the player (the settings page changes it). The default is the middle step, 14, which
+# is (2 * 14 + 1)^2 = 841 chunks. The last step is "Unlimited", capped at UNLIMITED_VIEW: the chunks grow with the square of the
+# distance and each one is held in memory (40 is about 6,500 chunks, roughly 2 GB).
+VIEW_STEPS = [6, 8, 10, 12, 14, 18, 24, 32, 40]
+DEFAULT_VIEW = 14
+UNLIMITED_VIEW = 40
+UNLOAD_MARGIN = 2           # chunks farther than the view distance plus this are unloaded
 UPLOAD_BUDGET_MS = 2.0      # time per frame spent uploading finished meshes
 WALK_SPEED = 5.0            # blocks per second
 FLY_SPEED = 14.0
@@ -103,7 +108,6 @@ HIDDEN_BOX = ((-1.0e6, -1.0e6, -1.0e6), (-1.0e6 + 1.0, -1.0e6 + 1.0, -1.0e6 + 1.
 SMOOTH_RESOLUTION = int(os.environ.get("VOXEL_SMOOTH", "1"))   # samples per block for the smooth skin; 0 draws cubes
 DAY_SECONDS = float(os.environ.get("VOXEL_DAY_SECONDS", "240"))   # real seconds for one day and night
 START_TIME = float(os.environ.get("VOXEL_TIME", "0.3"))           # time of day at the start: 0 sunrise, 0.25 noon, 0.5 sunset
-FOG_END_CHUNKS = VIEW_RADIUS + 0.5   # the fog is complete at the edge of the loaded chunks, so their edge never shows
 FOG_START_FRACTION = 0.5             # the fog starts at this fraction of its end distance
 
 # Colours of the sky, the fog and the light, blended by the sun's height.
@@ -121,29 +125,34 @@ MOON_LIGHT = (0.45, 0.55, 0.85)
 # The pause menu's pages: the title, and the items on each page. The settings page holds the mouse sensitivity.
 MENU_PAGES = {
     "pause": ("PAUSED", ("resume", "settings", "quit")),
-    "settings": ("SETTINGS", ("sens_down", "sens_value", "sens_up", "time_value", "time_track", "back")),
+    "settings": ("SETTINGS", ("sens_down", "sens_value", "sens_up", "view_down", "view_value", "view_up", "time_value",
+                              "time_track", "back")),
 }
-MENU_TEXT = {"resume": "Resume", "settings": "Settings", "quit": "Quit", "back": "Back", "sens_down": "<", "sens_up": ">"}
+MENU_TEXT = {"resume": "Resume", "settings": "Settings", "quit": "Quit", "back": "Back", "sens_down": "<", "sens_up": ">",
+             "view_down": "<", "view_up": ">"}
 
 
 def load_settings():
     """The saved settings: the mouse sensitivity (a percent, one of SENSITIVITY_STEPS) and the time of day (0 to 1, or None
     if none is saved). Missing or unreadable settings keep their defaults."""
-    settings = {"mouse_sensitivity": 100, "time_of_day": None}
+    settings = {"mouse_sensitivity": 100, "time_of_day": None, "view_radius": DEFAULT_VIEW}
     try:
         with open(SETTINGS_FILE) as f:
             data = json.load(f)
         settings["mouse_sensitivity"] = int(data.get("mouse_sensitivity", 100))
         if "time_of_day" in data:
             settings["time_of_day"] = float(data["time_of_day"]) % 1.0
+        settings["view_radius"] = int(data.get("view_radius", DEFAULT_VIEW))
     except (OSError, ValueError, TypeError, AttributeError):
         pass
     settings["mouse_sensitivity"] = min(SENSITIVITY_STEPS, key=lambda step: abs(step - settings["mouse_sensitivity"]))
+    settings["view_radius"] = min(VIEW_STEPS, key=lambda step: abs(step - settings["view_radius"]))
     return settings
 
 
-def save_settings(sensitivity, time_of_day):
-    StateFile.write_json(SETTINGS_FILE, {"mouse_sensitivity": sensitivity, "time_of_day": round(time_of_day, 5)})
+def save_settings(sensitivity, time_of_day, view_radius):
+    StateFile.write_json(SETTINGS_FILE, {"mouse_sensitivity": sensitivity, "time_of_day": round(time_of_day, 5),
+                                         "view_radius": view_radius})
 
 
 class VoxelGame(PyScript):
@@ -182,6 +191,7 @@ class VoxelGame(PyScript):
         self.menu_page = "pause"        # the page of the pause menu: "pause" or "settings"
         saved = load_settings()
         self.sensitivity = saved["mouse_sensitivity"]   # mouse sensitivity, a percent of MOUSE_SENSITIVITY
+        self.view_radius = saved["view_radius"]         # the view distance in chunks each way (VIEW_STEPS)
         self.dragging = False           # the time-of-day slider is being dragged
         self.outline_keys = {}          # the last outline shown under each name, so unchanged ones are not re-uploaded
         self.outline_bodies = set()     # the outlines already made as runtime meshes
@@ -308,7 +318,10 @@ class VoxelGame(PyScript):
             "sens_down": ((cx - 215, cy - 24, cx - 150, cy + 6), (cx - 200, cy - 20)),
             "sens_value": (None, (cx - 120, cy - 20)),
             "sens_up": ((cx + 150, cy - 24, cx + 215, cy + 6), (cx + 165, cy - 20)),
-            "time_value": (None, (cx - 120, cy + 36)),
+            "view_down": ((cx - 215, cy + 8, cx - 150, cy + 38), (cx - 200, cy + 12)),
+            "view_value": (None, (cx - 120, cy + 12)),
+            "view_up": ((cx + 150, cy + 8, cx + 215, cy + 38), (cx + 165, cy + 12)),
+            "time_value": (None, (cx - 120, cy + 44)),
             "time_track": ((cx - 150, cy + 60, cx + 150, cy + 86), (cx - 150, cy + 62)),
             "back": ((cx - 100, cy + 110, cx + 100, cy + 144), (cx - 30, cy + 114)),
         }
@@ -331,6 +344,10 @@ class VoxelGame(PyScript):
     def menu_label(self, item):
         if item == "sens_value":
             return "Mouse sensitivity: %d%%" % self.sensitivity
+        if item == "view_value":
+            if self.view_radius == UNLIMITED_VIEW:
+                return "View distance: Unlimited (%d)" % self.view_radius
+            return "View distance: %d chunks" % self.view_radius
         if item == "time_value":
             minutes = (round(self.clock * 1440) + 360) % 1440   # 0 is sunrise (06:00), 0.25 noon, 0.5 sunset, 0.75 midnight
             return "Time of day: %02d:%02d" % (minutes // 60, minutes % 60)
@@ -339,7 +356,7 @@ class VoxelGame(PyScript):
             return "[" + "-" * knob + "O" + "-" * (TRACK_CELLS - 1 - knob) + "]"
         text = MENU_TEXT[item]
         if self.menu_hover == item:
-            return "[%s]" % text if item in ("sens_down", "sens_up") else "> %s <" % text
+            return "[%s]" % text if item in ("sens_down", "sens_up", "view_down", "view_up") else "> %s <" % text
         return text
 
     def update_pause_key(self):
@@ -359,7 +376,15 @@ class VoxelGame(PyScript):
     def change_sensitivity(self, step):
         index = SENSITIVITY_STEPS.index(self.sensitivity) + step
         self.sensitivity = SENSITIVITY_STEPS[max(0, min(len(SENSITIVITY_STEPS) - 1, index))]
-        save_settings(self.sensitivity, self.clock)
+        save_settings(self.sensitivity, self.clock, self.view_radius)
+
+    def change_view(self, step):
+        """One step of view distance. The chunks are asked for again at once: a longer view requests the new ones, and a shorter
+        one unloads the far ones (request_chunks)."""
+        index = VIEW_STEPS.index(self.view_radius) + step
+        self.view_radius = VIEW_STEPS[max(0, min(len(VIEW_STEPS) - 1, index))]
+        self.wanted_centre = None
+        save_settings(self.sensitivity, self.clock, self.view_radius)
 
     def drag_time(self, mouse_x, pressing):
         """The time-of-day slider: while the button is held on the track, the time follows the mouse; the choice is saved
@@ -370,7 +395,7 @@ class VoxelGame(PyScript):
             self.clock = min(0.999, max(0.0, (mouse_x - left) / (right - left)))
         elif self.dragging:
             self.dragging = False
-            save_settings(self.sensitivity, self.clock)
+            save_settings(self.sensitivity, self.clock, self.view_radius)
 
     def look_speed(self):
         """Degrees a pixel of mouse movement turns the view."""
@@ -419,6 +444,10 @@ class VoxelGame(PyScript):
             self.change_sensitivity(-1)
         if clicked and self.menu_hover == "sens_up":
             self.change_sensitivity(1)
+        if clicked and self.menu_hover == "view_down":
+            self.change_view(-1)
+        if clicked and self.menu_hover == "view_up":
+            self.change_view(1)
         self.show_menu(True)
 
     def set_target_text(self, text):
@@ -459,15 +488,15 @@ class VoxelGame(PyScript):
     def request_chunks(self, centre):
         """Ask for every chunk in the view that is not requested yet, nearest first. Unload the far ones."""
         cx, cz = centre
-        wanted = [(cx + dx, cz + dz) for dz in range(-VIEW_RADIUS, VIEW_RADIUS + 1)
-                  for dx in range(-VIEW_RADIUS, VIEW_RADIUS + 1)]
+        view = self.view_radius
+        wanted = [(cx + dx, cz + dz) for dz in range(-view, view + 1) for dx in range(-view, view + 1)]
         wanted.sort(key=lambda c: (c[0] - cx) ** 2 + (c[1] - cz) ** 2)
         for chunk in wanted:
             if chunk not in self.requested:
                 self.world.request_chunk(*chunk)
                 self.requested.add(chunk)
         for chunk in list(self.requested):
-            if max(abs(chunk[0] - cx), abs(chunk[1] - cz)) > UNLOAD_RADIUS:
+            if max(abs(chunk[0] - cx), abs(chunk[1] - cz)) > view + UNLOAD_MARGIN:
                 self.world.unload_chunk(*chunk)
                 self.requested.discard(chunk)
 
@@ -742,7 +771,7 @@ class VoxelGame(PyScript):
         sun_disc = light if height > 0.0 else (0.0, 0.0, 0.0)   # the disc shows only above the horizon
         sun_disc = mix((0.0, 0.0, 0.0), sun_disc, min(1.0, max(0.0, height * 12.0)))
 
-        fog_end = FOG_END_CHUNKS * VoxelGen.CHUNK
+        fog_end = (self.view_radius + 0.5) * VoxelGen.CHUNK   # the fog is complete at the edge of the loaded chunks
         fog_colour, fog_start = sky, fog_end * FOG_START_FRACTION
         if self.world is not None and self.eye_in_water():
             # Under the water the view is short and blue-green, whatever the time of day. The sky is that colour too, since
@@ -781,7 +810,7 @@ class VoxelGame(PyScript):
                  "dirty": stats["dirty"], "meshing": stats["meshing"], "quads": stats["quads"],
                  "upload_ms": round(stats["upload_ms"], 3), "edits": stats["edits"], "slot": self.slot,
                  "smoothing": self.world.smoothing(), "active": self.world.active_count(), "paused": self.paused,
-                 "menu": self.menu_page if self.paused else None, "sensitivity": self.sensitivity,
+                 "menu": self.menu_page if self.paused else None, "sensitivity": self.sensitivity, "view_radius": self.view_radius,
                  "seed": self.seed, "frames": self.frames,
                  "player": [round(v, 3) for v in self.pos], "on_ground": self.on_ground, "flying": self.flying,
                  "swimming": self.swimming, "walkers": len(self.walkers.walkers) if self.walkers else 0,

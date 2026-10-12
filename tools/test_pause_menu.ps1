@@ -104,6 +104,7 @@ cge.mouse_delta = lambda: (0.0, 0.0)
 # (y 377).
 $settingsScript = Click-Script 500 305
 $sensUpScript = Click-Script 665 241
+$viewUpScript = Click-Script 680 273
 $trackScript = Click-Script 500 323
 $backScript = Click-Script 500 377
 $quitScript = Click-Script 500 351
@@ -174,6 +175,11 @@ try {
     $raised = Wait-State { param($s) $s.sensitivity -eq 125 } 10
     Check "the up arrow raises the mouse sensitivity from 100% to 125%" ($raised -and $raised.sensitivity -eq 125)
     Check "the sensitivity is saved to the settings file" ((Test-Path (Join-Path $exeDir "cg_control/test_settings.json")) -and ((Get-Content (Join-Path $exeDir "cg_control/test_settings.json") -Raw) -match "125"))
+    # The view distance starts at the middle step (14 chunks); the right arrow takes it to 18, and the file keeps it.
+    $ran = Run-Script "07c_view_up" $viewUpScript
+    $viewed = Wait-State { param($s) $s.view_radius -eq 18 } 10
+    Check "the right arrow raises the view distance from 14 to 18 chunks" ($viewed -and $viewed.view_radius -eq 18)
+    Check "the view distance is saved to the settings file" ((Get-Content (Join-Path $exeDir "cg_control/test_settings.json") -Raw) -match '"view_radius":\s*18')
     $ran = Run-Script "08_back" $backScript
     $back = Wait-State { param($s) $s.menu -eq "pause" } 10
     Check "Back returns to the pause page" ($back -and $back.menu -eq "pause")
