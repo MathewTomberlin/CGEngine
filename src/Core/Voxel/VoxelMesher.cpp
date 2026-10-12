@@ -24,6 +24,12 @@ namespace CGEngine {
 			}
 		};
 
+		// How much a light block's light is multiplied where the sky is at sky (0 to 1): VoxelLampBrightness in a cave, and 1 in
+		// the open, where the sun already lights the ground, so a lamp does not wash out sunlit grass.
+		float lampGain(float sky) {
+			return 1.0f + (VoxelLampBrightness - 1.0f) * (1.0f - sky);
+		}
+
 		// Brightness of a corner by its occlusion (0 = walled in, 3 = open).
 		const float occlusionLight[4] = { 0.5f, 0.66f, 0.82f, 1.0f };
 
@@ -75,8 +81,8 @@ namespace CGEngine {
 				vertex.normal = normal;
 				// Texture repeats once per block across the quad, so a big quad tiles like its blocks would.
 				vertex.texCoord = glm::vec2(static_cast<float>(cornerU[k] * w), static_cast<float>(cornerV[k] * h));
-				vertex.colour = base * occlusionLight[face.occlusion[k]] * ((face.light + face.lamp) / 255.0f);
-				vertex.glow = palette[face.block] * (face.emission / 255.0f);
+				vertex.colour = base * occlusionLight[face.occlusion[k]] * (face.light / 255.0f + face.lamp / 255.0f * lampGain(face.light / 255.0f));
+				vertex.glow = palette[face.block] * (face.emission / 255.0f * VoxelLampBrightness);
 				out.vertices.push_back(vertex);
 			}
 			// Split the quad along the diagonal between its less occluded corners, so the shading does not streak.
@@ -354,8 +360,8 @@ namespace CGEngine {
 			const glm::vec3 air = glm::floor(p + normal * 0.5f);
 			const float sky = chunk.lightAt(static_cast<int>(air.x), static_cast<int>(air.y), static_cast<int>(air.z)) / 255.0f;
 			const float lamp = chunk.lampAt(static_cast<int>(air.x), static_cast<int>(air.y), static_cast<int>(air.z)) / 255.0f;
-			vertex.colour = palette[static_cast<size_t>(block)] * occlusion * (sky + lamp);
-			vertex.glow = palette[static_cast<size_t>(block)] * (chunk.emission[block] / 255.0f);
+			vertex.colour = palette[static_cast<size_t>(block)] * occlusion * (sky + lamp * lampGain(sky));
+			vertex.glow = palette[static_cast<size_t>(block)] * (chunk.emission[block] / 255.0f * VoxelLampBrightness);
 			return vertex;
 		}
 	}
