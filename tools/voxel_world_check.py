@@ -20,6 +20,8 @@ VOXEL_LEAVES = 8
 VOXEL_STONE = 3
 VOXEL_LAMP = 17   # VoxelGen.LAMP
 VOXEL_BRICK = 18  # VoxelGen.BRICK
+VOXEL_COAL = 20   # VoxelTerrain::Coal
+VOXEL_IRON = 21   # VoxelTerrain::Iron
 
 
 def load_chunks(world, chunks, timeout=60.0):
@@ -422,6 +424,25 @@ def measure_remesh(world, chunks, results):
     wait_meshed(world, chunks)
 
 
+def check_ores(world, chunks, checks):
+    """Ore is in the stone: coal at any depth, and iron only deep (below the terrain's IronDepth of 20)."""
+    coal = iron = iron_high = 0
+    xs = range(min(cx for cx, _ in chunks) * SIZE, (max(cx for cx, _ in chunks) + 1) * SIZE)
+    zs = range(min(cz for _, cz in chunks) * SIZE, (max(cz for _, cz in chunks) + 1) * SIZE)
+    for x in xs:
+        for z in zs:
+            for y in range(1, 40):
+                block = world.get_block(x, y, z)
+                if block == VOXEL_COAL:
+                    coal += 1
+                elif block == VOXEL_IRON:
+                    iron += 1
+                    if y >= 20:
+                        iron_high += 1
+    checks["coal ore is in the stone"] = coal > 0
+    checks["iron ore is in the stone, and only deep"] = iron > 0 and iron_high == 0
+
+
 def check_lamp(world, checks):
     """A light block lights the air round it: full at its cell, and 0.8 less for each block walked through air. Tested in a
     sealed pocket of stone, which the sky cannot reach, so the air has no sky light until the lamp is placed. The
@@ -489,6 +510,7 @@ def run(out_path="cg_control/voxel_check.json"):
     check_skin_surface(world, results["check"])
     check_lamp(world, results["check"])
     check_props(world, results["check"], chunks)
+    check_ores(world, chunks, results["check"])
     measure_remesh(world, chunks, results)
     check_groups(results["check"])
     biomes ={world.biome_at(x, z) for x in range(-200, 200, 10) for z in range(-200, 200, 10)}

@@ -12,6 +12,19 @@ namespace CGEngine {
 			return static_cast<float>((h ^ (h >> 16)) & 0xFFFFu) / 65535.0f;
 		}
 
+		// A repeatable number in [0, 1] for a block's position: every chunk that sees the block agrees on it.
+		float blockValue(int32_t wx, int32_t wy, int32_t wz, uint32_t seed) {
+			uint32_t h = static_cast<uint32_t>(wx) * 374761393u + static_cast<uint32_t>(wy) * 2246822519u
+				+ static_cast<uint32_t>(wz) * 668265263u + seed * 1442695041u;
+			h = (h ^ (h >> 13)) * 1274126177u;
+			return static_cast<float>((h ^ (h >> 16)) & 0xFFFFu) / 65535.0f;
+		}
+
+		// Ores: iron is rare and only deep (above IronDepth it is not drawn); coal is more common, at any depth.
+		const float IronChance = 0.006f;
+		const float CoalChance = 0.02f;
+		const int IronDepth = 20;
+
 		// Smooth noise in [0, 1]: lattice values blended with smoothstep.
 		float valueNoise(float x, float z, uint32_t seed) {
 			const float fx = std::floor(x);
@@ -109,6 +122,21 @@ namespace CGEngine {
 				if (caveWidth > 0.0f) {
 					for (int y = 1; y < std::min(height, top - 2); ++y) {
 						if (isCave(cx * size + lx, y, cz * size + lz)) blocks[(static_cast<size_t>(y) * size + lz) * size + lx] = Air;
+					}
+				}
+			}
+		}
+		// Ores: a stone block becomes iron or coal by its position's value, so the same block is the same in any chunk.
+		for (int y = 1; y < height; ++y) {
+			for (int lz = 0; lz < size; ++lz) {
+				for (int lx = 0; lx < size; ++lx) {
+					uint8_t& block = blocks[(static_cast<size_t>(y) * size + lz) * size + lx];
+					if (block != Stone) continue;
+					const float r = blockValue(cx * size + lx, y, cz * size + lz, seed);
+					if (r < IronChance && y < IronDepth) {
+						block = Iron;
+					} else if (r < IronChance + CoalChance) {
+						block = Coal;
 					}
 				}
 			}
