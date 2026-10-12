@@ -71,6 +71,8 @@ namespace CGEngine {
 		// Hits: a block takes BlockType::hits hits to break. Each hit adds one, and the damage shows in the block's colour. Returns the
 		// damage stage the block is at now (1 to hits - 1), -1 when this hit breaks it (it becomes air), or -2 if there is no block.
 		int hitBlock(int x, int y, int z);
+		// Heals the block at (x, y, z) by one stage. Returns the stage it is at now (0 when healed fully or never damaged).
+		int healBlock(int x, int y, int z);
 		// The damage stage of the block at (x, y, z), 0 for none.
 		int damageAt(int x, int y, int z) const;
 		// Every prop as (x, y, z, dir). Props are kept with the edits, so a chunk that unloads keeps them.

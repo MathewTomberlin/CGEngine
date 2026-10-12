@@ -86,6 +86,8 @@ def ray_box(origin, direction, centre, half):
 def hotbar_key(slot):
     """The key for a hotbar slot: 1 to 9, then 0, - and =."""
     return HOTBAR_KEYS[slot]
+HEAL_AFTER = 4.0                 # seconds a damaged block is left alone before it starts to heal
+HEAL_STEP = 1.0                  # seconds per damage stage it heals once it does
 HELD_TORCH_BRIGHTNESS = 2.5     # the light of the torch the player carries (L lights and puts it out)
 WALKERS = int(os.environ.get("VOXEL_WALKERS", "12"))   # creatures that wander the terrain near the spawn
 SHADOWS = os.environ.get("VOXEL_SHADOWS", "1") != "0"   # the sun casts shadows (the map covers SHADOW_RADIUS around the camera)
@@ -178,6 +180,7 @@ class VoxelGame(PyScript):
         self.target = None              # (block, normal) under the crosshair, or None
         self.torch_target = None        # (distance, cell) of the torch under the crosshair, or None
         self.held_lit = False           # the torch the player carries is lit (L toggles it)
+        self.hit_times = {}             # the damaged blocks, by cell: the time each was last hit
         self.keys_was = {}              # previous state of the one-shot keys and buttons
         self.last = None
         self.frames = 0
@@ -259,6 +262,7 @@ class VoxelGame(PyScript):
         self.update_hud()
         self.update_sky(dt)
         self.update_held_torch()
+        self.update_healing()
         self.frame_dt = dt
         self.place_camera()
 
@@ -728,8 +732,12 @@ class VoxelGame(PyScript):
         block, normal = self.target
         if breaking:
             # A block takes its hits (VoxelGen.HITS) to break: this hit breaks it when hit_block says -1.
-            if self.world.hit_block(block[0], block[1], block[2]) == -1:
+            stage = self.world.hit_block(block[0], block[1], block[2])
+            if stage == -1:
+                self.hit_times.pop(tuple(block), None)
                 self.drop_torches_on(block)
+            elif stage > 0:
+                self.hit_times[tuple(block)] = time.time()
         elif placing:
             cell = (block[0] + normal[0], block[1] + normal[1], block[2] + normal[2])
             if physics.cell_in_player(cell, self.pos):
@@ -742,6 +750,18 @@ class VoxelGame(PyScript):
                 self.world.set_block(cell[0], cell[1], cell[2], HOTBAR[self.slot])
 
     # ----- sky ----------------------------------------------------------------------------
+
+    def update_healing(self):
+        """A damaged block that is left alone for HEAL_AFTER seconds heals a stage every HEAL_STEP seconds, so a half-broken
+        wall is a choice rather than a trap."""
+        now = time.time()
+        for cell, last in list(self.hit_times.items()):
+            if now - last < HEAL_AFTER:
+                continue
+            if self.world.heal_block(*cell) <= 0:
+                del self.hit_times[cell]
+            else:
+                self.hit_times[cell] = now - HEAL_AFTER + HEAL_STEP
 
     def update_held_torch(self):
         """The carried torch: a point light at the eye, lit or out. It is a shader light, so it needs no re-mesh."""

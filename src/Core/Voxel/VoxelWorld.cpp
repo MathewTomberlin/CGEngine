@@ -375,6 +375,19 @@ namespace CGEngine {
 		return stage;
 	}
 
+	int VoxelWorld::healBlock(int x, int y, int z) {
+		const int stage = damageAt(x, y, z);
+		if (stage <= 1) {
+			clearDamage(x, y, z);
+			return 0;
+		}
+		const int cx = floorDiv(x, size);
+		const int cz = floorDiv(z, size);
+		damageByChunk[std::make_pair(cx, cz)][localIndex(x - cx * size, y, z - cz * size)] = static_cast<uint8_t>(stage - 1);
+		markLight(cx, cz, x - cx * size, z - cz * size);
+		return stage - 1;
+	}
+
 	int VoxelWorld::damageAt(int x, int y, int z) const {
 		if (y < 0 || y >= height) return 0;
 		const int cx = floorDiv(x, size);

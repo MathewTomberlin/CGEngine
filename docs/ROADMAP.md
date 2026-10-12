@@ -281,7 +281,7 @@ Goal: blocks and creatures take several hits, and what the player has hit looks 
   chunk it is in. Measure the re-mesh cost (14.5 is the baseline: about 3 ms).
 - [ ] **16.3** Hit feedback: the aimed block shakes or flashes on a hit, and a broken block gives a short particle burst in its
   colour (particles are a new engine feature, so this may wait for a small particle system).
-- [ ] **16.4** Damage heals: a block not hit for a few seconds goes back one stage (so a half-broken wall is a choice, not a
+- [x] **16.4** Damage heals: a block not hit for a few seconds goes back one stage (so a half-broken wall is a choice, not a
   trap). The timer is per cell and only runs for damaged cells.
 - [ ] **16.5** Creatures take hits: the walkers (11.9) have health, a hit pushes them back, and a dead one leaves a drop. This is
   also where the creatures' own behaviour starts (they chase, flee and fight, not only wander).

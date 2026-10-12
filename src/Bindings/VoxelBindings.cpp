@@ -44,6 +44,8 @@ void bindVoxel(py::module_& m) {
              "Hit the block at (x, y, z). Returns its damage stage (1 to hits - 1), -1 if this hit breaks it, or -2 if there is no block.")
         .def("damage_at", &VoxelWorld::damageAt, py::arg("x"), py::arg("y"), py::arg("z"),
              "The damage stage of the block at (x, y, z): 0 for none.")
+        .def("heal_block", &VoxelWorld::healBlock, py::arg("x"), py::arg("y"), py::arg("z"),
+             "Heal the block at (x, y, z) by one damage stage. Returns the stage it is at now.")
         .def("prop_boxes", [](const VoxelWorld& world) {
             // The boxes the torches are drawn with, so a hit test can use what the player sees.
             py::list result;

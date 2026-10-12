@@ -464,6 +464,11 @@ def check_damage(checks):
         and world.get_block(4, 30, 4) == 0
     checks["a hit leaves a damage stage, and the stage goes with the block"] = stage == 1 and world.damage_at(4, 30, 4) == 0
     checks["a hit marks the chunk to be meshed again"] = dirty > 0
+    world.set_block(4, 31, 4, VOXEL_STONE)
+    world.hit_block(4, 31, 4)
+    world.hit_block(4, 31, 4)
+    healed = [world.heal_block(4, 31, 4), world.heal_block(4, 31, 4), world.heal_block(4, 31, 4)]
+    checks["a damaged block heals one stage at a time, and is whole again"] = healed == [1, 0, 0] and world.damage_at(4, 31, 4) == 0
     world.clear()
 
 
