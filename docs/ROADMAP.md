@@ -252,6 +252,10 @@ full block, and light blocks (full cells that give light) are wanted too.
 - [x] **14.6** Decided: a torch needs no micro grid. It is drawn at a fraction of a block by `buildPropMesh` and its cell is
   air to collision, so the walk, the mesher and the light pass see no finer cells. The 4x4x4 micro-grid is not built; it stays
   an option for a prop that must collide at its own scale.
+- [x] **14.9** Torches are saved with the edits: the edit file is version 2, with the torches after the blocks (x, y, z and
+  dir for each). Version 1 files still load. Checked by the save and load round trip in `voxel_world_check.py`.
+- [ ] **14.10** The aim label names a torch when the crosshair is on one ("Looking at: torch"), and the torch is outlined like
+  a block is, so the player can see what a break will take.
 - Interim (not on the roadmap as a fix): the cave floor (0.2 of the sky) could be raised to make caves readable before the
   torches land. Decide after 14.1 if they are still too dark.
 

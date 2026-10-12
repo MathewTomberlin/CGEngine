@@ -534,6 +534,16 @@ def run(out_path="cg_control/voxel_check.json"):
     results["check"]["load reads"] = world.load_edits(edit_file)
     results["check"]["edit count after load"] = world.edit_count() == 1
     results["check"]["loaded edit applies at once"] = world.get_block(3, 20, 3) == BLOCK_CHECK
+    # Torches are saved with the edits too: one goes out and comes back from the file.
+    world.set_block(5, 30, 5, 0)
+    world.set_prop(5, 30, 5, 2)
+    world.save_edits(edit_file)
+    world.remove_prop(5, 30, 5)
+    world.clear_edits()
+    world.load_edits(edit_file)
+    results["check"]["a torch is saved and loaded with the edits"] = world.prop_at(5, 30, 5) == 2
+    world.remove_prop(5, 30, 5)
+    world.clear_edits()
 
     # The smooth skin meshes the same chunks: every loaded chunk gets a mesh, and switching back to cubes works too.
     world.set_smoothing(1)

@@ -497,7 +497,7 @@ namespace CGEngine {
 		if (!out) return false;
 		const auto put32 = [&out](uint32_t v) { out.write(reinterpret_cast<const char*>(&v), 4); };
 		out.write("CGVE", 4);
-		put32(1);
+		put32(2);   // version 2: the blocks, then the torches
 		put32(static_cast<uint32_t>(editCount()));
 		for (const auto& chunkEdits : edits) {
 			const int cx = chunkEdits.first.first;
@@ -512,6 +512,23 @@ namespace CGEngine {
 				out.put(static_cast<char>(edit.second));
 			}
 		}
+		// The torches, after the blocks: a count, then x, y, z (int32) and dir (a byte) for each.
+		uint32_t torches = 0;
+		for (const auto& chunkProps : propsByChunk) torches += static_cast<uint32_t>(chunkProps.second.size());
+		put32(torches);
+		for (const auto& chunkProps : propsByChunk) {
+			const int cx = chunkProps.first.first;
+			const int cz = chunkProps.first.second;
+			for (const auto& entry : chunkProps.second) {
+				const int y = entry.first / (size * size);
+				const int lz = (entry.first % (size * size)) / size;
+				const int lx = entry.first % size;
+				put32(static_cast<uint32_t>(cx * size + lx));
+				put32(static_cast<uint32_t>(y));
+				put32(static_cast<uint32_t>(cz * size + lz));
+				out.put(static_cast<char>(entry.second));
+			}
+		}
 		return static_cast<bool>(out);
 	}
 
@@ -523,7 +540,7 @@ namespace CGEngine {
 		uint32_t version = 0;
 		uint32_t count = 0;
 		in.read(magic, 4);
-		if (!in || std::string(magic, 4) != "CGVE" || !get32(version) || version != 1 || !get32(count)) return false;
+		if (!in || std::string(magic, 4) != "CGVE" || !get32(version) || (version != 1 && version != 2) || !get32(count)) return false;
 		for (uint32_t i = 0; i < count; ++i) {
 			uint32_t x = 0, y = 0, z = 0;
 			if (!get32(x) || !get32(y) || !get32(z)) return false;
@@ -537,6 +554,29 @@ namespace CGEngine {
 			const int cz = floorDiv(wz, size);
 			edits[std::make_pair(cx, cz)][localIndex(wx - cx * size, wy, wz - cz * size)] = static_cast<uint8_t>(block);
 		}
+		// Version 2 carries the torches after the blocks (see saveEdits). They are kept like the edits, by chunk.
+		if (version == 2) {
+			uint32_t torches = 0;
+			if (!get32(torches)) return false;
+			for (uint32_t i = 0; i < torches; ++i) {
+				uint32_t x = 0, y = 0, z = 0;
+				if (!get32(x) || !get32(y) || !get32(z)) return false;
+				const int dir = in.get();
+				if (dir == std::char_traits<char>::eof()) return false;
+				const int wx = static_cast<int>(x);
+				const int wy = static_cast<int>(y);
+				const int wz = static_cast<int>(z);
+				if (wy < 0 || wy >= height || dir > 5) continue;
+				const int cx = floorDiv(wx, size);
+				const int cz = floorDiv(wz, size);
+				propsByChunk[std::make_pair(cx, cz)][localIndex(wx - cx * size, wy, wz - cz * size)] = static_cast<uint8_t>(dir);
+			}
+			for (const auto& chunkProps : propsByChunk) {
+				if (isLoaded(chunkProps.first.first, chunkProps.first.second)) markNeighboursDirty(chunkProps.first.first, chunkProps.first.second);
+				if (isLoaded(chunkProps.first.first, chunkProps.first.second)) markDirty(chunkProps.first.first, chunkProps.first.second);
+			}
+		}
+
 		// Loaded chunks take the edits now; the rest take them when they load.
 		for (const auto& chunkEdits : edits) {
 			Chunk* chunk = findChunk(chunkEdits.first.first, chunkEdits.first.second);
