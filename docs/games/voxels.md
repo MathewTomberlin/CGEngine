@@ -9,8 +9,8 @@ $env:CGENGINE_SCENE = "scenes/voxels.json"; $env:CGENGINE_FULLSCREEN = "1"; .\ma
 ```
 
 `VOXEL_SEED` picks the world. `VOXEL_TIME` sets the time of day at the start: 0 is sunrise, 0.25 noon, 0.5 sunset and
-0.75 midnight. `VOXEL_DAY_SECONDS` sets how long a day lasts (240 seconds by default). For the best frame rate, build and
-run the Release configuration.
+0.75 midnight. `VOXEL_DAY_SECONDS` sets how long a day lasts (240 seconds by default). `VOXEL_FIXED_STEP` (seconds) makes every frame advance that
+much game time; the scripted tests use it. For the best frame rate, build and run the Release configuration.
 
 ## Controls
 
@@ -34,6 +34,9 @@ run the Release configuration.
   draws the parts of the trees that reach it, so the trees have no seams.
 - Caves are tunnels and rooms carved out of the stone, below the surface, from two 3D noise fields. The sky is a
   gradient from the horizon to the zenith, with the sun's disc and glow, and the fog takes the horizon colour.
+- Sky light darkens the caves and the ground under trees. A block's light is full in the open and falls by a fifth for
+  each block walked through air from the sky, down to a fifth beyond eight blocks. It is baked into the mesh colours, so
+  it costs nothing per frame.
 - The sun casts shadows (`VOXEL_SHADOWS=0` turns them off; `VOXEL_SHADOW_RADIUS`, 40 blocks by default, sets how far
   they reach). The map is drawn again when the camera moves, the sun turns, or a tenth of a second passes, and not at
   all while the sun is down.
@@ -103,6 +106,7 @@ world.request_chunk(0, 0)                      # generated on a worker; world.is
 world.update(2.0, focus_x=0, focus_z=0)        # once a frame: install, upload within 2 ms, start meshing
 world.set_block(3, 10, 5, 0)                   # remove one block; its chunks are re-meshed by update()
 world.get_block(3, 10, 5)                      # 0 for air, and for chunks that are not loaded
+world.light_at(3, 10, 5)                       # sky light, 0 to 255 (computed on demand, for queries)
 world.unload_chunk(0, 0)
 world.stats()                                  # chunks, loaded, pending, dirty, meshing, quads, upload_ms
 
@@ -145,7 +149,8 @@ the view's level and the worst frame.
 
 ## Limits
 
-- Caves get no light of their own yet: only the sun's shadow reaches them (11.6 in the roadmap).
+- Light is baked when a chunk is meshed, so an edit that lets the sky into a cave shows once the chunks around it are
+  re-meshed, a few frames later.
 - The simulation runs on the loaded chunks only. The player's collision is in C++ (`world.step_body`), and the Python
   version (`VoxelPhysics.step`) stays as the reference that the tests compare with.
 - Water is opaque. The smooth skin has two levels of detail: two samples a block within 3 chunks of the player, and one a block beyond that.

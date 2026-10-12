@@ -70,12 +70,13 @@ function Sample-Frames($label, $seconds) {
 
 Remove-Item -Recurse -Force $control -ErrorAction SilentlyContinue
 $env:CGENGINE_SCENE = "scenes/voxels.json"; $env:VOXEL_SEED = "1"
+$launched = Get-Date
 $app = Start-Process -FilePath (Join-Path $exeDir "main.exe") -WorkingDirectory $exeDir -PassThru
 Remove-Item Env:CGENGINE_SCENE; Remove-Item Env:VOXEL_SEED
 try {
     while (-not (Test-Path $stateFile)) { Start-Sleep -Milliseconds 200 }
     do { Start-Sleep -Milliseconds 250; $s = Read-State } while (-not $s -or $s.pending -ne 0 -or $s.meshing -ne 0 -or $s.loaded -lt $s.chunks -or -not $s.on_ground)
-    Write-Host ("loaded {0} chunks ({1} quads)" -f $s.loaded, $s.quads)
+    Write-Host ("loaded {0} chunks ({1} quads) in {2:N1} s from the start" -f $s.loaded, $s.quads, ((Get-Date) - $launched).TotalSeconds)
 
     $still = [double]$Seconds
     Set-Script "perf_still" @()

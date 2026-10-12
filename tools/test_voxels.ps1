@@ -1,11 +1,12 @@
 # Integration test for the voxel sample: runs the engine on resources/scenes/voxels.json, walks and turns the player
 # with scripted keys, and checks that the chunks load, the camera turns without tilting, and no frame is too long.
 # Usage (from the repo root, after building):
-#   pwsh tools/test_voxels.ps1 [-ExeDir build/bin/Debug] [-MaxFrameMs 60]
-# Build the Release configuration for real frame-time numbers. Exits 0 on success, 1 on any failed check.
+#   pwsh tools/test_voxels.ps1 [-ExeDir build/bin/Release] [-MaxFrameMs 60]
+# The worst-frame check is for the Release configuration: a Debug build of the 841-chunk world runs too slowly for it.
+# Exits 0 on success, 1 on any failed check.
 
 param(
-    [string]$ExeDir = "build/bin/Debug",
+    [string]$ExeDir = "build/bin/Release",
     [double]$MaxFrameMs = 60.0
 )
 
@@ -59,9 +60,12 @@ function Wait-State($condition, $timeoutSec) {
 Remove-Item -Recurse -Force $control -ErrorAction SilentlyContinue
 $env:CGENGINE_SCENE = "scenes/voxels.json"
 $env:VOXEL_SEED = "1"
+# Every frame advances 1/60 s, so the keys below last the same game time at any frame rate.
+$env:VOXEL_FIXED_STEP = "0.0166667"
 $app = Start-Process -FilePath (Join-Path $exeDir "main.exe") -WorkingDirectory $exeDir -PassThru
 Remove-Item Env:CGENGINE_SCENE
 Remove-Item Env:VOXEL_SEED
+Remove-Item Env:VOXEL_FIXED_STEP
 
 try {
     $deadline = (Get-Date).AddSeconds(20)
@@ -83,18 +87,21 @@ try {
     $worldCheck = Get-Content (Join-Path $control "voxel_check.json") -Raw | ConvertFrom-Json
     $worldCheck.check.PSObject.Properties | ForEach-Object { Check ("world: " + $_.Name) ([bool]$_.Value) }
     Write-Host ("      caves: {0} of {1} underground blocks are air" -f $worldCheck.caveAir, $worldCheck.underground)
+    Write-Host ("      light: {0} open-ground samples, {1} underground samples with a mean of {2} (255 is full sky)" -f $worldCheck.light.surfaceSamples, $worldCheck.light.deepSamples, $worldCheck.light.deepMean)
 
-    # Walk forward for 4 seconds, then turn right for 2 seconds: 90 degrees a second is 180 degrees of turn.
+    # Walk forward for 240 frames (4 seconds), then turn right for 120 frames (2 seconds): 90 degrees a second is 180
+    # degrees of turn. The frames are counted by the Enter key, which the game asks for once a frame, before the walk.
     # Mouse input is scripted to nothing so that the real mouse cannot turn the view during the test.
     $keys = @'
-import time
 import cg_engine_bindings as cge
-_t0 = time.perf_counter()
+_frames = [0]
 def _fake(name):
-    t = time.perf_counter() - _t0
-    if 1.0 <= t < 5.0 and name == "W":
+    if name == "Enter":
+        _frames[0] += 1
+    f = _frames[0]
+    if 1 <= f <= 240 and name == "W":
         return True
-    if 6.0 <= t < 8.0 and name == "Right":
+    if 300 <= f <= 420 and name == "Right":
         return True
     return False
 cge.key_down = _fake
@@ -112,9 +119,12 @@ cge.mouse_delta = lambda: (0.0, 0.0)
     $samples = 0
     $tilt = 0.0
     $aim = 0.0
-    $end = (Get-Date).AddSeconds(11)
-    while ((Get-Date) -lt $end) {
-        Start-Sleep -Milliseconds 250
+    # Sample until the scripted keys have run their frames (the state reports the frame count).
+    $target = $before.frames + 430
+    $end = (Get-Date).AddSeconds(120)
+    $s = $before
+    while ($s.frames -lt $target -and (Get-Date) -lt $end) {
+        Start-Sleep -Milliseconds 100
         $s = Read-State
         if ($s) {
             $worst = [math]::Max($worst, [double]$s.max_frame_ms); $samples++
@@ -127,7 +137,7 @@ cge.mouse_delta = lambda: (0.0, 0.0)
     $after = Read-State
 
     $turn = ((($after.yaw - $before.yaw) % 360) + 360) % 360
-    $turned = [math]::Abs($turn - 180) -lt 40
+    $turned = [math]::Abs($turn - 180) -lt 10
     Check "the walk and turn ran (yaw changed by about 180 degrees)" $turned
     Write-Host "      yaw $($before.yaw) -> $($after.yaw), pitch $($before.pitch) -> $($after.pitch), mouse captured: $($after.mouse_captured)"
     Check "turning keeps the pitch fixed (the camera does not tilt)" ([math]::Abs($after.pitch - $before.pitch) -lt 0.5)

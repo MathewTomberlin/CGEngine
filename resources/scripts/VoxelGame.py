@@ -30,6 +30,9 @@ FLY_RISE = 10.0             # blocks per second when flying up or down
 TURN_SPEED = 90.0           # degrees per second, for the arrow keys
 MOUSE_SENSITIVITY = float(os.environ.get("VOXEL_MOUSE_SENSITIVITY", "0.00625"))   # degrees per pixel
 MAX_PITCH = 85.0            # the engine's camera stops at this angle
+# VOXEL_FIXED_STEP (seconds) makes every frame advance the same time, so a scripted test holds a key for the same game time
+# whatever the frame rate. Unset, a frame advances the real time since the last one.
+FIXED_STEP = float(os.environ["VOXEL_FIXED_STEP"]) if os.environ.get("VOXEL_FIXED_STEP") else None
 SPAWN_HEIGHT = 60.0         # above the tallest column, so the player drops onto the terrain
 RESPAWN_DEPTH = -20.0       # below this the player is put back at the spawn height
 # The blocks the number keys 1 to 7 choose from when placing (the hotbar), and the file the F5 and F9 keys save and load.
@@ -177,6 +180,8 @@ class VoxelGame(PyScript):
     def frame(self):
         now = time.perf_counter()
         raw = 0.0 if self.last is None else now - self.last
+        if FIXED_STEP is not None:
+            raw = 0.0 if self.last is None else FIXED_STEP
         dt = min(0.05, raw)
         raw_dt = min(0.05, raw)
         self.last = now
