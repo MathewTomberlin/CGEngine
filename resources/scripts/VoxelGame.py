@@ -329,7 +329,7 @@ class VoxelGame(PyScript):
             if not self.world.is_loaded(0, 0):
                 return
             self.walkers = VoxelWalkers.Walkers(self.world, (8.5, 8.5), WALKERS, self.seed)
-        self.walkers.update(dt)
+        self.walkers.update(dt, (self.pos[0], self.pos[2]))
 
     def in_water(self):
         """True while a liquid block is at the player's feet or chest."""

@@ -13,6 +13,8 @@ from VoxelShapes import boxes_arrays
 HALF_WIDTH = 0.3            # the creature is 0.6 wide and 1.2 tall
 HEIGHT = 1.2
 PACE = 1.4                  # blocks per second
+FLEE_RANGE = 4.5            # a creature this close to the player runs away from it
+FLEE_PACE = 3.0             # blocks per second while it runs
 RESPAWN_DEPTH = -10.0       # below this a creature is put back at its spawn point
 CHUNK = VoxelGen.CHUNK
 PALETTE = [(0.92, 0.90, 0.85), (0.55, 0.36, 0.22), (0.20, 0.20, 0.24), (0.85, 0.62, 0.30)]
@@ -31,25 +33,31 @@ class Walker:
         cge.find_body(name).get_mesh().set_position(cge.Vector3f(*spawn))
         cge.add_voxel_walker(name, world, HALF_WIDTH, HEIGHT)
 
-    def update(self, dt):
+    def update(self, dt, player=None):
         pos, _vel, on_ground = cge.voxel_walker_state(self.name)
         if pos[1] < RESPAWN_DEPTH:
             cge.set_voxel_position(self.name, *self.spawn)
             self.last = None
             return
+        pace = PACE
         self.timer -= dt
-        if self.timer <= 0.0:
+        if player is not None and math.hypot(pos[0] - player[0], pos[2] - player[1]) < FLEE_RANGE:
+            # Startled: it runs straight away from the player, and keeps running until it is out of range.
+            self.heading = math.atan2(pos[2] - player[1], pos[0] - player[0])
+            self.timer = 1.0
+            pace = FLEE_PACE
+        elif self.timer <= 0.0:
             self.heading += self.rng.uniform(-1.2, 1.2)
             self.timer = self.rng.uniform(1.0, 4.0)
         # A wall stops the creature short of the distance it meant to walk (seen in last frame's move): it turns, and
         # jumps a block if it stands on the ground.
         if self.last is not None:
             walked = math.hypot(pos[0] - self.last[0], pos[2] - self.last[2])
-            if walked < 0.5 * PACE * dt and on_ground:
+            if walked < 0.5 * pace * dt and on_ground:
                 self.heading += self.rng.choice((-1.0, 1.0)) * self.rng.uniform(math.pi / 3, 2.0 * math.pi / 3)
                 cge.voxel_jump(self.name, physics.JUMP_SPEED)
         self.last = pos
-        cge.set_voxel_velocity(self.name, math.cos(self.heading) * PACE, math.sin(self.heading) * PACE)
+        cge.set_voxel_velocity(self.name, math.cos(self.heading) * pace, math.sin(self.heading) * pace)
 
     def state(self):
         """The creature's feet, velocity and ground contact, as the engine has them now."""
@@ -84,6 +92,7 @@ class Walkers:
                     break
         return None
 
-    def update(self, dt):
+    def update(self, dt, player=None):
+        """player is the (x, z) of the player, which the creatures run from when it comes close."""
         for walker in self.walkers:
-            walker.update(dt)
+            walker.update(dt, player)
