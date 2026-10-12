@@ -16,6 +16,8 @@ namespace CGEngine {
         World();
         //World state
         void runWorld();
+        // Removes every Body before the asset manager clears its other types at exit (see releaseBodies in World.cpp).
+        void releaseBodies();
         void startWorld();
         void endWorld();
 
