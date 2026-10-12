@@ -62,6 +62,8 @@ for _block in range(FLOW_FIRST, FLOW_LAST + 1):
 # Items that are not blocks: a creature leaves a hide when it dies. They are held in the inventory like blocks, but a slot
 # holding one cannot place it (the game checks COLOURS, which lists the blocks only), and the world never defines them.
 HIDE = 40
-ITEM_COLOURS = {HIDE: (0.72, 0.56, 0.40)}
-ITEM_NAMES = {HIDE: "hide"}
+PICKAXE = 41                        # a tool: it does not stack, and when it is the selected slot its swings on PICKAXE_BLOCKS count double
+ITEM_COLOURS = {HIDE: (0.72, 0.56, 0.40), PICKAXE: (0.62, 0.62, 0.68)}
+ITEM_NAMES = {HIDE: "hide", PICKAXE: "pickaxe"}
 NAMES.update(ITEM_NAMES)
+PICKAXE_BLOCKS = (STONE, COAL, IRON, BRICK)   # the blocks a pickaxe mines faster (VoxelWorld.hit_block takes two hits from it)

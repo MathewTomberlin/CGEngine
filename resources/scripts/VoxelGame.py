@@ -342,6 +342,7 @@ class VoxelGame(PyScript):
         self.world.set_terrain(self.seed, VoxelGen.SEA_LEVEL, 8, 44, VoxelGen.SNOW_LEVEL, VoxelGen.TREE_CHANCE,
                           VoxelGen.CAVE_WIDTH)
         self.inventory.start(START_ITEMS, START_COUNT)
+        self.inventory.slots[COLUMNS] = [VoxelGen.PICKAXE, 1]   # the first row below the hotbar: drag it into the hotbar to use it
 
     def setup_hud(self):
         """Two labels: the top left holds what the crosshair is on and the controls; the hotbar sits along the bottom."""
@@ -1040,11 +1041,17 @@ class VoxelGame(PyScript):
             # A block takes its hits (VoxelGen.HITS) to break. The hit that would break it needs room for it in the inventory;
             # a hit that leaves it standing does not, so a full inventory can still damage a block.
             kind = self.world.get_block(*block)
-            breaks = self.world.damage_at(*block) + 1 >= VoxelGen.HITS.get(kind, 1)
+            # A pickaxe in the selected slot takes two swings at the blocks it mines (VoxelGen.PICKAXE_BLOCKS).
+            swings = 2 if self.selected() == VoxelGen.PICKAXE and kind in VoxelGen.PICKAXE_BLOCKS else 1
+            breaks = self.world.damage_at(*block) + swings >= VoxelGen.HITS.get(kind, 1)
             if breaks and not self.creative and not self.inventory.fits(kind):
                 self.notify("Inventory full")
                 return
-            stage = self.world.hit_block(block[0], block[1], block[2])
+            stage = -2
+            for _ in range(swings):
+                stage = self.world.hit_block(block[0], block[1], block[2])
+                if stage < 0:
+                    break
             colour = VoxelGen.COLOURS.get(kind, (0.5, 0.5, 0.5))
             centre = [block[i] + 0.5 for i in range(3)]
             if stage != -2:

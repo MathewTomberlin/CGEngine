@@ -80,6 +80,22 @@ i.click(4)
 i.return_held()
 check("closing the screen returns the held stack to the inventory", i.slots[0] == [TORCH, 6] and i.held is None)
 
+# A tool does not stack: each pickaxe takes a slot of its own.
+PICKAXE = 41
+i = inv.Inventory()
+i.add(PICKAXE, 2)
+check("a tool does not stack: two pickaxes take two slots", i.slots[0] == [PICKAXE, 1] and i.slots[1] == [PICKAXE, 1])
+full = inv.Inventory()
+full.slots = [[PICKAXE, 1] for _ in range(inv.SLOTS)]
+check("a full row of tools has no room for another", not full.fits(PICKAXE, 1))
+i.slots[2] = [PICKAXE, 1]
+i.held = [PICKAXE, 1]
+i.click(0)
+check("a held tool is not merged into a tool's slot", i.slots[0] == [PICKAXE, 1] and i.held == [PICKAXE, 1])
+j = inv.Inventory()
+j.load_list([[PICKAXE, 3], [PICKAXE, 1]])
+check("a saved tool with more than one is dropped, one is kept", j.slots[0] is None and j.slots[1] == [PICKAXE, 1])
+
 # The starting kit fills the hotbar, and a save loads back, with damaged entries dropped.
 i = inv.Inventory()
 i.start([STONE, DIRT, TORCH], 16)

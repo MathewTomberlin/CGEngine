@@ -321,8 +321,10 @@ Goal: items have quantities, the inventory is a grid the player can see and chan
 - [x] **17.4** The inventory is saved with the edits: F5 writes `cg_control/voxel_inventory.json` beside `voxel_edits.bin`, and F9
   loads both. A missing file keeps the current inventory, and a damaged entry is dropped. It is a JSON file, not part of the
   binary edit file, because the item model lives in Python. Checked by `voxel_game_check.py` (the save and load round trip).
-- [ ] **17.5** Tools: a pickaxe speeds up breaking stone and ore (uses 16.1 hardness), so ore is worth a tool. Later, not first.
-
+- [x] **17.5** Tools: a pickaxe (`VoxelGen.PICKAXE`, a tool: it does not stack, and cannot be placed). It starts in the first
+  row below the hotbar, so the player drags it into the hotbar. When it is the selected slot, a click on stone, coal, iron or
+  brick takes two swings (so stone takes two clicks and iron three, not three to five). It uses the hardness of 16.1, so the
+  ore is quicker to mine with it. Not yet: no crafting, no other tools, and no wear.
 ## Phase 18: multi-user interaction (long-term goal; multiplayer voxel is the first stretch goal)
 Goal: several people (or an AI and a person) work in one CG Engine world at the same time.
 - [ ] **18.1** Engine assumptions to change first: the engine is single-process by design. The globals (`world`, `renderer`,

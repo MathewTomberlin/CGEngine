@@ -6,11 +6,19 @@ choose its slots. The inventory screen (I) holds a stack in the cursor while it 
 Pure Python with no engine calls, so tools/test_voxel_inventory.py checks it without a window.
 """
 
+import VoxelGen
+
 COLUMNS = 12                # slots in a row; the hotbar is the first row
 ROWS = 3
 SLOTS = COLUMNS * ROWS
 HOTBAR_SLOTS = COLUMNS
 STACK_LIMIT = 64            # the most of one item in one slot
+UNSTACKED = (VoxelGen.PICKAXE,)   # tools: one to a slot
+
+
+def limit(item):
+    """The most of an item one slot holds."""
+    return 1 if item in UNSTACKED else STACK_LIMIT
 
 
 class Inventory:
@@ -28,21 +36,21 @@ class Inventory:
 
     def fits(self, item, amount=1):
         """True when amount of item can be added: into stacks of it that are not full, or into empty slots."""
-        room = sum(STACK_LIMIT - s[1] for s in self.slots if s and s[0] == item)
-        room += STACK_LIMIT * sum(1 for s in self.slots if s is None)
+        room = sum(limit(item) - s[1] for s in self.slots if s and s[0] == item)
+        room += limit(item) * sum(1 for s in self.slots if s is None)
         return room >= amount
 
     def add(self, item, amount=1):
         """Add amount of item: topping up the stacks of it first, then filling empty slots. Returns what did not fit."""
         left = amount
         for s in self.slots:
-            if left > 0 and s and s[0] == item and s[1] < STACK_LIMIT:
-                moved = min(left, STACK_LIMIT - s[1])
+            if left > 0 and s and s[0] == item and s[1] < limit(item):
+                moved = min(left, limit(item) - s[1])
                 s[1] += moved
                 left -= moved
         for index, s in enumerate(self.slots):
             if left > 0 and s is None:
-                moved = min(left, STACK_LIMIT)
+                moved = min(left, limit(item))
                 self.slots[index] = [item, moved]
                 left -= moved
         return left
@@ -86,7 +94,7 @@ class Inventory:
         if secondary:
             if s is None:
                 self.slots[index] = [item, 1]
-            elif s[0] == item and s[1] < STACK_LIMIT:
+            elif s[0] == item and s[1] < limit(item):
                 s[1] += 1
             else:
                 return
@@ -96,7 +104,7 @@ class Inventory:
             self.held = None
             return
         elif s[0] == item:
-            moved = min(count, STACK_LIMIT - s[1])
+            moved = min(count, limit(item) - s[1])
             s[1] += moved
             self.held[1] -= moved
         else:
@@ -130,5 +138,5 @@ class Inventory:
                 item, count = int(entry[0]), int(entry[1])
             except (TypeError, ValueError, IndexError, KeyError):
                 continue
-            if 0 < item < 256 and 0 < count <= STACK_LIMIT:
+            if 0 < item < 256 and 0 < count <= limit(item):
                 self.slots[index] = [item, count]

@@ -237,6 +237,22 @@ def main():
         checks["C turns creative mode on"] = game.creative is True
         game.creative = False
 
+        # A pickaxe in the selected slot takes two swings at stone (so two clicks break it), and it is not a block: it cannot be placed.
+        inv.slots[0] = [VoxelGen.PICKAXE, 1]
+        game.slot = 0
+        pick_stone = (12, 58, 2)
+        put(*pick_stone, STONE)
+        game.target = (pick_stone, UP)
+        click(game, "Left")
+        checks["a pickaxe's click is two swings: stone takes two clicks, not three"] = (
+            world.get_block(*pick_stone) == STONE and world.damage_at(*pick_stone) == 2)
+        click(game, "Left")
+        checks["the second pickaxe click breaks the stone"] = world.get_block(*pick_stone) == 0
+        game.target = (floor, UP)
+        click(game, "Right", secondary=True)
+        checks["a pickaxe cannot be placed"] = game.notice == "A pickaxe cannot be placed"
+        inv.slots[0] = [STONE, 16]
+
         # Creatures: a hit takes one of the creature's health, the last one takes it out of the world and leaves a hide.
         checks["creatures are in the world"] = game.walkers is not None and len(game.walkers.walkers) > 0
         if game.walkers is None:
