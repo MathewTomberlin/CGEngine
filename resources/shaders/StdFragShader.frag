@@ -231,6 +231,8 @@ void main() {
     if(materials[mtl].useLighting != 0){
         linearColor = vec3(0.0);
         vec3 surfNormal = normalize(normal);
+        //Voxel skins are closed surfaces drawn from both sides: seen from behind, the face is lit as the side the viewer is on.
+        if(triplanar != 0 && !gl_FrontFacing) surfNormal = -surfNormal;
         vec3 surfViewDir = normalize(cameraPosition - surfPos);
 
         for(int i = 0; i < lightCount; ++i){

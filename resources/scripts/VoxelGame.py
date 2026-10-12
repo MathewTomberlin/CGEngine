@@ -34,9 +34,9 @@ WATER_SPEED = 0.6           # the walking speed in water, as a share of the walk
 WATER_SINK = 1.2            # blocks per second the player sinks in water
 WATER_RISE = 3.0            # blocks per second the player swims up with Space
 WATER_DRAG = 4.0            # how quickly the vertical speed moves to the swim speed (per second)
-WATER_FOG = (0.10, 0.30, 0.42)   # the colour of the view under the water
-WATER_FOG_START = 1.0
-WATER_FOG_END = 22.0
+WATER_FOG = (0.30, 0.58, 0.70)   # the colour of the view under the water (lighter than the water itself, so the bed reads)
+WATER_FOG_START = 4.0
+WATER_FOG_END = 46.0
 TURN_SPEED = 90.0           # degrees per second, for the arrow keys
 MOUSE_SENSITIVITY = float(os.environ.get("VOXEL_MOUSE_SENSITIVITY", "0.00625"))   # degrees per pixel at 100%
 VIEW_SMOOTH = 14.0          # how quickly the camera follows the eye's height (per second): a climbed block is seen as a step, not a jump
@@ -242,7 +242,8 @@ class VoxelGame(PyScript):
                                     emits=VoxelGen.EMITS.get(block, 0),
                                     shape="cube" if block in VoxelGen.CUBES else "smooth",
                                     group="own" if block in VoxelGen.OWN else "terrain",
-                                    material=VoxelGen.MATERIALS.get(block))
+                                    material=VoxelGen.MATERIALS.get(block),
+                                    mesh=VoxelGen.WATER if block in VoxelGen.LIQUIDS else 0)
         self.world.set_smoothing(SMOOTH_RESOLUTION)
         self.world.set_move_seconds(SIM_TICK * 0.9)   # a falling block lands just before the next tick
         # Smooth skin nearest the camera is finer: NEAR_SAMPLES per block within NEAR_RADIUS chunks.
@@ -674,10 +675,11 @@ class VoxelGame(PyScript):
             fog_start, fog_end = WATER_FOG_START, WATER_FOG_END
         cge.set_light("sun", direction=cge.Vector3f(*travel), colour=cge.Vector3f(*light),
                       brightness=0.45 + 0.55 * day)
+        # The sun's shadows are off under the water: the water surface is a shadow over everything below it, which is dark.
         cge.set_environment(sky=cge.Vector3f(*sky), zenith=cge.Vector3f(*zenith), fog=cge.Vector3f(*fog_colour),
                             fog_start=fog_start, fog_end=fog_end,
                             sun_direction=cge.Vector3f(*toward_sun), sun_colour=cge.Vector3f(*sun_disc),
-                            sun_size=1.6)
+                            sun_size=1.6, shadows=SHADOWS and not (self.world is not None and self.eye_in_water()))
         self.sun = travel
         self.fog = (fog_end * FOG_START_FRACTION, fog_end)
 

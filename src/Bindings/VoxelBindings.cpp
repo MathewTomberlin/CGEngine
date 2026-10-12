@@ -56,18 +56,22 @@ void bindVoxel(py::module_& m) {
              "The surface style: 0 for cubes, or the number of samples per block for a smooth skin (1 for the block scale, 2 for half blocks). Loaded chunks are re-meshed.")
         .def("smoothing", &VoxelWorld::smoothing, "The surface style set by set_smoothing: 0 for cubes, else the samples per block.")
         .def("define_block", [](VoxelWorld& world, int block_id, sf::Vector3f colour, bool solid, bool falls, bool liquid, int emits,
-                const std::string& shape, const std::string& group, const std::optional<std::string>& material) {
+                const std::string& shape, const std::string& group, const std::optional<std::string>& material, int mesh) {
             if (shape != "smooth" && shape != "cube") throw py::value_error("shape must be \"smooth\" or \"cube\"");
             if (group != "terrain" && group != "own") throw py::value_error("group must be \"terrain\" or \"own\"");
             if (shape == "cube" && group == "terrain") throw py::value_error("a cube block is drawn in its own mesh: group must be \"own\"");
+            if (mesh < 0 || mesh > 255) throw py::value_error("mesh must be a block id, 0 to 255");
+            if (mesh != 0 && group != "own") throw py::value_error("mesh is for a block in its own mesh: group must be \"own\"");
             world.setColour(block_id, glm::vec3(colour.x, colour.y, colour.z));
             BlockType type{ solid, falls, liquid, static_cast<uint8_t>(std::clamp(emits, 0, 255)) };
             type.own = group == "own";
             type.cube = shape == "cube";
+            type.mesh = static_cast<uint8_t>(mesh);
             world.defineBlock(block_id, type);
             world.setMaterial(block_id, material.value_or(std::string()));
         }, py::arg("block_id"), py::arg("colour"), py::arg("solid") = true, py::arg("falls") = false, py::arg("liquid") = false,
            py::arg("emits") = 0, py::arg("shape") = "smooth", py::arg("group") = "terrain", py::arg("material") = py::none(),
+           py::arg("mesh") = 0,
            "Define a block id: its colour, whether it is solid (blocks movement), falls (sand-like, moves down into air or liquid), "
            "liquid (flows, as water does) and emits (the light it gives off at its own cell, 0 to 255; a lamp is 255). How it is "
            "drawn: shape is \"smooth\" (the skin) or \"cube\" (a cube that never merges with its neighbours); group is \"terrain\" "

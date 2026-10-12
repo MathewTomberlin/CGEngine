@@ -22,9 +22,9 @@ FALLS = (SAND, GRAVEL)              # blocks that fall into air or liquid
 EMITS = {LAMP: 255}                 # the light each block gives off at its own cell, 0 to 255; the light falls off through air
 # How each block is drawn (BlockType::own and cube). A block in OWN has its own mesh per chunk, drawn with MATERIALS[block]
 # (a material in scenes/voxels.json); the rest are the terrain's smooth skin. A cube block is always in OWN.
-OWN = (WOOD, LEAVES, BRICK)
+OWN = (WOOD, LEAVES, BRICK) + LIQUIDS   # water is in its own mesh too, so the ground under it has a skin to be seen by
 CUBES = (BRICK,)
-MATERIALS = {WOOD: "voxel_wood", LEAVES: "voxel_leaves", BRICK: "voxel_brick"}
+MATERIALS = {WOOD: "voxel_wood", LEAVES: "voxel_leaves", BRICK: "voxel_brick", WATER: "voxel_water"}
 
 COLOURS = {
     GRASS: (0.36, 0.72, 0.26),

@@ -50,7 +50,7 @@ namespace CGEngine {
 		const BlockType& type = types[static_cast<size_t>(block)];
 		if (!type.solid) return 0;
 		if (!type.own) return TerrainSkin;
-		return (type.cube ? CubeSkin : OwnSkin) + block;
+		return (type.cube ? CubeSkin : OwnSkin) + (type.mesh ? type.mesh : block);
 	}
 
 	const char* VoxelWorld::biomeName(int x, int z) const {
@@ -494,7 +494,7 @@ namespace CGEngine {
 		}
 		for (size_t id = 0; id < 256; ++id) {
 			padded.emission[id] = types[id].emits;
-			padded.rule[id].group = types[id].own ? static_cast<uint8_t>(id) : 0;
+			padded.rule[id].group = types[id].own ? static_cast<uint8_t>(types[id].mesh ? types[id].mesh : id) : 0;
 			padded.rule[id].cube = types[id].cube;
 		}
 		return padded;

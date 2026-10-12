@@ -14,6 +14,7 @@ namespace CGEngine {
 		// skin, or a cube that never merges with its neighbours, which is what a cube block always is (own is forced).
 		bool own = false;       // drawn in its own mesh, not the terrain mesh
 		bool cube = false;      // drawn as cubes, even where the terrain is smooth
+		uint8_t mesh = 0;       // the mesh of an own block: 0 is the block's own id, else this id, so blocks can share one mesh
 	};
 
 	// Water: block 5 is a full source. Flowing water has a level from 7 down to 1, kept as block ids 9 to 15 (id = 16 -
