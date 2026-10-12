@@ -56,7 +56,7 @@ rate, build and run the Release configuration.
   eight blocks. The lamp's light is added to the sky's in the mesh colours, so it brightens sunlit ground as well as caves
   (`light_at` gives the brighter of the two). Its light is twice the sky's in a cave (`VoxelLampLight`), and
   about the sky's in the open, where the sun already lights the ground. A lamp is a solid block, drawn as a cube, and its
-  faces glow at four times their colour whatever the sun and the shadows do (the glow is `VoxelVertex::glow`, added after the lighting). Carried
+  faces glow with the warm light colour at 0.8 whatever the sun and the shadows do (the glow is `VoxelVertex::glow`, added after the lighting; it stays under 1 so it does not clip to white, and the light a lamp gives its neighbours is tinted the same warm colour). Carried
   and small torches are on the roadmap (Phase 14); they will be props on a block's face, not full blocks.
 - The sun casts shadows (`VOXEL_SHADOWS=0` turns them off; `VOXEL_SHADOW_RADIUS`, 40 blocks by default, sets how far
   they reach). The map is drawn again when the camera moves, the sun turns, or a tenth of a second passes, and not at

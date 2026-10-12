@@ -65,6 +65,9 @@ namespace CGEngine {
 		void removeProp(int x, int y, int z);
 		// The dir of the prop at (x, y, z), or -1 for none.
 		int propAt(int x, int y, int z) const;
+		// How far from the cell's centre, toward the block the prop at (x, y, z) leans on (dir), the drawn skin is: a torch stands
+		// on that surface (VoxelMesher.h propShape). 0.5 if there is no solid block there.
+		float propAnchor(int x, int y, int z, int dir) const;
 		// Every prop as (x, y, z, dir). Props are kept with the edits, so a chunk that unloads keeps them.
 		std::vector<std::array<int, 4>> props() const;
 		// True if the column at (x, z) is in a loaded chunk, so its blocks are real.

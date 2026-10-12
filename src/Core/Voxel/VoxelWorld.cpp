@@ -358,6 +358,26 @@ namespace CGEngine {
 		return entry == chunk->second.end() ? -1 : entry->second;
 	}
 
+	float VoxelWorld::propAnchor(int x, int y, int z, int dir) const {
+		// March from the centre of the block the prop leans on toward the prop's cell, to where the skin stops being inside.
+		// The skin is the one collision uses, which is the drawn surface.
+		const double wx = x + 0.5 + PropDirs[dir][0];
+		const double wy = y + 0.5 + PropDirs[dir][1];
+		const double wz = z + 0.5 + PropDirs[dir][2];
+		if (skinDensity(wx, wy, wz) <= VoxelSkinIso) return 0.5f;
+		const double cx = x + 0.5;
+		const double cy = y + 0.5;
+		const double cz = z + 0.5;
+		for (int i = 1; i <= 100; ++i) {
+			const double t = i / 100.0;   // 0 at the block's centre, 1 at the prop's cell centre
+			const double px = wx + (cx - wx) * t;
+			const double py = wy + (cy - wy) * t;
+			const double pz = wz + (cz - wz) * t;
+			if (skinDensity(px, py, pz) <= VoxelSkinIso) return static_cast<float>(1.0 - t);
+		}
+		return 0.5f;
+	}
+
 	std::vector<std::array<int, 4>> VoxelWorld::props() const {
 		std::vector<std::array<int, 4>> list;
 		for (const auto& chunk : propsByChunk) {
@@ -576,7 +596,8 @@ namespace CGEngine {
 					const int pz = dz * size + (entry.first / size) % size;
 					const int py = entry.first / (size * size);
 					if (px < -border || px >= size + border || pz < -border || pz >= size + border) continue;
-					padded.props.push_back({ px, py, pz, entry.second });
+					const float anchor = propAnchor(cx * size + px, py, cz * size + pz, entry.second);
+					padded.props.push_back({ px, py, pz, entry.second, anchor });
 				}
 			}
 		}

@@ -24,7 +24,7 @@ namespace CGEngine {
 			}
 		};
 
-		// How much a light block's light is multiplied where the sky is at sky (0 to 1): VoxelLampBrightness in a cave, and 1 in
+		// How much a light block's light is multiplied where the sky is at sky (0 to 1): VoxelLampLight in a cave, and 1 in
 		// the open, where the sun already lights the ground, so a lamp does not wash out sunlit grass.
 		float lampGain(float sky) {
 			return 1.0f + (VoxelLampLight - 1.0f) * (1.0f - sky);
@@ -100,8 +100,8 @@ namespace CGEngine {
 				vertex.texCoord = glm::vec2(static_cast<float>(cornerU[k] * w), static_cast<float>(cornerV[k] * h));
 				vertex.colour = base * occlusionLight[face.occlusion[k]];
 				vertex.sky = face.light / 255.0f;
-				vertex.glow = palette[face.block] * (face.emission / 255.0f * VoxelLampBrightness)
-					+ vertex.colour * (face.lamp / 255.0f * lampGain(face.light / 255.0f));
+				vertex.glow = VoxelLightTint * (face.emission / 255.0f * VoxelGlow)
+					+ vertex.colour * VoxelLightTint * (face.lamp / 255.0f * lampGain(face.light / 255.0f));
 				out.vertices.push_back(vertex);
 			}
 			// Split the quad along the diagonal between its less occluded corners, so the shading does not streak.
@@ -389,8 +389,8 @@ namespace CGEngine {
 			const float lamp = chunk.lampAt(static_cast<int>(air.x), static_cast<int>(air.y), static_cast<int>(air.z)) / 255.0f;
 			vertex.colour = palette[static_cast<size_t>(block)] * occlusion;
 			vertex.sky = sky;
-			vertex.glow = palette[static_cast<size_t>(block)] * (chunk.emission[block] / 255.0f * VoxelLampBrightness)
-				+ vertex.colour * (lamp * lampGain(sky));
+			vertex.glow = VoxelLightTint * (chunk.emission[block] / 255.0f * VoxelGlow)
+				+ vertex.colour * VoxelLightTint * (lamp * lampGain(sky));
 			return vertex;
 		}
 	}
@@ -601,18 +601,40 @@ namespace CGEngine {
 		}
 	}
 
+	PropShape propShape(glm::vec3 cell, int dir, float anchor) {
+		const glm::vec3 wall(PropDirs[dir][0], PropDirs[dir][1], PropDirs[dir][2]);
+		// The base is on the skin of the wall, at anchor toward it. A floor torch stands up from the skin, a ceiling one hangs
+		// from it, and a torch on a side wall stands against it, low in its cell, with the stick's outer face on the skin.
+		const bool ceiling = wall.y > 0.5f;
+		const bool floor = wall.y < -0.5f;
+		glm::vec3 base = cell + wall * anchor;
+		glm::vec3 up(0.0f, 1.0f, 0.0f);
+		glm::vec3 offset(0.0f);
+		if (ceiling) {
+			up = glm::vec3(0.0f, -1.0f, 0.0f);
+		} else if (!floor) {
+			base.y -= 0.2f;
+			offset = -wall * 0.06f;
+		}
+		PropShape shape;
+		shape.stickCentre = base + offset + up * 0.25f;
+		shape.stickHalf = glm::vec3(0.06f, 0.25f, 0.06f);
+		shape.flameCentre = base + offset + up * 0.55f;
+		shape.flameHalf = glm::vec3(0.1f, 0.08f, 0.1f);
+		return shape;
+	}
+
 	void buildPropMesh(const PaddedChunk& chunk, MeshArrays& out) {
-		const glm::vec3 wood(0.42f, 0.27f, 0.14f);
-		const glm::vec3 flame(1.0f, 0.62f, 0.25f);
+		const glm::vec3 wood(0.25f, 0.15f, 0.07f);
+		// The flame's own colour is dark, so its glow (the light colour) is what shows: it stays warm, not white.
+		const glm::vec3 flame(0.25f, 0.15f, 0.06f);
 		for (const PaddedChunk::Prop& prop : chunk.props) {
 			if (prop.x < 0 || prop.x >= chunk.size || prop.y < 0 || prop.y >= chunk.height || prop.z < 0 || prop.z >= chunk.size) continue;
 			const float sky = chunk.lightAt(prop.x, prop.y, prop.z) / 255.0f;
-			// The stick stands against the block it leans on: a thin upright box toward that face of its cell, and a flame on top.
-			const glm::vec3 wall(PropDirs[prop.dir][0], PropDirs[prop.dir][1], PropDirs[prop.dir][2]);
 			const glm::vec3 cell(prop.x + 0.5f, prop.y + 0.5f, prop.z + 0.5f);
-			const glm::vec3 base = cell + wall * 0.36f + glm::vec3(0.0f, -0.1f, 0.0f);
-			addBox(out, base + glm::vec3(0.0f, 0.4f, 0.0f), glm::vec3(0.06f, 0.25f, 0.06f), wood, glm::vec3(0.0f), sky);
-			addBox(out, base + glm::vec3(0.0f, 0.78f, 0.0f), glm::vec3(0.1f, 0.08f, 0.1f), flame * 0.5f, flame * 2.5f, sky);
+			const PropShape shape = propShape(cell, prop.dir, prop.anchor);
+			addBox(out, shape.stickCentre, shape.stickHalf, wood, glm::vec3(0.0f), sky);
+			addBox(out, shape.flameCentre, shape.flameHalf, flame, VoxelLightTint * VoxelGlow, sky);
 		}
 	}
 

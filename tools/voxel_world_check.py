@@ -380,6 +380,10 @@ def check_props(world, checks, chunks):
     checks["the air beside a torch gets 0.8 of that"] = abs(next_light - 163) <= 2
     checks["a torch cell stays air to collision"] = world.skin_at(cx + 1, cy, cz) == 0
     checks["a torch adds geometry to its chunk's terrain mesh"] = world.chunk_group_quads(0, 0).get(0, 0) > quads_before
+    # The wall is stone at +x, so its skin is 0.3 from the torch's cell centre; the stick's outer face must be on that skin.
+    boxes = [b for b in world.prop_boxes() if (b[0], b[1], b[2]) == (cx + 1, cy, cz)]
+    stick_outer = boxes[0][4][0] + boxes[0][5][0] if boxes else None
+    checks["a torch stands on the skin of its wall, not inside it"] = stick_outer is not None and abs(stick_outer - (cx + 1.5 + 0.3)) < 0.03
     world.remove_prop(cx + 1, cy, cz)
     checks["removing a torch removes it and its light"] = world.prop_at(cx + 1, cy, cz) == -1         and world.light_at(cx + 1, cy, cz) == 0
     for (x, y, z), block in saved.items():

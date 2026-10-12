@@ -15,9 +15,12 @@ namespace CGEngine {
 	// chunk with this much border computes the same light for a shared cell as its neighbour does.
 	constexpr int VoxelLightReach = 8;
 
-	// How bright a light block is: its glow is this many times its colour, its light in a cave is VoxelLampLight (below), and
-	// the open gets less; see lampGain. The glow is clamped only where it is shown.
-	constexpr float VoxelLampBrightness = 4.0f;
+	// The glow of a light block or a torch: its light colour times this, added after the lighting. It stays under 1 in each
+	// channel, so a glowing face keeps its warm colour instead of clipping to white (the held torch is lit the same way).
+	constexpr float VoxelGlow = 0.8f;
+	// The colour of the light the blocks give (the held torch's colour). The light a block gives its neighbours is tinted by it,
+	// so a wall near a lamp is lit by a warm light, as the held torch lights it.
+	const glm::vec3 VoxelLightTint(1.0f, 0.72f, 0.4f);
 
 	// How much a light block's light is multiplied in a cave, where the sky gives none (see lampGain in VoxelMesher.cpp). In
 	// the open it is 1, so sunlit ground is not washed out.
@@ -64,6 +67,7 @@ namespace CGEngine {
 		struct Prop {
 			int x, y, z;
 			uint8_t dir;
+			float anchor = 0.5f;   // how far from the cell's centre, toward the block it leans on, the drawn skin is (VoxelWorld::propAnchor)
 		};
 		std::vector<Prop> props;
 
@@ -114,6 +118,13 @@ namespace CGEngine {
 
 	// A round ball of a block's colour, centred at centre and appended to out. The moving blocks are drawn with it.
 	void buildBlob(const std::array<glm::vec3, 256>& palette, uint8_t block, glm::vec3 centre, float radius, MeshArrays& out);
+
+	// The boxes of a torch: its stick (centre and half size) and its flame. A torch stands on the skin of the block it leans on,
+	// at distance anchor from its cell's centre, so the stick is outside the drawn surface and not hidden in it.
+	struct PropShape {
+		glm::vec3 stickCentre, stickHalf, flameCentre, flameHalf;
+	};
+	PropShape propShape(glm::vec3 cell, int dir, float anchor);
 
 	// The geometry of the chunk's props (torches): a stick leaning on its block and a flame on top, for the props in the chunk
 	// itself (not its border, which the neighbour draws). Appended to out, which is the terrain mesh.

@@ -43,7 +43,7 @@ COLOURS = {
     WOOD: (0.44, 0.29, 0.15),
     LEAVES: (0.20, 0.50, 0.16),
     GRAVEL: (0.52, 0.50, 0.47),
-    LAMP: (1.00, 0.80, 0.42),
+    LAMP: (0.30, 0.22, 0.12),       # the block's own colour is dark: its glow (the light colour) is what shows, warm, not white
     TORCH: (1.00, 0.62, 0.25),
     COAL: (0.16, 0.16, 0.18),
     IRON: (0.66, 0.46, 0.36),

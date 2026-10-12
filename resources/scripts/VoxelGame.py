@@ -604,14 +604,11 @@ class VoxelGame(PyScript):
         self.target = physics.raycast(self.solid, start, look, max_distance=physics.REACH + 0.5)
 
     def torch_under_aim(self, eye, look):
-        """The nearest torch the look ray meets within reach, as (distance, cell), or None. A torch is its stick and its flame,
-        in the same place VoxelMesher.cpp (buildPropMesh) draws them."""
+        """The nearest torch the look ray meets within reach, as (distance, cell), or None. The boxes are the ones the torch is
+        drawn with (VoxelWorld.prop_boxes), so the player aims at what they see."""
         best = None
-        for x, y, z, dir in self.world.props():
-            wall = VoxelGen.DIRECTIONS[dir]
-            base = (x + 0.5 + 0.36 * wall[0], y + 0.5 + 0.36 * wall[1] - 0.1, z + 0.5 + 0.36 * wall[2])
-            for centre, half in (((base[0], base[1] + 0.4, base[2]), (0.06, 0.25, 0.06)),
-                                 ((base[0], base[1] + 0.78, base[2]), (0.1, 0.08, 0.1))):
+        for x, y, z, dir, stick, stick_half, flame, flame_half in self.world.prop_boxes():
+            for centre, half in ((stick, stick_half), (flame, flame_half)):
                 t = ray_box(eye, look, centre, half)
                 if t is not None and t <= physics.REACH and (best is None or t < best[0]):
                     best = (t, (x, y, z))

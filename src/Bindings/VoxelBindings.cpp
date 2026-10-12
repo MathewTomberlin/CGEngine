@@ -40,6 +40,20 @@ void bindVoxel(py::module_& m) {
         .def("prop_at", &VoxelWorld::propAt, py::arg("x"), py::arg("y"), py::arg("z"),
              "The direction of the torch in a cell (see set_prop), or -1 for none.")
         .def("props", &VoxelWorld::props, "Every torch as a list of (x, y, z, dir).")
+        .def("prop_boxes", [](const VoxelWorld& world) {
+            // The boxes the torches are drawn with, so a hit test can use what the player sees.
+            py::list result;
+            for (const auto& prop : world.props()) {
+                const PropShape shape = propShape(glm::vec3(prop[0] + 0.5f, prop[1] + 0.5f, prop[2] + 0.5f), prop[3],
+                    world.propAnchor(prop[0], prop[1], prop[2], prop[3]));
+                result.append(py::make_tuple(prop[0], prop[1], prop[2], prop[3],
+                    py::make_tuple(shape.stickCentre.x, shape.stickCentre.y, shape.stickCentre.z),
+                    py::make_tuple(shape.stickHalf.x, shape.stickHalf.y, shape.stickHalf.z),
+                    py::make_tuple(shape.flameCentre.x, shape.flameCentre.y, shape.flameCentre.z),
+                    py::make_tuple(shape.flameHalf.x, shape.flameHalf.y, shape.flameHalf.z)));
+            }
+            return result;
+        }, "Each torch's boxes: (x, y, z, dir, stick centre, stick half size, flame centre, flame half size), as drawn.")
         .def("get_block", &VoxelWorld::getBlock, py::arg("x"), py::arg("y"), py::arg("z"),
              "The block id at world coordinates, 0 (air) outside the world height or in chunks that are not loaded.")
         .def("set_block", &VoxelWorld::setBlock, py::arg("x"), py::arg("y"), py::arg("z"), py::arg("block_id"),
