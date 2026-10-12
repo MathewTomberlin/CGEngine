@@ -22,7 +22,7 @@ namespace CGEngine {
 		bool onGround = false;
 	};
 
-	// True if the box with its feet at pos touches a solid block.
+	// True if the box with its feet at pos touches a solid block, or a cell of a chunk that is not loaded.
 	bool voxelBodyOverlaps(const VoxelWorld& world, const VoxelBodyShape& shape, const std::array<double, 3>& pos);
 
 	// One step: gravity (unless flying), then the move along x, z and y, each stopped flush against a block it runs into.

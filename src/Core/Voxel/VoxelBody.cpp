@@ -45,7 +45,9 @@ namespace CGEngine {
 		for (int x = x0; x <= x1; ++x) {
 			for (int y = y0; y <= y1; ++y) {
 				for (int z = z0; z <= z1; ++z) {
-					if (world.isSolid(x, y, z)) return true;
+					// Cells in chunks that are not loaded count as solid: a body waits at the edge of the loaded world rather
+					// than falling through terrain that has not arrived yet.
+					if (!world.loadedAt(x, z) || world.isSolid(x, y, z)) return true;
 				}
 			}
 		}
