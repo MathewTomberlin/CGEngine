@@ -109,8 +109,8 @@ Goal: the terrain looks rounded and real, the blocks obey physics the scripts ca
 
 ## Phase 11: making the voxel sample feel right to play (from playing it)
 Goal: the world reads well at a human pace, and the engine's own state is easy to see and to test.
-Next, in order: 11.14 and 11.15 (both wait for a snapshot from the player), then Phase 14 (torches), and the creatures' own
-behaviour (they only wander now).
+Next, in order: 11.14 and 11.15 (both wait for a snapshot from the player), then Phase 15 (view distance), Phase 16
+(damage) and Phase 17 (inventory). The creatures' own behaviour (they only wander now) comes with Phase 16.
 - [x] **11.1** Mouse look at a quarter of the first setting (0.00625 degrees a pixel, `VOXEL_MOUSE_SENSITIVITY`). Escape
   opens a pause menu: the mouse is freed and the world stands still; Resume locks the mouse; Quit closes the app.
   `tools/test_pause_menu.ps1` checks each step with scripted input.
@@ -255,6 +255,61 @@ full block, and light blocks (full cells that give light) are wanted too.
 - Interim (not on the roadmap as a fix): the cave floor (0.2 of the sky) could be raised to make caves readable before the
   torches land. Decide after 14.1 if they are still too dark.
 
+## Phase 15: view distance (from playtesting: the view is short)
+Goal: the player chooses how far they can see, and a long view stays cheap enough to walk through.
+- [x] **15.1** A view distance setting on the settings page: arrows from 6 to 40 chunks each way, with 14 (the old default) in
+  the middle. The fog, the chunk requests and the unload radius follow it, and the choice is saved with the other settings.
+  "Unlimited" is the last step and is capped at 40, because each chunk is held in memory (about 6,500 chunks, roughly 2 GB).
+  `tools/test_pause_menu.ps1` checks the arrow and the saved file.
+- [ ] **15.2** Far skins: the chunks beyond the near ring are meshed coarser (a sample every two blocks or more), so a long view
+  costs a fraction of the quads. This is what makes "Unlimited" honest; the cap of 40 is the stand-in until then.
+- [ ] **15.3** Measure the frame time at each view distance in Release (`tools/voxel_perf.ps1`), and record the memory per step,
+  so the step list is chosen from numbers. The current numbers are only for 14 (about 650 frames a second at 841 chunks).
+- [ ] **15.4** Chunks beyond the view are unloaded as the player moves, but the edits are kept (they are already); check that a
+  long walk at 40 does not leave the process growing (the unload path, and the meshes' GPU buffers).
+
+## Phase 16: voxel health and damage (from playtesting: one hit breaks everything)
+Goal: blocks and creatures take several hits, and what the player has hit looks hit.
+- [ ] **16.1** Block hardness: each block type has a number of hits to break (stone more than dirt, leaves less than wood,
+  lamps and torches one). `define_block(..., hits=)`. The hardness is data, like the other block rules.
+- [ ] **16.2** Visual damage states: a damaged block shows its stage, from a darker tint to cracks on its faces. Damage is a
+  per-cell value kept with the edits (like props), so the mesher can tint the cell's faces; a stage change re-meshes only the
+  chunk it is in. Measure the re-mesh cost (14.5 is the baseline: about 3 ms).
+- [ ] **16.3** Hit feedback: the aimed block shakes or flashes on a hit, and a broken block gives a short particle burst in its
+  colour (particles are a new engine feature, so this may wait for a small particle system).
+- [ ] **16.4** Damage heals: a block not hit for a few seconds goes back one stage (so a half-broken wall is a choice, not a
+  trap). The timer is per cell and only runs for damaged cells.
+- [ ] **16.5** Creatures take hits: the walkers (11.9) have health, a hit pushes them back, and a dead one leaves a drop. This is
+  also where the creatures' own behaviour starts (they chase, flee and fight, not only wander).
+- [ ] **16.6** The player has health: hits from creatures, falling and water-free lava (if lava is added) lower it; it refills
+  slowly out of combat; at zero the player respawns at the spawn with the inventory kept.
+
+## Phase 17: inventory and a real hotbar (from playtesting: the hotbar is a line of text)
+Goal: items have quantities, the inventory is a grid the player can see and change, and the hotbar is a UI, not text.
+- [ ] **17.1** An item model: an item is a block id or a tool/torch id, with a quantity and a stack limit. Breaking a block
+  gives its item to the inventory; placing takes one from the stack. Torches are items with quantities (a torch is no longer
+  free). Creative mode (a flag) keeps the old unlimited placing for building.
+- [ ] **17.2** An inventory screen (I): a grid of slots, each with an icon (the block's colour swatch until textures exist),
+  the quantity, and a drag to move or split stacks. Opened and closed without losing the place in the world.
+- [ ] **17.3** A real hotbar UI: nine or ten slots drawn as boxes with icons and quantities, the selected one highlighted, and
+  the number keys selecting them. It is the first row of the inventory, so the two are one model.
+- [ ] **17.4** Save the inventory with the edits (the save file has blocks, props and damage, and now the inventory too).
+- [ ] **17.5** Tools: a pickaxe speeds up breaking stone and ore (uses 16.1 hardness), so ore is worth a tool. Later, not first.
+
+## Phase 18: multi-user interaction (long-term goal; multiplayer voxel is the first stretch goal)
+Goal: several people (or an AI and a person) work in one CG Engine world at the same time.
+- [ ] **18.1** Engine assumptions to change first: the engine is single-process by design. The globals (`world`, `renderer`,
+  `assets`, the Python interpreter) are process singletons, and the control channel is one file inbox. A second player needs
+  the world state to be separable from the presentation: a state that can be sent, and a view that draws a state it did not make.
+- [ ] **18.2** A transport: a message layer (sockets, or a library such as ENet) with a small set of messages (join, state
+  snapshot, block edit, prop edit, player position, chat). Starts as a loopback test with two processes on one machine.
+- [ ] **18.3** A server that owns the world: the voxel edits, props and damage are applied there; clients send requests and draw
+  what the server says. The server is the same engine headless (no window), which the smoke test can already approximate.
+- [ ] **18.4** Stretch goal, the multiplayer voxel game: two players see each other (a body with a name), share edits, and
+  one can break what the other placed. Then the inventory per player (17) and the damage from other players (16.5 and 16.6).
+- [ ] **18.5** Shared authoring: the control channel (Phase 2) works per server, so an AI and a person can change the same
+  world through the same messages a client sends. This is the original goal of the roadmap, reached through 18.3.
+
 ## Tooling and quality
 - [x] CI build on Windows (`.github/workflows/build.yml`) with Mesa software OpenGL smoke run
 - [~] Unit tests for pure logic runnable without a GPU. Done for the dungeon generator (`python -I tools/test_dungeon_gen.py`) and for the scene format and command list (`python -I tools/test_scene_format.py`: example scenes, invalid fixtures, documented commands). The C++ parsers in `SceneLoader` and `ControlChannel` are still covered only by the GPU integration test.
@@ -301,4 +356,15 @@ full block, and light blocks (full cells that give light) are wanted too.
   anything I have not seen in play: the leaf and trunk seams, and the dark patch under a trunk, are plausible but not tested
   beyond a screenshot. The one thing I would do first next is the torch as a prop (14.2), because the caves still have nothing
   in them that the player brings.
+- Review, after the view distance round (Phase 15). The roadmap has three kinds of open item: the ones waiting on a player
+  (11.14, 11.15), the ones that are real engine work and do not depend on anyone (15.2 far skins, 16 damage, 17 inventory),
+  and the long-term goal (18). The first kind has been waiting longest; I would not invent a fix for either without a snapshot.
+  The gaps I found while reading it, now on the roadmap: torches are not in the save file (14.9), the torch on a face is not
+  named in the aim label (14.10), and the far view has no level of detail (15.2). How I feel about the sample: it has become a
+  place with things in it (caves that read, water to swim in, trees that are their own shapes, torches that light the way),
+  and the thing I trust least is what I have only seen in a screenshot. The biggest technical risk is that the engine's
+  singletons (`world`, `renderer`, `assets`) assume one world in one process, so the multiplayer goal is a change to the
+  engine's shape, not just a feature. I am more excited by the damage and inventory work (it turns the sample from a walk into a
+  game) than by anything else on this list, and I would start there after the far skins, because the view is where the
+  player first notices the sample is empty.
 - The tests run through the control channel with scripted input. They are the best guard against regressions in the game, and they caught a real engine bug (the run loop), so keep adding one for each new interaction.
