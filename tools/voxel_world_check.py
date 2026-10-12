@@ -428,6 +428,27 @@ def measure_remesh(world, chunks, results):
     wait_meshed(world, chunks)
 
 
+def check_rocks(world, chunks, checks, results):
+    """Boulders are stone on the ground. The terrain's own columns end in grass, sand, snow or dirt, so a column whose top block
+    is stone is a boulder. Some are in the chunks checked, and none is in the sea."""
+    sea_level = 14
+    rocks = []
+    xs = range(min(cx for cx, _ in chunks) * SIZE, (max(cx for cx, _ in chunks) + 1) * SIZE)
+    zs = range(min(cz for _, cz in chunks) * SIZE, (max(cz for _, cz in chunks) + 1) * SIZE)
+    for x in xs:
+        for z in zs:
+            top = None
+            for y in range(HEIGHT - 1, 0, -1):
+                if world.get_block(x, y, z) != 0:
+                    top = y
+                    break
+            if top is not None and world.get_block(x, top, z) == VOXEL_STONE:
+                rocks.append((x, top, z))
+    results["boulders"] = len(rocks)
+    checks["boulders are in the chunks checked"] = len(rocks) > 0
+    checks["no boulder is in the sea"] = all(top > sea_level for _, top, _ in rocks)
+
+
 def check_ores(world, chunks, checks):
     """Ore is in the stone: coal at any depth, and iron only deep (below the terrain's IronDepth of 20)."""
     coal = iron = iron_high = 0
@@ -540,6 +561,7 @@ def run(out_path="cg_control/voxel_check.json"):
     check_lamp(world, results["check"])
     check_props(world, results["check"], chunks)
     check_ores(world, chunks, results["check"])
+    check_rocks(world, chunks, results["check"], results)
     check_damage(results["check"])
     measure_remesh(world, chunks, results)
     check_groups(results["check"])
