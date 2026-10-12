@@ -154,6 +154,8 @@ creatures' own behaviour (they only wander now).
 - [x] **11.16** Settings page from the pause menu: Settings opens a page with the mouse sensitivity (arrows, 25% to 300%),
   applied at once and saved to `voxel_settings.json`. Escape and Back return to the menu. `tools/test_pause_menu.ps1` checks
   the page, the arrow, the saved file and the way back. Still open: the other settings (graphics, shadows, the sun).
+- [x] **11.17** Settings: a time-of-day slider (drag or click the track; it sets the sun, and the choice is saved), and the
+  mouse sensitivity now goes up to 500%. `tools/test_pause_menu.ps1` checks the slider and the saved time.
 - [ ] **11.14** Intermittent square shadow on the terrain at high sun, with nothing casting it. Not reproduced yet. F12 now saves a screenshot and the game state together (`cg_control/snapshots/`), so the next occurrence can be checked. The shadow edge now fades to lit at the map boundary, which may hide a square edge. Needs an F12 pair from the player.
 - [ ] **11.15** Start of game: the player sometimes falls through the ground into the kill zone, then restarts at the spawn
   height and falls again until moved. Not reproduced: a run with focus in another window landed normally, and the 24-seed

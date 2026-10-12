@@ -100,10 +100,12 @@ cge.mouse_delta = lambda: (0.0, 0.0)
 }
 
 # The menu of the 1000 x 500 window: the pause page has Resume (y 260), Settings (y 305) and Quit (y 351). The settings
-# page has the sensitivity arrows (the up arrow at x 665, y 265) and Back (y 305).
+# page has the sensitivity arrows (the up arrow at x 665, y 241), the time-of-day track (y 323, from x 350 to 650) and Back
+# (y 377).
 $settingsScript = Click-Script 500 305
-$sensUpScript = Click-Script 665 265
-$backScript = Click-Script 500 305
+$sensUpScript = Click-Script 665 241
+$trackScript = Click-Script 500 323
+$backScript = Click-Script 500 377
 $quitScript = Click-Script 500 351
 
 Remove-Item -Recurse -Force $control -ErrorAction SilentlyContinue
@@ -163,6 +165,11 @@ try {
     $ran = Run-Script "06_settings_again" $settingsScript
     $page = Wait-State { param($s) $s.menu -eq "settings" } 10
     Check "Settings opens again" ($page -and $page.menu -eq "settings")
+    $ran = Run-Script "06b_time_track" $trackScript
+    $noon = Wait-State { param($s) [math]::Abs($s.time_of_day - 0.5) -lt 0.02 } 10
+    Check "clicking the middle of the time-of-day track sets the time to the middle of the day ($([math]::Round($noon.time_of_day, 3)))" ($noon -and [math]::Abs($noon.time_of_day - 0.5) -lt 0.02)
+    Start-Sleep -Milliseconds 600
+    Check "the time-of-day choice is saved to the settings file" ((Get-Content (Join-Path $exeDir "cg_control/test_settings.json") -Raw) -match "time_of_day`": 0\.5")
     $ran = Run-Script "07_sensitivity_up" $sensUpScript
     $raised = Wait-State { param($s) $s.sensitivity -eq 125 } 10
     Check "the up arrow raises the mouse sensitivity from 100% to 125%" ($raised -and $raised.sensitivity -eq 125)

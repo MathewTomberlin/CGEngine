@@ -41,7 +41,8 @@ TURN_SPEED = 90.0           # degrees per second, for the arrow keys
 MOUSE_SENSITIVITY = float(os.environ.get("VOXEL_MOUSE_SENSITIVITY", "0.00625"))   # degrees per pixel at 100%
 # The settings the player chose, kept between runs in the game's folder. VOXEL_SETTINGS moves the file (the tests use one of their own).
 SETTINGS_FILE = os.environ.get("VOXEL_SETTINGS", "voxel_settings.json")
-SENSITIVITY_STEPS = [25, 50, 75, 100, 125, 150, 200, 250, 300]   # mouse sensitivity, as a percent of MOUSE_SENSITIVITY
+SENSITIVITY_STEPS = [25, 50, 75, 100, 125, 150, 200, 250, 300, 400, 500]   # mouse sensitivity, as a percent of MOUSE_SENSITIVITY
+TRACK_CELLS = 39            # the characters of the time-of-day slider's track
 MAX_PITCH = 85.0            # the engine's camera stops at this angle
 # VOXEL_FIXED_STEP (seconds) makes every frame advance the same time, so a scripted test holds a key for the same game time
 # whatever the frame rate. Unset, a frame advances the real time since the last one.
@@ -90,23 +91,29 @@ MOON_LIGHT = (0.45, 0.55, 0.85)
 # The pause menu's pages: the title, and the items on each page. The settings page holds the mouse sensitivity.
 MENU_PAGES = {
     "pause": ("PAUSED", ("resume", "settings", "quit")),
-    "settings": ("SETTINGS", ("sens_down", "sens_value", "sens_up", "back")),
+    "settings": ("SETTINGS", ("sens_down", "sens_value", "sens_up", "time_value", "time_track", "back")),
 }
 MENU_TEXT = {"resume": "Resume", "settings": "Settings", "quit": "Quit", "back": "Back", "sens_down": "<", "sens_up": ">"}
 
 
 def load_settings():
-    """The saved mouse sensitivity (a percent), or 100 if nothing usable is saved."""
+    """The saved settings: the mouse sensitivity (a percent, one of SENSITIVITY_STEPS) and the time of day (0 to 1, or None
+    if none is saved). Missing or unreadable settings keep their defaults."""
+    settings = {"mouse_sensitivity": 100, "time_of_day": None}
     try:
         with open(SETTINGS_FILE) as f:
-            percent = int(json.load(f).get("mouse_sensitivity", 100))
+            data = json.load(f)
+        settings["mouse_sensitivity"] = int(data.get("mouse_sensitivity", 100))
+        if "time_of_day" in data:
+            settings["time_of_day"] = float(data["time_of_day"]) % 1.0
     except (OSError, ValueError, TypeError, AttributeError):
-        return 100
-    return min(SENSITIVITY_STEPS, key=lambda step: abs(step - percent))
+        pass
+    settings["mouse_sensitivity"] = min(SENSITIVITY_STEPS, key=lambda step: abs(step - settings["mouse_sensitivity"]))
+    return settings
 
 
-def save_settings(sensitivity):
-    StateFile.write_json(SETTINGS_FILE, {"mouse_sensitivity": sensitivity})
+def save_settings(sensitivity, time_of_day):
+    StateFile.write_json(SETTINGS_FILE, {"mouse_sensitivity": sensitivity, "time_of_day": round(time_of_day, 5)})
 
 
 class VoxelGame(PyScript):
@@ -139,11 +146,17 @@ class VoxelGame(PyScript):
         self.hud_ready = False          # the label and the outline bodies exist (made on the second frame)
         self.paused = False             # the pause menu is open: the world stands still and the mouse is free
         self.menu_page = "pause"        # the page of the pause menu: "pause" or "settings"
-        self.sensitivity = load_settings()   # mouse sensitivity, a percent of MOUSE_SENSITIVITY
+        saved = load_settings()
+        self.sensitivity = saved["mouse_sensitivity"]   # mouse sensitivity, a percent of MOUSE_SENSITIVITY
+        self.dragging = False           # the time-of-day slider is being dragged
         self.outline_keys = {}          # the last outline shown under each name, so unchanged ones are not re-uploaded
         self.outline_bodies = set()     # the outlines already made as runtime meshes
         self.slot = 0                   # the hotbar slot placing uses
-        self.clock = START_TIME % 1.0   # fraction of a day
+        # The time of day: VOXEL_TIME if it is set, else the time the player last chose on the settings page, else START_TIME.
+        if "VOXEL_TIME" in os.environ or saved["time_of_day"] is None:
+            self.clock = START_TIME % 1.0   # fraction of a day
+        else:
+            self.clock = saved["time_of_day"]
         self.sun = (0.0, -1.0, 0.0)     # the direction the sun's light travels
         self.fog = (0.0, 0.0)           # fog start and end distances, in blocks
 
@@ -248,10 +261,12 @@ class VoxelGame(PyScript):
             "resume": ((cx - 100, cy - 4, cx + 100, cy + 30), (cx - 62, cy)),
             "settings": ((cx - 100, cy + 40, cx + 100, cy + 74), (cx - 62, cy + 44)),
             "quit": ((cx - 100, cy + 84, cx + 100, cy + 118), (cx - 40, cy + 88)),
-            "sens_down": ((cx - 215, cy - 4, cx - 150, cy + 30), (cx - 200, cy)),
-            "sens_value": (None, (cx - 120, cy)),
-            "sens_up": ((cx + 150, cy - 4, cx + 215, cy + 30), (cx + 165, cy)),
-            "back": ((cx - 100, cy + 40, cx + 100, cy + 74), (cx - 30, cy + 44)),
+            "sens_down": ((cx - 215, cy - 24, cx - 150, cy + 6), (cx - 200, cy - 20)),
+            "sens_value": (None, (cx - 120, cy - 20)),
+            "sens_up": ((cx + 150, cy - 24, cx + 215, cy + 6), (cx + 165, cy - 20)),
+            "time_value": (None, (cx - 120, cy + 36)),
+            "time_track": ((cx - 150, cy + 60, cx + 150, cy + 86), (cx - 150, cy + 62)),
+            "back": ((cx - 100, cy + 110, cx + 100, cy + 144), (cx - 30, cy + 114)),
         }
         cge.create_text_body("menu_title", "", "hud", cge.Vector2f(cx - 80, cy - 60), 28, outline_thickness=HUD_OUTLINE)
         for item, (_rect, (x, y)) in self.menu_layout.items():
@@ -272,6 +287,12 @@ class VoxelGame(PyScript):
     def menu_label(self, item):
         if item == "sens_value":
             return "Mouse sensitivity: %d%%" % self.sensitivity
+        if item == "time_value":
+            minutes = (round(self.clock * 1440) + 360) % 1440   # 0 is sunrise (06:00), 0.25 noon, 0.5 sunset, 0.75 midnight
+            return "Time of day: %02d:%02d" % (minutes // 60, minutes % 60)
+        if item == "time_track":
+            knob = min(TRACK_CELLS - 1, int(self.clock * TRACK_CELLS))
+            return "[" + "-" * knob + "O" + "-" * (TRACK_CELLS - 1 - knob) + "]"
         text = MENU_TEXT[item]
         if self.menu_hover == item:
             return "[%s]" % text if item in ("sens_down", "sens_up") else "> %s <" % text
@@ -294,7 +315,18 @@ class VoxelGame(PyScript):
     def change_sensitivity(self, step):
         index = SENSITIVITY_STEPS.index(self.sensitivity) + step
         self.sensitivity = SENSITIVITY_STEPS[max(0, min(len(SENSITIVITY_STEPS) - 1, index))]
-        save_settings(self.sensitivity)
+        save_settings(self.sensitivity, self.clock)
+
+    def drag_time(self, mouse_x, pressing):
+        """The time-of-day slider: while the button is held on the track, the time follows the mouse; the choice is saved
+        when the button comes up."""
+        left, right = self.menu_layout["time_track"][0][0], self.menu_layout["time_track"][0][2]
+        if pressing and (self.dragging or self.menu_hover == "time_track"):
+            self.dragging = True
+            self.clock = min(0.999, max(0.0, (mouse_x - left) / (right - left)))
+        elif self.dragging:
+            self.dragging = False
+            save_settings(self.sensitivity, self.clock)
 
     def look_speed(self):
         """Degrees a pixel of mouse movement turns the view."""
@@ -303,6 +335,7 @@ class VoxelGame(PyScript):
     def pause(self):
         self.paused = True
         self.menu_page = "pause"
+        self.dragging = False
         cge.set_mouse_captured(False)
         self.mouse_captured = False
         self.menu_hover = None
@@ -323,7 +356,9 @@ class VoxelGame(PyScript):
             rect = self.menu_layout[item][0]
             if rect and rect[0] <= mouse_x <= rect[2] and rect[1] <= mouse_y <= rect[3]:
                 self.menu_hover = item
-        clicked = self.pressed("MenuClick", bool(cge.mouse_down("Left")))
+        pressing = bool(cge.mouse_down("Left"))
+        self.drag_time(mouse_x, pressing)
+        clicked = self.pressed("MenuClick", pressing)
         if clicked and self.menu_hover == "resume":
             self.resume()
             return
