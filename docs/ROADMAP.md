@@ -178,5 +178,15 @@ creatures' own behaviour (they only wander now).
 - Remaining big-ticket items: Phase 5, batching draws by material (3.2 continuation), and the dungeon's next steps (an inventory, a shop for coins, and sound).
 - Voxel notes (from the voxel sample, later work): the smooth skin looks much better than the cubes, and shadows read well once the map is cached. The HUD took several passes: the screen's own view is a square in the middle of the window, so window-wide text needs its own view, and text draws over meshes only with a high z order. A closed window used to restart the scene (the run loop now ends).
 - Hypotheses get a run before a fix. The background-run theory for the start-of-game fall was tested (a run with focus in another window) and it landed normally. A bug that cannot be reproduced gets instrumentation that saves the state at the moment of failure, not a guess.
-- How I feel about it, after PR #186: the voxel sample reads as a game now. The level of detail and the skirts fixed the thing I was least happy with (flat green sheets and vines), and the shadows read well. I am least sure of the two bugs I cannot reproduce, the start-of-game fall and the square shadow, so I want a snapshot before a theory. The worries, in order: the frame-rate drop from the HUD (11.8), checks that depend on frame timing, and the `Body` draw path that casts a transformable to a shape to draw text (it works, but it is undefined behaviour and should store a drawable). I would fix those three before the next big feature. Caves are where the lighting is weakest, so 11.6 is the feature I would pick after them.
+- A check that counts seconds fails under load, so count frames. The voxel walk and the dungeon walk hold their keys for
+  frames now, and the walk's yaw lands on 180 degrees at any frame rate.
+- The Debug build is not a performance build: the 841-chunk world runs at about 33 frames a second in Debug and 650 in
+  Release. Measure frame times in Release, and say which build a number came from.
+- A probe that places a body at a fixed point can put it behind a wall, since the dungeon's layout depends on the seed.
+  The brute looked missing in three spots before it showed beside the player on a fixed seed. Check the placement first.
+- How I feel about it, after this round: the sample now has what it was missing for a player: caves that read as caves,
+  water to swim in, a desert to walk into, creatures on the ground, and enemies that move like they have bodies. The two
+  bugs I still cannot reproduce, the start-of-game fall and the square shadow, are where my guesses have been wrong, so I
+  want the snapshot before any more theory. I would keep the Release-only frame checks honest, and move bodies without a
+  script (11.9) next, since every new creature currently needs its own Python.
 - The tests run through the control channel with scripted input. They are the best guard against regressions in the game, and they caught a real engine bug (the run loop), so keep adding one for each new interaction.
