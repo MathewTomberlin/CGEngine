@@ -64,6 +64,8 @@ $env:VOXEL_SEED = "1"
 $env:VOXEL_FIXED_STEP = "0.0166667"
 # The start is noon, whatever time the player saved: the sun checks below depend on it.
 $env:VOXEL_TIME = "0.25"
+# The game starts from its saved settings, so the test writes a known baseline first: noon, normal time speed, windowed.
+Set-Content -Path (Join-Path $exeDir "voxel_settings.json") -Value '{"mouse_sensitivity": 500, "time_of_day": 0.25, "view_radius": 14, "time_speed": 1.0, "fullscreen": false}' -Encoding utf8
 $app = Start-Process -FilePath (Join-Path $exeDir "main.exe") -WorkingDirectory $exeDir -PassThru
 Remove-Item Env:VOXEL_TIME
 Remove-Item Env:CGENGINE_SCENE
