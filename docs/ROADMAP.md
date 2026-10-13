@@ -381,23 +381,32 @@ Goal: several people (or an AI and a person) work in one CG Engine world at the 
   two processes do not need the singletons changed, because each one is a separate game (a loopback link is enough). A server
   in the same process would need them changed. A headless server (18.3) also needs the engine to start without a window, which
   it does not yet: `World::startWorld` makes the window. Still open: the window-free start, and the state that a presentation
-  draws from (the world is drawn straight from `VoxelWorld`).
+  draws from (the world is drawn straight from `VoxelWorld`). The host of 18.3 is already the one that owns the edits, so the
+  window-free start is the step that makes it a server rather than a player with a server's rules.
 - [x] **18.2** A transport, as a loopback test: `VoxelNet.py` links two game processes over TCP, JSON lines, non-blocking and polled
   once a frame. One process listens (`VOXEL_NET=listen:7790`), the other connects (`VOXEL_NET=connect:127.0.0.1:7790`), and both
   run the same `VOXEL_SEED`, since each generates the terrain itself. The messages are block, prop, hit (the damage stage) and
   position. A remote edit to a chunk that is not loaded waits until it loads. Checked by `tools/test_voxel_net.ps1`: a break, a
   placement and a hit each show in the other process, and each sees the other's position. Not secure, and only on one machine.
-- [ ] **18.3** A server that owns the world: the voxel edits, props and damage are applied there; clients send requests and draw
-  what the server says. The server is the same engine headless (no window), which the smoke test can already approximate.
+- [~] **18.3** A server that owns the world, first form: the listening game is the host. It applies the edits, torches and damage,
+  and runs the block physics. A client makes its edit at once, sends it as a request (`req`), and draws the cells the host sends
+  back (`cells`), so a request the host refuses is undone on the client. A client that joins later is sent every edited cell.
+  The C++ side records the changed cells (`VoxelWorld::setRecordChanges`, `takeChanges`, `editedCells`, `setDamage`). Checked by
+  `tools/test_voxel_net.ps1`: a client's hit, break, placement and torch; a refused placement; a hit on the host; a late client.
+  Not yet: the host still has a window (the headless start is 18.1); the host does not arbitrate cells in chunks it has not
+  loaded, so the two players must stay within each other's view; a client's own edits from before it connected stay on that
+  client; F9 on the host removes no cell the file lacks; a falling block pops on the client (no moving-block draw); the inventory
+  is local, so a placement the host refuses still spends the item, and a break the host had already made still gives one.
 - [~] **18.4** Stretch goal, the multiplayer voxel game, in its first form: the two processes see each other (a box where the other
   player's feet are, with no name yet), share the edits (blocks, torches, damage), and one breaks what the other placed. Each has
   its own inventory and health, so the inventory per player is in place by construction. Not yet: a name, the creatures (each
-  process has its own, so a creature hit in one is not seen in the other), the other player's damage on a player, and a server
-  that owns the world (18.3): right now each process is an equal peer, and the edits race if both edit the same cell at once.
-- [~] **18.5** Shared authoring: an AI and a person can change the same world, through the same messages a second player sends.
-  In the loopback this is a script run through the control channel (`run_script`) that calls `game.net_send` after an edit, as
-  `tools/test_voxel_net.ps1` does. Not yet a documented control command (a `voxel_block` message in the inbox would be the
-  next step), and the other process applies an edit only if its chunk is loaded.
+  process has its own, so a creature hit in one is not seen in the other), the other player's damage on a player, and a
+  headless server (18.3): the host now owns the edits, but it still has a window and a player in it.
+- [x] **18.5** Shared authoring: an AI and a person change the same world through the same requests a second player sends. The
+  engine takes commands from Python (`cge.add_command`, `docs/ai/control-api.md`), and the voxel sample registers `voxel_edit`,
+  which an agent writes to a client's inbox like any command. The host applies it under the click rules and sends the cell
+  back. `tools/test_voxel_net.ps1` checks it, and that a bad op is reported as an error. An edit in a chunk the host has not
+  loaded is not applied (see 18.3).
 ## Phase 19: developer console and settings (from playtesting)
 Goal: the game can be driven from inside, and its window and sun are under the player's control.
 - [x] **19.1** The developer console, opened with backtick (`VoxelConsole.py`). The world stands still while it is open; the
