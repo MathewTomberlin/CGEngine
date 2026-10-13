@@ -42,6 +42,7 @@ namespace {
             {"7", sf::Keyboard::Scan::Num7}, {"8", sf::Keyboard::Scan::Num8}, {"9", sf::Keyboard::Scan::Num9},
             {"0", sf::Keyboard::Scan::Num0}, {"-", sf::Keyboard::Scan::Hyphen}, {"=", sf::Keyboard::Scan::Equal},
             {"F5", sf::Keyboard::Scan::F5}, {"F9", sf::Keyboard::Scan::F9}, {"F12", sf::Keyboard::Scan::F12},
+            {"`", sf::Keyboard::Scan::Grave}, {"Backspace", sf::Keyboard::Scan::Backspace},
             {"L", sf::Keyboard::Scan::L}, {"I", sf::Keyboard::Scan::I}, {"C", sf::Keyboard::Scan::C},
         };
         return keys;
@@ -267,6 +268,27 @@ void bindGame(py::module_& m) {
         camera->setPosition(sf::Vector3f(position.x, -position.y, position.z), false);
         camera->lookAt(target);
     }, py::arg("position"), py::arg("target"), "Place the camera at position (world coordinates, y up) and aim it at target.");
+
+    m.def("typed_text", []() {
+        // Only ASCII is kept: the console's commands are ASCII, and Backspace or Enter arrive as keys, not characters.
+        std::string text;
+        for (char32_t ch : InputMap::takeTypedText()) {
+            if (ch < 128) text.push_back(static_cast<char>(ch));
+        }
+        return text;
+    }, "The characters typed since the last call, in order (ASCII only). Use key_down for Backspace and Enter.");
+
+    m.def("set_fullscreen", [](bool on) {
+        if (!screen) throw std::runtime_error("the window is not running yet");
+        if (!screen->setFullscreen(on)) return false;
+        if (renderer && renderer->getCurrentCamera()) {
+            const sf::Vector2u size = screen->getWindow()->getSize();
+            renderer->getCurrentCamera()->setAspect(static_cast<float>(size.x) / static_cast<float>(size.y));
+        }
+        return true;
+    }, py::arg("on"), "Full screen (a borderless window the size of the desktop) or windowed. False if not supported here.");
+
+    m.def("is_fullscreen", []() { return screen != nullptr && screen->isFullscreen(); }, "Whether the window is full screen.");
 
     m.def("set_camera_planes", [](float nearDistance, float farDistance) {
         if (!renderer) throw std::runtime_error("the renderer is not running yet");
