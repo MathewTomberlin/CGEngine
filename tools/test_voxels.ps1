@@ -64,6 +64,8 @@ $env:VOXEL_SEED = "1"
 $env:VOXEL_FIXED_STEP = "0.0166667"
 # The start is noon, whatever time the player saved: the sun checks below depend on it.
 $env:VOXEL_TIME = "0.25"
+# The game starts from its saved settings, so the test writes a known baseline first: noon, normal time speed, windowed.
+Set-Content -Path (Join-Path $exeDir "voxel_settings.json") -Value '{"mouse_sensitivity": 500, "time_of_day": 0.25, "view_radius": 14, "time_speed": 1.0, "fullscreen": false}' -Encoding utf8
 $app = Start-Process -FilePath (Join-Path $exeDir "main.exe") -WorkingDirectory $exeDir -PassThru
 Remove-Item Env:VOXEL_TIME
 Remove-Item Env:CGENGINE_SCENE
@@ -101,6 +103,15 @@ try {
     $gameResult = Get-Content (Join-Path $control "voxel_game_check.json") -Raw | ConvertFrom-Json
     $gameResult.check.PSObject.Properties | ForEach-Object { Check ("game: " + $_.Name) ([bool]$_.Value) }
     $gameResult.errors | ForEach-Object { Check ("game check error: " + $_) $false }
+
+    # The developer console's commands, run inside the game by tools/voxel_console_check.py.
+    $consoleCheck = (Resolve-Path "tools/voxel_console_check.py").Path -replace '\\', '/'
+    Send-Command "00c_console_check" ('{"command":"run_script","params":{"path":"' + $consoleCheck + '"}}')
+    $ranConsole = Wait-Result "00c_console_check" 120
+    Check "the console check script runs" ($ranConsole -and $ranConsole.ok)
+    $consoleResult = Get-Content (Join-Path $control "voxel_console_check.json") -Raw | ConvertFrom-Json
+    $consoleResult.check.PSObject.Properties | ForEach-Object { Check ("console: " + $_.Name) ([bool]$_.Value) }
+    $consoleResult.errors | ForEach-Object { Check ("console check error: " + $_) $false }
 
     # Walk forward for 240 frames (4 seconds), then turn right for 120 frames (2 seconds): 90 degrees a second is 180
     # degrees of turn. The frames are counted by the Enter key, which the game asks for once a frame, before the walk.

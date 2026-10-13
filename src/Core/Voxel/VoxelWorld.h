@@ -22,9 +22,12 @@
 namespace CGEngine {
 	// A world of blocks split into square chunks, built in the background. A chunk goes through three steps:
 	//   requestChunk: a worker generates its blocks (VoxelTerrain);
-	//   update: the blocks are installed, and the chunk is marked dirty;
-	//   update: a worker meshes the dirty chunk from a copy of it and its neighbours (VoxelMesher), and update uploads
-	//           the mesh as a body (see RuntimeMesh.h) within a time budget.
+	//   update: the blocks are installed, and the chunk's region is marked changed;
+	//   update: a worker meshes the changed region from copies of its loaded chunks and their neighbours (VoxelMesher), and
+	//           update uploads the region's mesh as one body per mesh group (see RuntimeMesh.h) within a time budget.
+	// A region is RegionChunks by RegionChunks chunks (see VoxelWorld.cpp), so the view draws a region's groups in one body
+	// each instead of one per chunk. Nothing of a chunk's mesh is kept after its region is uploaded: a changed region is meshed
+	// again from the blocks.
 	// Only update() and the block setters touch the world; workers see copies. Block 0 is air. Blocks in chunks that are
 	// not loaded count as air. Chunk (cx, cz) covers x in [cx * size, cx * size + size) and z likewise, and its body sits
 	// at that corner, so its vertices are local to the chunk.
@@ -161,14 +164,19 @@ namespace CGEngine {
 			std::vector<uint8_t> blocks;    // empty until the terrain is installed
 			bool loaded = false;
 			uint32_t generation = 0;        // unique per chunk, so late results for an unloaded chunk are ignored
-			bool dirty = true;              // the mesh is out of date
-			bool meshing = false;           // a mesh for the current version is on a worker
-			uint32_t version = 0;           // bumped by each change to the blocks or their neighbours
-			int quads = 0;                  // all groups together
+			int quads = 0;                  // all groups together, as last uploaded
 			int resolution = 0;             // the smooth skin's samples per block for this chunk (0: cubes); see resolutionFor
 			int stride = 1;                 // the sample grid's stride for this chunk (2 for a far chunk); see strideFor
-			std::map<int, id_t> bodies;     // the body of each mesh group drawn (0: the terrain), by its asset id
 			std::map<int, int> groupQuads;  // the quads of each group's mesh as last uploaded
+		};
+
+		// A region: the bodies that draw its chunks, one per mesh group (0: the terrain). It is meshed as a whole.
+		struct Region {
+			std::map<int, id_t> bodies;     // the body of each group drawn, by its asset id
+			bool dirty = true;              // a chunk changed, so the region is meshed again
+			bool meshing = false;           // a mesh for the current version is on a worker
+			uint32_t version = 0;           // bumped by each change, so a mesh made from older blocks is dropped
+			int settle = 0;                 // updates since the last change; see RegionSettleUpdates in VoxelWorld.cpp
 		};
 
 		struct TerrainResult {
@@ -185,12 +193,20 @@ namespace CGEngine {
 			int quads = 0;
 		};
 
-		struct MeshResult {
+		// The quads each chunk of a region has, as the region was meshed.
+		struct ChunkQuads {
 			int cx;
 			int cz;
-			uint32_t generation;
+			int quads;
+			std::map<int, int> groupQuads;
+		};
+
+		struct RegionResult {
+			int rx;
+			int rz;
 			uint32_t version;
-			std::vector<GroupMesh> groups;
+			std::vector<GroupMesh> groups;  // each group's mesh for the whole region, chunks merged
+			std::vector<ChunkQuads> chunks;
 		};
 
 		int size;
@@ -214,8 +230,9 @@ namespace CGEngine {
 		std::pair<bool, id_t> movingBody = { false, 0 };
 		bool movingShown = false;
 		std::map<std::pair<int, int>, Chunk> chunks;
-		// The chunks whose mesh may be out of date, so update() finds them without scanning every chunk.
-		std::set<std::pair<int, int>> dirtyKeys;
+		// The regions whose mesh may be out of date, so update() finds them without scanning every region.
+		std::set<std::pair<int, int>> dirtyRegions;
+		std::map<std::pair<int, int>, Region> regions;
 		// Edited blocks: chunk (cx, cz) -> index in that chunk -> block id. See setBlock.
 		std::map<std::pair<int, int>, std::map<int, uint8_t>> edits;
 		// Props (torches) by chunk: local index -> dir. See setProp.
@@ -234,7 +251,7 @@ namespace CGEngine {
 		bool stopping = false;
 		std::mutex resultMutex;
 		std::deque<TerrainResult> terrainResults;
-		std::deque<MeshResult> meshResults;
+		std::deque<RegionResult> meshResults;
 
 		void startWorkers();
 		// Re-reads the detail of every loaded chunk for a new focus; a chunk whose level changed is meshed again.
@@ -250,13 +267,21 @@ namespace CGEngine {
 		Chunk* findChunk(int cx, int cz);
 		void markDirty(int cx, int cz);
 		void markNeighboursDirty(int cx, int cz);
+		// The region holding chunk (cx, cz), as (rx, rz).
+		static std::pair<int, int> regionOf(int cx, int cz);
+		// Marks a region changed: it is meshed again once it has settled.
+		void markRegionDirty(std::pair<int, int> key);
+		// The loaded chunks in a region.
+		int loadedChunksIn(std::pair<int, int> key) const;
+		// Removes a region's bodies. Its chunks are not touched; the region is left clean and empty.
+		void removeRegionBodies(std::pair<int, int> key);
 		// Marks the chunks that see the light of the cell at local (lx, lz) in chunk (cx, cz), as setBlock does.
 		void markLight(int cx, int cz, int lx, int lz);
 		void installTerrain(TerrainResult& result);
 		void applyEdits(int cx, int cz, std::vector<uint8_t>& blocks) const;
-		void uploadMesh(MeshResult& result);
-		void startMeshing(int cx, int cz, Chunk& chunk);
+		void uploadMesh(RegionResult& result);
+		void startMeshing(std::pair<int, int> key);
 		PaddedChunk snapshot(int cx, int cz, int border) const;
-		std::string bodyName(int cx, int cz, uint8_t group) const;
+		std::string bodyName(int rx, int rz, uint8_t group) const;
 	};
 }

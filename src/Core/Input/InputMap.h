@@ -39,6 +39,8 @@ namespace CGEngine {
     public:
         InputMap();
         void setWindow(RenderWindow* w);
+        /// The characters typed since the last call, in order, and empties the buffer. Games read it for text entry.
+        static std::u32string takeTypedText();
         optional<Vector2i> getCursorPosition();
         /// <summary>
         /// Clear the the domains map.

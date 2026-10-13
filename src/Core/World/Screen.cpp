@@ -1,3 +1,9 @@
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 #include "Screen.h"
 #include "../Engine/Engine.h"
 #include <cstdlib>
@@ -89,11 +95,44 @@ namespace CGEngine {
             const VideoMode desktop = VideoMode::getDesktopMode();
             setSize(Vector2i(static_cast<int>(desktop.size.x), static_cast<int>(desktop.size.y)));
             window = make_unique<RenderWindow>(desktop, windowTitle, Style::Default, State::Fullscreen);
+            fullscreen = true;
         } else {
             window = make_unique<RenderWindow>(VideoMode(size), windowTitle);
         }
         initView();
         return window.get();
+    }
+
+    bool Screen::setFullscreen(bool on) {
+#ifdef _WIN32
+        if (!window) return false;
+        if (on == fullscreen) return true;
+        HWND handle = static_cast<HWND>(window->getNativeHandle());
+        if (on) {
+            windowedPosition = window->getPosition();
+            windowedSize = window->getSize();
+            const Vector2u desktop = VideoMode::getDesktopMode().size;
+            SetWindowLongPtr(handle, GWL_STYLE, WS_POPUP | WS_VISIBLE);
+            SetWindowPos(handle, HWND_TOP, 0, 0, static_cast<int>(desktop.x), static_cast<int>(desktop.y), SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+            window->setPosition(Vector2i(0, 0));
+            window->setSize(desktop);
+        } else {
+            SetWindowLongPtr(handle, GWL_STYLE, WS_OVERLAPPEDWINDOW | WS_VISIBLE);
+            SetWindowPos(handle, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+            window->setSize(windowedSize);
+            window->setPosition(windowedPosition);
+        }
+        fullscreen = on;
+        // The size the view is laid out for is the window's new size; a resize event follows for the GL viewport.
+        const Vector2u now = window->getSize();
+        setSize(V2f(static_cast<float>(now.x), static_cast<float>(now.y)));
+        initView();
+        glViewport(0, 0, static_cast<GLsizei>(now.x), static_cast<GLsizei>(now.y));
+        return true;
+#else
+        (void)on;
+        return false;
+#endif
     }
 
     void Screen::initView() {

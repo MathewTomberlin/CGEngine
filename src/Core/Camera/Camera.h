@@ -20,11 +20,14 @@ namespace CGEngine {
 		glm::mat4 getOrientation() const;
 		void rotate(Vector3f euler, bool affect2DView = true);
 		void lookAt(Vector3f position);
+		// The clipping distances in world units: nothing nearer than nearDistance or farther than farDistance is drawn.
+		void setPlanes(float nearDistance, float farDistance) { nearPlane = nearDistance; farPlane = farDistance; }
 		glm::vec3 getForward();
 		glm::vec3 getUp();
 		glm::vec3 getRight();
 		float getFov() const { return fov; }
 		float getAspect() const { return aspect; }
+		void setAspect(float ratio) { aspect = ratio; }
 		glm::mat4 getMatrix() const;
 		glm::mat4 getProjection() const;
 		glm::mat4 getTransform() const;

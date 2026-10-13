@@ -267,7 +267,7 @@ full block, and light blocks (full cells that give light) are wanted too.
 Goal: the player chooses how far they can see, and a long view stays cheap enough to walk through.
 - [x] **15.1** A view distance setting on the settings page: arrows from 6 to 40 chunks each way, with 14 (the old default) in
   the middle. The fog, the chunk requests and the unload radius follow it, and the choice is saved with the other settings.
-  "Unlimited" is the last step and is capped at 40, because each chunk is held in memory (about 6,500 chunks, roughly 2 GB).
+  "Unlimited" is the last step and is capped at 60 (15.6), because each chunk is held in memory.
   `tools/test_pause_menu.ps1` checks the arrow and the saved file.
 - [x] **15.2** Far skins: the chunks more than 6 from the player (`VOXEL_FAR_RADIUS`) are meshed with every second block
   sampled (`buildSmoothMesh` takes a stride; the chunk size is even, so the grids of neighbours line up, and the skirts hide
@@ -280,17 +280,42 @@ Goal: the player chooses how far they can see, and a long view stays cheap enoug
   841 chunks" in the notes did not come back: the build from before this round measured 201 / 199 / 178 on the same machine
   today, so this round's HUD and game script cost about 10%. Still open: memory per step (the step list is chosen from these
   numbers, so the memory is the next measurement).
-- [ ] **15.5** Draw calls at a long view: each chunk is one body with its own draws, so at 40 there are 6,561 chunk bodies a frame
-  and the frame rate is 27 whatever the quads are. Analysis (not built): merging 4 by 4 chunks into one body per group means
-  the region's mesh is rebuilt from every chunk's CPU copy when one chunk changes, and those copies are not kept now. At 40 the
-  vertices alone are about 2 GB of GPU memory, so keeping the copies roughly doubles the memory. Either keep the copies in a
-  compact form, or rebuild a region from the chunks' blocks (the mesher is fast: a chunk takes a few ms). Decide before building.
-  Until then "Unlimited" stays at 40.
+- [x] **15.5** Draw calls at a long view: a region is 4 by 4 chunks, drawn as one body per mesh group (`VoxelWorld.cpp`,
+  `RegionChunks`), so 6,561 chunks at view 40 are about 400 regions' bodies, not one per chunk. Option B: a changed region is
+  meshed again from its blocks, and no chunk's mesh is kept after upload (the memory stays as it was). A region waits two
+  updates after its last change (`RegionSettleUpdates`), so a run of changes is meshed once. Measured at view 40 on this
+  machine, before and after: standing 26 to 201 fps, turning 26 to 193, walking 23 to 166; load 37 s to 8 s; worst frame 55 to
+  72 ms to 11 to 18 ms. The quads are unchanged (2,217,929). Checked by `voxel_world_check.py` (through `test_voxels.ps1`),
+  `test_voxel_net.ps1`, `test_swimming.ps1` and `test_pause_menu.ps1`. Not measured: the cost of a block edit, which re-meshes
+  up to 16 chunks on a worker, and a frontier of new chunks while walking. One turning run at view 14 had a single 108 ms
+  frame; it did not come back in the next run (worst 5 ms).
 - [x] **15.4** Memory on a long walk at 40 (`VOXEL_SEED=1`, Release): the player was moved round a wide circle 40 times, 90 blocks
   a hop, so the chunks behind unloaded and the ones ahead loaded (about 6,750 to 6,880 chunks held throughout). The working
   set went from 624 MB to a peak of 1,064 MB around the 24th hop, then fell back to 675 MB by the end. So the churn does not
   grow without bound: the peak is the chunks being meshed as they come in, and the heap gives most of it back. Not measured:
   a walk of hours, and the GPU's own memory (the buffers are not in the working set).
+- [x] **15.6** The cap rises from 40 to 60 chunks: `VIEW_STEPS` and `UNLIMITED_VIEW` in `VoxelGame.py`. The memory figures below
+  were taken before 15.7, when the camera clipped at 100 blocks: view 40 is 6,561 chunks, 0.77 GB private memory; view 60 is
+  14,641 chunks, 1.46 GB; view 80 is 25,921 chunks, 2.4 GB. View 80 stays out: its memory and frame rate are too heavy for the cap.
+  The frame rates in this item were not right, see 15.7.
+- [x] **15.8** Far skins are off by default (`VOXEL_FAR_RADIUS=0`). The far skins (stride 2 past 6 chunks) showed dark blotches on
+  the ground: each far vertex takes its occlusion and sky light from one air cell, so a shaded cell darkens the whole triangle
+  between two far vertices. Averaging those values over the stride cut the blotches but was not kept, since far skins are off.
+  With them off, view 40 is 6,561 chunks, 8.4 million quads, 2.2 GB private memory, 96 frames a second standing and walking, 89
+  turning, worst frame 41 to 43 ms, loaded in 18 s. The cap is back at 40: 60 measured 4.6 GB without far skins (18 million
+  quads). With far skins on, 60 is 1.5 GB (15.6), at the cost of the blotches.
+- [x] **15.7** The camera clipped at 100 blocks, about six chunks, so nothing past it was drawn at any view distance. The camera is
+  now built with a far plane of (view + 1) chunks and a near plane of 0.1 blocks (`Camera::setPlanes`, `set_camera_planes`, and
+  `VoxelGame.set_clip_planes`). The fog still hides the far edge, which is the same distance as before. Screenshots at noon with
+  seed 1 (`VOXEL_SEED=1`) show the terrain fading into the haze at view 14, and forest out to the horizon at view 40.
+  Corrected frame rates, Release on this machine, standing / walking, worst frame:
+  view 14 (841 chunks, 0.56 M quads) 369 to 462 / 354 to 416 fps, worst 5 to 9 ms in two runs; one walking run had a single 114 ms
+  frame that did not come back in two later runs (a second single frame of 108 ms was seen earlier at view 14);
+  view 40 (6,642 chunks, 2.2 M quads) 150 / 150 fps, worst 10 to 14 ms;
+  view 60 (15,004 chunks, 4.6 M quads) 77 / 64 fps, worst 19 to 52 ms, loaded in 15 s.
+  The 15.5 numbers were also measured with the 100-block plane, so the speed-up there (26 to 201 fps at view 40) is real for
+  the same plane but not what the player sees now. Memory was not re-measured with the plane at its new distance.
+
 ## Phase 16: voxel health and damage (from playtesting: one hit breaks everything)
 Goal: blocks and creatures take several hits, and what the player has hit looks hit.
 - [x] **16.1** Block hardness: each block type has a number of hits to break (stone more than dirt, leaves less than wood,
@@ -311,13 +336,20 @@ Goal: blocks and creatures take several hits, and what the player has hit looks 
   trap). The timer is per cell and only runs for damaged cells.
 - [x] **16.5** Creatures take hits: each has `HEALTH` (3) and a left click takes one (the aimed creature is outlined, and its
   hits left are on the HUD). A hit pushes it away and flashes it red. A dead one is taken out of the world (its walker and its
-  mesh) and leaves a hide for the inventory (`VoxelGen.HIDE`, an item that cannot be placed). One in three is a biter: it chases
+  mesh) and leaves a hide on the ground where it fell (16.7). The hide is `VoxelGen.HIDE`, an item that cannot be placed. One in three is a biter: it chases
   the player inside 7 blocks and bites at 1 health each 1.2 s when within 1.3 blocks. The others still run from the player.
-  Not yet: the drop lands in the inventory directly, not on the ground to pick up, and the creatures do not fight each other.
+  Not yet: the creatures do not fight each other.
 - [x] **16.6** The player has health: ten points on a bar above the hotbar. Bites and falls lower it (a fall past 4 blocks costs
   1 point a block beyond that; the spawn drop does not count). It heals 0.25 a second after 6 s without a hit, and does not heal
-  while the game is paused. At zero the player is back at the spawn with the inventory kept. Not yet: lava (the sample has none),
-  and the hurt is not shown on screen beyond the bar.
+  while the game is paused. At zero the player is back at the spawn with the inventory kept.
+  The hurt shows on screen too: the whole window reddens at the moment of a bite or a fall and fades over 0.4 s
+  (`update_hurt_flash`, under the hotbar). Creative mode (C) takes no bites or falls. Not yet: lava (the sample has none).
+- [x] **16.7** Dropped items: a creature's hide lies on the ground where it died (`VoxelDrops.py`), a small bobbing cube in the
+  item's colour, one mesh body each. Walking within 1.2 blocks of it (and no more than a floor away) takes it, when the inventory
+  has room; a full inventory leaves it there. Drops are saved with the inventory (F5 and F9), and creative mode takes none and
+  leaves them where they are. A hide dropped in the air falls to the first solid block under it. Checked by
+  `tools/test_voxel_drops.py` (no GPU) and `voxel_game_check.py`. Standing on a drop the inventory has no room for says so
+  on the HUD. Not yet: each drop rebuilds its mesh every frame.
 ## Phase 17: inventory and a real hotbar (from playtesting: the hotbar is a line of text)
 Goal: items have quantities, the inventory is a grid the player can see and change, and the hotbar is a UI, not text.
 - [x] **17.1** An item model: an item is a block id (a torch is one too, though it is a prop), held in a slot with a count up to
@@ -366,6 +398,22 @@ Goal: several people (or an AI and a person) work in one CG Engine world at the 
   In the loopback this is a script run through the control channel (`run_script`) that calls `game.net_send` after an edit, as
   `tools/test_voxel_net.ps1` does. Not yet a documented control command (a `voxel_block` message in the inbox would be the
   next step), and the other process applies an edit only if its chunk is loaded.
+## Phase 19: developer console and settings (from playtesting)
+Goal: the game can be driven from inside, and its window and sun are under the player's control.
+- [x] **19.1** The developer console, opened with backtick (`VoxelConsole.py`). The world stands still while it is open; the
+  mouse is freed and given back when it closes. Commands: help, echo, time (names, HH:MM or a fraction), timespeed, tp (spawn, x z
+  on the ground, or x y z), pos, heal, hurt, creative, fly, give, drop, clear (inventory, drops, log), spawn creature [count]
+  [biter], kill creatures [all|near radius], destroy [radius], break, setblock, fill (up to 20,000 blocks), view, fullscreen, save,
+  load, stats, seed and quit. A command that fails prints why, and the game goes on. Checked from inside the game by
+  `tools/voxel_console_check.py` (40 checks, through `test_voxels.ps1`), which restores the time, view and window it changes.
+  Not yet: tab completion, and commands for the player's speed and the sky.
+- [x] **19.2** Settings page: Window (windowed or full screen) and Time speed (paused, slow, normal, fast), both saved with the
+  other settings. Full screen is a borderless window the size of the desktop, switched in place (`set_fullscreen`, Windows): the
+  window and its GL context are kept, the camera's aspect and the view follow the new size, and the HUD is laid out again. The
+  page's rows are re-laid out, and `test_pause_menu.ps1` clicks the new rows.
+- [x] **19.3** Engine support for the console: `typed_text` gives the characters typed since the last call, and the Grave and
+  Backspace keys are polled by games. The engine's own console is hidden in the voxel game, so backtick opens the game's console.
+
 ## Tooling and quality
 - [x] CI build on Windows (`.github/workflows/build.yml`) with Mesa software OpenGL smoke run
 - [~] Unit tests for pure logic runnable without a GPU. Done for the dungeon generator (`python -I tools/test_dungeon_gen.py`) and for the scene format and command list (`python -I tools/test_scene_format.py`: example scenes, invalid fixtures, documented commands). The C++ parsers in `SceneLoader` and `ControlChannel` are still covered only by the GPU integration test.

@@ -9,8 +9,37 @@
 
 namespace CGEngine {
 	namespace {
-		// Dirty chunks mesh in this many per update at most, so one update never copies too many chunks.
+		// Loaded chunks copied for meshing per update at most, so one update never copies too many of them.
 		const int MaxMeshStartsPerUpdate = 16;
+		// A region is RegionChunks by RegionChunks chunks, drawn as one body per mesh group. The view then draws a few
+		// hundred regions' groups instead of a body per chunk (roadmap 15.5).
+		const int RegionChunks = 4;
+		// A changed region waits this many updates before it is meshed, so a run of changes (chunks streaming in beside
+		// it) is meshed once.
+		const int RegionSettleUpdates = 2;
+
+		// One loaded chunk of a region, copied for its mesh: the blocks with their neighbours, and the chunk's detail.
+		struct ChunkInput {
+			int cx = 0;
+			int cz = 0;
+			int resolution = 0;
+			int stride = 1;
+			unsigned skirtSides = 0;
+			PaddedChunk padded;
+		};
+
+		// Adds a chunk's mesh to a region's, moved by the chunk's place in the region (offsets from the region's corner).
+		void appendMesh(MeshArrays& into, const MeshArrays& part, float offsetX, float offsetZ) {
+			const unsigned int base = static_cast<unsigned int>(into.vertices.size());
+			into.vertices.reserve(into.vertices.size() + part.vertices.size());
+			for (VoxelVertex vertex : part.vertices) {
+				vertex.position.x += offsetX;
+				vertex.position.z += offsetZ;
+				into.vertices.push_back(vertex);
+			}
+			into.indices.reserve(into.indices.size() + part.indices.size());
+			for (unsigned int index : part.indices) into.indices.push_back(index + base);
+		}
 		const size_t MaxWorkers = 6;
 	}
 
@@ -475,11 +504,43 @@ namespace CGEngine {
 	}
 
 	void VoxelWorld::markDirty(int cx, int cz) {
-		if (Chunk* chunk = findChunk(cx, cz)) {
-			chunk->dirty = true;
-			++chunk->version;
-			dirtyKeys.insert(std::make_pair(cx, cz));
+		if (findChunk(cx, cz)) markRegionDirty(regionOf(cx, cz));
+	}
+
+	std::pair<int, int> VoxelWorld::regionOf(int cx, int cz) {
+		return { floorDiv(cx, RegionChunks), floorDiv(cz, RegionChunks) };
+	}
+
+	void VoxelWorld::markRegionDirty(std::pair<int, int> key) {
+		Region& region = regions[key];
+		region.dirty = true;
+		++region.version;
+		region.settle = 0;
+		dirtyRegions.insert(key);
+	}
+
+	int VoxelWorld::loadedChunksIn(std::pair<int, int> key) const {
+		int count = 0;
+		for (int lz = 0; lz < RegionChunks; ++lz) {
+			for (int lx = 0; lx < RegionChunks; ++lx) {
+				const Chunk* chunk = findChunk(key.first * RegionChunks + lx, key.second * RegionChunks + lz);
+				if (chunk && chunk->loaded) ++count;
+			}
 		}
+		return count;
+	}
+
+	void VoxelWorld::removeRegionBodies(std::pair<int, int> key) {
+		auto it = regions.find(key);
+		if (it == regions.end()) return;
+		Region& region = it->second;
+		for (const auto& body : region.bodies) {
+			if (Body* mesh = assets.get<Body>(body.second)) removeRuntimeMesh(mesh);
+		}
+		region.bodies.clear();
+		region.dirty = false;
+		++region.version;   // a mesh still on a worker is for the old version, and is dropped when it arrives
+		dirtyRegions.erase(key);
 	}
 
 	VoxelBodyState VoxelWorld::stepBody(const VoxelBodyState& body, const VoxelBodyShape& shape, double dt, bool flying) const {
@@ -523,11 +584,14 @@ namespace CGEngine {
 	void VoxelWorld::unloadChunk(int cx, int cz) {
 		auto it = chunks.find(std::make_pair(cx, cz));
 		if (it == chunks.end()) return;
-		for (const auto& body : it->second.bodies) {
-			if (Body* mesh = assets.get<Body>(body.second)) removeRuntimeMesh(mesh);
-		}
-		dirtyKeys.erase(std::make_pair(cx, cz));
 		chunks.erase(it);
+		// The region's mesh still has this chunk in it, so the region is meshed again without it (or removed, when it is empty).
+		const auto key = regionOf(cx, cz);
+		if (loadedChunksIn(key) == 0) {
+			removeRegionBodies(key);
+		} else {
+			markRegionDirty(key);
+		}
 		markNeighboursDirty(cx, cz);
 	}
 
@@ -777,81 +841,129 @@ namespace CGEngine {
 		return padded;
 	}
 
-	void VoxelWorld::startMeshing(int cx, int cz, Chunk& chunk) {
-		chunk.dirty = false;
-		chunk.meshing = true;
-		dirtyKeys.erase(std::make_pair(cx, cz));
-		const int resolution = chunk.resolution;
-		const int stride = chunk.stride;
-		PaddedChunk padded = snapshot(cx, cz, VoxelLightReach);
-		// Skirts on the sides that meet a neighbour at another level of detail (bit 1: -x, 2: +x, 4: -z, 8: +z).
-		unsigned skirtSides = 0;
-		if (resolution > 0) {
-			const int dxs[4] = { -1, 1, 0, 0 };
-			const int dzs[4] = { 0, 0, -1, 1 };
-			for (int side = 0; side < 4; ++side) {
-				const Chunk* neighbour = findChunk(cx + dxs[side], cz + dzs[side]);
-				if (neighbour && neighbour->loaded && (neighbour->resolution != resolution || neighbour->stride != stride)) skirtSides |= 1u << side;
+	void VoxelWorld::startMeshing(std::pair<int, int> key) {
+		Region& region = regions[key];
+		region.dirty = false;
+		region.meshing = true;
+		dirtyRegions.erase(key);
+		// Each loaded chunk of the region is copied here, on this thread, with its neighbours, so the worker sees a fixed copy.
+		std::vector<ChunkInput> inputs;
+		for (int lz = 0; lz < RegionChunks; ++lz) {
+			for (int lx = 0; lx < RegionChunks; ++lx) {
+				const int cx = key.first * RegionChunks + lx;
+				const int cz = key.second * RegionChunks + lz;
+				const Chunk* chunk = findChunk(cx, cz);
+				if (!chunk || !chunk->loaded) continue;
+				ChunkInput input;
+				input.cx = cx;
+				input.cz = cz;
+				input.resolution = chunk->resolution;
+				input.stride = chunk->stride;
+				// Skirts on the sides that meet a neighbour at another level of detail (bit 1: -x, 2: +x, 4: -z, 8: +z).
+				if (input.resolution > 0) {
+					const int dxs[4] = { -1, 1, 0, 0 };
+					const int dzs[4] = { 0, 0, -1, 1 };
+					for (int side = 0; side < 4; ++side) {
+						const Chunk* neighbour = findChunk(cx + dxs[side], cz + dzs[side]);
+						if (neighbour && neighbour->loaded && (neighbour->resolution != input.resolution || neighbour->stride != input.stride)) {
+							input.skirtSides |= 1u << side;
+						}
+					}
+				}
+				input.padded = snapshot(cx, cz, VoxelLightReach);
+				inputs.push_back(std::move(input));
 			}
 		}
 		const std::array<glm::vec3, 256> colours = palette;
 		std::array<bool, 256> cubeShape{};
 		for (size_t id = 0; id < 256; ++id) cubeShape[id] = types[id].cube;
-		const uint32_t generation = chunk.generation;
-		const uint32_t version = chunk.version;
-		enqueue([this, cx, cz, generation, version, resolution, stride, skirtSides, padded = std::move(padded), colours, cubeShape]() mutable {
-			MeshResult result;
-			result.cx = cx;
-			result.cz = cz;
-			result.generation = generation;
+		const uint32_t version = region.version;
+		enqueue([this, key, version, inputs = std::move(inputs), colours, cubeShape]() mutable {
+			RegionResult result;
+			result.rx = key.first;
+			result.rz = key.second;
 			result.version = version;
-			computeLight(padded);
-			// The terrain, and a mesh of its own for each block type in the chunk that has one (see PaddedChunk::rule).
-			std::array<bool, 256> present{};
-			for (uint8_t block : padded.blocks) {
-				if (padded.rule[block].group != 0) present[padded.rule[block].group] = true;
-			}
-			std::vector<uint8_t> groups = { 0 };
-			for (size_t id = 1; id < 256; ++id) {
-				if (present[id]) groups.push_back(static_cast<uint8_t>(id));
-			}
-			for (uint8_t group : groups) {
-				GroupMesh part;
-				part.group = group;
-				// A cube block is always cubes; the others are cubes only while the world draws cubes (smoothing 0).
-				const bool cubes = resolution <= 0 || (group != 0 && cubeShape[group]);
-				if (cubes) {
-					buildChunkMesh(padded, colours, group, part.mesh);
-				} else {
-					buildSmoothMesh(padded, colours, resolution, stride, skirtSides, group, part.mesh);
+			std::map<int, MeshArrays> merged;
+			std::map<int, int> mergedQuads;
+			for (ChunkInput& input : inputs) {
+				computeLight(input.padded);
+				// The terrain, and a mesh of its own for each block type in the chunk that has one (see PaddedChunk::rule).
+				std::array<bool, 256> present{};
+				for (uint8_t block : input.padded.blocks) {
+					if (input.padded.rule[block].group != 0) present[input.padded.rule[block].group] = true;
 				}
-				// The torches are drawn with the terrain (their cells are air to it, so they are not part of any block's mesh).
-				if (group == 0) buildPropMesh(padded, part.mesh);
-				part.quads = static_cast<int>(part.mesh.indices.size() / 6);
-				result.groups.push_back(std::move(part));
+				std::vector<uint8_t> groups = { 0 };
+				for (size_t id = 1; id < 256; ++id) {
+					if (present[id]) groups.push_back(static_cast<uint8_t>(id));
+				}
+				// The chunk's place in the region: its meshes are local to the chunk, and the region's body is at its corner.
+				const float offsetX = static_cast<float>((input.cx - key.first * RegionChunks) * size);
+				const float offsetZ = static_cast<float>((input.cz - key.second * RegionChunks) * size);
+				ChunkQuads chunkQuads;
+				chunkQuads.cx = input.cx;
+				chunkQuads.cz = input.cz;
+				chunkQuads.quads = 0;
+				for (uint8_t group : groups) {
+					MeshArrays part;
+					// A cube block is always cubes; the others are cubes only while the world draws cubes (smoothing 0).
+					const bool cubes = input.resolution <= 0 || (group != 0 && cubeShape[group]);
+					if (cubes) {
+						buildChunkMesh(input.padded, colours, group, part);
+					} else {
+						buildSmoothMesh(input.padded, colours, input.resolution, input.stride, input.skirtSides, group, part);
+					}
+					// The torches are drawn with the terrain (their cells are air to it, so they are not part of any block's mesh).
+					if (group == 0) buildPropMesh(input.padded, part);
+					const int quads = static_cast<int>(part.indices.size() / 6);
+					// A group with no faces in this chunk is not one of its groups (the terrain is always considered).
+					if (!part.vertices.empty()) chunkQuads.groupQuads[group] = quads;
+					chunkQuads.quads += quads;
+					mergedQuads[group] += quads;
+					appendMesh(merged[group], part, offsetX, offsetZ);
+				}
+				result.chunks.push_back(std::move(chunkQuads));
+			}
+			for (auto& entry : merged) {
+				if (entry.second.vertices.empty()) continue;
+				GroupMesh group;
+				group.group = static_cast<uint8_t>(entry.first);
+				group.mesh = std::move(entry.second);
+				group.quads = mergedQuads[entry.first];
+				result.groups.push_back(std::move(group));
 			}
 			std::lock_guard<std::mutex> lock(resultMutex);
 			meshResults.push_back(std::move(result));
 		});
 	}
 
-	std::string VoxelWorld::bodyName(int cx, int cz, uint8_t group) const {
-		std::string name = "voxel_chunk_" + std::to_string(cx) + "_" + std::to_string(cz);
+	std::string VoxelWorld::bodyName(int rx, int rz, uint8_t group) const {
+		std::string name = "voxel_region_" + std::to_string(rx) + "_" + std::to_string(rz);
 		if (group != 0) name += "_" + std::to_string(group);
 		return name;
 	}
 
-	void VoxelWorld::uploadMesh(MeshResult& result) {
-		auto it = chunks.find(std::make_pair(result.cx, result.cz));
-		if (it == chunks.end() || it->second.generation != result.generation) return;
-		Chunk& chunk = it->second;
-		chunk.meshing = false;
-		// The chunk changed while it was being meshed. It is dirty again, so the next update meshes it again.
-		if (result.version != chunk.version) return;
+	void VoxelWorld::uploadMesh(RegionResult& result) {
+		const auto key = std::make_pair(result.rx, result.rz);
+		auto it = regions.find(key);
+		if (it == regions.end()) return;
+		Region& region = it->second;
+		region.meshing = false;
+		// The region changed while it was being meshed. It is dirty again, so the next update meshes it again.
+		if (result.version != region.version) {
+			if (loadedChunksIn(key) > 0) markRegionDirty(key);
+			return;
+		}
+		for (const ChunkQuads& chunkQuads : result.chunks) {
+			Chunk* chunk = findChunk(chunkQuads.cx, chunkQuads.cz);
+			if (!chunk || !chunk->loaded) continue;
+			chunk->quads = chunkQuads.quads;
+			chunk->groupQuads = chunkQuads.groupQuads;
+		}
 
+		const Vector3f position(static_cast<float>(key.first * RegionChunks * size), 0.0f,
+			static_cast<float>(key.second * RegionChunks * size));
 		std::set<int> drawn;
 		for (GroupMesh& part : result.groups) {
-			if (part.mesh.vertices.empty()) continue;
 			drawn.insert(part.group);
 			const std::string& materialName = part.group != 0 && !groupMaterials[part.group].empty() ? groupMaterials[part.group] : material;
 			std::vector<id_t> materials;
@@ -861,31 +973,26 @@ namespace CGEngine {
 				materials.push_back(assets.getDefaultId<Material>().value_or(0));
 			}
 			Body* body = nullptr;
-			const auto existing = chunk.bodies.find(part.group);
-			if (existing != chunk.bodies.end()) body = assets.get<Body>(existing->second);
+			const auto existing = region.bodies.find(part.group);
+			if (existing != region.bodies.end()) body = assets.get<Body>(existing->second);
 			if (body) {
 				updateCompactMeshBody(body, std::move(part.mesh.vertices), std::move(part.mesh.indices));
 			} else {
-				const Vector3f position(static_cast<float>(result.cx * size), 0.0f, static_cast<float>(result.cz * size));
-				body = createCompactMeshBody(bodyName(result.cx, result.cz, part.group), std::move(part.mesh.vertices),
+				body = createCompactMeshBody(bodyName(key.first, key.second, part.group), std::move(part.mesh.vertices),
 					std::move(part.mesh.indices), materials, position);
-				if (body) chunk.bodies[part.group] = body->getId().value_or(0);
+				if (body) region.bodies[part.group] = body->getId().value_or(0);
 			}
 			if (body) body->transparent = types[part.group].transparent;
-			chunk.groupQuads[part.group] = part.quads;
 		}
 		// A group that is drawn no more (its blocks were taken away) loses its body.
-		for (auto drawnBody = chunk.bodies.begin(); drawnBody != chunk.bodies.end();) {
+		for (auto drawnBody = region.bodies.begin(); drawnBody != region.bodies.end();) {
 			if (drawn.count(drawnBody->first)) {
 				++drawnBody;
 				continue;
 			}
 			if (Body* body = assets.get<Body>(drawnBody->second)) removeRuntimeMesh(body);
-			chunk.groupQuads.erase(drawnBody->first);
-			drawnBody = chunk.bodies.erase(drawnBody);
+			drawnBody = region.bodies.erase(drawnBody);
 		}
-		chunk.quads = 0;
-		for (const auto& group : chunk.groupQuads) chunk.quads += group.second;
 	}
 
 	int VoxelWorld::update(double budgetMs, int focusX, int focusZ) {
@@ -903,7 +1010,7 @@ namespace CGEngine {
 		const auto start = std::chrono::steady_clock::now();
 		int uploaded = 0;
 		for (;;) {
-			MeshResult result;
+			RegionResult result;
 			{
 				std::lock_guard<std::mutex> lock(resultMutex);
 				if (meshResults.empty()) break;
@@ -917,20 +1024,30 @@ namespace CGEngine {
 		}
 		uploadMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
 
-		// 3. Start meshing the dirty chunks nearest the focus first.
+		// 3. Start meshing the changed regions nearest the focus, once they have settled. A region costs its loaded chunks against
+		//    MaxMeshStartsPerUpdate, but the first one always starts, so the queue moves.
 		std::vector<std::pair<int, std::pair<int, int>>> candidates;
-		for (const auto& key : dirtyKeys) {
-			const Chunk* chunk = findChunk(key.first, key.second);
-			if (!chunk || !chunk->loaded || !chunk->dirty || chunk->meshing) continue;
-			const int dx = key.first - focusX;
-			const int dz = key.second - focusZ;
+		const std::vector<std::pair<int, int>> keys(dirtyRegions.begin(), dirtyRegions.end());
+		for (const auto& key : keys) {
+			if (loadedChunksIn(key) == 0) {
+				dirtyRegions.erase(key);
+				continue;
+			}
+			Region& region = regions[key];
+			if (region.meshing) continue;
+			if (++region.settle < RegionSettleUpdates) continue;
+			const int dx = key.first * RegionChunks + RegionChunks / 2 - focusX;
+			const int dz = key.second * RegionChunks + RegionChunks / 2 - focusZ;
 			candidates.push_back({ dx * dx + dz * dz, key });
 		}
 		std::sort(candidates.begin(), candidates.end());
-		const size_t starts = std::min(candidates.size(), static_cast<size_t>(MaxMeshStartsPerUpdate));
-		for (size_t i = 0; i < starts; ++i) {
+		int budget = MaxMeshStartsPerUpdate;
+		for (size_t i = 0; i < candidates.size(); ++i) {
 			const auto key = candidates[i].second;
-			startMeshing(key.first, key.second, chunks.at(key));
+			const int loaded = loadedChunksIn(key);
+			if (i > 0 && loaded > budget) continue;
+			startMeshing(key);
+			budget -= loaded;
 		}
 		return uploaded;
 	}
@@ -953,16 +1070,16 @@ namespace CGEngine {
 
 	int VoxelWorld::dirtyCount() const {
 		int count = 0;
-		for (const auto& entry : chunks) {
-			if (entry.second.loaded && entry.second.dirty) ++count;
+		for (const auto& entry : regions) {
+			if (entry.second.dirty) count += loadedChunksIn(entry.first);
 		}
 		return count;
 	}
 
 	int VoxelWorld::meshingCount() const {
 		int count = 0;
-		for (const auto& entry : chunks) {
-			if (entry.second.meshing) ++count;
+		for (const auto& entry : regions) {
+			if (entry.second.meshing) count += loadedChunksIn(entry.first);
 		}
 		return count;
 	}
@@ -974,13 +1091,9 @@ namespace CGEngine {
 	}
 
 	void VoxelWorld::clear() {
-		for (auto& entry : chunks) {
-			for (const auto& body : entry.second.bodies) {
-				if (Body* mesh = assets.get<Body>(body.second)) removeRuntimeMesh(mesh);
-			}
-		}
+		for (const auto& entry : regions) removeRegionBodies(entry.first);
 		chunks.clear();
-		dirtyKeys.clear();
+		dirtyRegions.clear();
 	}
 
 	// The blocks in flight are drawn as balls that move with them, in one runtime mesh that is rebuilt while any move.
