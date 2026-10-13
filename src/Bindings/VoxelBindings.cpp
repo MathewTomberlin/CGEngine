@@ -76,10 +76,15 @@ void bindVoxel(py::module_& m) {
              "Call once a frame. Installs generated chunks, uploads finished meshes within budget_ms (at least one), and starts "
              "meshing the dirty chunks nearest (focus_x, focus_z), a chunk coordinate. Returns the meshes uploaded.")
         .def("stats", [](const VoxelWorld& world) {
+            const VoxelWorld::Timings timings = world.timings();
             return py::dict("chunks"_a = world.chunkCount(), "loaded"_a = world.loadedCount(), "pending"_a = world.pendingCount(),
+                "install_ms"_a = timings.install, "start_ms"_a = timings.start, "terrain_ms"_a = timings.terrain, "mesh_ms"_a = timings.mesh,
+                "light_ms"_a = timings.light, "skin_ms"_a = timings.skin, "surface_ms"_a = timings.surface, "builds"_a = timings.builds,
                 "dirty"_a = world.dirtyCount(), "meshing"_a = world.meshingCount(), "quads"_a = world.quadCount(),
                 "upload_ms"_a = world.lastUploadMs(), "uploads"_a = world.uploadCount(), "edits"_a = world.editCount());
         }, "Counts of chunks by state, quads in the meshes, edited blocks, and how long the last update's uploads took.")
+        .def("ready_within", &VoxelWorld::readyWithin, py::arg("cx"), py::arg("cz"), py::arg("radius"),
+             "How many chunks in the square of this radius around (cx, cz) are meshed and uploaded, not waiting for terrain or a mesh.")
         .def("set_smoothing", &VoxelWorld::setSmoothing, py::arg("resolution"),
              "The surface style: 0 for cubes, or the number of samples per block for a smooth skin (1 for the block scale, 2 for half blocks). Loaded chunks are re-meshed.")
         .def("smoothing", &VoxelWorld::smoothing, "The surface style set by set_smoothing: 0 for cubes, else the samples per block.")

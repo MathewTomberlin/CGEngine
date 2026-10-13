@@ -145,6 +145,7 @@ SIM_TICK = float(os.environ.get("VOXEL_SIM_TICK", "0.25"))
 NEAR_RADIUS = int(os.environ.get("VOXEL_NEAR_RADIUS", "3"))     # chunks around the player that get the finer skin
 NEAR_SAMPLES = int(os.environ.get("VOXEL_NEAR_SAMPLES", "2"))   # samples per block there (the far chunks use VOXEL_SMOOTH)
 STATE_INTERVAL = 0.25       # seconds between writes to cg_control/voxel_state.json
+READY_RADII = (2, 6)          # the squares, in chunks around the player, whose ready counts the state file reports, besides the view (roadmap 22.1)
 # The outline of the block the crosshair is on (yellow: it is broken), and of the cell a block would be placed in
 # (its own colour, brightened). Both are thin bars around the cube's edges, made as runtime meshes.
 HELP_TEXT = "LMB break  RMB place  WASD move  Space jump  Enter fly  1-0 - = slot  I inventory  C creative  F5/F9 save/load  Esc release"
@@ -1875,7 +1876,14 @@ class VoxelGame(PyScript):
         """Write the player and the world's counts to cg_control/voxel_state.json, so an agent can check them without a screenshot."""
         stats = self.world.stats()
         basis = cge.camera_basis()
-        state = {"chunks": stats["chunks"], "loaded": stats["loaded"], "pending": stats["pending"],
+        centre = self.chunk_under_player()
+        ready = {"r%d" % r: self.world.ready_within(centre[0], centre[1], r) for r in READY_RADII}
+        ready["view"] = self.world.ready_within(centre[0], centre[1], self.view_radius)
+        state = {"chunks": stats["chunks"], "loaded": stats["loaded"], "pending": stats["pending"], "ready": ready,
+                 "timings": {"install": round(stats["install_ms"], 1), "start": round(stats["start_ms"], 1),
+                             "terrain": round(stats["terrain_ms"], 1), "mesh": round(stats["mesh_ms"], 1),
+                             "light": round(stats["light_ms"], 1), "skin": round(stats["skin_ms"], 1), "surface": round(stats["surface_ms"], 1),
+                             "builds": round(stats["builds"])},
                  "dirty": stats["dirty"], "meshing": stats["meshing"], "quads": stats["quads"],
                  "upload_ms": round(stats["upload_ms"], 3), "uploads": stats["uploads"], "edits": stats["edits"], "slot": self.slot,
                  "smoothing": self.world.smoothing(), "active": self.world.active_count(), "paused": self.paused,

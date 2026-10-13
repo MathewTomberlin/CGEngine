@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cstddef>
 #include <cstdlib>
 #include <cstring>
 #include <chrono>
@@ -312,19 +313,36 @@ namespace CGEngine {
 				std::unique_lock<std::mutex> lock(jobMutex);
 				jobReady.wait(lock, [this] { return stopping || !jobs.empty(); });
 				if (stopping) return;
-				job = std::move(jobs.front());
-				jobs.pop_front();
+				size_t nearest = 0;
+				long long best = -1;
+				for (size_t i = 0; i < jobs.size(); ++i) {
+					const long long dx = jobs[i].x - jobFocusX;
+					const long long dz = jobs[i].z - jobFocusZ;
+					const long long distance = dx * dx + dz * dz;
+					if (best < 0 || distance < best) {
+						best = distance;
+						nearest = i;
+					}
+				}
+				job = std::move(jobs[nearest].run);
+				jobs.erase(jobs.begin() + static_cast<std::ptrdiff_t>(nearest));
 			}
 			job();
 		}
 	}
 
-	void VoxelWorld::enqueue(std::function<void()> job) {
+	void VoxelWorld::enqueue(int x, int z, bool terrain, std::function<void()> job) {
 		{
 			std::lock_guard<std::mutex> lock(jobMutex);
-			jobs.push_back(std::move(job));
+			jobs.push_back(Job{ x, z, terrain, std::move(job) });
 		}
 		jobReady.notify_one();
+	}
+
+	void VoxelWorld::setJobFocus(int x, int z) {
+		std::lock_guard<std::mutex> lock(jobMutex);
+		jobFocusX = x;
+		jobFocusZ = z;
 	}
 
 	void VoxelWorld::setColour(int blockId, glm::vec3 colour) {
@@ -656,6 +674,17 @@ namespace CGEngine {
 			dirtyRegions.insert(key);
 		}
 
+	bool VoxelWorld::neighboursSettled(int cx, int cz) const {
+		for (int dz = -1; dz <= 1; ++dz) {
+			for (int dx = -1; dx <= 1; ++dx) {
+				if (dx == 0 && dz == 0) continue;
+				const Chunk* chunk = findChunk(cx + dx, cz + dz);
+				if (chunk && !chunk->loaded) return false;   // requested, its terrain still on its way
+			}
+		}
+		return true;
+	}
+
 	int VoxelWorld::loadedChunksIn(std::pair<int, int> key) const {
 		int count = 0;
 		for (int lz = 0; lz < RegionChunks; ++lz) {
@@ -700,12 +729,14 @@ namespace CGEngine {
 		const VoxelTerrain settings = terrain;
 		const int chunkSize = size;
 		const int chunkHeight = height;
-		enqueue([this, settings, cx, cz, generation, chunkSize, chunkHeight] {
+		enqueue(cx, cz, true, [this, settings, cx, cz, generation, chunkSize, chunkHeight] {
+			const auto began = std::chrono::steady_clock::now();
 			TerrainResult result;
 			result.cx = cx;
 			result.cz = cz;
 			result.generation = generation;
 			settings.fillChunk(cx, cz, chunkSize, chunkHeight, result.blocks);
+			result.ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - began).count();
 			std::lock_guard<std::mutex> lock(resultMutex);
 			terrainResults.push_back(std::move(result));
 		});
@@ -721,6 +752,13 @@ namespace CGEngine {
 		auto it = chunks.find(std::make_pair(cx, cz));
 		if (it == chunks.end()) return;
 		chunks.erase(it);
+		{
+			// Its terrain is not wanted any more: a queued job for it is dropped, not run.
+			std::lock_guard<std::mutex> lock(jobMutex);
+			jobs.erase(std::remove_if(jobs.begin(), jobs.end(), [cx, cz](const Job& job) {
+				return job.terrain && job.x == cx && job.z == cz;
+			}), jobs.end());
+		}
 		memoChunk = nullptr;
 		// The region's mesh still has this chunk in it, so the region is meshed again without it (or removed, when it is empty).
 		const auto key = regionOf(cx, cz);
@@ -1021,18 +1059,28 @@ namespace CGEngine {
 			std::array<bool, 256> cubeShape{};
 			for (size_t id = 0; id < 256; ++id) cubeShape[id] = types[id].cube;
 			const uint32_t epoch = region.epoch;
-			enqueue([this, key, epoch, inputs = std::move(inputs), colours, cubeShape]() mutable {
+			enqueue(key.first * RegionChunks + RegionChunks / 2, key.second * RegionChunks + RegionChunks / 2, false,
+				[this, key, epoch, inputs = std::move(inputs), colours, cubeShape]() mutable {
+				const auto began = std::chrono::steady_clock::now();
 				RegionResult result;
 				result.rx = key.first;
 				result.rz = key.second;
 				result.epoch = epoch;
 				std::map<int, MeshArrays> merged;
 				std::map<int, int> mergedQuads;
+				const auto stage = [](std::chrono::steady_clock::time_point since) {
+					return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - since).count();
+				};
 				for (ChunkInput& input : inputs) {
 					std::shared_ptr<const ChunkMesh> mesh = input.reuse;
 					if (!mesh) {
+						auto clock = std::chrono::steady_clock::now();
 						computeLight(input.padded);
+						result.lightMs += stage(clock);
+						clock = std::chrono::steady_clock::now();
 						if (input.resolution > 0) computeSkin(input.padded);
+						result.skinMs += stage(clock);
+						clock = std::chrono::steady_clock::now();
 						auto built = std::make_shared<ChunkMesh>();
 						// The terrain, and a mesh of its own for each block type in the chunk that has one (see PaddedChunk::rule).
 						std::array<bool, 256> present{};
@@ -1055,6 +1103,8 @@ namespace CGEngine {
 							// The torches are drawn with the terrain (their cells are air to it, so they are not part of any block's mesh).
 							if (group == 0) buildPropMesh(input.padded, part);
 						}
+						result.surfaceMs += stage(clock);
+						++result.built;
 						mesh = built;
 					}
 					// The chunk's place in the region: its meshes are local to the chunk, and the region's body is at its corner.
@@ -1074,6 +1124,7 @@ namespace CGEngine {
 					group.quads = mergedQuads[entry.first];
 					result.groups.push_back(std::move(group));
 				}
+				result.ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - began).count();
 				std::lock_guard<std::mutex> lock(resultMutex);
 				meshResults.push_back(std::move(result));
 			});
@@ -1145,6 +1196,7 @@ namespace CGEngine {
 	}
 
 	int VoxelWorld::update(double budgetMs, int focusX, int focusZ) {
+		setJobFocus(focusX, focusZ);
 		refreshResolutions(focusX, focusZ, false);
 		updateMovingBlocks();
 		// 1. Install the terrain that finished generating.
@@ -1153,7 +1205,12 @@ namespace CGEngine {
 			std::lock_guard<std::mutex> lock(resultMutex);
 			installed.swap(terrainResults);
 		}
-		for (TerrainResult& result : installed) installTerrain(result);
+		const auto installBegan = std::chrono::steady_clock::now();
+		for (TerrainResult& result : installed) {
+			totals.terrain += result.ms;
+			installTerrain(result);
+		}
+		totals.install += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - installBegan).count();
 
 		// 2. Upload finished meshes, until the budget is spent. At least one, so the queue always moves.
 		const auto start = std::chrono::steady_clock::now();
@@ -1168,6 +1225,11 @@ namespace CGEngine {
 				result = std::move(meshResults.front());
 				meshResults.pop_front();
 			}
+			totals.mesh += result.ms;
+			totals.light += result.lightMs;
+			totals.builds += result.built;
+			totals.skin += result.skinMs;
+			totals.surface += result.surfaceMs;
 			uploadMesh(result);
 			++uploaded;
 		}
@@ -1185,11 +1247,22 @@ namespace CGEngine {
 			Region& region = regions[key];
 			if (region.meshing) continue;
 			if (++region.settle < RegionSettleUpdates) continue;
+			// A region is meshed when the chunks around its loaded ones are in too, so a chunk is not meshed once for each neighbour.
+			bool settled = true;
+			for (int lz = 0; lz < RegionChunks && settled; ++lz) {
+				for (int lx = 0; lx < RegionChunks && settled; ++lx) {
+					const int cx = key.first * RegionChunks + lx, cz = key.second * RegionChunks + lz;
+					const Chunk* chunk = findChunk(cx, cz);
+					if (chunk && chunk->loaded && !neighboursSettled(cx, cz)) settled = false;
+				}
+			}
+			if (!settled) continue;
 			const int dx = key.first * RegionChunks + RegionChunks / 2 - focusX;
 			const int dz = key.second * RegionChunks + RegionChunks / 2 - focusZ;
 			candidates.push_back({ dx * dx + dz * dz, key });
 		}
 		std::sort(candidates.begin(), candidates.end());
+		const auto startBegan = std::chrono::steady_clock::now();
 		int budget = MaxMeshStartsPerUpdate;
 		for (size_t i = 0; i < candidates.size(); ++i) {
 			const auto key = candidates[i].second;
@@ -1198,6 +1271,7 @@ namespace CGEngine {
 			startMeshing(key);
 			budget -= loaded;
 		}
+		totals.start += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - startBegan).count();
 		return uploaded;
 	}
 
@@ -1205,6 +1279,20 @@ namespace CGEngine {
 		int count = 0;
 		for (const auto& entry : chunks) {
 			if (entry.second.loaded) ++count;
+		}
+		return count;
+	}
+
+	int VoxelWorld::readyWithin(int cx, int cz, int radius) const {
+		int count = 0;
+		for (int z = cz - radius; z <= cz + radius; ++z) {
+			for (int x = cx - radius; x <= cx + radius; ++x) {
+				const Chunk* chunk = findChunk(x, z);
+				if (!chunk || !chunk->loaded || chunk->dirty || !chunk->mesh) continue;
+				const auto region = regions.find(regionOf(x, z));
+				if (region != regions.end() && region->second.meshing) continue;
+				++count;
+			}
 		}
 		return count;
 	}

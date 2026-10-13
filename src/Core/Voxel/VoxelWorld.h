@@ -166,10 +166,26 @@ namespace CGEngine {
 		int chunkCount() const { return static_cast<int>(chunks.size()); }
 		int loadedCount() const;
 		int pendingCount() const;       // chunks waiting for terrain
+		// The chunks in the square of this radius around (cx, cz) whose mesh is up to date and uploaded (loaded, not dirty, with a
+		// mesh, and its region not being meshed): what the player sees there. Measures how fast the ground arrives (roadmap 22.1).
+		int readyWithin(int cx, int cz, int radius) const;
 		int dirtyCount() const;         // loaded chunks whose mesh is out of date
 		int meshingCount() const;       // chunks being meshed on a worker
 		int quadCount() const;          // quads in the loaded chunks' meshes, as last uploaded
 		double lastUploadMs() const { return uploadMs; }
+		// Where the time goes, cumulative since the world was made (roadmap 22.1): installing the terrain that arrived, starting the
+		// meshes, the terrain generated and the meshes built on the workers, in milliseconds.
+		struct Timings {
+			double install = 0.0;
+			double start = 0.0;
+			double terrain = 0.0;
+			double mesh = 0.0;
+			double light = 0.0;
+			double skin = 0.0;
+			double surface = 0.0;
+			double builds = 0.0;            // chunks meshed, cumulative: a chunk is meshed again each time a neighbour changes
+		};
+		Timings timings() const { return totals; }
 		// Regions uploaded so far: it rises by one each time a region's mesh is shown (see uploadMesh).
 		int uploadCount() const { return uploads; }
 		// Removes every chunk and its body. Work still on the workers is dropped when it finishes. The edits stay.
@@ -220,6 +236,7 @@ namespace CGEngine {
 			int cz;
 			uint32_t generation;
 			std::vector<uint8_t> blocks;
+			double ms = 0.0;    // how long the worker took
 		};
 
 		// One group's mesh of a chunk (see buildChunkMesh): group 0 is the terrain.
@@ -243,6 +260,11 @@ namespace CGEngine {
 			uint32_t epoch;
 			std::vector<GroupMesh> groups;  // each group's mesh for the whole region, chunks merged
 			std::vector<ChunkBuilt> chunks;
+			double ms = 0.0;                // how long the worker took
+			double lightMs = 0.0;           // of which: the light, the skin and the surfaces (the mesher's stages)
+			double skinMs = 0.0;
+			double surfaceMs = 0.0;
+			int built = 0;                  // chunks this job built the mesh of (the others were reused)
 		};
 
 		int size;
@@ -284,13 +306,24 @@ namespace CGEngine {
 		void clearDamage(int x, int y, int z);
 		uint32_t nextGeneration = 1;
 		double uploadMs = 0.0;
+		Timings totals;
 		int uploads = 0;
 
 		// Background work. Jobs run on the workers; their results wait in the result queues until update() takes them.
 		std::vector<std::thread> workers;
 		std::mutex jobMutex;
 		std::condition_variable jobReady;
-		std::deque<std::function<void()>> jobs;
+		// A queued job and the chunk it is for (a region's mesh job uses its middle chunk). The job nearest the focus runs first, so
+		// the ground the player is on is meshed before far terrain queued earlier. unloadChunk drops a chunk's queued terrain.
+		struct Job {
+			int x = 0;
+			int z = 0;
+			bool terrain = false;
+			std::function<void()> run;
+		};
+		std::vector<Job> jobs;
+		int jobFocusX = 0;              // the chunk the job order is measured from, set by update() (setJobFocus)
+		int jobFocusZ = 0;
 		bool stopping = false;
 		std::mutex resultMutex;
 		std::deque<TerrainResult> terrainResults;
@@ -305,7 +338,8 @@ namespace CGEngine {
 		void showPreview(MeshArrays& arrays);
 		void stopWorkers();
 		void workerLoop();
-		void enqueue(std::function<void()> job);
+		void enqueue(int x, int z, bool terrain, std::function<void()> job);
+		void setJobFocus(int x, int z);
 
 		static int floorDiv(int a, int b);
 		int localIndex(int lx, int y, int lz) const { return (y * size + lz) * size + lx; }
@@ -324,6 +358,9 @@ namespace CGEngine {
 		void markRegionDirty(std::pair<int, int> key);
 		// The loaded chunks in a region.
 		int loadedChunksIn(std::pair<int, int> key) const;
+		// Whether a chunk's eight neighbours are all loaded or not wanted (not requested): a chunk's mesh reads its neighbours, so
+		// it is meshed once they are in, not again each time one arrives (see update).
+		bool neighboursSettled(int cx, int cz) const;
 		// Removes a region's bodies. Its chunks are not touched; the region is left clean and empty.
 		void removeRegionBodies(std::pair<int, int> key);
 		// Marks the chunks that see the light of the cell at local (lx, lz) in chunk (cx, cz), as setBlock does.
