@@ -528,8 +528,11 @@ Goal: the player sees what a placement will do before they make it, and a placem
 - [x] **24.4** A torch's ghost is its own stick and flame at the cell (`setPreviewProp`), and the stick stands out of the skin along the
   surface normal (`VoxelWorld::propNormal`, the gradient of the skin density), tilted up a little so it still stands on a wall or a
   slope. The aim test keeps an axis-aligned bound of the stick.
-- [ ] **24.5** Open: the ghost's cost, measured per target change (not yet); the ghost's opacity (0.45) and the outline colours, to
-  judge in play; a ghost for breaking (the blocks that would fall), and the torch's tilt on steep slopes, which is not yet seen.
+- [~] **24.5** The ghost's cost: a rebuild took 3.5 ms (the mesh 3.2 ms, the upload 0.3 ms), measured in the engine with
+  `ghost_cost` timings in the state file (`preview`). The mesh copied the whole column down to the floor; it now copies the blocks
+  from five below the cell, which the 2.5-block keep radius needs, and takes 1.2 ms. A rebuild is 2.1 ms in all, once per aimed
+  cell that changes. Still open: the ghost's opacity (0.45) and the outline colours, to judge in play; a ghost for breaking (the
+  blocks that would fall); the torch's tilt on steep slopes, which is not yet seen; and a ghost built off the frame (about 2 ms).
 
 ## Phase 25: skin shape fidelity (from playtesting round 3: narrow shapes and black patches)
 Goal: a skin takes the shape of its blocks: a one-block column is one block wide with a top, and no vertex is black for want of light.

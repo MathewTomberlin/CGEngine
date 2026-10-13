@@ -1418,16 +1418,19 @@ namespace CGEngine {
 		const int span = 2 * PreviewRadius;
 		const int ox = x - PreviewRadius;
 		const int oz = z - PreviewRadius;
+		// Only the blocks a few below the cell are copied: the ghost keeps the surface within PreviewKeep of it, so the terrain far
+		// below (up to the world's floor) is not needed.
+		const int oy = std::max(0, y - PreviewRadius - 2);
 		PaddedChunk padded;
 		padded.size = span;
-		padded.height = std::min(height, y + PreviewRadius + 1);
+		padded.height = std::min(height, y + PreviewRadius + 1) - oy;
 		padded.border = 3;
 		const int p = span + 2 * padded.border;
 		padded.blocks.assign(static_cast<size_t>(p) * p * (padded.height + 2 * padded.border), 0);
 		for (int py = 0; py < padded.height; ++py) {
 			for (int pz = -padded.border; pz < span + padded.border; ++pz) {
 				for (int px = -padded.border; px < span + padded.border; ++px) {
-					padded.blocks[padded.index(px, py, pz)] = static_cast<uint8_t>(getBlock(ox + px, py, oz + pz));
+					padded.blocks[padded.index(px, py, pz)] = static_cast<uint8_t>(getBlock(ox + px, oy + py, oz + pz));
 				}
 			}
 		}
@@ -1439,7 +1442,7 @@ namespace CGEngine {
 			padded.rule[id].cube = types[id].cube;
 		}
 		const int cx = x - ox;
-		const int cy = y;
+		const int cy = y - oy;
 		const int cz = z - oz;
 		const std::array<glm::vec3, 256> colours = palette;
 		const int resolution = resolutionFor(floorDiv(x, size), floorDiv(z, size));
@@ -1483,6 +1486,7 @@ namespace CGEngine {
 		// Move the ghost from the padded copy's corner into the world.
 		for (VoxelVertex& vertex : out.vertices) {
 			vertex.position.x += static_cast<float>(ox);
+			vertex.position.y += static_cast<float>(oy);
 			vertex.position.z += static_cast<float>(oz);
 		}
 	}
