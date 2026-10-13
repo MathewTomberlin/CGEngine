@@ -95,9 +95,9 @@ def one_block(x, y, z):
     return (x, y, z) == (3, 0, 0)
 
 
-# The terrain's density is its share of the 2 by 2 by 2 blocks at each corner, less 0.15, interpolated between the corners: a
-# slab of terrain has 0.85 deep inside, 0.35 on its top face, and the skin (the iso, 0.3) 0.1 of a block out from the face.
-# A single block is too thin to be a terrain skin, and a wall one block thick stays solid (see below).
+# The terrain's density is the larger of its share of the 2 by 2 by 2 blocks at each corner, less 0.15, interpolated between the
+# corners, and 0.6 times the occupancy of the block centres (VoxelCentreWeight): a slab of terrain has 0.85 deep inside, 0.35 on its
+# top face, and the skin (the iso, 0.3) 0.1 of a block out from the face. A single block is a skin of its own, its faces on the iso.
 def slab(x, y, z):
     return p.TERRAIN_SKIN if y <= 0 else 0
 
@@ -106,7 +106,8 @@ check("the density is 0.85 deep inside a slab of terrain", abs(p.density(slab, 3
 check("the density is 0.35 on a slab's top face", abs(p.density(slab, 3.5, 1.0, 0.5) - 0.35) < 1e-9)
 check("the skin is 0.1 of a block above a slab's top face", abs(p.density(slab, 3.5, 1.0 + BULGE, 0.5) - p.SKIN_ISO) < 1e-9)
 check("the density is under the iso above a slab", p.density(slab, 3.5, 2.5, 0.5) < p.SKIN_ISO)
-check("a single block of terrain is too thin to be a skin", p.density(one_block, 3.5, 0.5, 0.5) < p.SKIN_ISO)
+check("a single block of terrain is inside its own skin", p.density(one_block, 3.5, 0.5, 0.5) > p.SKIN_ISO)
+check("a single block's face is on the skin (half way between block centres)", abs(p.density(one_block, 3.0, 0.5, 0.5) - p.SKIN_ISO) < 1e-9)
 
 
 # A wall one block thick, standing on the slab: its middle stays inside the skin (a wider smoothing would thin it away).

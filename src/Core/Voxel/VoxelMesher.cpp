@@ -374,21 +374,32 @@ namespace CGEngine {
 			return inGroup(chunk, x, y, z, group);
 		}
 
-		// The density at p (block units). The terrain's is its smoothed occupancy, interpolated between block corners (VoxelTerrainShift):
-		// a block's corner is a whole number. The other groups' is their occupancy, interpolated between block centres, which are the
+		// The density at p (block units). The terrain's is its smoothed occupancy, interpolated between block corners (VoxelTerrainShift),
+		// or the occupancy of its block centres (VoxelCentreWeight), whichever is larger: a thin feature keeps its width, a broad one
+		// keeps its smooth corners. The other groups' is their occupancy, interpolated between block centres, which are the
 		// corner + 0.5, so it falls from 1 to 0 across each block face and the iso-surface runs along the faces.
 		float densityAt(const PaddedChunk& chunk, uint8_t group, glm::vec3 p) {
 			if (group == 0) {
 				const glm::vec3 base = glm::floor(p);
 				const glm::vec3 t = p - base;
 				const int x0 = static_cast<int>(base.x), y0 = static_cast<int>(base.y), z0 = static_cast<int>(base.z);
-				float value = 0.0f;
+				float corners = 0.0f;
 				for (int c = 0; c < 8; ++c) {
 					const int dx = c & 1, dy = (c >> 1) & 1, dz = (c >> 2) & 1;
 					const float w = (dx ? t.x : 1.0f - t.x) * (dy ? t.y : 1.0f - t.y) * (dz ? t.z : 1.0f - t.z);
-					value += w * chunk.skin[chunk.index(x0 + dx, y0 + dy, z0 + dz)];
+					corners += w * chunk.skin[chunk.index(x0 + dx, y0 + dy, z0 + dz)];
 				}
-				return value;
+				const glm::vec3 b = p - glm::vec3(0.5f);
+				const glm::vec3 centreBase = glm::floor(b);
+				const glm::vec3 u = b - centreBase;
+				const int cx0 = static_cast<int>(centreBase.x), cy0 = static_cast<int>(centreBase.y), cz0 = static_cast<int>(centreBase.z);
+				float centres = 0.0f;
+				for (int c = 0; c < 8; ++c) {
+					const int dx = c & 1, dy = (c >> 1) & 1, dz = (c >> 2) & 1;
+					const float w = (dx ? u.x : 1.0f - u.x) * (dy ? u.y : 1.0f - u.y) * (dz ? u.z : 1.0f - u.z);
+					if (solidAt(chunk, 0, cx0 + dx, cy0 + dy, cz0 + dz)) centres += w;
+				}
+				return std::max(corners, VoxelCentreWeight * centres);
 			}
 			const glm::vec3 b = p - glm::vec3(0.5f);
 			const glm::vec3 base = glm::floor(b);
@@ -457,11 +468,26 @@ namespace CGEngine {
 			float lamp = 0.0f;
 			// The eight cells that touch the point: the air among them is what the vertex can see.
 			const glm::vec3 corner = glm::floor(p - glm::vec3(0.5f));
+			bool sawAir = false;
 			for (int c = 0; c < 8; ++c) {
 				const int ax = static_cast<int>(corner.x) + (c & 1), ay = static_cast<int>(corner.y) + ((c >> 1) & 1), az = static_cast<int>(corner.z) + ((c >> 2) & 1);
 				if (chunk.at(ax, ay, az) != 0) continue;
+				sawAir = true;
 				sky = std::max(sky, chunk.lightAt(ax, ay, az) / 255.0f);
 				lamp = std::max(lamp, chunk.lampAt(ax, ay, az) / 255.0f);
+			}
+			// A vertex inside solid blocks (a surface pulled into a corner) has none of them: it takes the brightest air within a block.
+			if (!sawAir) {
+				for (int dz = -1; dz <= 2; ++dz) {
+					for (int dy = -1; dy <= 2; ++dy) {
+						for (int dx = -1; dx <= 2; ++dx) {
+							const int ax = static_cast<int>(corner.x) + dx, ay = static_cast<int>(corner.y) + dy, az = static_cast<int>(corner.z) + dz;
+							if (chunk.at(ax, ay, az) != 0) continue;
+							sky = std::max(sky, chunk.lightAt(ax, ay, az) / 255.0f);
+							lamp = std::max(lamp, chunk.lampAt(ax, ay, az) / 255.0f);
+						}
+					}
+				}
 			}
 			vertex.colour = palette[static_cast<size_t>(block)] * occlusion
 				* (chunk.damage.empty() ? 1.0f : 1.0f - DamageTint * chunk.damage[dominant] / 255.0f);
