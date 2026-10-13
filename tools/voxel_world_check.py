@@ -338,21 +338,30 @@ def check_walkers(world, checks, results):
         cge.remove_mesh_body(w.name)
 
 
+BULGE = 0.1   # the terrain's skin sits this far out from each face (VoxelTerrainShift: 1 - 2 * (VoxelSkinIso + shift))
+
+
 def check_skin_surface(world, checks):
-    """The surface the view meets is the drawn skin: looking straight down, it lies about 0.2 of a block above the top block of
-    the column (the skin sits out from each face), and the outline's block is the one under it."""
+    """The surface the view meets is the drawn skin: on flat ground, looking straight down, it lies BULGE of a block above the
+    top block of the column (the skin sits out from each face). Only flat columns are checked: on a slope the column's top is not
+    the surface under its centre. The outline's block is the one under the surface."""
+    def top_at(x, z):
+        return max([y for y in range(HEIGHT - 1) if world.is_solid(x, y, z)] or [-1]) + 1
+
     good = 0
     total = 0
     for x in range(-20, 20, 5):
         for z in range(-20, 20, 5):
-            top = max([y for y in range(HEIGHT - 1) if world.is_solid(x, y, z)] or [-1]) + 1
+            top = top_at(x, z)
             if top <= 0:
+                continue
+            if any(top_at(x + dx, z + dz) != top for dx in (-1, 0, 1) for dz in (-1, 0, 1)):
                 continue
             surface = world.skin_surface((x + 0.5, top + 20.0, z + 0.5), (0.0, -1.0, 0.0), 40.0)
             total += 1
-            if surface is not None and abs(surface[1] - (top + 0.2)) < 0.25:
+            if surface is not None and abs(surface[1] - (top + BULGE)) < 0.06:
                 good += 1
-    checks["the view meets the drawn skin (about 0.2 of a block above the top block)"] = total > 0 and good >= 0.9 * total
+    checks["the view meets the drawn skin on flat ground (BULGE above the top block)"] = total > 0 and good >= 0.9 * total
 
 
 def check_props(world, checks, chunks):
@@ -383,7 +392,8 @@ def check_props(world, checks, chunks):
     # The wall is stone at +x, so its skin is 0.3 from the torch's cell centre; the stick's outer face must be on that skin.
     boxes = [b for b in world.prop_boxes() if (b[0], b[1], b[2]) == (cx + 1, cy, cz)]
     stick_outer = boxes[0][4][0] + boxes[0][5][0] if boxes else None
-    checks["a torch stands on the skin of its wall, not inside it"] = stick_outer is not None and abs(stick_outer - (cx + 1.5 + 0.3)) < 0.03
+    # The torch leans on the wall at cx + 2 (its face), so its base is on the skin BULGE out from that face.
+    checks["a torch stands on the skin of its wall, not inside it"] = stick_outer is not None and abs(stick_outer - (cx + 2.0 - BULGE)) < 0.03
     world.remove_prop(cx + 1, cy, cz)
     checks["removing a torch removes it and its light"] = world.prop_at(cx + 1, cy, cz) == -1         and world.light_at(cx + 1, cy, cz) == 0
     for (x, y, z), block in saved.items():

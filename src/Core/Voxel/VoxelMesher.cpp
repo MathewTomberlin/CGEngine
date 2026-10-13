@@ -232,6 +232,53 @@ namespace CGEngine {
 		}
 	}
 
+	void computeSkin(PaddedChunk& chunk) {
+		// The terrain's occupancy, 1 in a block of group 0 and 0 elsewhere, in the padded layout of PaddedChunk::index.
+		const int b = chunk.border;
+		const int P = chunk.size + 2 * b;
+		const int Y = chunk.height + 2 * b;
+		const size_t n = static_cast<size_t>(P) * P * Y;
+		std::vector<int> solid(n, 0);
+		for (int y = -b; y < chunk.height + b; ++y) {
+			for (int z = -b; z < chunk.size + b; ++z) {
+				for (int x = -b; x < chunk.size + b; ++x) {
+					solid[chunk.index(x, y, z)] = inGroup(chunk, x, y, z, 0) ? 1 : 0;
+				}
+			}
+		}
+		// A corner's value sums the two blocks on each side of it along x, then z, then y: the 2 by 2 by 2 blocks that meet there.
+		// The first block on the padded edge has no block before it, and nothing samples that far out.
+		std::vector<int> along(n, 0);
+		for (int y = 0; y < Y; ++y) {
+			for (int z = 0; z < P; ++z) {
+				for (int x = 0; x < P; ++x) {
+					const size_t i = (static_cast<size_t>(y) * P + z) * P + x;
+					along[i] = solid[i] + (x > 0 ? solid[i - 1] : 0);
+				}
+			}
+		}
+		for (int y = 0; y < Y; ++y) {
+			for (int z = 0; z < P; ++z) {
+				for (int x = 0; x < P; ++x) {
+					const size_t i = (static_cast<size_t>(y) * P + z) * P + x;
+					solid[i] = along[i] + (z > 0 ? along[i - P] : 0);
+				}
+			}
+		}
+		for (int y = 0; y < Y; ++y) {
+			for (int z = 0; z < P; ++z) {
+				for (int x = 0; x < P; ++x) {
+					const size_t i = (static_cast<size_t>(y) * P + z) * P + x;
+					along[i] = solid[i] + (y > 0 ? solid[i - static_cast<size_t>(P) * P] : 0);
+				}
+			}
+		}
+		chunk.skin.assign(n, 0.0f);
+		for (size_t i = 0; i < n; ++i) {
+			chunk.skin[i] = along[i] / 8.0f - VoxelTerrainShift;
+		}
+	}
+
 	void buildChunkMesh(const PaddedChunk& chunk, const std::array<glm::vec3, 256>& palette, uint8_t group, MeshArrays& out) {
 		out.vertices.clear();
 		out.indices.clear();
@@ -327,10 +374,22 @@ namespace CGEngine {
 			return inGroup(chunk, x, y, z, group);
 		}
 
-		// The density at p (block units): the blocks' occupancy, interpolated between block centres (a block's centre is
-		// its corner + 0.5). It falls from 1 to 0 across each block face, so the iso-surface at 0.5 runs along the faces
-		// and rounds the convex edges and corners.
+		// The density at p (block units). The terrain's is its smoothed occupancy, interpolated between block corners (VoxelTerrainShift):
+		// a block's corner is a whole number. The other groups' is their occupancy, interpolated between block centres, which are the
+		// corner + 0.5, so it falls from 1 to 0 across each block face and the iso-surface runs along the faces.
 		float densityAt(const PaddedChunk& chunk, uint8_t group, glm::vec3 p) {
+			if (group == 0) {
+				const glm::vec3 base = glm::floor(p);
+				const glm::vec3 t = p - base;
+				const int x0 = static_cast<int>(base.x), y0 = static_cast<int>(base.y), z0 = static_cast<int>(base.z);
+				float value = 0.0f;
+				for (int c = 0; c < 8; ++c) {
+					const int dx = c & 1, dy = (c >> 1) & 1, dz = (c >> 2) & 1;
+					const float w = (dx ? t.x : 1.0f - t.x) * (dy ? t.y : 1.0f - t.y) * (dz ? t.z : 1.0f - t.z);
+					value += w * chunk.skin[chunk.index(x0 + dx, y0 + dy, z0 + dz)];
+				}
+				return value;
+			}
 			const glm::vec3 b = p - glm::vec3(0.5f);
 			const glm::vec3 base = glm::floor(b);
 			const glm::vec3 t = b - base;
@@ -339,7 +398,7 @@ namespace CGEngine {
 			for (int c = 0; c < 8; ++c) {
 				const int dx = c & 1, dy = (c >> 1) & 1, dz = (c >> 2) & 1;
 				const float w = (dx ? t.x : 1.0f - t.x) * (dy ? t.y : 1.0f - t.y) * (dz ? t.z : 1.0f - t.z);
-				if (solidAt(chunk, group,x0 + dx, y0 + dy, z0 + dz)) value += w;
+				if (solidAt(chunk, group, x0 + dx, y0 + dy, z0 + dz)) value += w;
 			}
 			return value;
 		}
@@ -390,7 +449,13 @@ namespace CGEngine {
 				vertex.texCoord = glm::vec2(p.x, p.y);
 			}
 			// Sky light of the air the normal points into: caves and the ground under trees are darker.
-			const glm::vec3 air = glm::floor(p + normal * 0.5f);
+			glm::vec3 air = glm::floor(p + normal * 0.5f);
+			// A slope can put the point just inside a solid block, and a solid block has no light: the sample steps further out
+			// along the normal until it is in air.
+			for (const float reach : { 0.9f, 1.3f }) {
+				if (chunk.at(static_cast<int>(air.x), static_cast<int>(air.y), static_cast<int>(air.z)) == 0) break;
+				air = glm::floor(p + normal * reach);
+			}
 			const float sky = chunk.lightAt(static_cast<int>(air.x), static_cast<int>(air.y), static_cast<int>(air.z)) / 255.0f;
 			const float lamp = chunk.lampAt(static_cast<int>(air.x), static_cast<int>(air.y), static_cast<int>(air.z)) / 255.0f;
 			vertex.colour = palette[static_cast<size_t>(block)] * occlusion

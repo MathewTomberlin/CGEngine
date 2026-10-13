@@ -17,6 +17,7 @@ JUMP_SPEED = 9.0        # blocks per second, upwards
 MAX_FALL = 40.0         # terminal fall speed
 REACH = 6.0             # blocks from the eye that a block can be picked
 SKIN_ISO = 0.3          # the skin is where the density is this (VoxelSkinIso in VoxelMesher.h)
+TERRAIN_SHIFT = 0.15    # the terrain's density at a block corner is its share of the 2 x 2 x 2 blocks there, less this (VoxelTerrainShift)
 # The skin ids solid() returns (VoxelWorld.skin_at): 0 for air, TERRAIN_SKIN for the terrain (a plain True counts as it), OWN_SKIN
 # + block for a smooth block in its own mesh, and CUBE_SKIN + block for a cube block.
 TERRAIN_SKIN = 1
@@ -27,9 +28,34 @@ _SUBSTEP = 0.1          # largest move along one axis in one go
 _BISECT_STEPS = 12      # how exactly a blocked move is set flush against the skin
 
 
+def terrain_corner(solid, x, y, z):
+    """The terrain blocks among the 2 by 2 by 2 that meet at the block corner (x, y, z) (VoxelWorld::terrainCorners)."""
+    total = 0
+    for dz in (0, 1):
+        for dy in (0, 1):
+            for dx in (0, 1):
+                if solid(x - 1 + dx, y - 1 + dy, z - 1 + dz) == TERRAIN_SKIN:
+                    total += 1
+    return total
+
+
 def density(solid, x, y, z):
-    """The skin's density at (x, y, z), the largest of the skins it is in (VoxelWorld::skinDensity). Each smooth skin is the
-    occupancy of its blocks' centres around the point, weighted trilinearly; a cube's skin is 1 in its own cell."""
+    """The skin's density at (x, y, z), the largest of the skins it is in (VoxelWorld::skinDensity). The terrain's is its
+    share of the 2 x 2 x 2 blocks at each corner around the point, less TERRAIN_SHIFT, interpolated between the corners; another
+    smooth skin is the occupancy of its blocks' centres, weighted trilinearly; a cube's skin is 1 in its own cell."""
+    fx = math.floor(x)
+    fy = math.floor(y)
+    fz = math.floor(z)
+    ux = x - fx
+    uy = y - fy
+    uz = z - fz
+    terrain = 0.0
+    for c in range(8):
+        dx = c & 1
+        dy = (c >> 1) & 1
+        dz = (c >> 2) & 1
+        weight = (ux if dx else 1.0 - ux) * (uy if dy else 1.0 - uy) * (uz if dz else 1.0 - uz)
+        terrain += weight * (terrain_corner(solid, int(fx) + dx, int(fy) + dy, int(fz) + dz) / 8.0 - TERRAIN_SHIFT)
     bx = x - 0.5
     by = y - 0.5
     bz = z - 0.5
@@ -50,10 +76,10 @@ def density(solid, x, y, z):
         dz = (c >> 2) & 1
         weights[c] = (tx if dx else 1.0 - tx) * (ty if dy else 1.0 - ty) * (tz if dz else 1.0 - tz)
         skins[c] = solid(x0 + dx, y0 + dy, z0 + dz) or 0
-    value = 0.0
+    value = terrain
     for c in range(8):
         skin = skins[c]
-        if not skin or skin >= CUBE_SKIN or skin in skins[:c]:
+        if not skin or skin == TERRAIN_SKIN or skin >= CUBE_SKIN or skin in skins[:c]:
             continue
         total = 0.0
         for d in range(8):

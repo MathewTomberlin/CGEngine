@@ -451,15 +451,25 @@ recipe with an item missing is shown disabled; a recipe the player does not know
 
 ## Phase 21: a smooth terrain skin (from playtesting round 2: slopes read as steps)
 Goal: a one-block rise over a one-block run is a smooth hill, and the ground reads as land, not as blocks under a skin.
-- [ ] **21.1** Measure the stepping first: a screenshot of a 45 degree slope, and the density along a line across it. The
-  skin's density is trilinear over the block centres, so the iso line through a staircase keeps the staircase.
-- [ ] **21.2** A smoothed occupancy for the terrain skin: the occupancy is blurred over a few cells before the iso crossing,
-  so the surface crosses a slope at a smooth angle. Cube and own-mesh blocks keep their rules (12.1).
-- [ ] **21.3** Normals from the smoothed field, and the occlusion kept. Measured in Release against the 10.1 numbers: quads,
-  load time, frame time.
-- [ ] **21.4** Collision reads the same field: `skinDensity` and `physics.density` change together, and `voxel_world_check.py`
-  compares them on random moves, as 13.2 does.
-- [ ] **21.5** Open: a finer field near the camera (the 11.7 question), if 21.2 is not enough.
+- [x] **21.1** Measured first: a staircase of stone, one block per step, built in a test world and photographed. The steps read
+  as bands of ledges.
+- [x] **21.2** A smoothed density for the terrain: the share of the 2 by 2 by 2 blocks that meet at each block corner, less
+  `VoxelTerrainShift` (0.15), interpolated between the corners. A straight 45 degree slope comes out straight, with a ripple
+  of about 0.04 of a block. The other skins are unchanged (the occupancy between block centres, iso 0.3). Tried and rejected:
+  a 3 by 3 by 3 mean is smoother, but a one-block wall averages to 0.33 and vanishes, so a body walked through it.
+  The 2 by 2 by 2 corners keep a one-block wall solid (its middle is 0.35, above the iso).
+- [x] **21.3** The mesh and the world read the same corners: `computeSkin` (mesher, padded chunk) and `terrainCorners`
+  (world, a per-chunk cache cleared by `markDirty`). A flat face's surface sits 0.1 of a block out (it was 0.2). Measured
+  in Release with `test_voxels.ps1`: block edits re-mesh in about 2.8 to 3.7 ms, as before; 841 chunks give 1.15 M quads
+  (1.2 M before). The frame rate was measured while another program used much of the CPU: standing 94 to 254 fps across
+  runs, and with the creatures off 280 to 340 fps. So the creatures' collision queries are now the main cost of a frame
+  (see 22.5); the number needs a quiet machine to be final.
+- [x] **21.4** Collision reads the same field: `skinDensity` and `physics.density` change together. `test_voxel_physics.py`
+  checks the slab's density (0.85 deep, 0.35 on its face), the skin 0.1 out, a one-block wall, a ledge, a ramp and a wall
+  that is not climbed. `voxel_world_check.py` checks the surface on flat ground, a torch on a wall, and the parity suite.
+- [ ] **21.5** Open: a dark speckle appears on the surface in one screenshot of the new ramp (not shadows: it stays with shadows
+  off). It is probably coal ore in the stone showing through the closer surface; to confirm with a block-type probe.
+- Open: a finer field near the camera (the 11.7 question), if this is not enough.
 
 ## Phase 22: far-view loading latency (from playtesting round 2: distant ground takes seconds after a move)
 Goal: a player who walks sees the ground ahead within a second or two, at any view distance the setting allows.
@@ -470,6 +480,9 @@ Goal: a player who walks sees the ground ahead within a second or two, at any vi
 - [ ] **22.3** Coarse first: a far region shows a stride-4 skin as soon as its terrain is in, and the detailed skin follows.
   The skirts keep the seams (11.12).
 - [ ] **22.4** The lesson of 15.8 applies: a coarse level must not bring back the blotches from averaged occlusion.
+- [ ] **22.5** The creatures' collision queries are the main frame cost after Phase 21 (about 4 ms of a frame with twelve
+  creatures in view, on a busy machine). Count the density queries a frame makes and cache what repeats; this is a frame-rate
+  item as much as a load item.
 
 ## Phase 23: upkeep (lead developer)
 - [ ] **23.1** Split `VoxelGame.py` (about 2,000 lines) into modules by concern: net, physics glue, inventory and crafting, HUD,
