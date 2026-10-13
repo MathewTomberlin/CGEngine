@@ -449,7 +449,13 @@ namespace CGEngine {
 				vertex.texCoord = glm::vec2(p.x, p.y);
 			}
 			// Sky light of the air the normal points into: caves and the ground under trees are darker.
-			const glm::vec3 air = glm::floor(p + normal * 0.5f);
+			glm::vec3 air = glm::floor(p + normal * 0.5f);
+			// A slope can put the point just inside a solid block, and a solid block has no light: the sample steps further out
+			// along the normal until it is in air.
+			for (const float reach : { 0.9f, 1.3f }) {
+				if (chunk.at(static_cast<int>(air.x), static_cast<int>(air.y), static_cast<int>(air.z)) == 0) break;
+				air = glm::floor(p + normal * reach);
+			}
 			const float sky = chunk.lightAt(static_cast<int>(air.x), static_cast<int>(air.y), static_cast<int>(air.z)) / 255.0f;
 			const float lamp = chunk.lampAt(static_cast<int>(air.x), static_cast<int>(air.y), static_cast<int>(air.z)) / 255.0f;
 			vertex.colour = palette[static_cast<size_t>(block)] * occlusion
