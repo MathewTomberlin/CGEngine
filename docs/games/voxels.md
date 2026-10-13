@@ -132,7 +132,10 @@ world.active_count()                     # cells queued: 0 when everything has s
 - `resources/scripts/VoxelGame.py`: the game. It asks for the chunks near the player (`VIEW_RADIUS` = 14 chunks each way,
   841 in all), moves the player and the camera, edits blocks, runs the day and night cycle, and writes
   `cg_control/voxel_state.json` four times a second: chunk counts, quads, the player, the frame time, the time of day, the
-  sun, the fog, and the camera's own basis.
+  sun, the fog, the camera's own basis, and how long the load and the ghost take (`ready`, `timings`, `preview`).
+  The rest of the game is in mixins it inherits, so the methods still share its state: `VoxelConfig.py` (the constants and the
+  helpers), `VoxelHud.py` (the HUD and the menus' drawing), `VoxelInventoryScreen.py` (the inventory and the crafting panel),
+  `VoxelNetSync.py` (two processes sharing their edits) and `VoxelSettingsMenu.py` (the pause menu and its settings).
 - `resources/scripts/VoxelPhysics.py`: the Python reference for the body mover on the skin (the game runs `world.step_body` in C++), and block
   picking. Pure Python: `python -I tools/test_voxel_physics.py` checks it without the engine.
 - `resources/scripts/VoxelWalkers.py`: creatures that wander the terrain (`VOXEL_WALKERS`, 12 by default). Each is a box
@@ -224,10 +227,11 @@ where the player stands.
 ## Performance
 
 Release, 841 chunks in view: about 180 frames a second standing still on this machine, with about 0.55 million quads (the
-chunks more than 6 from the player are far skins, sampled every second block; `VOXEL_FAR_RADIUS` moves that line). The view
+chunks more than 12 from the player are far skins, sampled every second block; `VOXEL_FAR_RADIUS` moves that line). The view
 distance is set on the settings page. Measured with `tools/voxel_perf.ps1` at each step (see the roadmap, 15.3 and 15.5): at
 24 about 80 frames a second, at 40 about 27, and the cost there is the number of chunk draws. `tools/test_voxels.ps1` checks
-the load, the walk, the view's level and the worst frame.
+the load, the walk, the view's level and the worst frame. `tools/voxel_load.ps1` measures how long the ground takes to arrive
+after a move (roadmap 22.1), and `tools/run_tests.ps1` runs every suite (`-Engine` for the ones that start the game).
 
 ## Two players on one machine (roadmap 18.2, 18.3)
 

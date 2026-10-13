@@ -1,6 +1,7 @@
 # Runs the project's test suites and prints one summary line per suite. Exits 1 if any suite fails, so it can gate a commit or a CI step.
 # The Python suites need no GPU and run by default. The engine suites start the game unattended (see tools/unattended.ps1), so
-# they need the built executable: pass -Engine to run them too. Each suite keeps its own script; this only runs them and counts.
+# they need the built executables (main and voxel_game, Release or Debug): pass -Engine to run them too. Each suite keeps its own
+# script; this only runs them and counts.
 # Usage (from the repo root):
 #   pwsh tools/run_tests.ps1                       # the Python suites
 #   pwsh tools/run_tests.ps1 -Engine               # the Python suites, then the engine suites (Release build)
