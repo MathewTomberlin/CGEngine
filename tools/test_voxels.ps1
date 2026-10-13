@@ -102,6 +102,15 @@ try {
     $gameResult.check.PSObject.Properties | ForEach-Object { Check ("game: " + $_.Name) ([bool]$_.Value) }
     $gameResult.errors | ForEach-Object { Check ("game check error: " + $_) $false }
 
+    # The developer console's commands, run inside the game by tools/voxel_console_check.py.
+    $consoleCheck = (Resolve-Path "tools/voxel_console_check.py").Path -replace '\\', '/'
+    Send-Command "00c_console_check" ('{"command":"run_script","params":{"path":"' + $consoleCheck + '"}}')
+    $ranConsole = Wait-Result "00c_console_check" 120
+    Check "the console check script runs" ($ranConsole -and $ranConsole.ok)
+    $consoleResult = Get-Content (Join-Path $control "voxel_console_check.json") -Raw | ConvertFrom-Json
+    $consoleResult.check.PSObject.Properties | ForEach-Object { Check ("console: " + $_.Name) ([bool]$_.Value) }
+    $consoleResult.errors | ForEach-Object { Check ("console check error: " + $_) $false }
+
     # Walk forward for 240 frames (4 seconds), then turn right for 120 frames (2 seconds): 90 degrees a second is 180
     # degrees of turn. The frames are counted by the Enter key, which the game asks for once a frame, before the walk.
     # Mouse input is scripted to nothing so that the real mouse cannot turn the view during the test.

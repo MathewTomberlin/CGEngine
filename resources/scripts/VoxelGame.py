@@ -20,6 +20,7 @@ import traceback
 import cg_engine_bindings as cge
 from PyScript import PyScript
 import StateFile
+import VoxelConsole
 import VoxelDrops
 import VoxelGen
 import VoxelInventory
@@ -31,11 +32,12 @@ import VoxelWalkers
 
 # The view distance, in chunks each way from the player (the settings page changes it). The default is the middle step, 14, which
 # is (2 * 14 + 1)^2 = 841 chunks. The last step is "Unlimited", capped at UNLIMITED_VIEW: the chunks grow with the square of the
-# distance and each one is held in memory. Measured in Release: 60 is about 14,600 chunks, 1.5 GB private memory and about 100
-# frames a second; 80 is about 25,900 chunks, 2.4 GB and dips to 60 frames a second, so it stays out.
-VIEW_STEPS = [6, 8, 10, 12, 14, 18, 24, 32, 40, 60]
+# distance and each one is held in memory. Without far skins (the default), 40 is about 6,600 chunks, 8.4 million quads and
+# 2.2 GB private memory at about 96 frames a second; 60 measured 4.6 GB, so the cap stays at 40. With far skins on
+# (VOXEL_FAR_RADIUS=6), 60 is about 14,600 chunks and 1.5 GB, but the far skins show dark blotches (roadmap 15.8).
+VIEW_STEPS = [6, 8, 10, 12, 14, 18, 24, 32, 40]
 DEFAULT_VIEW = 14
-UNLIMITED_VIEW = 60
+UNLIMITED_VIEW = 40
 UNLOAD_MARGIN = 2           # chunks farther than the view distance plus this are unloaded
 UPLOAD_BUDGET_MS = 2.0      # time per frame spent uploading finished meshes
 WALK_SPEED = 5.0            # blocks per second
@@ -56,6 +58,7 @@ VIEW_SMOOTH = 14.0          # how quickly the camera follows the eye's height (p
 SETTINGS_FILE = os.environ.get("VOXEL_SETTINGS", "voxel_settings.json")
 SENSITIVITY_STEPS = [25, 50, 75, 100, 125, 150, 200, 250, 300, 400, 500]   # mouse sensitivity, as a percent of MOUSE_SENSITIVITY
 TRACK_CELLS = 39            # the characters of the time-of-day slider's track
+TIME_SPEEDS = [("Paused", 0.0), ("Slow", 0.25), ("Normal", 1.0), ("Fast", 4.0)]   # the choices on the settings page
 MAX_PITCH = 85.0            # the engine's camera stops at this angle
 # VOXEL_FIXED_STEP (seconds) makes every frame advance the same time, so a scripted test holds a key for the same game time
 # whatever the frame rate. Unset, a frame advances the real time since the last one.
@@ -120,7 +123,7 @@ HEAL_AFTER = 4.0                 # seconds a damaged block is left alone before 
 HEAL_STEP = 1.0                  # seconds per damage stage it heals once it does
 HELD_TORCH_BRIGHTNESS = 2.5     # the light of the torch the player carries (L lights and puts it out)
 WALKERS = int(os.environ.get("VOXEL_WALKERS", "12"))   # creatures that wander the terrain near the spawn
-FAR_RADIUS = int(os.environ.get("VOXEL_FAR_RADIUS", "6"))   # chunks more than this from the player get far skins
+FAR_RADIUS = int(os.environ.get("VOXEL_FAR_RADIUS", "0"))   # chunks more than this from the player get far skins; 0 is off (roadmap 15.8)
 FAR_STRIDE = 2             # the far skins sample every second block: a quarter of the quads
 SHADOWS = os.environ.get("VOXEL_SHADOWS", "1") != "0"   # the sun casts shadows (the map covers SHADOW_RADIUS around the camera)
 SHADOW_RADIUS = float(os.environ.get("VOXEL_SHADOW_RADIUS", "40"))
@@ -159,17 +162,19 @@ MOON_LIGHT = (0.45, 0.55, 0.85)
 # The pause menu's pages: the title, and the items on each page. The settings page holds the mouse sensitivity.
 MENU_PAGES = {
     "pause": ("PAUSED", ("resume", "settings", "quit")),
-    "settings": ("SETTINGS", ("sens_down", "sens_value", "sens_up", "view_down", "view_value", "view_up", "time_value",
-                              "time_track", "back")),
+    "settings": ("SETTINGS", ("sens_down", "sens_value", "sens_up", "view_down", "view_value", "view_up",
+                              "window_down", "window_value", "window_up", "speed_down", "speed_value", "speed_up",
+                              "time_value", "time_track", "back")),
 }
 MENU_TEXT = {"resume": "Resume", "settings": "Settings", "quit": "Quit", "back": "Back", "sens_down": "<", "sens_up": ">",
-             "view_down": "<", "view_up": ">"}
+             "view_down": "<", "view_up": ">", "window_down": "<", "window_up": ">", "speed_down": "<", "speed_up": ">"}
 
 
 def load_settings():
     """The saved settings: the mouse sensitivity (a percent, one of SENSITIVITY_STEPS) and the time of day (0 to 1, or None
     if none is saved). Missing or unreadable settings keep their defaults."""
-    settings = {"mouse_sensitivity": 100, "time_of_day": None, "view_radius": DEFAULT_VIEW}
+    settings = {"mouse_sensitivity": 100, "time_of_day": None, "view_radius": DEFAULT_VIEW, "time_speed": 1.0,
+                "fullscreen": False}
     try:
         with open(SETTINGS_FILE) as f:
             data = json.load(f)
@@ -177,6 +182,8 @@ def load_settings():
         if "time_of_day" in data:
             settings["time_of_day"] = float(data["time_of_day"]) % 1.0
         settings["view_radius"] = int(data.get("view_radius", DEFAULT_VIEW))
+        settings["time_speed"] = min(100.0, max(0.0, float(data.get("time_speed", 1.0))))
+        settings["fullscreen"] = bool(data.get("fullscreen", False))
     except (OSError, ValueError, TypeError, AttributeError):
         pass
     settings["mouse_sensitivity"] = min(SENSITIVITY_STEPS, key=lambda step: abs(step - settings["mouse_sensitivity"]))
@@ -184,9 +191,9 @@ def load_settings():
     return settings
 
 
-def save_settings(sensitivity, time_of_day, view_radius):
+def save_settings(sensitivity, time_of_day, view_radius, time_speed, fullscreen):
     StateFile.write_json(SETTINGS_FILE, {"mouse_sensitivity": sensitivity, "time_of_day": round(time_of_day, 5),
-                                         "view_radius": view_radius})
+                                         "view_radius": view_radius, "time_speed": time_speed, "fullscreen": fullscreen})
 
 
 class VoxelGame(PyScript):
@@ -227,6 +234,11 @@ class VoxelGame(PyScript):
         saved = load_settings()
         self.sensitivity = saved["mouse_sensitivity"]   # mouse sensitivity, a percent of MOUSE_SENSITIVITY
         self.view_radius = saved["view_radius"]         # the view distance in chunks each way (VIEW_STEPS)
+        self.time_speed = saved["time_speed"]           # how fast the sun moves: 0 pauses it, 1 is a day every DAY_SECONDS
+        self.fullscreen = saved["fullscreen"]           # full screen or windowed (applied once the window is up)
+        self.console = VoxelConsole.Console(self)       # the developer console, opened with backtick
+        self.title_page = None                          # the page whose title is placed (see show_menu)
+        self.menu_titles = {}
         self.dragging = False           # the time-of-day slider is being dragged
         self.outline_keys = {}          # the last outline shown under each name, so unchanged ones are not re-uploaded
         self.outline_bodies = set()     # the outlines already made as runtime meshes
@@ -305,8 +317,10 @@ class VoxelGame(PyScript):
             self.show_outline("target_place", None, None)
             self.setup_hud()
             self.hud_ready = True
+            self.apply_window_settings()
         self.update_pause_key()
         self.update_inventory_key()
+        self.console.update()
         if self.paused:
             # The world stands still while the menu is open: no time passes, no block moves, the player does not move.
             self.update_pause_menu()
@@ -314,6 +328,9 @@ class VoxelGame(PyScript):
         elif self.inventory_open:
             # The inventory screen stands the world still too, and frees the mouse for its slots.
             self.update_inventory()
+            dt = 0.0
+        elif self.console.open:
+            # The console stands the world still while it is open, so typing a command moves nothing.
             dt = 0.0
         else:
             self.world.simulate(dt, SIM_BUDGET_MS, SIM_TICK)
@@ -390,22 +407,10 @@ class VoxelGame(PyScript):
         self.menu_text = {}
         self.menu_hover = None
         size = cge.window_size()
-        cx, cy = size.x / 2, size.y / 2
-        self.menu_layout = {
-            "resume": ((cx - 100, cy - 4, cx + 100, cy + 30), (cx - 62, cy)),
-            "settings": ((cx - 100, cy + 40, cx + 100, cy + 74), (cx - 62, cy + 44)),
-            "quit": ((cx - 100, cy + 84, cx + 100, cy + 118), (cx - 40, cy + 88)),
-            "sens_down": ((cx - 215, cy - 24, cx - 150, cy + 6), (cx - 200, cy - 20)),
-            "sens_value": (None, (cx - 120, cy - 20)),
-            "sens_up": ((cx + 150, cy - 24, cx + 215, cy + 6), (cx + 165, cy - 20)),
-            "view_down": ((cx - 215, cy + 8, cx - 150, cy + 38), (cx - 200, cy + 12)),
-            "view_value": (None, (cx - 120, cy + 12)),
-            "view_up": ((cx + 150, cy + 8, cx + 215, cy + 38), (cx + 165, cy + 12)),
-            "time_value": (None, (cx - 120, cy + 44)),
-            "time_track": ((cx - 150, cy + 60, cx + 150, cy + 86), (cx - 150, cy + 62)),
-            "back": ((cx - 100, cy + 110, cx + 100, cy + 144), (cx - 30, cy + 114)),
-        }
-        cge.create_text_body("menu_title", "", "hud", cge.Vector2f(cx - 80, cy - 60), 28, outline_thickness=HUD_OUTLINE)
+        geometry = self.menu_geometry(size)
+        self.menu_layout = geometry["items"]
+        self.menu_titles = geometry["titles"]
+        cge.create_text_body("menu_title", "", "hud", cge.Vector2f(*self.menu_titles["pause"]), 28, outline_thickness=HUD_OUTLINE)
         for item, (_rect, (x, y)) in self.menu_layout.items():
             cge.create_text_body("menu_" + item, "", "hud", cge.Vector2f(x, y), 22, outline_thickness=HUD_OUTLINE)
 
@@ -418,6 +423,10 @@ class VoxelGame(PyScript):
         """The labels of the current page are drawn while the game is paused, and are empty (so not drawn) otherwise."""
         title, items = MENU_PAGES[self.menu_page] if shown else ("", ())
         self.set_menu_text("menu_title", title)
+        if shown and self.title_page != self.menu_page:
+            # Each page has its own title place: the settings page is taller, so its title is higher.
+            self.title_page = self.menu_page
+            cge.set_text_body("menu_title", title, position=cge.Vector2f(*self.menu_titles[self.menu_page]))
         for item in self.menu_layout:
             self.set_menu_text("menu_" + item, self.menu_label(item) if item in items else "")
 
@@ -428,6 +437,10 @@ class VoxelGame(PyScript):
             if self.view_radius == UNLIMITED_VIEW:
                 return "View distance: Unlimited (%d)" % self.view_radius
             return "View distance: %d chunks" % self.view_radius
+        if item == "window_value":
+            return "Window: %s" % ("full screen" if self.fullscreen else "windowed")
+        if item == "speed_value":
+            return "Time speed: %s" % self.time_speed_name()
         if item == "time_value":
             minutes = (round(self.clock * 1440) + 360) % 1440   # 0 is sunrise (06:00), 0.25 noon, 0.5 sunset, 0.75 midnight
             return "Time of day: %02d:%02d" % (minutes // 60, minutes % 60)
@@ -436,10 +449,13 @@ class VoxelGame(PyScript):
             return "[" + "-" * knob + "O" + "-" * (TRACK_CELLS - 1 - knob) + "]"
         text = MENU_TEXT[item]
         if self.menu_hover == item:
-            return "[%s]" % text if item in ("sens_down", "sens_up", "view_down", "view_up") else "> %s <" % text
+            return "[%s]" % text if item.endswith(("_down", "_up")) else "> %s <" % text
         return text
 
     def update_pause_key(self):
+        if self.console.open:
+            # The console takes Escape (it closes), so the pause menu does not open over it.
+            return
         if self.inventory_open:
             # Escape closes the inventory screen first; the menu opens on the next press.
             if self.pressed("Pause", bool(cge.key_down("Escape"))):
@@ -458,10 +474,117 @@ class VoxelGame(PyScript):
         self.menu_hover = None
         self.show_menu(True)
 
+    def save_prefs(self):
+        """The settings the game keeps between runs: the mouse sensitivity, the time of day and its speed, the view distance and
+        the window's mode."""
+        save_settings(self.sensitivity, self.clock, self.view_radius, self.time_speed, self.fullscreen)
+
+    def set_clock(self, clock):
+        self.clock = clock % 1.0
+        self.save_prefs()
+
+    def set_time_speed(self, speed):
+        self.time_speed = speed
+        self.save_prefs()
+
+    def step_time_speed(self, step):
+        """One step along TIME_SPEEDS (the settings page's arrows), from the choice nearest the current speed."""
+        values = [value for _name, value in TIME_SPEEDS]
+        index = min(range(len(values)), key=lambda i: abs(values[i] - self.time_speed))
+        self.set_time_speed(values[max(0, min(len(values) - 1, index + step))])
+
+    def time_speed_name(self):
+        for name, value in TIME_SPEEDS:
+            if value == self.time_speed:
+                return name
+        return "%gx" % self.time_speed
+
+    def set_creative(self, on):
+        self.creative = on
+        self.notify("Creative mode on" if on else "Creative mode off")
+
+    def set_view_distance(self, chunks):
+        """The view distance nearest to chunks, from VIEW_STEPS. The chunks are asked for again at once (request_chunks)."""
+        self.view_radius = min(VIEW_STEPS, key=lambda step: abs(step - chunks))
+        self.wanted_centre = None
+        self.save_prefs()
+        return self.view_radius
+
+    def teleport(self, x, y, z):
+        self.pos = [x, y, z]
+        self.vel = [0.0, 0.0, 0.0]
+        self.on_ground = False
+        self.fell_from = None
+
+    def heal(self, amount=None):
+        """Health back to all of it, or to amount (at most all of it). Returns the health."""
+        self.health = PLAYER_HEALTH if amount is None else max(0.0, min(PLAYER_HEALTH, amount))
+        return self.health
+
+    def set_fullscreen(self, on):
+        """Full screen or windowed (cge.set_fullscreen). The HUD is laid out for the new size on the next frame. False if the
+        window cannot switch here."""
+        if not cge.set_fullscreen(on):
+            return False
+        self.fullscreen = cge.is_fullscreen()
+        self.save_prefs()
+        return True
+
+    def toggle_fullscreen(self):
+        if not self.set_fullscreen(not self.fullscreen):
+            self.notify("Full screen is not available here")
+
+    def apply_window_settings(self):
+        """At the start: the engine's own console is hidden (the game has its own, on backtick), and the saved window mode is used."""
+        console_body = cge.find_body("Console")
+        if console_body is not None:
+            console_body.set_rendering_enabled(False)
+        if self.fullscreen != cge.is_fullscreen():
+            self.set_fullscreen(self.fullscreen)
+
+    def menu_geometry(self, size):
+        """Where the pause menu's items and titles are for a window of this size. Each item has a click rectangle (left, top,
+        right, bottom) or None, and a text position. The settings rows are stacked from the middle of the window."""
+        cx, cy = size.x / 2, size.y / 2
+        items = {
+            "resume": ((cx - 100, cy - 4, cx + 100, cy + 30), (cx - 62, cy)),
+            "settings": ((cx - 100, cy + 40, cx + 100, cy + 74), (cx - 62, cy + 44)),
+            "quit": ((cx - 100, cy + 84, cx + 100, cy + 118), (cx - 40, cy + 88)),
+            "sens_value": (None, (cx - 120, cy - 92)),
+            "view_value": (None, (cx - 120, cy - 52)),
+            "window_value": (None, (cx - 120, cy - 12)),
+            "speed_value": (None, (cx - 120, cy + 28)),
+            "time_value": (None, (cx - 120, cy + 64)),
+            "time_track": ((cx - 150, cy + 84, cx + 150, cy + 110), (cx - 150, cy + 86)),
+            "back": ((cx - 100, cy + 124, cx + 100, cy + 158), (cx - 30, cy + 128)),
+        }
+        for row, top in (("sens", cy - 96), ("view", cy - 56), ("window", cy - 16), ("speed", cy + 24)):
+            items[row + "_down"] = ((cx - 215, top, cx - 150, top + 30), (cx - 200, top + 4))
+            items[row + "_up"] = ((cx + 150, top, cx + 215, top + 30), (cx + 165, top + 4))
+        return {"items": items, "titles": {"pause": (cx - 80, cy - 60), "settings": (cx - 90, cy - 130)},
+                "cross": (cx - 6, cy - 13)}
+
+    def layout_hud(self):
+        """Places the crosshair and the pause menu for the window's current size."""
+        geometry = self.menu_geometry(self.window)
+        self.menu_layout = geometry["items"]
+        self.menu_titles = geometry["titles"]
+        cross_x, cross_y = geometry["cross"]
+        cge.set_text_body("hud_cross", self.menu_text.get("hud_cross", ""), position=cge.Vector2f(cross_x, cross_y))
+        for item, (_rect, (x, y)) in self.menu_layout.items():
+            cge.set_text_body("menu_" + item, self.menu_text.get("menu_" + item, ""), position=cge.Vector2f(x, y))
+        self.title_page = None   # the title goes to its place for the page on the next show_menu
+        self.show_menu(self.paused)
+
+    def draw_console(self):
+        """The console's log and input line, under the help text, at the top of the window."""
+        width = min(820, self.window.x - 28)
+        self.console.draw((14, 62, width, (VoxelConsole.SHOWN_LINES + 1) * 18 + 12), layer=975)
+
     def change_sensitivity(self, step):
         index = SENSITIVITY_STEPS.index(self.sensitivity) + step
         self.sensitivity = SENSITIVITY_STEPS[max(0, min(len(SENSITIVITY_STEPS) - 1, index))]
-        save_settings(self.sensitivity, self.clock, self.view_radius)
+        self.save_prefs()
 
     def change_view(self, step):
         """One step of view distance. The chunks are asked for again at once: a longer view requests the new ones, and a shorter
@@ -469,7 +592,7 @@ class VoxelGame(PyScript):
         index = VIEW_STEPS.index(self.view_radius) + step
         self.view_radius = VIEW_STEPS[max(0, min(len(VIEW_STEPS) - 1, index))]
         self.wanted_centre = None
-        save_settings(self.sensitivity, self.clock, self.view_radius)
+        self.save_prefs()
 
     def drag_time(self, mouse_x, pressing):
         """The time-of-day slider: while the button is held on the track, the time follows the mouse; the choice is saved
@@ -480,7 +603,7 @@ class VoxelGame(PyScript):
             self.clock = min(0.999, max(0.0, (mouse_x - left) / (right - left)))
         elif self.dragging:
             self.dragging = False
-            save_settings(self.sensitivity, self.clock, self.view_radius)
+            self.save_prefs()
 
     def look_speed(self):
         """Degrees a pixel of mouse movement turns the view."""
@@ -533,6 +656,12 @@ class VoxelGame(PyScript):
             self.change_view(-1)
         if clicked and self.menu_hover == "view_up":
             self.change_view(1)
+        if clicked and self.menu_hover in ("window_down", "window_up"):
+            self.toggle_fullscreen()
+        if clicked and self.menu_hover == "speed_down":
+            self.step_time_speed(-1)
+        if clicked and self.menu_hover == "speed_up":
+            self.step_time_speed(1)
         self.show_menu(True)
 
     def set_target_text(self, text):
@@ -543,10 +672,15 @@ class VoxelGame(PyScript):
     def update_hud(self):
         if not self.hud_ready:
             return
-        # The crosshair is for aiming, so it is hidden while a menu or the inventory is open.
-        self.set_menu_text("hud_cross", "" if self.paused or self.inventory_open else "+")
+        size = cge.window_size()
+        if (size.x, size.y) != (self.window.x, self.window.y):
+            # The window changed size (full screen): the HUD is laid out for it again.
+            self.window = size
+            self.layout_hud()
+        # The crosshair is for aiming, so it is hidden while a menu, the inventory or the console is open.
+        self.set_menu_text("hud_cross", "" if self.paused or self.inventory_open or self.console.open else "+")
         biome = self.world.biome_at(math.floor(self.pos[0]), math.floor(self.pos[2])).capitalize()
-        if self.paused or self.inventory_open:
+        if self.paused or self.inventory_open or self.console.open:
             self.set_target_text("")
         elif not self.mouse_captured:
             self.set_target_text("%s.  Click the game to capture the mouse" % biome)
@@ -569,6 +703,7 @@ class VoxelGame(PyScript):
         self.update_hurt_flash()
         self.update_inventory_screen()
         self.update_notice()
+        self.draw_console()
 
     # ----- the HUD's boxes: the hotbar, the inventory screen, the held stack and notices -----------
 
@@ -987,20 +1122,27 @@ class VoxelGame(PyScript):
             self.write_state(os.path.join(folder, "state_%s.json" % stamp))
 
     def save_and_load(self):
-        """F5 saves the edits and the inventory, F9 loads them. The held stack goes back into the inventory first, so a save
-        does not lose it."""
+        """F5 saves the edits and the inventory, F9 loads them (see save_world and load_world)."""
         if self.pressed("Save", bool(cge.key_down("F5"))):
-            os.makedirs("cg_control", exist_ok=True)
-            self.world.settle_moves()   # blocks in flight land first, so none is missing from the file
-            self.world.save_edits(EDITS_FILE)
-            self.inventory.return_held()
-            StateFile.write_json(INVENTORY_FILE, {"slots": self.inventory.to_list(), "slot": self.slot,
-                                                  "drops": self.drops.to_list()})
-            self.notify("Saved")
+            self.save_world()
         if self.pressed("Load", bool(cge.key_down("F9"))):
-            self.world.load_edits(EDITS_FILE)
-            self.load_inventory()
-            self.notify("Loaded")
+            self.load_world()
+
+    def save_world(self):
+        """The edits and the inventory go to cg_control. The held stack goes back into the inventory first, so a save does not
+        lose it."""
+        os.makedirs("cg_control", exist_ok=True)
+        self.world.settle_moves()   # blocks in flight land first, so none is missing from the file
+        self.world.save_edits(EDITS_FILE)
+        self.inventory.return_held()
+        StateFile.write_json(INVENTORY_FILE, {"slots": self.inventory.to_list(), "slot": self.slot,
+                                              "drops": self.drops.to_list()})
+        self.notify("Saved")
+
+    def load_world(self):
+        self.world.load_edits(EDITS_FILE)
+        self.load_inventory()
+        self.notify("Loaded")
 
     def load_inventory(self):
         """The inventory saved with the edits. A missing or unreadable file keeps the inventory the player has."""
@@ -1024,7 +1166,7 @@ class VoxelGame(PyScript):
         if self.pressed("Inventory", bool(cge.key_down("I"))):
             if self.inventory_open:
                 self.close_inventory()
-            elif not self.paused:
+            elif not self.paused and not self.console.open:
                 self.open_inventory()
 
     def open_inventory(self):
@@ -1337,7 +1479,7 @@ class VoxelGame(PyScript):
     def update_sky(self, dt):
         """The sun crosses the sky in DAY_SECONDS. The light, the sky and the fog follow it: at night the sky is dark and
         the moon gives a dim blue light; at sunrise and sunset the light and the sky turn orange."""
-        self.clock = (self.clock + dt / DAY_SECONDS) % 1.0
+        self.clock = (self.clock + dt * self.time_speed / DAY_SECONDS) % 1.0
         angle = 2.0 * math.pi * self.clock
         height = math.sin(angle)                  # -1 at midnight, 0 at sunrise and sunset, 1 at noon
         toward_sun = (0.45 * math.cos(angle), height, 0.3 * math.cos(angle))

@@ -298,6 +298,12 @@ Goal: the player chooses how far they can see, and a long view stays cheap enoug
   were taken before 15.7, when the camera clipped at 100 blocks: view 40 is 6,561 chunks, 0.77 GB private memory; view 60 is
   14,641 chunks, 1.46 GB; view 80 is 25,921 chunks, 2.4 GB. View 80 stays out: its memory and frame rate are too heavy for the cap.
   The frame rates in this item were not right, see 15.7.
+- [x] **15.8** Far skins are off by default (`VOXEL_FAR_RADIUS=0`). The far skins (stride 2 past 6 chunks) showed dark blotches on
+  the ground: each far vertex takes its occlusion and sky light from one air cell, so a shaded cell darkens the whole triangle
+  between two far vertices. Averaging those values over the stride cut the blotches but was not kept, since far skins are off.
+  With them off, view 40 is 6,561 chunks, 8.4 million quads, 2.2 GB private memory, 96 frames a second standing and walking, 89
+  turning, worst frame 41 to 43 ms, loaded in 18 s. The cap is back at 40: 60 measured 4.6 GB without far skins (18 million
+  quads). With far skins on, 60 is 1.5 GB (15.6), at the cost of the blotches.
 - [x] **15.7** The camera clipped at 100 blocks, about six chunks, so nothing past it was drawn at any view distance. The camera is
   now built with a far plane of (view + 1) chunks and a near plane of 0.1 blocks (`Camera::setPlanes`, `set_camera_planes`, and
   `VoxelGame.set_clip_planes`). The fog still hides the far edge, which is the same distance as before. Screenshots at noon with
@@ -392,6 +398,22 @@ Goal: several people (or an AI and a person) work in one CG Engine world at the 
   In the loopback this is a script run through the control channel (`run_script`) that calls `game.net_send` after an edit, as
   `tools/test_voxel_net.ps1` does. Not yet a documented control command (a `voxel_block` message in the inbox would be the
   next step), and the other process applies an edit only if its chunk is loaded.
+## Phase 19: developer console and settings (from playtesting)
+Goal: the game can be driven from inside, and its window and sun are under the player's control.
+- [x] **19.1** The developer console, opened with backtick (`VoxelConsole.py`). The world stands still while it is open; the
+  mouse is freed and given back when it closes. Commands: help, echo, time (names, HH:MM or a fraction), timespeed, tp (spawn, x z
+  on the ground, or x y z), pos, heal, hurt, creative, fly, give, drop, clear (inventory, drops, log), spawn creature [count]
+  [biter], kill creatures [all|near radius], destroy [radius], break, setblock, fill (up to 20,000 blocks), view, fullscreen, save,
+  load, stats, seed and quit. A command that fails prints why, and the game goes on. Checked from inside the game by
+  `tools/voxel_console_check.py` (40 checks, through `test_voxels.ps1`), which restores the time, view and window it changes.
+  Not yet: tab completion, and commands for the player's speed and the sky.
+- [x] **19.2** Settings page: Window (windowed or full screen) and Time speed (paused, slow, normal, fast), both saved with the
+  other settings. Full screen is a borderless window the size of the desktop, switched in place (`set_fullscreen`, Windows): the
+  window and its GL context are kept, the camera's aspect and the view follow the new size, and the HUD is laid out again. The
+  page's rows are re-laid out, and `test_pause_menu.ps1` clicks the new rows.
+- [x] **19.3** Engine support for the console: `typed_text` gives the characters typed since the last call, and the Grave and
+  Backspace keys are polled by games. The engine's own console is hidden in the voxel game, so backtick opens the game's console.
+
 ## Tooling and quality
 - [x] CI build on Windows (`.github/workflows/build.yml`) with Mesa software OpenGL smoke run
 - [~] Unit tests for pure logic runnable without a GPU. Done for the dungeon generator (`python -I tools/test_dungeon_gen.py`) and for the scene format and command list (`python -I tools/test_scene_format.py`: example scenes, invalid fixtures, documented commands). The C++ parsers in `SceneLoader` and `ControlChannel` are still covered only by the GPU integration test.
