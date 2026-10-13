@@ -188,9 +188,9 @@ namespace CGEngine {
 
 
 	double VoxelWorld::skinDensity(double x, double y, double z) const {
-		// The same weights as the mesh's density (VoxelMesher.cpp), per skin (see skinAt). The terrain's density is its share of the
-		// 2 by 2 by 2 blocks at each block corner, less VoxelTerrainShift, interpolated between the corners (the mesh's corners are the
-		// same numbers). Each other smooth skin adds up the weights of the corners it is in, and the density is the largest. The
+		// The same weights as the mesh's density (VoxelMesher.cpp), per skin (see skinAt). The terrain's density is the larger of its
+		// share of the 2 by 2 by 2 blocks at each block corner, less VoxelTerrainShift, interpolated between the corners, and its block
+		// centres' occupancy, scaled by VoxelCentreWeight (the mesh's corners and centres are the same numbers). Each other smooth skin adds up the weights of the corners it is in, and the density is the largest. The
 		// world's ends are solid below and open above, and the unloaded cells are solid terrain. Python's copy (VoxelPhysics.py)
 		// matches it operation for operation, so the parity check can compare them.
 		const double bx = x - 0.5, by = y - 0.5, bz = z - 0.5;
@@ -214,7 +214,12 @@ namespace CGEngine {
 			const double w = (dx ? ux : 1.0 - ux) * (dy ? uy : 1.0 - uy) * (dz ? uz : 1.0 - uz);
 			terrain += w * (terrainCorners(c0x + dx, c0y + dy, c0z + dz) / 8.0 - VoxelTerrainShift);
 		}
-		double value = terrain;
+		// The terrain's block centres, weighted as the other skins below (VoxelCentreWeight): a thin terrain feature keeps its width.
+		double centres = 0.0;
+		for (int c = 0; c < 8; ++c) {
+			if (skin[c] == TerrainSkin) centres += weight[c];
+		}
+		double value = std::max(terrain, VoxelCentreWeight * centres);
 		for (int c = 0; c < 8; ++c) {
 			if (skin[c] == 0 || skin[c] == TerrainSkin || skin[c] >= CubeSkin) continue;
 			// Each smooth skin is summed once, at its first corner.

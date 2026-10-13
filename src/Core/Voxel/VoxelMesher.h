@@ -9,7 +9,8 @@
 namespace CGEngine {
 	// The skin is the surface where the density is this (see buildSmoothMesh). Collision uses the same surface, so the drawn
 	// ground and the ground a body stands on are one. The other smooth skins' density is their occupancy, interpolated between
-	// block centres. The terrain's is smoothed over the corners of the blocks (VoxelTerrainShift).
+	// block centres. The terrain's is the larger of a smoothing over the corners of the blocks (VoxelTerrainShift) and the blocks'
+	// centres (VoxelCentreWeight), so a thin feature keeps its width.
 	constexpr float VoxelSkinIso = 0.3f;
 
 	// The terrain's density at a block corner is the share of the 2 by 2 by 2 blocks that meet there that are terrain, less this,
@@ -17,6 +18,12 @@ namespace CGEngine {
 	// the surface sits 0.1 of a block out from the face. A wall one block thick keeps 0.35 inside it, so it stays solid, which a
 	// wider smoothing would thin away. A slope of one block in one becomes a straight slope, not a step.
 	constexpr float VoxelTerrainShift = 0.15f;
+
+	// The terrain's density also takes the occupancy of the block centres, interpolated between them, and keeps the larger of the
+	// two. The corner share alone thins a feature one block across: a column's corners hold only 2 of their 8 blocks, so the column
+	// never reaches the iso, and a two-block tower loses its top. The centre term keeps such a feature at its true width: a
+	// solid block's centre is 0.6, so the surface sits exactly half way between centres, on the block faces.
+	constexpr float VoxelCentreWeight = 0.6f;
 
 	// How far light and shade reach through air, in blocks. A cell's light depends only on blocks this close to it, so a
 	// chunk with this much border computes the same light for a shared cell as its neighbour does.

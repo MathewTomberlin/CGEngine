@@ -469,7 +469,7 @@ Goal: a one-block rise over a one-block run is a smooth hill, and the ground rea
   that is not climbed. `voxel_world_check.py` checks the surface on flat ground, a torch on a wall, and the parity suite.
 - [ ] **21.5** Open: a dark speckle appears on the surface in one screenshot of the new ramp (not shadows: it stays with shadows
   off). It is probably coal ore in the stone showing through the closer surface; to confirm with a block-type probe.
-- Open: a finer field near the camera (the 11.7 question), if this is not enough.
+- Open: a finer field near the camera (the 11.7 question), if this is not enough. Phase 25 added the block-centre term.
 
 ## Phase 22: far-view loading latency (from playtesting round 2: distant ground takes seconds after a move)
 Goal: a player who walks sees the ground ahead within a second or two, at any view distance the setting allows.
@@ -512,6 +512,21 @@ Goal: the player sees what a placement will do before they make it, and a placem
   slope. The aim test keeps an axis-aligned bound of the stick.
 - [ ] **24.5** Open: the ghost's cost, measured per target change (not yet); the ghost's opacity (0.45) and the outline colours, to
   judge in play; a ghost for breaking (the blocks that would fall), and the torch's tilt on steep slopes, which is not yet seen.
+
+## Phase 25: skin shape fidelity (from playtesting round 3: narrow shapes and black patches)
+Goal: a skin takes the shape of its blocks: a one-block column is one block wide with a top, and no vertex is black for want of light.
+- [x] **25.1** Measured with `skin_surface` rays on a floating column, a two-block tower and a one-block wall. The column had no skin
+  at all: its corners hold 2 of their 8 blocks, 0.25 less the 0.15 shift is under the 0.3 iso. The tower's top was missing, and the
+  wall came out 1.28 thick. The stone bumps in play were the same: tubes with open tops, whose interior vertices had no air to see,
+  so they took no sky light and rendered black.
+- [x] **25.2** The terrain's density is the larger of the corner share and `VoxelCentreWeight` (0.6) times the block-centre
+  occupancy (`densityAt`, `skinDensity`, and `physics.density`, which change together). A column is exactly its width, with its
+  faces half way between block centres; a tower's top is its block face; a wall keeps its corner width; flat ground keeps its 0.1
+  bulge. `test_voxel_physics.py` and the voxel suite (181 checks) pass.
+- [x] **25.3** A vertex inside solid blocks takes the brightest air within a block for its sky and lamp light, not zero.
+- [ ] **25.4** Open: the far skins (stride 2) read the same centres, so a one-block feature at an odd block is still missed there;
+  check a far hill in play. Textures: the terrain is triplanar in world space (`StdFragShader.frag`), so the texture does not
+  stretch on a slope; the black patches it was blamed for are the vertices above, but a close look in play is still to do.
 
 ## Tooling and quality
 - [x] CI build on Windows (`.github/workflows/build.yml`) with Mesa software OpenGL smoke run
