@@ -226,12 +226,16 @@ distance is set on the settings page. Measured with `tools/voxel_perf.ps1` at ea
 24 about 80 frames a second, at 40 about 27, and the cost there is the number of chunk draws. `tools/test_voxels.ps1` checks
 the load, the walk, the view's level and the worst frame.
 
-## Two players on one machine (roadmap 18.2)
+## Two players on one machine (roadmap 18.2, 18.3)
 
 Start one game with `VOXEL_NET=listen:7790` and a second with `VOXEL_NET=connect:127.0.0.1:7790`, both with the same
-`VOXEL_SEED`. Each shows the other as a box where its feet are, and the edits (blocks, torches, hits) are shared. Each game
-keeps its own inventory and health, and the creatures are not shared yet. `tools/test_voxel_net.ps1` runs the two processes and
-checks the sharing. There is no server and nothing is secure: this is the first step of the multi-user goal (Phase 18).
+`VOXEL_SEED`. Each shows the other as a box where its feet are. The listening game is the host and owns the world: it applies
+the edits (blocks, torches, hits, damage) and the block physics, and it sends each changed cell to the client. A client makes
+its edit at once, then asks the host for it (a request), and the host's answer overwrites the client's cell, so a request the
+host refuses is undone on the client. A client that connects later is sent every edited cell. Each game keeps its own
+inventory and health, and the creatures are not shared yet. `tools/test_voxel_net.ps1` runs the two processes and checks the
+sharing, including a refused placement and a client that joins late. There is no security, and the host still opens a window:
+a headless host is the next step (18.1).
 
 ## Limits
 
