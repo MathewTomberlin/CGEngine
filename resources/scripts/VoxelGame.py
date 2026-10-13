@@ -78,6 +78,8 @@ SLOT_GAP = 6                # pixels between slots
 HUD_BOTTOM = 14             # pixels between the hotbar and the bottom of the window
 NOTICE_SECONDS = 1.5        # how long a notice ("Inventory full") stays on screen
 WHITE = (1.0, 1.0, 1.0)
+RETICLE_PLAIN = (255, 255, 255, 255)   # the crosshair when it is not on a surface within reach
+RETICLE_AIM = (240, 72, 36, 255)      # the crosshair when it is on a surface within reach (VoxelGame.update_reticle)
 HIT_FLASH_SECONDS = 0.12    # the aimed block's outline is white this long after a hit
 PLAYER_HEALTH = 10.0        # the player's health: ten segments on the bar above the hotbar
 REGEN_DELAY = 6.0           # seconds without a hit before the player starts to heal
@@ -96,24 +98,6 @@ INVENTORY_FILE = "cg_control/voxel_inventory.json"
 EDITS_FILE = "cg_control/voxel_edits.bin"
 NET_SPEC = os.environ.get("VOXEL_NET")   # listen:<port> or connect:<host>:<port>: two processes share their edits (VoxelNet)
 POS_INTERVAL = 0.1         # seconds between the player's position messages
-
-
-FACE_COLOUR = (1.0, 1.0, 1.0)   # the outline of the face the crosshair is on
-FACE_THICKNESS = 0.01       # half the thickness of the sheet the face outline is drawn as
-
-
-def face_box(block, normal):
-    """The box of the face of a block that the normal points out of: a sheet a hair thick on the face, so its outline shows the
-    face. None when there is no face (a zero normal)."""
-    if normal == (0, 0, 0):
-        return None
-    axis = next(i for i in range(3) if normal[i] != 0)
-    lo = [float(v) for v in block]
-    hi = [float(v + 1) for v in block]
-    plane = float(block[axis] + (1 if normal[axis] > 0 else 0))
-    lo[axis] = plane - FACE_THICKNESS
-    hi[axis] = plane + FACE_THICKNESS
-    return tuple(lo), tuple(hi)
 
 
 def inside(box, x, y):
@@ -273,6 +257,7 @@ class VoxelGame(PyScript):
         self.inventory_open = False     # the inventory screen is up: the world stands still and the mouse is free
         self.inventory_hover = None     # the slot under the mouse on the inventory screen
         self.preview_key = None         # the placement the ghost shows (cell, item, dir), or None
+        self.reticle_aiming = False     # the crosshair is coloured (on a surface within reach)
         self.crafting = VoxelRecipes.Crafting()   # the recipes the player knows, and the crafting panel's dropdown
         self.craft_hover = None         # the recipe row under the mouse on the crafting panel
         self.mouse_before_inventory = False   # the mouse was captured when the screen opened, so it is again when it closes
@@ -700,6 +685,14 @@ class VoxelGame(PyScript):
             self.step_time_speed(1)
         self.show_menu(True)
 
+    def update_reticle(self):
+        """The crosshair is coloured while it is on a surface within reach (self.target), and white otherwise."""
+        aiming = self.target is not None and not (self.paused or self.inventory_open or self.console.open)
+        if aiming != self.reticle_aiming:
+            self.reticle_aiming = aiming
+            cge.set_text_body("hud_cross", self.menu_text.get("hud_cross", ""),
+                              colour=cge.Color(*(RETICLE_AIM if aiming else RETICLE_PLAIN)))
+
     def set_target_text(self, text):
         if self.target_text != text:
             self.target_text = text
@@ -715,6 +708,7 @@ class VoxelGame(PyScript):
             self.layout_hud()
         # The crosshair is for aiming, so it is hidden while a menu, the inventory or the console is open.
         self.set_menu_text("hud_cross", "" if self.paused or self.inventory_open or self.console.open else "+")
+        self.update_reticle()
         biome = self.world.biome_at(math.floor(self.pos[0]), math.floor(self.pos[2])).capitalize()
         if self.paused or self.inventory_open or self.console.open:
             self.set_target_text("")
@@ -1272,8 +1266,8 @@ class VoxelGame(PyScript):
             self.outline_bodies.add(name)
 
     def update_outlines(self):
-        """Outline what a break takes (the block the crosshair is on, or the torch it is on), and the cell the selected item
-        would go into, in the colour it would have. A hit flashes the break outline white for a moment."""
+        """Outline what a break takes when it is a creature or a torch. A block is not outlined: its ghost and the reticle show it.
+        A hit on a creature flashes its outline white for a moment."""
         if self.paused or self.inventory_open:
             self.show_outline("target_break", None, None)
             self.hide_placement_outlines()
@@ -1292,19 +1286,9 @@ class VoxelGame(PyScript):
             self.show_outline("target_break", None, None)
             self.hide_placement_outlines()
             return
-        block, normal = self.target
-        flash = time.time() < self.flash_until
-        self.show_outline("target_break", (tuple(float(v) for v in block),
-                                           tuple(float(v + 1) for v in block)), WHITE if flash else BREAK_COLOUR)
-        self.show_outline("target_face", face_box(block, normal), WHITE if flash else FACE_COLOUR)
-        placement, _ = self.placement_check()
-        if placement is None:
-            self.show_outline("target_place", None, None)
-            return
-        cell, item, _ = placement
-        colour = mix(VoxelGen.COLOURS.get(item, (1.0, 1.0, 1.0)), (1.0, 1.0, 1.0), 0.4)
-        self.show_outline("target_place", (tuple(float(v) for v in cell),
-                                           tuple(float(v + 1) for v in cell)), colour)
+        # A block is shown by the ghost of what it would become and by the reticle: no outline of the block, its face or the cell.
+        self.show_outline("target_break", None, None)
+        self.hide_placement_outlines()
 
     def hide_placement_outlines(self):
         self.show_outline("target_place", None, None)
