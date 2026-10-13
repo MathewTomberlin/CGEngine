@@ -14,8 +14,9 @@ sys.path.insert(0, os.path.join(HERE, "..", "resources", "scripts"))
 import VoxelPhysics as p  # noqa: E402
 
 failures = []
-TOP = 5.0 + (0.5 - p.SKIN_ISO)     # the skin above a floor whose top face is at y = 5
-WALL = 3.0 - (0.5 - p.SKIN_ISO)    # the skin in front of a wall whose face is at x = 3
+BULGE = 1.0 - 2.0 * (p.SKIN_ISO + p.TERRAIN_SHIFT)   # the terrain's skin sits this far out from a face (0.1 of a block)
+TOP = 5.0 + BULGE                # the skin above a floor whose top face is at y = 5
+WALL = 3.0 - BULGE              # the skin in front of a wall whose face is at x = 3
 
 
 def check(name, ok):
@@ -64,8 +65,8 @@ def ramp(x, y, z):
     return y < 5 + x // 2
 
 
-pos, vel, on_ground = run(ramp, (0.5, 8.0, 0.5), (0.0, 0.0, 0.0), 1.0)
-pos, vel, on_ground = run(ramp, pos, (2.0, 0.0, 0.0), 4.0, flying=False)
+# The body drops onto the ramp and keeps walking in the same run: a run that starts in the air does not climb.
+pos, vel, on_ground = run(ramp, (2.5, 8.0, 0.5), (2.0, 0.0, 0.0), 5.0, flying=False)
 check("a player walks up a ramp of blocks", pos[0] > 6.0 and pos[1] > 5.0 + 0.3 * (pos[0] - 2.0) and on_ground)
 check("walking up a ramp keeps the body on its surface (outside the skin, on the ground)",
       on_ground and not p.inside(ramp, pos))
@@ -76,15 +77,17 @@ def ledge(x, y, z):
 
 
 pos, vel, on_ground = run(ledge, (1.0, TOP, 0.5), (3.0, 0.0, 0.0), 1.2)
-check("a player walks up onto a one-block ledge (its top is at 6, the skin at 6.2)",
-      pos[0] > 4.0 and abs(pos[1] - (6.0 + (0.5 - p.SKIN_ISO))) < 1e-3 and on_ground)
+check("a player walks up onto a one-block ledge (its top is at 6, the skin on it)",
+      pos[0] > 4.0 and abs(pos[1] - (6.0 + BULGE)) < 1e-3 and on_ground)
 pos, vel, on_ground = run(floor_world, (1.0, TOP, 0.5), (3.0, 0.0, 0.0), 2.0)
-check("a four-block wall is not climbed", pos[0] < WALL and pos[1] < TOP + 0.5)
+# The corners of a wall fill in: its foot rises as a one-block fillet, so the body stands on the fillet against the wall's
+# face, below the wall's top (9). It does not get over the wall.
+check("a four-block wall is not climbed", pos[0] < WALL and pos[1] < 7.0)
 
 # A box inside the ground is inside the skin, and one standing on the ground is not.
 check("a box inside the ground is inside the skin", p.inside(floor_world, (0.5, 4.0, 0.5)))
-check("a box standing on the ground is outside the skin", not p.inside(floor_world, (0.5, TOP, 0.5)))
-check("a box next to the wall is outside the skin", not p.inside(floor_world, (1.5, TOP, 0.5)))
+check("a box standing on the ground is outside the skin", not p.inside(floor_world, (0.5, TOP + 1e-3, 0.5)))
+check("a box next to the wall is outside the skin", not p.inside(floor_world, (1.0, TOP + 1e-3, 0.5)))
 check("the eye is part of the body: a box with its eye in a wall is inside", p.inside(floor_world, (2.9, 5.5, 0.5)))
 
 
@@ -92,10 +95,26 @@ def one_block(x, y, z):
     return (x, y, z) == (3, 0, 0)
 
 
-# The skin density is 0.5 on a block face and falls to 0 across a block: the iso-surface is 0.2 of a block out.
-check("the density is 1 inside a solid block", p.density(one_block, 3.5, 0.5, 0.5) == 1.0)
-check("the density is 0 well outside a block", p.density(one_block, 6.5, 0.5, 0.5) == 0.0)
-check("the density is 0.5 on a block's face", abs(p.density(one_block, 3.0, 0.5, 0.5) - 0.5) < 1e-12)
+# The terrain's density is its share of the 2 by 2 by 2 blocks at each corner, less 0.15, interpolated between the corners: a
+# slab of terrain has 0.85 deep inside, 0.35 on its top face, and the skin (the iso, 0.3) 0.1 of a block out from the face.
+# A single block is too thin to be a terrain skin, and a wall one block thick stays solid (see below).
+def slab(x, y, z):
+    return p.TERRAIN_SKIN if y <= 0 else 0
+
+
+check("the density is 0.85 deep inside a slab of terrain", abs(p.density(slab, 3.5, -2.5, 0.5) - 0.85) < 1e-9)
+check("the density is 0.35 on a slab's top face", abs(p.density(slab, 3.5, 1.0, 0.5) - 0.35) < 1e-9)
+check("the skin is 0.1 of a block above a slab's top face", abs(p.density(slab, 3.5, 1.0 + BULGE, 0.5) - p.SKIN_ISO) < 1e-9)
+check("the density is under the iso above a slab", p.density(slab, 3.5, 2.5, 0.5) < p.SKIN_ISO)
+check("a single block of terrain is too thin to be a skin", p.density(one_block, 3.5, 0.5, 0.5) < p.SKIN_ISO)
+
+
+# A wall one block thick, standing on the slab: its middle stays inside the skin (a wider smoothing would thin it away).
+def thin_wall(x, y, z):
+    return p.TERRAIN_SKIN if (y <= 0 or x == 3) else 0
+
+
+check("a one-block wall of terrain is solid through its middle", p.density(thin_wall, 3.5, 2.5, 0.5) > p.SKIN_ISO)
 
 # Skins (VoxelWorld::skinAt): a cube's skin is the cell it is in, so the density is 1 inside and 0 at the next cell's edge.
 def one_brick(x, y, z):
@@ -103,19 +122,18 @@ def one_brick(x, y, z):
 
 
 check("a cube's density is 1 inside its cell", p.density(one_brick, 3.9999, 0.5, 0.5) == 1.0)
-check("a cube's density is 0 in the next cell", p.density(one_brick, 4.0, 0.5, 0.5) == 0.0)
+check("a cube's density is under the iso in the next cell", p.density(one_brick, 4.0, 0.5, 0.5) < p.SKIN_ISO)
 
 
-# Each smooth skin is its own: where a stone meets a leaf (its own skin), the density is the larger of the two, not their sum.
-def stone_and_leaf(x, y, z):
-    if (x, y, z) == (0, 0, 0):
-        return p.TERRAIN_SKIN
-    if (x, y, z) == (1, 0, 0):
+# Each smooth skin is its own: a leaf above a slab of terrain has density 1 at its centre, which is the larger of its own skin and
+# the terrain's, not their sum.
+def slab_and_leaf(x, y, z):
+    if (x, y, z) == (1, 1, 0):
         return p.OWN_SKIN + 8
-    return 0
+    return slab(x, y, z)
 
 
-check("skins take the largest density, they do not add up", abs(p.density(stone_and_leaf, 1.0, 0.5, 0.5) - 0.5) < 1e-12)
+check("skins take the largest density, they do not add up", abs(p.density(slab_and_leaf, 1.5, 1.5, 0.5) - 1.0) < 1e-9)
 
 
 # A body lands on a brick at the brick's drawn top face (y = 6), not 0.2 above it as a smooth block would.

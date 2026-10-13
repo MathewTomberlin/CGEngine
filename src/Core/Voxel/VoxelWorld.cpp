@@ -72,6 +72,16 @@ namespace CGEngine {
 		return block != 0 && types[static_cast<size_t>(block)].solid;
 	}
 
+	int VoxelWorld::skinFast(int x, int y, int z) const {
+		if (y < 0 || y >= height || !loadedAt(x, z)) return skinAt(x, y, z);
+		const int block = getBlock(x, y, z);
+		if (block == 0) return 0;
+		const BlockType& type = types[static_cast<size_t>(block)];
+		if (!type.solid) return 0;
+		if (!type.own) return TerrainSkin;
+		return skinAt(x, y, z);
+	}
+
 	int VoxelWorld::skinAt(int x, int y, int z) const {
 		if (y < 0) return TerrainSkin;                  // the world's floor is solid
 		if (y >= height) return 0;
@@ -120,11 +130,66 @@ namespace CGEngine {
 		return std::max(padded.lightAt(lx, y, lz), padded.lampAt(lx, y, lz));
 	}
 
+	int VoxelWorld::terrainCorners(int x, int y, int z) const {
+		const int cx = floorDiv(x, size);
+		const int cz = floorDiv(z, size);
+		const Chunk* chunk = findChunk(cx, cz);
+		if (y < 0 || y > height || !chunk || !chunk->loaded) {
+			// The floor, the air above and the unloaded chunks count as skinAt sees them.
+			int total = 0;
+			for (int dz = 0; dz <= 1; ++dz) {
+				for (int dy = 0; dy <= 1; ++dy) {
+					for (int dx = 0; dx <= 1; ++dx) {
+						if (skinAt(x - 1 + dx, y - 1 + dy, z - 1 + dz) == TerrainSkin) ++total;
+					}
+				}
+			}
+			return total;
+		}
+		if (chunk->counts.empty()) buildCounts(cx, cz);
+		return chunk->counts[(static_cast<size_t>(y) * size + (z - cz * size)) * size + (x - cx * size)];
+	}
+
+	void VoxelWorld::buildCounts(int cx, int cz) const {
+		const Chunk* chunk = findChunk(cx, cz);
+		if (!chunk) return;
+		// The terrain occupancy of the blocks one before the chunk's corners and up to its top, then the 2 by 2 by 2 sum at each corner.
+		const int U = size + 1;
+		const int W = size + 1;
+		const int V = height + 2;
+		std::vector<uint8_t> solid(static_cast<size_t>(U) * W * V, 0);
+		for (int v = 0; v < V; ++v) {
+			for (int w = 0; w < W; ++w) {
+				for (int u = 0; u < U; ++u) {
+					solid[(static_cast<size_t>(v) * W + w) * U + u] = skinFast(cx * size + u - 1, v - 1, cz * size + w - 1) == TerrainSkin ? 1 : 0;
+				}
+			}
+		}
+		chunk->counts.assign(static_cast<size_t>(size) * size * (height + 1), 0);
+		for (int j = 0; j <= height; ++j) {
+			for (int k = 0; k < size; ++k) {
+				for (int i = 0; i < size; ++i) {
+					int total = 0;
+					for (int dv = 0; dv <= 1; ++dv) {
+						for (int dw = 0; dw <= 1; ++dw) {
+							for (int du = 0; du <= 1; ++du) {
+								total += solid[(static_cast<size_t>(j + dv) * W + (k + dw)) * U + (i + du)];
+							}
+						}
+					}
+					chunk->counts[(static_cast<size_t>(j) * size + k) * size + i] = static_cast<uint8_t>(total);
+				}
+			}
+		}
+	}
+
+
 	double VoxelWorld::skinDensity(double x, double y, double z) const {
-		// The same weights as the mesh's density (VoxelMesher.cpp), per skin (see skinAt): each smooth skin adds up the weights
-		// of the corners it is in, and the density is the largest. The world's ends are solid below and open above, and the
-		// unloaded cells are solid terrain. Python's copy (VoxelPhysics.py) matches it operation for operation, so the parity
-		// check can compare them exactly.
+		// The same weights as the mesh's density (VoxelMesher.cpp), per skin (see skinAt). The terrain's density is its share of the
+		// 2 by 2 by 2 blocks at each block corner, less VoxelTerrainShift, interpolated between the corners (the mesh's corners are the
+		// same numbers). Each other smooth skin adds up the weights of the corners it is in, and the density is the largest. The
+		// world's ends are solid below and open above, and the unloaded cells are solid terrain. Python's copy (VoxelPhysics.py)
+		// matches it operation for operation, so the parity check can compare them.
 		const double bx = x - 0.5, by = y - 0.5, bz = z - 0.5;
 		const double fx = std::floor(bx), fy = std::floor(by), fz = std::floor(bz);
 		const double tx = bx - fx, ty = by - fy, tz = bz - fz;
@@ -134,11 +199,21 @@ namespace CGEngine {
 		for (int c = 0; c < 8; ++c) {
 			const int dx = c & 1, dy = (c >> 1) & 1, dz = (c >> 2) & 1;
 			weight[c] = (dx ? tx : 1.0 - tx) * (dy ? ty : 1.0 - ty) * (dz ? tz : 1.0 - tz);
-			skin[c] = skinAt(x0 + dx, y0 + dy, z0 + dz);
+			skin[c] = skinFast(x0 + dx, y0 + dy, z0 + dz);
 		}
-		double value = 0.0;
+		// The terrain, interpolated between the block corners: the corner at or below the point, then the next one up.
+		const double tcx = std::floor(x), tcy = std::floor(y), tcz = std::floor(z);
+		const double ux = x - tcx, uy = y - tcy, uz = z - tcz;
+		const int c0x = static_cast<int>(tcx), c0y = static_cast<int>(tcy), c0z = static_cast<int>(tcz);
+		double terrain = 0.0;
 		for (int c = 0; c < 8; ++c) {
-			if (skin[c] == 0 || skin[c] >= CubeSkin) continue;
+			const int dx = c & 1, dy = (c >> 1) & 1, dz = (c >> 2) & 1;
+			const double w = (dx ? ux : 1.0 - ux) * (dy ? uy : 1.0 - uy) * (dz ? uz : 1.0 - uz);
+			terrain += w * (terrainCorners(c0x + dx, c0y + dy, c0z + dz) / 8.0 - VoxelTerrainShift);
+		}
+		double value = terrain;
+		for (int c = 0; c < 8; ++c) {
+			if (skin[c] == 0 || skin[c] == TerrainSkin || skin[c] >= CubeSkin) continue;
 			// Each smooth skin is summed once, at its first corner.
 			bool first = true;
 			for (int earlier = 0; earlier < c; ++earlier) {
@@ -317,8 +392,13 @@ namespace CGEngine {
 	}
 
 	const VoxelWorld::Chunk* VoxelWorld::findChunk(int cx, int cz) const {
+		if (memoChunk && memoX == cx && memoZ == cz) return memoChunk;
 		auto it = chunks.find(std::make_pair(cx, cz));
-		return it == chunks.end() ? nullptr : &it->second;
+		if (it == chunks.end()) return nullptr;
+		memoX = cx;
+		memoZ = cz;
+		memoChunk = &it->second;
+		return memoChunk;
 	}
 
 	VoxelWorld::Chunk* VoxelWorld::findChunk(int cx, int cz) {
@@ -553,6 +633,7 @@ namespace CGEngine {
 		void VoxelWorld::markDirty(int cx, int cz) {
 			Chunk* chunk = findChunk(cx, cz);
 			if (!chunk) return;
+			chunk->counts.clear();   // the terrain's corner counts are out of date (terrainCorners)
 			chunk->dirty = true;
 			markRegionDirty(regionOf(cx, cz));
 		}
@@ -632,6 +713,7 @@ namespace CGEngine {
 		auto it = chunks.find(std::make_pair(cx, cz));
 		if (it == chunks.end()) return;
 		chunks.erase(it);
+		memoChunk = nullptr;
 		// The region's mesh still has this chunk in it, so the region is meshed again without it (or removed, when it is empty).
 		const auto key = regionOf(cx, cz);
 		if (loadedChunksIn(key) == 0) {
@@ -942,6 +1024,7 @@ namespace CGEngine {
 					std::shared_ptr<const ChunkMesh> mesh = input.reuse;
 					if (!mesh) {
 						computeLight(input.padded);
+						if (input.resolution > 0) computeSkin(input.padded);
 						auto built = std::make_shared<ChunkMesh>();
 						// The terrain, and a mesh of its own for each block type in the chunk that has one (see PaddedChunk::rule).
 						std::array<bool, 256> present{};
@@ -1151,6 +1234,7 @@ namespace CGEngine {
 	void VoxelWorld::clear() {
 		for (const auto& entry : regions) removeRegionBodies(entry.first);
 		chunks.clear();
+		memoChunk = nullptr;
 		dirtyRegions.clear();
 	}
 

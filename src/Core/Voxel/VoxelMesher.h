@@ -7,9 +7,16 @@
 #include "../World/Renderer.h"
 
 namespace CGEngine {
-	// The skin is the surface where the blocks' occupancy, interpolated between block centres, is this (see buildSmoothMesh).
-	// Collision uses the same surface, so the drawn ground and the ground a body stands on are one.
+	// The skin is the surface where the density is this (see buildSmoothMesh). Collision uses the same surface, so the drawn
+	// ground and the ground a body stands on are one. The other smooth skins' density is their occupancy, interpolated between
+	// block centres. The terrain's is smoothed over the corners of the blocks (VoxelTerrainShift).
 	constexpr float VoxelSkinIso = 0.3f;
+
+	// The terrain's density at a block corner is the share of the 2 by 2 by 2 blocks that meet there that are terrain, less this,
+	// and it is interpolated between the corners. A flat face has half its blocks solid at its corners, so its density is 0.35 and
+	// the surface sits 0.1 of a block out from the face. A wall one block thick keeps 0.35 inside it, so it stays solid, which a
+	// wider smoothing would thin away. A slope of one block in one becomes a straight slope, not a step.
+	constexpr float VoxelTerrainShift = 0.15f;
 
 	// How far light and shade reach through air, in blocks. A cell's light depends only on blocks this close to it, so a
 	// chunk with this much border computes the same light for a shared cell as its neighbour does.
@@ -77,6 +84,9 @@ namespace CGEngine {
 		// The damage of each block position, in the layout of blocks: the fraction of its hits taken, 0 to 255. Empty if no block
 		// in the padded chunk is damaged.
 		std::vector<uint8_t> damage;
+		// The terrain's density at each block corner, in the layout of blocks: the share of the 2 by 2 by 2 blocks meeting there that are
+		// terrain, less VoxelTerrainShift (computeSkin). Empty until computeSkin runs; only the terrain's smooth mesh reads it.
+		std::vector<float> skin;
 
 		size_t index(int x, int y, int z) const {
 			const int p = size + 2 * border;
@@ -102,6 +112,9 @@ namespace CGEngine {
 	// through air, for VoxelLightReach blocks; it goes to chunk.lamp, apart from the sky's. Any block counts as opaque, the same
 	// as in the meshes, so caves and the ground under trees are dark until a light block is in them.
 	void computeLight(PaddedChunk& chunk);
+
+	// Fills chunk.skin (see VoxelTerrainShift). The chunk's border must be at least 1, and the mesh samples two blocks beyond it.
+	void computeSkin(PaddedChunk& chunk);
 
 	struct MeshArrays {
 		std::vector<VoxelVertex> vertices;

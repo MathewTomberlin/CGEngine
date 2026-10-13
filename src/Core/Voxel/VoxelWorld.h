@@ -108,6 +108,12 @@ namespace CGEngine {
 		static constexpr int OwnSkin = 256;
 		static constexpr int CubeSkin = 512;
 		int skinAt(int x, int y, int z) const;
+		// The same as skinAt, quicker for the common block: a solid terrain block is answered from its type alone.
+		int skinFast(int x, int y, int z) const;
+		// The terrain blocks among the 2 by 2 by 2 that meet at a block corner (0 to 8): the blocks x - 1 or x, and so on (VoxelTerrainShift).
+		int terrainCorners(int x, int y, int z) const;
+		// Fills the corner counts of the loaded chunk (cx, cz).
+		void buildCounts(int cx, int cz) const;
 
 		/// The sky light at a block, 0 (none) to 255 (full), as the mesh shades it. Computed on demand, so this is for queries.
 		uint8_t lightAt(int x, int y, int z) const;
@@ -185,6 +191,9 @@ namespace CGEngine {
 			int resolution = 0;             // the smooth skin's samples per block for this chunk (0: cubes); see resolutionFor
 			int stride = 1;                 // the sample grid's stride for this chunk (2 for a far chunk); see strideFor
 			std::map<int, int> groupQuads;  // the quads of each group's mesh as last uploaded
+			// The terrain's corner values (terrainCorners) for the chunk's corners: its own blocks' corners, x and z in [0, size) and y in
+			// [0, height]. Empty until it is needed; a change to the chunk or a neighbour clears it (markDirty).
+			mutable std::vector<uint8_t> counts;
 			bool dirty = true;                       // its blocks changed since its mesh was built, so it is meshed again (see markDirty)
 			std::shared_ptr<const ChunkMesh> mesh;   // its meshes as last built, reused by a region job while it is not dirty
 		};
@@ -287,6 +296,11 @@ namespace CGEngine {
 		static int floorDiv(int a, int b);
 		int localIndex(int lx, int y, int lz) const { return (y * size + lz) * size + lx; }
 		const Chunk* findChunk(int cx, int cz) const;
+		// The chunk the last lookup found: a block or a density query reads the same chunk many times in a row, and the map
+		// lookup is what costs. Erasing a chunk clears it (see unloadChunk and clear).
+		mutable int memoX = 0;
+		mutable int memoZ = 0;
+		mutable const Chunk* memoChunk = nullptr;
 		Chunk* findChunk(int cx, int cz);
 		void markDirty(int cx, int cz);
 		void markNeighboursDirty(int cx, int cz);
