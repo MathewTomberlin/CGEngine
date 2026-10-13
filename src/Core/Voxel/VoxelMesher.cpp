@@ -212,21 +212,23 @@ namespace CGEngine {
 		for (int s = 0; s <= VoxelLightReach; ++s) {
 			byStep[s] = std::max(LightFloor, std::pow(LightPerStep, static_cast<float>(s)));
 		}
-		// Every position of the padded chunk, including the air above the world (full light) and below it (none).
+		// Every position of the padded chunk, including the air above the world (full light) and below it (none). The levels are a
+		// few fixed values, so each one's byte is worked out once (the same rounding as a per-cell lround).
+		uint8_t stepByte[VoxelLightReach + 1];
+		for (int s = 0; s <= VoxelLightReach; ++s) stepByte[s] = static_cast<uint8_t>(std::lround(byStep[s] * 255.0f));
+		const uint8_t floorByte = static_cast<uint8_t>(std::lround(LightFloor * 255.0f));
 		chunk.light.assign(chunk.blocks.size(), 0);
 		chunk.lamp.assign(chunk.blocks.size(), 0);
 		for (int z = lo; z < hi; ++z) {
 			for (int x = lo; x < hi; ++x) {
 				for (int y = -b; y < h + b; ++y) {
 					const size_t i = chunk.index(x, y, z);
-					float level = 0.0f;
 					if (y >= h) {
-						level = 1.0f;
+						chunk.light[i] = 255;
 					} else if (y >= 0 && chunk.blocks[i] == 0) {
-						level = steps[i] == 0xFF ? LightFloor : byStep[steps[i]];
+						chunk.light[i] = steps[i] == 0xFF ? floorByte : stepByte[steps[i]];
 					}
-					chunk.light[i] = static_cast<uint8_t>(std::lround(level * 255.0f));
-					if (!emitted.empty()) chunk.lamp[i] = static_cast<uint8_t>(std::lround(emitted[i] * 255.0f));
+					if (!emitted.empty() && emitted[i] > 0.0f) chunk.lamp[i] = static_cast<uint8_t>(std::lround(emitted[i] * 255.0f));
 				}
 			}
 		}
@@ -457,8 +459,9 @@ namespace CGEngine {
 				// The solid block whose centre is nearest the point: a vertex on the ground takes the colour of the ground it stands on,
 				// not of a neighbouring bump, whose centre can outweigh the ground's in the trilinear share.
 				const glm::vec3 centre(x + 0.5f, y + 0.5f, z + 0.5f);
+				if (!solidAt(chunk, group, x, y, z)) continue;
 				const float distance = glm::dot(centre - p, centre - p) + (exposedBlock(chunk, x, y, z) ? 0.0f : 1000.0f);
-				if (solidAt(chunk, group, x, y, z) && distance < blockDistance) {
+				if (distance < blockDistance) {
 					blockDistance = distance;
 					dominant = chunk.index(x, y, z);
 					block = chunk.at(x, y, z);

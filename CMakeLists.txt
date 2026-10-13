@@ -129,6 +129,9 @@ target_compile_definitions(main PRIVATE
 if(MSVC)
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /Od /Zi")
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /O2")
+    # The voxel mesher and world are the loops a chunk's load runs: optimised in Debug too, which is about ten times faster there
+    # (roadmap 23.3). The rest of a Debug build stays unoptimised, so it can still be stepped through.
+    set_source_files_properties(src/Core/Voxel/VoxelMesher.cpp src/Core/Voxel/VoxelWorld.cpp PROPERTIES COMPILE_OPTIONS "/O2")
 else()
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0 -g")
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3")
