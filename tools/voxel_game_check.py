@@ -15,11 +15,13 @@ import math
 import os
 import random
 import time
+import traceback
 
 import cg_engine_bindings as cge
 import VoxelGame
 import VoxelGen
 import VoxelInventory
+import VoxelRecipes
 import VoxelWalkers
 
 RESULT = "cg_control/voxel_game_check.json"
@@ -58,6 +60,15 @@ def screen_click(game, slot, secondary=False):
     game.update_inventory()
 
 
+def panel_click(game, box):
+    """A left click at the centre of a box on the crafting panel, through the inventory screen's own update."""
+    MOUSE[0], MOUSE[1] = box[0] + box[2] / 2, box[1] + box[3] / 2
+    PRESSED["mouse:Left"] = True
+    game.update_inventory()
+    PRESSED["mouse:Left"] = False
+    game.update_inventory()
+
+
 def main():
     checks = {}
     errors = []
@@ -85,7 +96,6 @@ def main():
     game.hit_times = {}
     inv.slots = [None] * VoxelInventory.SLOTS
     inv.held = None
-    inv.start(VoxelGame.START_ITEMS, VoxelGame.START_COUNT)
     game.slot = 0
     MOUSE[0], MOUSE[1] = game.window.x / 2, game.window.y / 2
     # A column of test blocks in the loaded chunk at (0, 0), high above the ground the player stands on.
@@ -123,6 +133,7 @@ def main():
         floor = (2, 58, 6)
         put(*floor, DIRT)
         cell = (2, 59, 6)
+        inv.slots[0] = [STONE, 16]   # the stock to place from (the inventory starts empty)
         game.slot = 0
         before = inv.slots[0][1]
         game.target = (floor, UP)
@@ -214,6 +225,44 @@ def main():
         checks["closing the screen recaptures the mouse and leaves nothing held"] = (
             not game.inventory_open and game.mouse_captured and inv.held is None)
         inv.slots[20] = None
+
+        # Construction: the torch recipe is listed once wood is held, is disabled without wood, makes one torch from one wood, and
+        # a category picks the list. Creative mode lists every recipe and makes one with nothing in the inventory.
+        crafting = game.crafting
+        saved_known, saved_category = set(crafting.known), crafting.category
+        crafting.known = set()
+        crafting.category = VoxelRecipes.ALL
+        torch = VoxelRecipes.RECIPES[0]
+        inv.slots = [None] * VoxelInventory.SLOTS
+        game.open_inventory()
+        checks["a new player's crafting panel lists nothing"] = crafting.visible(False) == []
+        inv.add(VoxelGen.WOOD, 1)
+        game.learn_recipes()
+        checks["picking up wood teaches the torch recipe"] = "Torch" in crafting.known
+        _, button, options, rows = game.craft_layout(1)
+        checks["the torch recipe is listed once it is known"] = crafting.visible(False) == [torch]
+        panel_click(game, rows[0])
+        checks["a click on the recipe makes one torch from one wood"] = inv.count(TORCH) == 1 and inv.count(VoxelGen.WOOD) == 0
+        inv.slots = [None] * VoxelInventory.SLOTS
+        panel_click(game, rows[0])
+        checks["without wood the recipe is not made"] = inv.count(TORCH) == 0 and inv.count(VoxelGen.WOOD) == 0
+        panel_click(game, button)
+        checks["the dropdown button opens the category list"] = crafting.dropdown_open
+        light = VoxelRecipes.CATEGORIES.index("Light")
+        panel_click(game, options[light])
+        checks["a category picks the list and closes it"] = crafting.category == "Light" and not crafting.dropdown_open
+        game.creative = True
+        crafting.known = set()
+        checks["creative mode lists every recipe, known or not"] = crafting.visible(True) == [torch]
+        panel_click(game, rows[0])
+        checks["creative mode makes a torch with nothing in the inventory"] = inv.count(TORCH) == 1
+        game.creative = False
+        inv.slots = [None] * VoxelInventory.SLOTS
+        crafting.known, crafting.category = saved_known, saved_category
+        crafting.dropdown_open = False
+        game.craft_hover = None
+        game.close_inventory()
+        checks["closing the screen leaves the crafting list closed"] = not game.inventory_open and not crafting.dropdown_open
 
         # F5 saves the inventory with the edits, and F9 loads it back.
         inv.slots[0] = [DIRT, 7]
@@ -338,7 +387,7 @@ def main():
         game.health = VoxelGame.PLAYER_HEALTH
         game.landed_once = False
     except Exception as error:   # the checks above are the record; an error is a failure too
-        errors.append("%s: %s" % (type(error).__name__, error))
+        errors.append("%s: %s\n%s" % (type(error).__name__, error, traceback.format_exc()))
     finally:
         for cell in test_cells:
             world.set_block(cell[0], cell[1], cell[2], 0)
