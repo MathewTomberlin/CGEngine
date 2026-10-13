@@ -6,12 +6,15 @@ performance and documentation treated as first-class requirements.
 
 Status: `[ ]` not started, `[~]` in progress, `[x]` done.
 
-## Current priorities (lead developer, after playtesting round 2)
+## Current priorities (lead developer, after playtesting round 3)
 The order I am working in, and why:
-1. **Phase 20, construction.** Requested by the player: a recipe list grouped by category, known recipes shown, recipes with a missing item disabled, unknown recipes hidden, an empty start inventory. It is small and it gives the player a reason to use what they mine.
-2. **Phase 21, a smooth terrain skin.** Requested by the player: a one-block slope should be a hill, not a staircase. It is the most visible weakness in the sample, and it touches collision, so it is done with the density parity checks.
-3. **Phase 22, far-view load latency.** At view 40, distant ground takes seconds to appear after a move. Measured first, then ordered.
-4. **Phase 23, upkeep.** The game file is large, the tests are many scripts, and the Debug build is slow. Each item is done alongside the feature it touches.
+1. **Phase 22, far-view load latency.** Measured and mostly done: a view of 40 settles 12 s after launch, and the near ground is ready
+   about a second after a move. What remains is the meshing cost (Phase 26), which every load and every move pays.
+2. **Phases 24 and 25, placement and the skin's shape.** The ghost's cost is still unmeasured (24.5); the far skin's look is to judge
+   in play (22.4, 25.4).
+3. **Phase 23, upkeep.** The split and the test runner are done; the Debug speed (23.3) is next, since the Debug build is what a
+   developer runs under a debugger.
+4. **Phase 26, meshing cost.** The light pass is the largest single cost after the surface.
 
 Still waiting on the player: 11.14 (the square shadow) and 11.15 (the fall through the ground). Both need a snapshot.
 
@@ -473,22 +476,37 @@ Goal: a one-block rise over a one-block run is a smooth hill, and the ground rea
 
 ## Phase 22: far-view loading latency (from playtesting round 2: distant ground takes seconds after a move)
 Goal: a player who walks sees the ground ahead within a second or two, at any view distance the setting allows.
-- [ ] **22.1** Measure where the time goes at view 40 when the player moves: terrain generation, meshing, upload, the pending
-  count, and the time from a request to the first upload. The counts go in the state file; a script records them.
-- [ ] **22.2** Order the work by distance: the nearest chunks' terrain and meshing first. The worker queue is first in, first
-  out now, so far terrain can sit in front of near meshing.
-- [ ] **22.3** Coarse first: a far region shows a stride-4 skin as soon as its terrain is in, and the detailed skin follows.
-  The skirts keep the seams (11.12).
-- [ ] **22.4** The lesson of 15.8 applies: a coarse level must not bring back the blotches from averaged occlusion.
-- [ ] **22.5** The creatures' collision queries are the main frame cost after Phase 21 (about 4 ms of a frame with twelve
-  creatures in view, on a busy machine). Count the density queries a frame makes and cache what repeats; this is a frame-rate
-  item as much as a load item.
+Measured with `tools/voxel_load.ps1` (view 40, a 320-block move, 16 logical cores; the machine is shared):
+before this phase the launch to a settled view took 18 s, the nearest 5 by 5 chunks were ready 1.4 s after the move and the whole
+view 5.2 s after it. Of the 26 s of worker time for the move, 15.7 s was the surface of the chunks, 5.2 s their light, 2.0 s their
+skin, and 0.7 s the terrain: the meshing was the cost, not the terrain.
+- [x] **22.1** Measured: the counts and timings are in the state file (`ready`, `timings`), and the script reports them.
+- [x] **22.2** The worker queue runs the job nearest the player's chunk first, re-ranked on every update, so a far terrain job
+  no longer holds up the mesh under the player. A region is meshed when the chunks around its loaded ones are in too, so a chunk
+  is meshed once rather than again as each neighbour arrives (1,944 chunk builds for the move, about the number of new chunks).
+  Unloading a chunk drops its queued terrain. The nearest square came in 1.4 s, down to 1.1 s: the meshing still dominates.
+- [x] **22.3** Far skins from 12 chunks (stride 2, `VOXEL_FAR_RADIUS`, now on by default). Launch to a settled view: 18 s to 12 s.
+  The whole view after the move: 5.2 s to 3.1 s; the worst frame 150 ms to 74 ms. A coarser level than stride 2 (stride 4 first,
+  then the detail) is not done; the far skin's own cost is now the light and the surface.
+- [~] **22.4** The blotches of 15.8 were dirt colour showing through the grass: a coarse vertex took the colour of the nearest
+  block, which could be the dirt under the surface. A vertex now takes the nearest block with air beside it (`exposedBlock`).
+  Checked by screenshot at view 24 with the far skins on, with shadows on and off (the shadows are not the cause). The far terrain
+  is softer than the near terrain: judge it in play.
+- [x] **22.5** The creatures' collision: `skinDensity` reads a chunk's corner counts and blocks directly when the 3 by 3 by 3 blocks
+  it reads are in one loaded chunk, away from its walls, with no smooth block. Twelve creatures cost about 0.6 ms of a frame,
+  down from about 1.1 ms (`voxel_perf.ps1`, walkers 0 against 12).
+- Tried and rejected: 12 workers instead of 6. The per-stage CPU time doubled (light 5 s to 15 s for the same work), so the
+  machine's cores are shared between the threads. 6 stays.
+- New, from the measurements: the light pass is most of the rest (82,000 padded cells per chunk, rebuilt for each chunk); see 26.1.
 
 ## Phase 23: upkeep (lead developer)
-- [ ] **23.1** Split `VoxelGame.py` (about 2,000 lines) into modules by concern: net, physics glue, inventory and crafting, HUD,
-  and the state file. Behaviour does not change; the tests are the guard.
-- [ ] **23.2** One test runner, `tools/run_tests.ps1`, with the suites, a summary, and a non-zero exit on any failure. The suites
-  stay separate scripts.
+- [x] **23.1** Split `VoxelGame.py` (1,918 lines) by concern: `VoxelConfig.py` (the constants and the helpers the modules share),
+  `VoxelHud.py`, `VoxelInventoryScreen.py` (the inventory and crafting panel), `VoxelNetSync.py` and `VoxelSettingsMenu.py`, each a
+  mixin the game inherits, so the methods still read and write the game's own state. `VoxelGame.py` keeps the frame, the player,
+  the targeting, the world's save and load and the walkers: 931 lines. The methods moved verbatim; decorators are kept with them
+  (the first split dropped two `@property`s, and the voxel suite caught it). An AST check finds no undefined names.
+- [x] **23.2** `tools/run_tests.ps1`: the Python suites by default, the engine suites with `-Engine`, one line per suite, exit 1
+  on any failure. The command list check in `test_scene_format.py` now counts commands a script registers with `add_command`.
 - [ ] **23.3** Debug speed: the mesher is about ten times slower in Debug (about 0.4 s a chunk). A pragma to optimise the file
   did not help, so find the cost first; MSVC's checked iterators are the likely one.
 - [ ] **23.4** The `timespeed 0.5` crash in Debug (Phase 19's console): its root cause. It needs a stack from a Debug run, and a
@@ -527,6 +545,16 @@ Goal: a skin takes the shape of its blocks: a one-block column is one block wide
 - [ ] **25.4** Open: the far skins (stride 2) read the same centres, so a one-block feature at an odd block is still missed there;
   check a far hill in play. Textures: the terrain is triplanar in world space (`StdFragShader.frag`), so the texture does not
   stretch on a slope; the black patches it was blamed for are the vertices above, but a close look in play is still to do.
+
+## Phase 26: meshing cost (from Phase 22's measurements)
+Goal: a chunk's mesh costs a few milliseconds, so a view of 40 settles in a few seconds from launch.
+- [ ] **26.1** The light pass is a third of the mesh time: a breadth-first walk over the padded chunk (82,000 cells at light reach
+  8) for each chunk, with a `vector` frontier. Measure it alone; then flat arrays, and the light of a region's chunks computed once
+  for the region rather than per chunk.
+- [ ] **26.2** The surface: the sample grid calls the density 24,000 times a chunk and each vertex calls it seven more. Cache the
+  gradient's samples on the grid, or derive the normal from the grid's own neighbours.
+- [ ] **26.3** Allocation: each chunk job copies its padded area and allocates its vectors. Reuse per-worker buffers. Measure first:
+  more worker threads did not help, which points at the memory the threads share.
 
 ## Tooling and quality
 - [x] CI build on Windows (`.github/workflows/build.yml`) with Mesa software OpenGL smoke run
