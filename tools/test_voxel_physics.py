@@ -5,6 +5,7 @@ block's top face, and beside a wall it is 0.2 of a block out from the wall's fac
 Usage (from the repo root): python -I tools/test_voxel_physics.py
 Exits 0 on success, 1 on any failed check.
 """
+import math
 import os
 import sys
 
@@ -148,6 +149,34 @@ check("the cell touching the feet from below is allowed", not p.cell_in_player((
 
 # Sky is not picked.
 check("looking at the sky picks nothing", p.raycast(floor_world, (0.5, 20.0, 0.5), (0.0, 1.0, 0.0)) is None)
+
+# A creature (a box, half width CREATURE_HALF_WIDTH) walks at 2 blocks a second toward a still player, the fastest pace at the
+# frame cap (dt 0.05). It must never overlap the player's box, and it must come to the contact distance and stop there.
+def overlaps(a, b):
+    return abs(a[0] - b[0]) < p.PLAYER_HALF_WIDTH + p.CREATURE_HALF_WIDTH and abs(a[1] - b[1]) < p.PLAYER_HALF_WIDTH + p.CREATURE_HALF_WIDTH
+
+
+player_xz = (5.0, 0.0)
+never_overlaps = True
+creature_xz = (0.0, 0.0)
+closest = math.inf
+for _ in range(200):
+    vx, vz = p.keep_out(2.0, 0.0, player_xz[0] - creature_xz[0], player_xz[1] - creature_xz[1])
+    creature_xz = (creature_xz[0] + vx * 0.05, creature_xz[1] + vz * 0.05)
+    closest = min(closest, math.hypot(creature_xz[0] - player_xz[0], creature_xz[1] - player_xz[1]))
+    never_overlaps = never_overlaps and not overlaps(creature_xz, player_xz)
+check("a creature walking at a still player never overlaps its box", never_overlaps)
+check("a creature walking at a still player stops at the contact distance", p.CONTACT - 0.01 <= closest <= p.CONTACT + p.CONTACT_SLACK + 0.01)
+
+# A creature already in contact can walk off: a velocity away from the player is kept.
+vx, vz = p.keep_out(-2.0, 0.0, 0.5, 0.0)
+check("a creature in contact keeps its move away from the player", vx == -2.0 and vz == 0.0)
+
+# A player moving into a creature is stopped at its side; a move that gains distance is not, so a body in contact can step off.
+creature = (5.0, 0.0)
+check("a player walking into a creature is blocked", p.blocks_move((0.0, 0.0), (4.6, 0.0), creature))
+check("a player stepping away from a creature in contact is not blocked", not p.blocks_move((4.5, 0.0), (4.2, 0.0), creature))
+check("a player far from a creature is not blocked", not p.blocks_move((0.0, 0.0), (1.0, 0.0), creature))
 
 if failures:
     print(f"\n{len(failures)} check(s) failed")

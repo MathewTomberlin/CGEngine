@@ -120,6 +120,37 @@ def cell_in_player(cell, pos):
             and cell[2] < z + PLAYER_HALF_WIDTH and cell[2] + 1 > z - PLAYER_HALF_WIDTH)
 
 
+# Creatures are boxes too (VoxelWalkers, HALF_WIDTH). Two boxes can overlap at a diagonal while their centres are 0.6 apart,
+# and they cannot overlap while their centres are at least 0.6 * sqrt(2) apart: that is CONTACT, the distance a creature keeps
+# from the player's centre (so a creature beside the player stands about 0.25 of a block off its side). CONTACT_SLACK is how
+# far out a creature starts to slow, so one frame's move (at most 0.1 blocks, the fastest pace at the frame cap) cannot take it in.
+CREATURE_HALF_WIDTH = 0.3
+CONTACT = (PLAYER_HALF_WIDTH + CREATURE_HALF_WIDTH) * math.sqrt(2.0)
+CONTACT_SLACK = 0.15
+
+
+def keep_out(vx, vz, dx, dz, limit=CONTACT + CONTACT_SLACK):
+    """A creature's velocity (vx, vz), with the part of it toward the player removed while the player is nearer than limit.
+    (dx, dz) is the offset from the creature to the player. A part away from the player is kept, so a creature already in
+    contact can walk off."""
+    gap = math.hypot(dx, dz)
+    if gap >= limit or gap == 0.0:
+        return vx, vz
+    nx, nz = dx / gap, dz / gap
+    toward = vx * nx + vz * nz
+    if toward <= 0.0:
+        return vx, vz
+    return vx - toward * nx, vz - toward * nz
+
+
+def blocks_move(before, after, other):
+    """True if a move of a body's centre from before to after (x, z) brings it closer to other (x, z) while that is within
+    CONTACT. A move that does not close the gap is never blocked, so a body already in contact can step away."""
+    d_before = math.hypot(before[0] - other[0], before[1] - other[1])
+    d_after = math.hypot(after[0] - other[0], after[1] - other[1])
+    return d_after < CONTACT and d_after < d_before
+
+
 def step(solid, pos, vel, dt, flying=False, on_ground=False):
     """
     One physics step. vel is (vx, vy, vz) in blocks per second: the horizontal part is set by the caller each frame
