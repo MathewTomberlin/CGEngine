@@ -417,16 +417,18 @@ namespace CGEngine {
 			// The dominant solid block: the one whose centre weighs most at p.
 			const glm::vec3 b = p - glm::vec3(0.5f);
 			const glm::vec3 base = glm::floor(b);
-			const glm::vec3 t = b - base;
 			int block = 0;
-			float blockWeight = -1.0f;
+			float blockDistance = 1e30f;
 			size_t dominant = 0;
 			for (int c = 0; c < 8; ++c) {
 				const int dx = c & 1, dy = (c >> 1) & 1, dz = (c >> 2) & 1;
 				const int x = static_cast<int>(base.x) + dx, y = static_cast<int>(base.y) + dy, z = static_cast<int>(base.z) + dz;
-				const float w = (dx ? t.x : 1.0f - t.x) * (dy ? t.y : 1.0f - t.y) * (dz ? t.z : 1.0f - t.z);
-				if (solidAt(chunk, group,x, y, z) && w > blockWeight) {
-					blockWeight = w;
+				// The solid block whose centre is nearest the point: a vertex on the ground takes the colour of the ground it stands on,
+				// not of a neighbouring bump, whose centre can outweigh the ground's in the trilinear share.
+				const glm::vec3 centre(x + 0.5f, y + 0.5f, z + 0.5f);
+				const float distance = glm::dot(centre - p, centre - p);
+				if (solidAt(chunk, group, x, y, z) && distance < blockDistance) {
+					blockDistance = distance;
 					dominant = chunk.index(x, y, z);
 					block = chunk.at(x, y, z);
 				}
@@ -449,15 +451,18 @@ namespace CGEngine {
 				vertex.texCoord = glm::vec2(p.x, p.y);
 			}
 			// Sky light of the air the normal points into: caves and the ground under trees are darker.
-			glm::vec3 air = glm::floor(p + normal * 0.5f);
-			// A slope can put the point just inside a solid block, and a solid block has no light: the sample steps further out
-			// along the normal until it is in air.
-			for (const float reach : { 0.9f, 1.3f }) {
-				if (chunk.at(static_cast<int>(air.x), static_cast<int>(air.y), static_cast<int>(air.z)) == 0) break;
-				air = glm::floor(p + normal * reach);
+			// The light of the air the point looks into: the brightest air cell among those out along the normal and straight up. A
+			// vertex whose normal points into a solid block takes the light of the air beside it, not the solid block's none.
+			float sky = 0.0f;
+			float lamp = 0.0f;
+			// The eight cells that touch the point: the air among them is what the vertex can see.
+			const glm::vec3 corner = glm::floor(p - glm::vec3(0.5f));
+			for (int c = 0; c < 8; ++c) {
+				const int ax = static_cast<int>(corner.x) + (c & 1), ay = static_cast<int>(corner.y) + ((c >> 1) & 1), az = static_cast<int>(corner.z) + ((c >> 2) & 1);
+				if (chunk.at(ax, ay, az) != 0) continue;
+				sky = std::max(sky, chunk.lightAt(ax, ay, az) / 255.0f);
+				lamp = std::max(lamp, chunk.lampAt(ax, ay, az) / 255.0f);
 			}
-			const float sky = chunk.lightAt(static_cast<int>(air.x), static_cast<int>(air.y), static_cast<int>(air.z)) / 255.0f;
-			const float lamp = chunk.lampAt(static_cast<int>(air.x), static_cast<int>(air.y), static_cast<int>(air.z)) / 255.0f;
 			vertex.colour = palette[static_cast<size_t>(block)] * occlusion
 				* (chunk.damage.empty() ? 1.0f : 1.0f - DamageTint * chunk.damage[dominant] / 255.0f);
 			vertex.sky = sky;
