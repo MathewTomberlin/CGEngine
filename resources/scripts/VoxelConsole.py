@@ -14,6 +14,8 @@ import VoxelWalkers
 
 LOG_LINES = 200         # lines kept in the log
 SHOWN_LINES = 12        # lines drawn above the input line
+LINE_PITCH = 18         # pixels from one log line to the next
+FONT_SIZE = 15          # the console's text size
 MAX_HISTORY = 50        # lines remembered for the Up and Down keys
 MAX_FILL = 20000        # blocks one fill may set
 MAX_DESTROY = 12        # the largest radius destroy takes
@@ -501,14 +503,20 @@ class Console:
             return ["error: %s: %s" % (type(error).__name__, error)]
 
     def draw(self, box, layer):
-        """Shows the log and the input line over the HUD while the console is open, and hides them otherwise."""
+        """Shows the log and the input line over the HUD while the console is open, and hides them otherwise. Each log line is
+        its own label on a fixed pitch: the text body's own line spacing is tighter than the font, so lines in one body overlap."""
         game = self.game
         if not self.open:
             game.draw_rect("console_bg", box, (0, 0, 0, 0), layer=layer)
-            game.draw_text("console_log", "", (box[0] + 8, box[1] + 6), 15)
-            game.draw_text("console_input", "", (box[0] + 8, box[1] + box[3] - 24), 15)
+            for row in range(SHOWN_LINES):
+                game.draw_text("console_line_%d" % row, "", (box[0] + 8, box[1] + 6 + row * LINE_PITCH), FONT_SIZE)
+            game.draw_text("console_input", "", (box[0] + 8, box[1] + box[3] - 24), FONT_SIZE)
             return
         game.draw_rect("console_bg", box, (0, 0, 0, 185), layer=layer)
         shown = self.log[-SHOWN_LINES:]
-        game.draw_text("console_log", "\n".join(shown), (box[0] + 8, box[1] + 6), 15, (215, 215, 215, 255))
-        game.draw_text("console_input", "> " + self.line + "_", (box[0] + 8, box[1] + box[3] - 24), 15, (255, 230, 120, 255))
+        for row in range(SHOWN_LINES):
+            text = shown[row] if row < len(shown) else ""
+            game.draw_text("console_line_%d" % row, text, (box[0] + 8, box[1] + 6 + row * LINE_PITCH), FONT_SIZE,
+                           (215, 215, 215, 255))
+        game.draw_text("console_input", "> " + self.line + "_", (box[0] + 8, box[1] + box[3] - 24), FONT_SIZE,
+                       (255, 230, 120, 255))
