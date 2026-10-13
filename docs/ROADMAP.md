@@ -363,7 +363,7 @@ Goal: blocks and creatures take several hits, and what the player has hit looks 
 Goal: items have quantities, the inventory is a grid the player can see and change, and the hotbar is a UI, not text.
 - [x] **17.1** An item model: an item is a block id (a torch is one too, though it is a prop), held in a slot with a count up to
   64 (`VoxelInventory.py`, which has no engine calls). Breaking a block gives its item, and a torch on a broken block comes back
-  with it; placing takes one from the selected slot. The player starts with 16 of each hotbar item. Creative mode (C, or
+  with it; placing takes one from the selected slot. The player started with 16 of each hotbar item; Phase 20.4 empties the start. Creative mode (C, or
   `VOXEL_CREATIVE=1`) keeps the unlimited placing and gives nothing for a break. A hit that would finish a block is refused
   when the inventory has no room for it; a hit that leaves it standing is not. Tools are not items yet (17.5).
 - [x] **17.2** The inventory screen (I): three rows of twelve slots, the hotbar at the bottom and two rows above, each slot a box
@@ -435,13 +435,19 @@ Goal: the game can be driven from inside, and its window and sun are under the p
 ## Phase 20: construction (from playtesting round 2)
 Goal: the player makes items from items. A list of recipes, grouped by category from a dropdown. A known recipe is shown; a
 recipe with an item missing is shown disabled; a recipe the player does not know is not shown at all.
-- [ ] **20.1** Recipe data in `VoxelRecipes.py` (no engine calls): a recipe has a name, a category, the items it takes and the
-  items it makes, as item ids with counts. The first recipe: one wood block makes one torch.
-- [ ] **20.2** Known recipes: the player's set of known recipes starts empty. Creative mode knows every recipe.
-- [ ] **20.3** Crafting panel: a category dropdown and a list. A known recipe whose items the inventory lacks is drawn disabled
-  and cannot be clicked. In creative mode the check counts every item as 99 and crafting takes nothing from the inventory.
-- [ ] **20.4** The player starts with an empty inventory. The start stacks of 17.1 go; tests that need items give them.
-- [ ] **20.5** Checked offline by `tools/test_voxel_recipes.py` (no GPU), and in the game by `voxel_game_check.py`.
+- [x] **20.1** Recipe data in `VoxelRecipes.py` (no engine calls): a name, a category, the items it takes and the items it
+  makes, as item ids with counts. The first recipe: one wood block makes one torch.
+- [x] **20.2** Known recipes. The request did not say how a recipe is learned, so I chose: a recipe is learned the first time the
+  player holds one of its items (the notice says "New recipe"). From an empty start a torch would otherwise be unreachable.
+  Creative mode knows them all. The known set is saved in the inventory file.
+- [x] **20.3** The crafting panel sits above the inventory screen (I): a category dropdown, and a row per known recipe in the
+  chosen category. A recipe with an item missing is drawn dim and says what it needs; a click makes a recipe. Creative mode
+  counts every item as 99, and crafting takes nothing from the inventory (the output still goes in).
+- [x] **20.4** The start inventory is empty. The start pickaxe went too, since the request said nothing: a pickaxe cannot be
+  made yet (no recipe), so it comes from `give` or creative until one exists.
+- [x] **20.5** Checked by `tools/test_voxel_recipes.py` (offline, 21 checks), by 10 crafting checks in `voxel_game_check.py`
+  (through `test_voxels.ps1`, 53 checks in all), and by a screenshot of the panel.
+- Open: more recipes and categories, a recipe for the pickaxe (17.5), and other ways to learn a recipe than holding its item.
 
 ## Phase 21: a smooth terrain skin (from playtesting round 2: slopes read as steps)
 Goal: a one-block rise over a one-block run is a smooth hill, and the ground reads as land, not as blocks under a skin.
