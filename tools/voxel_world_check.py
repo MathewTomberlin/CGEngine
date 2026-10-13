@@ -393,7 +393,8 @@ def check_props(world, checks, chunks):
     boxes = [b for b in world.prop_boxes() if (b[0], b[1], b[2]) == (cx + 1, cy, cz)]
     stick_outer = boxes[0][4][0] + boxes[0][5][0] if boxes else None
     # The torch leans on the wall at cx + 2 (its face), so its base is on the skin BULGE out from that face.
-    checks["a torch stands on the skin of its wall, not inside it"] = stick_outer is not None and abs(stick_outer - (cx + 2.0 - BULGE)) < 0.03
+    # The stick stands out of the skin along its normal, so its foot is 0.06 off the wall and its outer edge is within 0.1 of the skin.
+    checks["a torch stands on the skin of its wall, not inside it"] = stick_outer is not None and abs(stick_outer - (cx + 2.0 - BULGE)) < 0.1
     world.remove_prop(cx + 1, cy, cz)
     checks["removing a torch removes it and its light"] = world.prop_at(cx + 1, cy, cz) == -1         and world.light_at(cx + 1, cy, cz) == 0
     for (x, y, z), block in saved.items():

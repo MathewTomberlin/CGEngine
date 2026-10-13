@@ -79,6 +79,7 @@ namespace CGEngine {
 			int x, y, z;
 			uint8_t dir;
 			float anchor = 0.5f;   // how far from the cell's centre, toward the block it leans on, the drawn skin is (VoxelWorld::propAnchor)
+			glm::vec3 normal = glm::vec3(0.0f, 1.0f, 0.0f);   // the skin's outward normal where the torch stands on it (VoxelWorld::propNormal)
 		};
 		std::vector<Prop> props;
 		// The damage of each block position, in the layout of blocks: the fraction of its hits taken, 0 to 255. Empty if no block
@@ -113,6 +114,9 @@ namespace CGEngine {
 	// as in the meshes, so caves and the ground under trees are dark until a light block is in them.
 	void computeLight(PaddedChunk& chunk);
 
+	// The density of a group at p (block units), as the smooth mesh samples it (VoxelMesher.cpp densityAt).
+	float densityAtPoint(const PaddedChunk& chunk, uint8_t group, glm::vec3 p);
+
 	// Fills chunk.skin (see VoxelTerrainShift). The chunk's border must be at least 1, and the mesh samples two blocks beyond it.
 	void computeSkin(PaddedChunk& chunk);
 
@@ -142,9 +146,13 @@ namespace CGEngine {
 	// The boxes of a torch: its stick (centre and half size) and its flame. A torch stands on the skin of the block it leans on,
 	// at distance anchor from its cell's centre, so the stick is outside the drawn surface and not hidden in it.
 	struct PropShape {
-		glm::vec3 stickCentre, stickHalf, flameCentre, flameHalf;
+		glm::vec3 stickCentre, stickHalf;   // the stick's centre, and the half size of the box round it (what the aim test uses)
+		glm::vec3 stickAxes[3];             // the stick's own axes, and its half sizes along them (stickSize)
+		glm::vec3 stickSize;
+		glm::vec3 flameCentre, flameHalf;
 	};
-	PropShape propShape(glm::vec3 cell, int dir, float anchor);
+	// The stick stands out of the skin along its normal, with its foot on the skin at anchor toward the block it leans on.
+	PropShape propShape(glm::vec3 cell, int dir, float anchor, glm::vec3 normal);
 
 	// The geometry of the chunk's props (torches): a stick leaning on its block and a flame on top, for the props in the chunk
 	// itself (not its border, which the neighbour draws). Appended to out, which is the terrain mesh.

@@ -50,8 +50,9 @@ void bindVoxel(py::module_& m) {
             // The boxes the torches are drawn with, so a hit test can use what the player sees.
             py::list result;
             for (const auto& prop : world.props()) {
+                const glm::vec3 normal = world.propNormal(prop[0], prop[1], prop[2], prop[3]);
                 const PropShape shape = propShape(glm::vec3(prop[0] + 0.5f, prop[1] + 0.5f, prop[2] + 0.5f), prop[3],
-                    world.propAnchor(prop[0], prop[1], prop[2], prop[3]));
+                    world.propAnchor(prop[0], prop[1], prop[2], prop[3]), normal);
                 result.append(py::make_tuple(prop[0], prop[1], prop[2], prop[3],
                     py::make_tuple(shape.stickCentre.x, shape.stickCentre.y, shape.stickCentre.z),
                     py::make_tuple(shape.stickHalf.x, shape.stickHalf.y, shape.stickHalf.z),
@@ -120,6 +121,11 @@ void bindVoxel(py::module_& m) {
            "drawn: shape is \"smooth\" (the skin) or \"cube\" (a cube that never merges with its neighbours); group is \"terrain\" "
            "(the chunk's terrain mesh) or \"own\" (a mesh of its own per chunk, drawn with material, a material name, or the "
            "world's material if None). A cube block must be in its own group.")
+        .def("set_preview", &VoxelWorld::setPreview, py::arg("x"), py::arg("y"), py::arg("z"), py::arg("block"),
+            "The ghost of a block placed at the cell: the mesh it would have there, shown only where it is new.")
+        .def("set_preview_prop", &VoxelWorld::setPreviewProp, py::arg("x"), py::arg("y"), py::arg("z"), py::arg("dir"),
+            "The ghost of a torch placed at the cell, leaning in direction dir.")
+        .def("clear_preview", &VoxelWorld::clearPreview, "Hide the placement ghost.")
         .def("skin_at", &VoxelWorld::skinAt, py::arg("x"), py::arg("y"), py::arg("z"),
              "The collision skin of the block at these coordinates: 0 for air and liquids, 1 for the terrain, 256 + id for a smooth "
              "block drawn in its own mesh, 512 + id for a cube. Solid blocks are the non-zero ones; VoxelPhysics uses it as its solid().")

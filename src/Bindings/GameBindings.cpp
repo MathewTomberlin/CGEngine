@@ -231,6 +231,12 @@ void bindGame(py::module_& m) {
         py::arg("material_ids"), py::arg("indices"),
         "Replace the vertices and indices of a body made by create_mesh_body. The GPU copy is updated before the next frame.");
 
+    m.def("set_xray", [](const std::string& name, bool on) {
+        Body* body = findBodyByName(name);
+        if (!body) throw std::invalid_argument("no body named '" + name + "'");
+        body->xray = on;
+    }, py::arg("name"), py::arg("on"), "Draw a body with the depth test off, so it shows through what is in front of it.");
+
     m.def("remove_mesh_body", [](const std::string& name) {
         return removeRuntimeMeshBody(name);
     }, py::arg("name"), "Remove a body made by create_mesh_body, and free its mesh. Returns False if there is no such body.");

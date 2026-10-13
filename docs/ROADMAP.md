@@ -495,6 +495,24 @@ Goal: a player who walks sees the ground ahead within a second or two, at any vi
   visible-window capture needs the player's agreement.
 - [ ] **23.5** The window-free start (18.1), which a headless server needs before 18.3 is a real server.
 
+## Phase 24: placement feedback (from playtesting round 3: the aim and the placed block)
+Goal: the player sees what a placement will do before they make it, and a placement never costs an item for nothing.
+- [x] **24.1** A lost placement: a block aimed at from inside the skin had no face (its normal was zero), so the placement wrote
+  the block over the targeted cell and spent the item, with nothing shown. The aim now starts further back until the ray enters a
+  block from outside. A placement is checked first (`placement_check`): it needs a face, a free cell that is not the player's, a
+  placeable item, and for a torch a block to lean on. Each refusal says why, and an item is spent only when the block is placed.
+- [x] **24.2** The outlines show through the skin: the block aimed at, the face it is aimed at (a sheet on that face, outlined), and
+  the cell the item would go into. They use a new x-ray flag on bodies (`Body::xray`, `set_xray`), drawn last with the depth test off.
+- [x] **24.3** A ghost of the placement: the mesh the block would have at its cell, drawn translucent. `VoxelWorld::setPreview` builds
+  it from the blocks within four of the cell (the smooth skin, the same resolution as the chunk), and keeps only the triangles that are
+  new, outside the terrain as it stands and within 2.5 blocks of the cell. A cube (brick) ghost is the cube alone. It is rebuilt only
+  when the cell or the item changes, not every frame.
+- [x] **24.4** A torch's ghost is its own stick and flame at the cell (`setPreviewProp`), and the stick stands out of the skin along the
+  surface normal (`VoxelWorld::propNormal`, the gradient of the skin density), tilted up a little so it still stands on a wall or a
+  slope. The aim test keeps an axis-aligned bound of the stick.
+- [ ] **24.5** Open: the ghost's cost, measured per target change (not yet); the ghost's opacity (0.45) and the outline colours, to
+  judge in play; a ghost for breaking (the blocks that would fall), and the torch's tilt on steep slopes, which is not yet seen.
+
 ## Tooling and quality
 - [x] CI build on Windows (`.github/workflows/build.yml`) with Mesa software OpenGL smoke run
 - [~] Unit tests for pure logic runnable without a GPU. Done for the dungeon generator (`python -I tools/test_dungeon_gen.py`) and for the scene format and command list (`python -I tools/test_scene_format.py`: example scenes, invalid fixtures, documented commands). The C++ parsers in `SceneLoader` and `ControlChannel` are still covered only by the GPU integration test.

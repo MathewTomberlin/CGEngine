@@ -608,6 +608,8 @@ namespace CGEngine {
         int zOrder = 0;
         // Drawn after the opaque bodies, blended and without writing depth, so what is behind it still shows (the voxel water).
         bool transparent = false;
+        // Drawn last, with the depth test off, so it shows through whatever is in front of it (the block outlines in the voxel sample).
+        bool xray = false;
         /// Drawn over the scene in window pixels, like a text label (the HUD's rectangles are overlays).
         bool overlay = false;
         /// <summary>
