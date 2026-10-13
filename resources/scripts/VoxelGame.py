@@ -35,7 +35,9 @@ import VoxelWalkers
 # is (2 * 14 + 1)^2 = 841 chunks. The last step is "Unlimited", capped at UNLIMITED_VIEW: the chunks grow with the square of the
 # distance and each one is held in memory. Without far skins (the default), 40 is about 6,600 chunks, 8.4 million quads and
 # 2.2 GB private memory at about 96 frames a second; 60 measured 4.6 GB, so the cap stays at 40. With far skins on
-# (VOXEL_FAR_RADIUS=6), 60 is about 14,600 chunks and 1.5 GB, but the far skins show dark blotches (roadmap 15.8).
+# (VOXEL_FAR_RADIUS=6), 60 is about 14,600 chunks and 1.5 GB, but the far skins showed dark blotches (roadmap 15.8). The far
+# skins are on from 12 chunks (roadmap 22.3): the launch to a settled view at 40 falls from 18 s to 12 s. Their vertex colour
+# now takes the surface block (VoxelMesher exposedBlock), which removed the dirt showing through the grass.
 VIEW_STEPS = [6, 8, 10, 12, 14, 18, 24, 32, 40]
 DEFAULT_VIEW = 14
 UNLIMITED_VIEW = 40
@@ -132,7 +134,7 @@ HEAL_AFTER = 4.0                 # seconds a damaged block is left alone before 
 HEAL_STEP = 1.0                  # seconds per damage stage it heals once it does
 HELD_TORCH_BRIGHTNESS = 2.5     # the light of the torch the player carries (L lights and puts it out)
 WALKERS = int(os.environ.get("VOXEL_WALKERS", "12"))   # creatures that wander the terrain near the spawn
-FAR_RADIUS = int(os.environ.get("VOXEL_FAR_RADIUS", "0"))   # chunks more than this from the player get far skins; 0 is off (roadmap 15.8)
+FAR_RADIUS = int(os.environ.get("VOXEL_FAR_RADIUS", "12"))   # chunks more than this from the player get far skins (stride 2); 0 is off (roadmap 15.8, 22.3)
 FAR_STRIDE = 2             # the far skins sample every second block: a quarter of the quads
 SHADOWS = os.environ.get("VOXEL_SHADOWS", "1") != "0"   # the sun casts shadows (the map covers SHADOW_RADIUS around the camera)
 SHADOW_RADIUS = float(os.environ.get("VOXEL_SHADOW_RADIUS", "40"))

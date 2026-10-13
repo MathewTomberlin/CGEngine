@@ -24,6 +24,7 @@ $stateFile = Join-Path $control "voxel_state.json"
 Set-Content -Path (Join-Path $control "load_settings.json") -Value ('{"mouse_sensitivity": 100, "view_radius": ' + $View + '}') -Encoding utf8
 $env:CGENGINE_SCENE = "scenes/voxels.json"; $env:VOXEL_SEED = "1"; $env:VOXEL_WALKERS = "0"; $env:VOXEL_CREATIVE = "1"
 $env:VOXEL_SETTINGS = "cg_control/load_settings.json"
+$launch = [System.Diagnostics.Stopwatch]::StartNew()
 $app = Start-Unattended (Join-Path $exeDir "main.exe") $exeDir
 $env:CGENGINE_SCENE = $null; $env:VOXEL_SEED = $null; $env:VOXEL_WALKERS = $null; $env:VOXEL_CREATIVE = $null; $env:VOXEL_SETTINGS = $null
 
@@ -49,6 +50,7 @@ try {
         Start-Sleep -Milliseconds 500
     }
     $s = Read-State
+    Write-Host ("launch to settled: {0:N1} s" -f $launch.Elapsed.TotalSeconds)
     $side = 2 * $s.view_radius + 1
     $full = @{ r2 = 25; r6 = 169; view = $side * $side }
     Write-Host ("start: {0} chunks loaded, view {1}, ready near {2} of 25, view {3} of {4}" -f $s.loaded, $s.view_radius, $s.ready.r2, $s.ready.view, $full.view)

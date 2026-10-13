@@ -239,10 +239,12 @@ namespace CGEngine {
 		const int Y = chunk.height + 2 * b;
 		const size_t n = static_cast<size_t>(P) * P * Y;
 		std::vector<int> solid(n, 0);
+		chunk.terrain.assign(n, 0);
 		for (int y = -b; y < chunk.height + b; ++y) {
 			for (int z = -b; z < chunk.size + b; ++z) {
 				for (int x = -b; x < chunk.size + b; ++x) {
 					solid[chunk.index(x, y, z)] = inGroup(chunk, x, y, z, 0) ? 1 : 0;
+					chunk.terrain[chunk.index(x, y, z)] = static_cast<uint8_t>(solid[chunk.index(x, y, z)]);
 				}
 			}
 		}
@@ -367,6 +369,22 @@ namespace CGEngine {
 		const int CubeEdges[12][2] = { { 0, 1 }, { 2, 3 }, { 4, 5 }, { 6, 7 }, { 0, 2 }, { 1, 3 }, { 4, 6 }, { 5, 7 },
 			{ 0, 4 }, { 1, 5 }, { 2, 6 }, { 3, 7 } };
 
+		// Whether the block at (x, y, z) has air beside it on one of its six faces: a surface block (see smoothVertex).
+		bool exposedBlock(const PaddedChunk& chunk, int x, int y, int z) {
+			static const int Faces[6][3] = { { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 }, { 0, 0, 1 }, { 0, 0, -1 } };
+			for (const auto& f : Faces) {
+				if (chunk.at(x + f[0], y + f[1], z + f[2]) == 0) return true;
+			}
+			return false;
+		}
+
+		// Whether the terrain (group 0) is in the block at (x, y, z), from PaddedChunk::terrain. Outside the padded chunk it is air.
+		bool terrainAt(const PaddedChunk& chunk, int x, int y, int z) {
+			const int b = chunk.border;
+			if (x < -b || y < -b || z < -b || x >= chunk.size + b || y >= chunk.height + b || z >= chunk.size + b) return false;
+			return chunk.terrain[chunk.index(x, y, z)] != 0;
+		}
+
 		// Whether the block at (x, y, z) is in the group. Outside the padded chunk it is air.
 		bool solidAt(const PaddedChunk& chunk, uint8_t group, int x, int y, int z) {
 			const int b = chunk.border;
@@ -397,7 +415,7 @@ namespace CGEngine {
 				for (int c = 0; c < 8; ++c) {
 					const int dx = c & 1, dy = (c >> 1) & 1, dz = (c >> 2) & 1;
 					const float w = (dx ? u.x : 1.0f - u.x) * (dy ? u.y : 1.0f - u.y) * (dz ? u.z : 1.0f - u.z);
-					if (solidAt(chunk, 0, cx0 + dx, cy0 + dy, cz0 + dz)) centres += w;
+					if (w > 0.0f && terrainAt(chunk, cx0 + dx, cy0 + dy, cz0 + dz)) centres += w;
 				}
 				return std::max(corners, VoxelCentreWeight * centres);
 			}
@@ -425,7 +443,9 @@ namespace CGEngine {
 			const float length = glm::length(gradient);
 			const glm::vec3 normal = length > 1e-6f ? -gradient / length : glm::vec3(0.0f, 1.0f, 0.0f);
 
-			// The dominant solid block: the one whose centre weighs most at p.
+			// The dominant solid block: the one whose centre is nearest the point, among those with air beside them. A vertex on the
+			// ground takes the colour of the surface block, not of the dirt under the grass, which a coarse vertex can be nearer to.
+			// A block with no air beside it counts only when no surface block touches the point.
 			const glm::vec3 b = p - glm::vec3(0.5f);
 			const glm::vec3 base = glm::floor(b);
 			int block = 0;
@@ -437,7 +457,7 @@ namespace CGEngine {
 				// The solid block whose centre is nearest the point: a vertex on the ground takes the colour of the ground it stands on,
 				// not of a neighbouring bump, whose centre can outweigh the ground's in the trilinear share.
 				const glm::vec3 centre(x + 0.5f, y + 0.5f, z + 0.5f);
-				const float distance = glm::dot(centre - p, centre - p);
+				const float distance = glm::dot(centre - p, centre - p) + (exposedBlock(chunk, x, y, z) ? 0.0f : 1000.0f);
 				if (solidAt(chunk, group, x, y, z) && distance < blockDistance) {
 					blockDistance = distance;
 					dominant = chunk.index(x, y, z);
