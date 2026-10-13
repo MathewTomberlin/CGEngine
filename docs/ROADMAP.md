@@ -507,8 +507,11 @@ skin, and 0.7 s the terrain: the meshing was the cost, not the terrain.
   (the first split dropped two `@property`s, and the voxel suite caught it). An AST check finds no undefined names.
 - [x] **23.2** `tools/run_tests.ps1`: the Python suites by default, the engine suites with `-Engine`, one line per suite, exit 1
   on any failure. The command list check in `test_scene_format.py` now counts commands a script registers with `add_command`.
-- [ ] **23.3** Debug speed: the mesher is about ten times slower in Debug (about 0.4 s a chunk). A pragma to optimise the file
-  did not help, so find the cost first; MSVC's checked iterators are the likely one.
+- [~] **23.3** Debug speed: measured at view 12, 458 chunks meshed in 52 s in Debug and 5.5 s in Release, about 9 times slower;
+  the surface is 44 s of it (4.4 s in Release), and the light 5.2 s (0.6 s). `#pragma optimize` and `runtime_checks` in the
+  mesher's files did not change it, and `/O2` cannot go on the command line with the Debug build's `/RTC1`. The likely cost is
+  MSVC's checked iterators (`_ITERATOR_DEBUG_LEVEL` 2), which only a Debug-wide change can remove, since the libraries must agree.
+  Open question for the player: whether Debug keeps the checked iterators (they catch out-of-range bugs) or gets the speed.
 - [ ] **23.4** The `timespeed 0.5` crash in Debug (Phase 19's console): its root cause. It needs a stack from a Debug run, and a
   visible-window capture needs the player's agreement.
 - [ ] **23.5** The window-free start (18.1), which a headless server needs before 18.3 is a real server.
