@@ -6,6 +6,15 @@ performance and documentation treated as first-class requirements.
 
 Status: `[ ]` not started, `[~]` in progress, `[x]` done.
 
+## Current priorities (lead developer, after playtesting round 2)
+The order I am working in, and why:
+1. **Phase 20, construction.** Requested by the player: a recipe list grouped by category, known recipes shown, recipes with a missing item disabled, unknown recipes hidden, an empty start inventory. It is small and it gives the player a reason to use what they mine.
+2. **Phase 21, a smooth terrain skin.** Requested by the player: a one-block slope should be a hill, not a staircase. It is the most visible weakness in the sample, and it touches collision, so it is done with the density parity checks.
+3. **Phase 22, far-view load latency.** At view 40, distant ground takes seconds to appear after a move. Measured first, then ordered.
+4. **Phase 23, upkeep.** The game file is large, the tests are many scripts, and the Debug build is slow. Each item is done alongside the feature it touches.
+
+Still waiting on the player: 11.14 (the square shadow) and 11.15 (the fall through the ground). Both need a snapshot.
+
 ## Phase 1: data-driven content (in progress)
 - [x] **1.1** JSON scene loader (materials, lights, model bodies) - `src/Core/Scene/SceneLoader.*`
 - [x] **1.2** Example scene and startup hook (`CGENGINE_SCENE`) - `resources/scenes/example.json`
@@ -423,6 +432,50 @@ Goal: the game can be driven from inside, and its window and sun are under the p
 - [x] **19.3** Engine support for the console: `typed_text` gives the characters typed since the last call, and the Grave and
   Backspace keys are polled by games. The engine's own console is hidden in the voxel game, so backtick opens the game's console.
 
+## Phase 20: construction (from playtesting round 2)
+Goal: the player makes items from items. A list of recipes, grouped by category from a dropdown. A known recipe is shown; a
+recipe with an item missing is shown disabled; a recipe the player does not know is not shown at all.
+- [ ] **20.1** Recipe data in `VoxelRecipes.py` (no engine calls): a recipe has a name, a category, the items it takes and the
+  items it makes, as item ids with counts. The first recipe: one wood block makes one torch.
+- [ ] **20.2** Known recipes: the player's set of known recipes starts empty. Creative mode knows every recipe.
+- [ ] **20.3** Crafting panel: a category dropdown and a list. A known recipe whose items the inventory lacks is drawn disabled
+  and cannot be clicked. In creative mode the check counts every item as 99 and crafting takes nothing from the inventory.
+- [ ] **20.4** The player starts with an empty inventory. The start stacks of 17.1 go; tests that need items give them.
+- [ ] **20.5** Checked offline by `tools/test_voxel_recipes.py` (no GPU), and in the game by `voxel_game_check.py`.
+
+## Phase 21: a smooth terrain skin (from playtesting round 2: slopes read as steps)
+Goal: a one-block rise over a one-block run is a smooth hill, and the ground reads as land, not as blocks under a skin.
+- [ ] **21.1** Measure the stepping first: a screenshot of a 45 degree slope, and the density along a line across it. The
+  skin's density is trilinear over the block centres, so the iso line through a staircase keeps the staircase.
+- [ ] **21.2** A smoothed occupancy for the terrain skin: the occupancy is blurred over a few cells before the iso crossing,
+  so the surface crosses a slope at a smooth angle. Cube and own-mesh blocks keep their rules (12.1).
+- [ ] **21.3** Normals from the smoothed field, and the occlusion kept. Measured in Release against the 10.1 numbers: quads,
+  load time, frame time.
+- [ ] **21.4** Collision reads the same field: `skinDensity` and `physics.density` change together, and `voxel_world_check.py`
+  compares them on random moves, as 13.2 does.
+- [ ] **21.5** Open: a finer field near the camera (the 11.7 question), if 21.2 is not enough.
+
+## Phase 22: far-view loading latency (from playtesting round 2: distant ground takes seconds after a move)
+Goal: a player who walks sees the ground ahead within a second or two, at any view distance the setting allows.
+- [ ] **22.1** Measure where the time goes at view 40 when the player moves: terrain generation, meshing, upload, the pending
+  count, and the time from a request to the first upload. The counts go in the state file; a script records them.
+- [ ] **22.2** Order the work by distance: the nearest chunks' terrain and meshing first. The worker queue is first in, first
+  out now, so far terrain can sit in front of near meshing.
+- [ ] **22.3** Coarse first: a far region shows a stride-4 skin as soon as its terrain is in, and the detailed skin follows.
+  The skirts keep the seams (11.12).
+- [ ] **22.4** The lesson of 15.8 applies: a coarse level must not bring back the blotches from averaged occlusion.
+
+## Phase 23: upkeep (lead developer)
+- [ ] **23.1** Split `VoxelGame.py` (about 2,000 lines) into modules by concern: net, physics glue, inventory and crafting, HUD,
+  and the state file. Behaviour does not change; the tests are the guard.
+- [ ] **23.2** One test runner, `tools/run_tests.ps1`, with the suites, a summary, and a non-zero exit on any failure. The suites
+  stay separate scripts.
+- [ ] **23.3** Debug speed: the mesher is about ten times slower in Debug (about 0.4 s a chunk). A pragma to optimise the file
+  did not help, so find the cost first; MSVC's checked iterators are the likely one.
+- [ ] **23.4** The `timespeed 0.5` crash in Debug (Phase 19's console): its root cause. It needs a stack from a Debug run, and a
+  visible-window capture needs the player's agreement.
+- [ ] **23.5** The window-free start (18.1), which a headless server needs before 18.3 is a real server.
+
 ## Tooling and quality
 - [x] CI build on Windows (`.github/workflows/build.yml`) with Mesa software OpenGL smoke run
 - [~] Unit tests for pure logic runnable without a GPU. Done for the dungeon generator (`python -I tools/test_dungeon_gen.py`) and for the scene format and command list (`python -I tools/test_scene_format.py`: example scenes, invalid fixtures, documented commands). The C++ parsers in `SceneLoader` and `ControlChannel` are still covered only by the GPU integration test.
@@ -490,3 +543,9 @@ Goal: the game can be driven from inside, and its window and sun are under the p
   game) than by anything else on this list, and I would start there after the far skins, because the view is where the
   player first notices the sample is empty.
 - The tests run through the control channel with scripted input. They are the best guard against regressions in the game, and they caught a real engine bug (the run loop), so keep adding one for each new interaction.
+- Review, round two (lead developer, after the host-owned edits PR was merged). The loop is explore, mine, light, fight and
+  rest, and the two things the player keeps hitting are the look of the ground and the wait for the far view. Nothing the
+  player brings is used yet, which is the gap construction (Phase 20) closes. My feeling: the smooth skin is the weakest part
+  of the sample to look at, and a rounded field is the change most likely to make the land read as real; it is C++ work, so its
+  cost can be measured. The engine's biggest risk is still the singletons (18.1), and the multiplayer goal depends on it.
+  Order: construction first (small, asked for), then the skin, then the far view, which I measure before I touch.
