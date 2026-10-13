@@ -6,6 +6,7 @@
 #include <SFML/Graphics/RenderWindow.hpp>
 #include <SFML/Graphics/RectangleShape.hpp>
 #include <SFML/System/Vector3.hpp>
+#include <cstdlib>
 #include <map>
 #include <optional>
 #include "../Core/Light/Light.h"
@@ -51,6 +52,13 @@ namespace {
     // Mouse look: while captured, the cursor is hidden and kept at the window's centre, and mouse_delta reports how far
     // it moved since the last call.
     bool mouseCaptured = false;
+
+    // CGENGINE_UNATTENDED=1 (the test scripts set it): no real keyboard, mouse or cursor input reaches the game, and the mouse is
+    // never captured, so a run nobody is at the machine for is not steered by whoever is at it.
+    bool unattended() {
+        static const bool value = std::getenv("CGENGINE_UNATTENDED") != nullptr;
+        return value;
+    }
 
     RenderWindow& gameWindow() {
         if (!renderer || !renderer->getWindow()) throw std::runtime_error("the window is not open yet");
@@ -131,6 +139,7 @@ void bindGame(py::module_& m) {
     m.def("key_down", [](const std::string& name) {
         auto it = gameKeys().find(name);
         if (it == gameKeys().end()) throw std::invalid_argument("unknown key '" + name + "'");
+        if (unattended()) return false;
         return sf::Keyboard::isKeyPressed(it->second);
     }, py::arg("name"), "True while the named key is held. Names: W A S D Up Down Left Right J K Space Enter R Escape, 0 to 9, F5, F9, F12.");
 
@@ -227,13 +236,20 @@ void bindGame(py::module_& m) {
     }, py::arg("name"), "Remove a body made by create_mesh_body, and free its mesh. Returns False if there is no such body.");
 
     m.def("mouse_down", [](const std::string& name) {
+        if (name != "Left" && name != "Right" && name != "Middle") {
+            throw std::invalid_argument("unknown mouse button '" + name + "' (use Left, Right or Middle)");
+        }
+        if (unattended()) return false;
         if (name == "Left") return sf::Mouse::isButtonPressed(sf::Mouse::Button::Left);
         if (name == "Right") return sf::Mouse::isButtonPressed(sf::Mouse::Button::Right);
-        if (name == "Middle") return sf::Mouse::isButtonPressed(sf::Mouse::Button::Middle);
-        throw std::invalid_argument("unknown mouse button '" + name + "' (use Left, Right or Middle)");
+        return sf::Mouse::isButtonPressed(sf::Mouse::Button::Middle);
     }, py::arg("name"), "True while the named mouse button is held. Names: Left Right Middle.");
 
     m.def("set_mouse_captured", [](bool captured) {
+        if (unattended()) {
+            mouseCaptured = false;   // the cursor is never taken: nothing is hidden, moved or read from it
+            return;
+        }
         RenderWindow& window = gameWindow();
         mouseCaptured = captured;
         window.setMouseCursorVisible(!captured);
@@ -246,6 +262,12 @@ void bindGame(py::module_& m) {
     }, "The mouse cursor's position in window pixels, from the top-left corner (it can be outside the window).");
 
     m.def("quit", []() { gameWindow().close(); }, "Close the window. The game ends when the current frame is done.");
+    m.def("add_command", [](const std::string& name, py::function handler) {
+        if (!interpreter) throw std::runtime_error("Python is not running");
+        interpreter->addCommand(name, handler);
+    }, py::arg("name"), py::arg("handler"),
+       "Register a control command (see docs/ai/control-api.md). handler(params_json) gets the command's params as JSON text and "
+       "returns its result as JSON text; a raised exception is reported as the command's error.");
 
     m.def("screenshot", [](const std::string& path) {
         if (!renderer) throw std::runtime_error("the renderer is not running yet");
@@ -273,7 +295,7 @@ void bindGame(py::module_& m) {
         // Only ASCII is kept: the console's commands are ASCII, and Backspace or Enter arrive as keys, not characters.
         std::string text;
         for (char32_t ch : InputMap::takeTypedText()) {
-            if (ch < 128) text.push_back(static_cast<char>(ch));
+            if (ch < 128 && !unattended()) text.push_back(static_cast<char>(ch));
         }
         return text;
     }, "The characters typed since the last call, in order (ASCII only). Use key_down for Backspace and Enter.");

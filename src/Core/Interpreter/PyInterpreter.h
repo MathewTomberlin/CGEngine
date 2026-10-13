@@ -4,6 +4,8 @@
 #include <pybind11/stl.h>
 #include <string>
 #include <vector>
+#include <map>
+#include <stdexcept>
 #include <filesystem>
 #include <iostream>
 
@@ -180,12 +182,37 @@ namespace CGEngine {
         
         //This is name of the PyScript factory method to be called
         const std::string PYSCRIPT_FACTORY_METHOD = "create_instance";
-        
+
+        /**
+         * @brief Registers a control command written in Python (cge.add_command). The control channel runs it for a command
+         * name that has no built-in. The handler gets the command's params as JSON text and returns its result as JSON text.
+         */
+        void addCommand(const std::string& name, py::function handler) {
+            py::gil_scoped_acquire acquire;
+            pythonCommands[name] = handler;
+        }
+
+        bool hasCommand(const std::string& name) const { return pythonCommands.count(name) > 0; }
+
+        /**
+         * @brief Runs a registered command. Throws std::runtime_error with the Python error text if the handler raises.
+         */
+        std::string runCommand(const std::string& name, const std::string& paramsJson) {
+            py::gil_scoped_acquire acquire;
+            try {
+                py::object result = pythonCommands.at(name)(paramsJson);
+                return py::cast<std::string>(result);
+            } catch (const py::error_already_set& e) {
+                throw std::runtime_error(e.what());
+            }
+        }
+
         PyInterpreter(const PyInterpreter&) = delete;
         PyInterpreter& operator=(const PyInterpreter&) = delete;
         PyInterpreter(PyInterpreter&&) = delete;
         PyInterpreter& operator=(PyInterpreter&&) = delete;
     private:
 		pybind11::scoped_interpreter guard{};
+		std::map<std::string, py::function> pythonCommands;
 	};
 }

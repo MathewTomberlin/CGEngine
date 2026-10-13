@@ -99,6 +99,9 @@ namespace CGEngine {
         } else {
             window = make_unique<RenderWindow>(VideoMode(size), windowTitle);
         }
+        // CGENGINE_UNATTENDED=1 (the test scripts set it) keeps the window hidden: a run without a person at the machine does not
+        // appear on screen or take the focus. The GL context still works, so frames and screenshots are as before.
+        if (std::getenv("CGENGINE_UNATTENDED")) window->setVisible(false);
         initView();
         return window.get();
     }
@@ -107,6 +110,11 @@ namespace CGEngine {
 #ifdef _WIN32
         if (!window) return false;
         if (on == fullscreen) return true;
+        // An unattended run has a hidden window: a full screen change would show it over the desk, so only the flag changes.
+        if (std::getenv("CGENGINE_UNATTENDED")) {
+            fullscreen = on;
+            return true;
+        }
         HWND handle = static_cast<HWND>(window->getNativeHandle());
         if (on) {
             windowedPosition = window->getPosition();

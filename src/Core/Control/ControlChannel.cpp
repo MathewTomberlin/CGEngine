@@ -260,6 +260,10 @@ namespace CGEngine {
                     {"materials", assets.getResourceCount<Material>()}
                 };
             }
+            // A command a script registered (cge.add_command) runs here, after the built-in ones.
+            if (interpreter && interpreter->hasCommand(command)) {
+                return json::parse(interpreter->runCommand(command, params.dump()));
+            }
             throw std::runtime_error("unknown command '" + command + "'");
         }
 
