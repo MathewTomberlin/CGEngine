@@ -255,7 +255,8 @@ def main():
         inv.slots[0] = [STONE, 16]
 
         # Creatures: a hit takes one of the creature's health, the last one takes it out of the world and leaves a hide.
-        checks["creatures are in the world"] = game.walkers is not None and len(game.walkers.walkers) > 0
+        # The herd is made even with no ambient creatures (VOXEL_WALKERS=0, as the suites run); the checks add their own.
+        checks["the creature herd is made"] = game.walkers is not None
         if game.walkers is None:
             raise RuntimeError("the creatures are not made yet")
         spawn = (game.spawn_pos[0] + 3.0, 40.0, game.spawn_pos[2] + 3.0)

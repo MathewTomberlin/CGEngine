@@ -9,6 +9,9 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+# Unattended: no window is shown and no real keyboard, mouse or cursor input is read (see CGENGINE_UNATTENDED in src/Bindings/GameBindings.cpp).
+$env:CGENGINE_UNATTENDED = "1"
+. (Join-Path $PSScriptRoot "unattended.ps1")
 $exeDir = (Resolve-Path $ExeDir).Path
 $control = Join-Path $exeDir "cg_control"
 $inbox = Join-Path $control "inbox"
@@ -112,11 +115,13 @@ $quitScript = Click-Script 500 351
 Remove-Item -Recurse -Force $control -ErrorAction SilentlyContinue
 $env:CGENGINE_SCENE = "scenes/voxels.json"
 $env:VOXEL_SEED = "1"
+# No ambient creatures and survival mode, so the menu checks are not disturbed by a bite.
+$env:VOXEL_WALKERS = "0"; $env:VOXEL_CREATIVE = "0"
 # The settings go to a file of the test's own, so the player's saved settings are not changed by the test.
 $env:VOXEL_SETTINGS = "cg_control/test_settings.json"
-$app = Start-Process -FilePath (Join-Path $exeDir "main.exe") -WorkingDirectory $exeDir -PassThru
+$app = Start-Unattended (Join-Path $exeDir "main.exe") $exeDir
 Remove-Item Env:CGENGINE_SCENE
-Remove-Item Env:VOXEL_SEED
+Remove-Item Env:VOXEL_SEED, Env:VOXEL_WALKERS, Env:VOXEL_CREATIVE
 Remove-Item Env:VOXEL_SETTINGS
 
 function Run-Script($id, $text) {
