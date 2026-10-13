@@ -95,6 +95,9 @@ namespace CGEngine {
 		// The terrain's density at each block corner, in the layout of blocks: the share of the 2 by 2 by 2 blocks meeting there that are
 		// terrain, less VoxelTerrainShift (computeSkin). Empty until computeSkin runs; only the terrain's smooth mesh reads it.
 		std::vector<float> skin;
+		// The terrain's occupancy, 1 where a block is group 0 and 0 elsewhere, in the layout of blocks. Set by computeSkin with the
+		// skin; the terrain's density reads the block centres from it, which is much cheaper than asking inGroup for each.
+		std::vector<uint8_t> terrain;
 
 		size_t index(int x, int y, int z) const {
 			const int p = size + 2 * border;

@@ -25,6 +25,7 @@ SCENES = os.path.join(RESOURCES, "scenes")
 INVALID = os.path.join(SCENES, "invalid")
 SCRIPTS = os.path.join(RESOURCES, "scripts")
 CONTROL_CPP = os.path.join(ROOT, "src", "Core", "Control", "ControlChannel.cpp")
+SCRIPTS = os.path.join(ROOT, "resources", "scripts")
 CONTROL_DOC = os.path.join(ROOT, "docs", "ai", "control-api.md")
 
 WORLD_ROOT = "Root"  # created by the engine before any scene loads, so scripts may attach to it
@@ -186,11 +187,17 @@ def check_command_list():
         engine = set(re.findall(r'command == "(\w+)"', f.read()))
     with open(CONTROL_DOC, encoding="utf-8") as f:
         documented = set(re.findall(r"^### `(\w+)`", f.read(), re.MULTILINE))
-    for name in sorted(engine - documented):
-        failures.append(f"command '{name}' is in ControlChannel.cpp but not in docs/ai/control-api.md")
-    for name in sorted(documented - engine):
-        failures.append(f"command '{name}' is in docs/ai/control-api.md but not in ControlChannel.cpp")
-    return len(engine)
+    # A game can add its own commands from Python (cge.add_command), e.g. the voxel sample's voxel_edit.
+    scripted = set()
+    for name in os.listdir(SCRIPTS):
+        if name.endswith(".py"):
+            with open(os.path.join(SCRIPTS, name), encoding="utf-8") as f:
+                scripted |= set(re.findall(r'add_command\("(\w+)"', f.read()))
+    for name in sorted((engine | scripted) - documented):
+        failures.append(f"command '{name}' is in the engine or a script but not in docs/ai/control-api.md")
+    for name in sorted(documented - engine - scripted):
+        failures.append(f"command '{name}' is in docs/ai/control-api.md but not in ControlChannel.cpp or a script")
+    return len(engine) + len(scripted)
 
 
 failures = []
