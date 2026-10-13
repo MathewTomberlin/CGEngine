@@ -194,6 +194,45 @@ namespace CGEngine {
 		// centres' occupancy, scaled by VoxelCentreWeight (the mesh's corners and centres are the same numbers). Each other smooth skin adds up the weights of the corners it is in, and the density is the largest. The
 		// world's ends are solid below and open above, and the unloaded cells are solid terrain. Python's copy (VoxelPhysics.py)
 		// matches it operation for operation, so the parity check can compare them.
+		// The common case, read straight: the 3 by 3 by 3 blocks the density reads lie in one loaded chunk, away from its walls and
+		// floor and roof, and none is a smooth block. Then the terrain is the chunk's corner counts and its blocks, which is the sum below
+		// with the same numbers (the creatures' and the player's collision queries are this function, so it is the hot path).
+		{
+			const int ix = static_cast<int>(std::floor(x)), iy = static_cast<int>(std::floor(y)), iz = static_cast<int>(std::floor(z));
+			const int cx = floorDiv(ix, size), cz = floorDiv(iz, size);
+			const int lx = ix - cx * size, lz = iz - cz * size;
+			const Chunk* chunk = findChunk(cx, cz);
+			if (chunk && chunk->loaded && lx >= 1 && lx <= size - 2 && lz >= 1 && lz <= size - 2 && iy >= 1 && iy <= height - 2) {
+				bool smooth = false;
+				for (int dz = -1; dz <= 1 && !smooth; ++dz) {
+					for (int dy = -1; dy <= 1 && !smooth; ++dy) {
+						for (int dx = -1; dx <= 1 && !smooth; ++dx) {
+							smooth = types[chunk->blocks[localIndex(lx + dx, iy + dy, lz + dz)]].own;
+						}
+					}
+				}
+				if (!smooth) {
+					if (chunk->counts.empty()) buildCounts(cx, cz);
+					// The centre cells are the block whose centre is the corner below the point, as in the sum below.
+					const double bxFloor = std::floor(x - 0.5), byFloor = std::floor(y - 0.5), bzFloor = std::floor(z - 0.5);
+					const int ox = static_cast<int>(bxFloor) - cx * size, oy = static_cast<int>(byFloor), oz = static_cast<int>(bzFloor) - cz * size;
+					const double ux = x - ix, uy = y - iy, uz = z - iz;
+					const double tx = x - 0.5 - bxFloor, ty = y - 0.5 - byFloor, tz = z - 0.5 - bzFloor;
+					double terrainShare = 0.0;
+					double centres = 0.0;
+					for (int c = 0; c < 8; ++c) {
+						const int dx = c & 1, dy = (c >> 1) & 1, dz = (c >> 2) & 1;
+						const double w = (dx ? ux : 1.0 - ux) * (dy ? uy : 1.0 - uy) * (dz ? uz : 1.0 - uz);
+						const size_t corner = (static_cast<size_t>(iy + dy) * size + (lz + dz)) * size + (lx + dx);
+						terrainShare += w * (chunk->counts[corner] / 8.0 - VoxelTerrainShift);
+						const double wc = (dx ? tx : 1.0 - tx) * (dy ? ty : 1.0 - ty) * (dz ? tz : 1.0 - tz);
+						const uint8_t block = chunk->blocks[localIndex(ox + dx, oy + dy, oz + dz)];
+						if (block != 0 && types[block].solid) centres += wc;
+					}
+					return std::max(terrainShare, VoxelCentreWeight * centres);
+				}
+			}
+		}
 		const double bx = x - 0.5, by = y - 0.5, bz = z - 0.5;
 		const double fx = std::floor(bx), fy = std::floor(by), fz = std::floor(bz);
 		const double tx = bx - fx, ty = by - fy, tz = bz - fz;
