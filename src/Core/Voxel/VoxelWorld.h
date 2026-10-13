@@ -56,6 +56,15 @@ namespace CGEngine {
 		// Level of detail for the smooth skin: the chunks within nearChunks of the focus (see update) use nearSamples per
 		// block, the rest use the smoothing resolution. nearChunks 0 turns it off.
 		void setDetail(int nearChunks, int nearSamples);
+		// The ghost of a placement, in the runtime mesh "voxel_preview": the mesh a block would have at the cell, shown only where it
+		// is new (outside the terrain as it is). setPreviewProp shows a torch leaning in direction dir (PropDirs). clearPreview hides it.
+		void setPreview(int x, int y, int z, int blockId);
+		void setPreviewProp(int x, int y, int z, int dir);
+		// The outward normal of the skin at a point (the gradient of skinDensity, negated), and the normal where a torch leans on the
+		// block in direction dir from cell (x, y, z): the stick stands out along it.
+		glm::vec3 skinNormal(double x, double y, double z) const;
+		glm::vec3 propNormal(int x, int y, int z, int dir) const;
+		void clearPreview();
 		// Far skins: the chunks more than farChunks from the focus are meshed with every stride-th block sampled (a stride of 2
 		// is a quarter of the quads). 0 chunks turns it off.
 		void setFar(int farChunks, int stride);
@@ -255,6 +264,8 @@ namespace CGEngine {
 		bool focusKnown = false;
 		// The blocks in flight, drawn as one mesh of balls (see updateMovingBlocks).
 		std::pair<bool, id_t> movingBody = { false, 0 };
+		// The placement ghost's body, if one is shown (see setPreview).
+		std::pair<bool, id_t> previewBody = { false, 0 };
 		bool movingShown = false;
 		std::map<std::pair<int, int>, Chunk> chunks;
 		// The regions whose mesh may be out of date, so update() finds them without scanning every region.
@@ -289,6 +300,9 @@ namespace CGEngine {
 		// Re-reads the detail of every loaded chunk for a new focus; a chunk whose level changed is meshed again.
 		void refreshResolutions(int focusX, int focusZ, bool force);
 		void updateMovingBlocks();
+		// The ghost's mesh for a block (or a torch when propDir is 0 to 5), in world coordinates, with only its new triangles.
+		void previewMesh(int x, int y, int z, int blockId, int propDir, MeshArrays& out) const;
+		void showPreview(MeshArrays& arrays);
 		void stopWorkers();
 		void workerLoop();
 		void enqueue(std::function<void()> job);

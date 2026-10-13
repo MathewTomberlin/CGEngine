@@ -1109,8 +1109,13 @@ namespace CGEngine {
 		//Draw each body with its calculated transform. Transparent bodies (the voxel water) come after the opaque ones, blended and
 		//without writing depth, so what is behind them still shows. The shadow map skips them: they do not block the sun.
 		vector<Body*> transparentBodies;
+		vector<Body*> xrayBodies;
 		for (auto iterator = renderOrder.begin(); iterator != renderOrder.end(); ++iterator) {
 			Body* body = assets.get<Body>(*iterator);
+			if (body->xray) {
+				if (!shadowPass) xrayBodies.push_back(body);
+				continue;
+			}
 			if (body->transparent) {
 				if (!shadowPass) transparentBodies.push_back(body);
 				continue;
@@ -1123,6 +1128,14 @@ namespace CGEngine {
 				body->onDraw(*window, body->getGlobalTransform());
 			}
 			GL_CHECK(glDepthMask(GL_TRUE));
+		}
+		// The x-ray bodies (the outlines of the block being aimed at) are drawn with the depth test off, so the skin does not hide them.
+		if (!xrayBodies.empty()) {
+			GL_CHECK(glDisable(GL_DEPTH_TEST));
+			for (Body* body : xrayBodies) {
+				body->onDraw(*window, body->getGlobalTransform());
+			}
+			GL_CHECK(glEnable(GL_DEPTH_TEST));
 		}
 	}
 

@@ -231,6 +231,12 @@ void bindGame(py::module_& m) {
         py::arg("material_ids"), py::arg("indices"),
         "Replace the vertices and indices of a body made by create_mesh_body. The GPU copy is updated before the next frame.");
 
+    m.def("set_xray", [](const std::string& name, bool on) {
+        Body* body = findBodyByName(name);
+        if (!body) throw std::invalid_argument("no body named '" + name + "'");
+        body->xray = on;
+    }, py::arg("name"), py::arg("on"), "Draw a body with the depth test off, so it shows through what is in front of it.");
+
     m.def("remove_mesh_body", [](const std::string& name) {
         return removeRuntimeMeshBody(name);
     }, py::arg("name"), "Remove a body made by create_mesh_body, and free its mesh. Returns False if there is no such body.");
@@ -376,14 +382,16 @@ void bindGame(py::module_& m) {
        "Make a text label at position (window pixels from the top-left) drawn over the scene. Use a font loaded with load_font. "
        "outline_thickness (pixels) draws an outline in outline_colour, which keeps the text readable over any background.");
 
-    m.def("set_text_body", [](const std::string& name, const std::string& text, std::optional<sf::Vector2f> position) {
+    m.def("set_text_body", [](const std::string& name, const std::string& text, std::optional<sf::Vector2f> position,
+                              std::optional<sf::Color> colour) {
         Body* body = findBodyByName(name);
         sf::Text* label = body ? body->get<sf::Text*>() : nullptr;
         if (!label) throw std::runtime_error("no text body named '" + name + "'");
         label->setString(text);
         if (position) label->setPosition(*position);
-    }, py::arg("name"), py::arg("text"), py::arg("position") = py::none(),
-       "Change the text of a label made by create_text_body, and optionally its position (window pixels).");
+        if (colour) label->setFillColor(*colour);
+    }, py::arg("name"), py::arg("text"), py::arg("position") = py::none(), py::arg("colour") = py::none(),
+       "Change the text of a label made by create_text_body, and optionally its position (window pixels) and colour.");
 
     // A filled rectangle over the scene, in window pixels from the top-left corner: the HUD's boxes, slots and swatches. It is an
     // overlay body, so it is drawn over the meshes; its z order puts it under the labels (which are 1000).

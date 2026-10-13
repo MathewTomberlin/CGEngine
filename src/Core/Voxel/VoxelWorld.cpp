@@ -11,6 +11,9 @@ namespace CGEngine {
 	namespace {
 		// Loaded chunks copied for meshing per update at most, so one update never copies too many of them.
 		const int MaxMeshStartsPerUpdate = 16;
+	// The placement ghost is built from the blocks this far each side of its cell, and keeps the surface this close to it.
+	const int PreviewRadius = 4;
+	const float PreviewKeep = 2.5f;
 		// A region is RegionChunks by RegionChunks chunks, drawn as one body per mesh group. The view then draws a few
 		// hundred regions' groups instead of a body per chunk (roadmap 15.5).
 		const int RegionChunks = 4;
@@ -934,7 +937,7 @@ namespace CGEngine {
 					const int py = entry.first / (size * size);
 					if (px < -border || px >= size + border || pz < -border || pz >= size + border) continue;
 					const float anchor = propAnchor(cx * size + px, py, cz * size + pz, entry.second);
-					padded.props.push_back({ px, py, pz, entry.second, anchor });
+					padded.props.push_back({ px, py, pz, entry.second, anchor, propNormal(cx * size + px, py, cz * size + pz, entry.second) });
 				}
 			}
 		}
@@ -1239,6 +1242,136 @@ namespace CGEngine {
 	}
 
 	// The blocks in flight are drawn as balls that move with them, in one runtime mesh that is rebuilt while any move.
+	void VoxelWorld::setPreview(int x, int y, int z, int blockId) {
+		clearPreview();
+		if (blockId <= 0 || blockId >= 256) return;
+		MeshArrays arrays;
+		previewMesh(x, y, z, blockId, -1, arrays);
+		showPreview(arrays);
+	}
+
+	void VoxelWorld::setPreviewProp(int x, int y, int z, int dir) {
+		clearPreview();
+		if (dir < 0 || dir > 5) return;
+		MeshArrays arrays;
+		previewMesh(x, y, z, 0, dir, arrays);
+		showPreview(arrays);
+	}
+
+	void VoxelWorld::clearPreview() {
+		if (!previewBody.first) return;
+		if (Body* body = assets.get<Body>(previewBody.second)) removeRuntimeMesh(body);
+		previewBody = { false, 0 };
+	}
+
+	void VoxelWorld::showPreview(MeshArrays& arrays) {
+		if (arrays.indices.empty()) return;
+		std::vector<id_t> materials;
+		if (auto materialId = assets.getId<Material>("voxel_ghost")) {
+			materials.push_back(materialId.value());
+		} else {
+			materials.push_back(assets.getDefaultId<Material>().value_or(0));
+		}
+		Body* body = createCompactMeshBody("voxel_preview", std::move(arrays.vertices), std::move(arrays.indices), materials,
+			Vector3f(0.0f, 0.0f, 0.0f));
+		if (body) {
+			body->transparent = true;
+			previewBody = { true, body->getId().value_or(0) };
+		}
+	}
+
+	void VoxelWorld::previewMesh(int x, int y, int z, int blockId, int propDir, MeshArrays& out) const {
+		// A padded copy of the blocks around the cell, PreviewRadius each side of it and up to just above it. Its origin is the
+		// world cell (ox, 0, oz), so its mesh is local to that and is moved into place at the end.
+		const int span = 2 * PreviewRadius;
+		const int ox = x - PreviewRadius;
+		const int oz = z - PreviewRadius;
+		PaddedChunk padded;
+		padded.size = span;
+		padded.height = std::min(height, y + PreviewRadius + 1);
+		padded.border = 3;
+		const int p = span + 2 * padded.border;
+		padded.blocks.assign(static_cast<size_t>(p) * p * (padded.height + 2 * padded.border), 0);
+		for (int py = 0; py < padded.height; ++py) {
+			for (int pz = -padded.border; pz < span + padded.border; ++pz) {
+				for (int px = -padded.border; px < span + padded.border; ++px) {
+					padded.blocks[padded.index(px, py, pz)] = static_cast<uint8_t>(getBlock(ox + px, py, oz + pz));
+				}
+			}
+		}
+		for (size_t id = 0; id < 256; ++id) {
+			padded.emission[id] = types[id].emits;
+			padded.rule[id].group = meshGroup(types[id], static_cast<uint8_t>(id));
+			padded.rule[id].join = types[id].joinAbove;
+			padded.rule[id].joinBelow = types[id].joinBelow;
+			padded.rule[id].cube = types[id].cube;
+		}
+		const int cx = x - ox;
+		const int cy = y;
+		const int cz = z - oz;
+		const std::array<glm::vec3, 256> colours = palette;
+		const int resolution = resolutionFor(floorDiv(x, size), floorDiv(z, size));
+
+		if (propDir >= 0) {
+			padded.props.push_back({ cx, cy, cz, static_cast<uint8_t>(propDir), propAnchor(x, y, z, propDir), propNormal(x, y, z, propDir) });
+			computeLight(padded);
+			buildPropMesh(padded, out);
+		} else if (blockId > 0) {
+			const uint8_t group = padded.rule[static_cast<size_t>(blockId)].group;
+			if (types[static_cast<size_t>(blockId)].cube || resolution <= 0) {
+				// A cube is its own mesh: the copy holds only the new block, so nothing else in its group is drawn.
+				std::fill(padded.blocks.begin(), padded.blocks.end(), 0);
+				padded.blocks[padded.index(cx, cy, cz)] = static_cast<uint8_t>(blockId);
+				computeLight(padded);
+				buildChunkMesh(padded, colours, group, out);
+			} else {
+				// The terrain as it is is kept for the filter below; the copy with the block added is meshed.
+				PaddedChunk before = padded;
+				padded.blocks[padded.index(cx, cy, cz)] = static_cast<uint8_t>(blockId);
+				computeLight(padded);
+				if (group == 0) {
+					computeSkin(before);
+					computeSkin(padded);
+				}
+				MeshArrays full;
+				buildSmoothMesh(padded, colours, resolution, 1, 0, group, full);
+				const glm::vec3 centre(cx + 0.5f, cy + 0.5f, cz + 0.5f);
+				for (size_t t = 0; t + 2 < full.indices.size(); t += 3) {
+					glm::vec3 corner(0.0f);
+					for (size_t k = 0; k < 3; ++k) corner += full.vertices[full.indices[t + k]].position;
+					const glm::vec3 middle = corner / 3.0f;
+					if (glm::distance(middle, centre) > PreviewKeep) continue;
+					// A triangle inside the terrain as it stands is the terrain itself, not new, so only the new ones are drawn.
+					if (densityAtPoint(before, group, middle) > VoxelSkinIso) continue;
+					for (size_t k = 0; k < 3; ++k) out.indices.push_back(full.indices[t + k]);
+				}
+				out.vertices = std::move(full.vertices);
+			}
+		}
+		// Move the ghost from the padded copy's corner into the world.
+		for (VoxelVertex& vertex : out.vertices) {
+			vertex.position.x += static_cast<float>(ox);
+			vertex.position.z += static_cast<float>(oz);
+		}
+	}
+
+
+	glm::vec3 VoxelWorld::skinNormal(double x, double y, double z) const {
+	    const double h = 0.25;
+	    const double gx = skinDensity(x + h, y, z) - skinDensity(x - h, y, z);
+	    const double gy = skinDensity(x, y + h, z) - skinDensity(x, y - h, z);
+	    const double gz = skinDensity(x, y, z + h) - skinDensity(x, y, z - h);
+	    const double length = std::sqrt(gx * gx + gy * gy + gz * gz);
+	    if (length < 1e-9) return glm::vec3(0.0f, 1.0f, 0.0f);
+	    return glm::vec3(static_cast<float>(-gx / length), static_cast<float>(-gy / length), static_cast<float>(-gz / length));
+	}
+
+	glm::vec3 VoxelWorld::propNormal(int x, int y, int z, int dir) const {
+	    // The foot of the torch: on the skin, at the anchor toward the block it leans on from the cell's centre.
+	    const double anchor = propAnchor(x, y, z, dir);
+	    return skinNormal(x + 0.5 + PropDirs[dir][0] * anchor, y + 0.5 + PropDirs[dir][1] * anchor, z + 0.5 + PropDirs[dir][2] * anchor);
+	}
+
 	void VoxelWorld::updateMovingBlocks() {
 		const std::vector<VoxelSimulation::Move>& moves = simulation.inFlight();
 		if (moves.empty() && !movingShown) return;

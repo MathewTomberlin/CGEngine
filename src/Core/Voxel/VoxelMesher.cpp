@@ -468,6 +468,10 @@ namespace CGEngine {
 		}
 	}
 
+	float densityAtPoint(const PaddedChunk& chunk, uint8_t group, glm::vec3 p) {
+		return densityAt(chunk, group, p);
+	}
+
 	void buildSmoothMesh(const PaddedChunk& chunk, const std::array<glm::vec3, 256>& palette, int resolution, int stride,
 		unsigned skirtSides, uint8_t group, MeshArrays& out) {
 		out.vertices.clear();
@@ -682,27 +686,69 @@ namespace CGEngine {
 		}
 	}
 
-	PropShape propShape(glm::vec3 cell, int dir, float anchor) {
+	// The half size of a box with the given axes and half sizes, along each world axis (for the axis-aligned bound of a stick).
+	glm::vec3 boundOf(const glm::vec3 axes[3], glm::vec3 half) {
+		glm::vec3 bound(0.0f);
+		for (int j = 0; j < 3; ++j) {
+			for (int i = 0; i < 3; ++i) bound[i] += std::abs(axes[j][i]) * half[j];
+		}
+		return bound;
+	}
+
+	PropShape propShape(glm::vec3 cell, int dir, float anchor, glm::vec3 normal) {
 		const glm::vec3 wall(PropDirs[dir][0], PropDirs[dir][1], PropDirs[dir][2]);
-		// The base is on the skin of the wall, at anchor toward it. A floor torch stands up from the skin, a ceiling one hangs
-		// from it, and a torch on a side wall stands against it, low in its cell, with the stick's outer face on the skin.
 		const bool ceiling = wall.y > 0.5f;
 		const bool floor = wall.y < -0.5f;
+		// The foot is on the skin of the block the torch leans on, at anchor toward it. A side torch sits low in its cell.
 		glm::vec3 base = cell + wall * anchor;
-		glm::vec3 up(0.0f, 1.0f, 0.0f);
-		glm::vec3 offset(0.0f);
-		if (ceiling) {
-			up = glm::vec3(0.0f, -1.0f, 0.0f);
-		} else if (!floor) {
-			base.y -= 0.2f;
-			offset = -wall * 0.06f;
-		}
+		if (!floor && !ceiling) base.y -= 0.2f;
+		// The stick stands out of the skin along the surface normal, tilted up a little so a torch on a wall or a slope still stands up.
+		const glm::vec3 n = glm::length(normal) > 1e-4f ? glm::normalize(normal) : -wall;
+		const glm::vec3 upward = ceiling ? glm::vec3(0.0f, -1.0f, 0.0f) : glm::vec3(0.0f, 1.0f, 0.0f);
+		const glm::vec3 along = glm::normalize(n + upward * 0.5f);
+		glm::vec3 side = glm::cross(along, glm::vec3(0.0f, 0.0f, 1.0f));
+		if (glm::length(side) < 1e-3f) side = glm::cross(along, glm::vec3(1.0f, 0.0f, 0.0f));
+		side = glm::normalize(side);
+		const glm::vec3 third = glm::cross(along, side);
+		// A side torch's stick is kept just off the wall, as it was when the sticks were upright.
+		const glm::vec3 foot = base + (floor || ceiling ? glm::vec3(0.0f) : n * 0.06f);
 		PropShape shape;
-		shape.stickCentre = base + offset + up * 0.25f;
-		shape.stickHalf = glm::vec3(0.06f, 0.25f, 0.06f);
-		shape.flameCentre = base + offset + up * 0.55f;
+		shape.stickAxes[0] = side;
+		shape.stickAxes[1] = along;
+		shape.stickAxes[2] = third;
+		shape.stickSize = glm::vec3(0.06f, 0.25f, 0.06f);
+		shape.stickCentre = foot + along * 0.25f;
+		shape.stickHalf = boundOf(shape.stickAxes, shape.stickSize);
+		shape.flameCentre = foot + along * 0.55f;
 		shape.flameHalf = glm::vec3(0.1f, 0.08f, 0.1f);
 		return shape;
+	}
+
+	// A box with its own axes (orthonormal): half is its half size along each axis, and the faces get the axes' normals.
+	void addOrientedBox(MeshArrays& out, glm::vec3 centre, const glm::vec3 axes[3], glm::vec3 half, glm::vec3 colour, glm::vec3 glow,
+		float sky, float flicker = 0.0f) {
+		for (int axis = 0; axis < 3; ++axis) {
+			const int u = (axis + 1) % 3;
+			const int v = (axis + 2) % 3;
+			for (int sign = -1; sign <= 1; sign += 2) {
+				const glm::vec3 normal = axes[axis] * static_cast<float>(sign);
+				const unsigned int first = static_cast<unsigned int>(out.vertices.size());
+				for (int k = 0; k < 4; ++k) {
+					const glm::vec3 position = centre + normal * half[axis] + axes[u] * ((cornerU[k] ? 1.0f : -1.0f) * half[u])
+						+ axes[v] * ((cornerV[k] ? 1.0f : -1.0f) * half[v]);
+					VoxelVertex vertex;
+					vertex.position = position;
+					vertex.normal = normal;
+					vertex.texCoord = glm::vec2(glm::dot(position, axes[u]), glm::dot(position, axes[v]));
+					vertex.colour = colour;
+					vertex.glow = glow;
+					vertex.flicker = flicker;
+					vertex.sky = sky;
+					out.vertices.push_back(vertex);
+				}
+				out.indices.insert(out.indices.end(), { first, first + 1, first + 2, first, first + 2, first + 3 });
+			}
+		}
 	}
 
 	void buildPropMesh(const PaddedChunk& chunk, MeshArrays& out) {
@@ -713,8 +759,8 @@ namespace CGEngine {
 			if (prop.x < 0 || prop.x >= chunk.size || prop.y < 0 || prop.y >= chunk.height || prop.z < 0 || prop.z >= chunk.size) continue;
 			const float sky = chunk.lightAt(prop.x, prop.y, prop.z) / 255.0f;
 			const glm::vec3 cell(prop.x + 0.5f, prop.y + 0.5f, prop.z + 0.5f);
-			const PropShape shape = propShape(cell, prop.dir, prop.anchor);
-			addBox(out, shape.stickCentre, shape.stickHalf, wood, glm::vec3(0.0f), sky);
+			const PropShape shape = propShape(cell, prop.dir, prop.anchor, prop.normal);
+			addOrientedBox(out, shape.stickCentre, shape.stickAxes, shape.stickSize, wood, glm::vec3(0.0f), sky);
 			// Each torch's flame wavers on its own phase, from its cell (a fraction in 0 to 1, then 1 added so it is never 0).
 			const float seed = std::sin(prop.x * 12.9898f + prop.y * 37.719f + prop.z * 78.233f) * 43758.5453f;
 			const float phase = 1.0f + (seed - std::floor(seed));

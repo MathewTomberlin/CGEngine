@@ -78,6 +78,8 @@ SLOT_GAP = 6                # pixels between slots
 HUD_BOTTOM = 14             # pixels between the hotbar and the bottom of the window
 NOTICE_SECONDS = 1.5        # how long a notice ("Inventory full") stays on screen
 WHITE = (1.0, 1.0, 1.0)
+RETICLE_PLAIN = (255, 255, 255, 255)   # the crosshair when it is not on a surface within reach
+RETICLE_AIM = (240, 72, 36, 255)      # the crosshair when it is on a surface within reach (VoxelGame.update_reticle)
 HIT_FLASH_SECONDS = 0.12    # the aimed block's outline is white this long after a hit
 PLAYER_HEALTH = 10.0        # the player's health: ten segments on the bar above the hotbar
 REGEN_DELAY = 6.0           # seconds without a hit before the player starts to heal
@@ -254,6 +256,8 @@ class VoxelGame(PyScript):
         self.creative = os.environ.get("VOXEL_CREATIVE", "0") == "1"   # placing takes nothing, breaking gives nothing
         self.inventory_open = False     # the inventory screen is up: the world stands still and the mouse is free
         self.inventory_hover = None     # the slot under the mouse on the inventory screen
+        self.preview_key = None         # the placement the ghost shows (cell, item, dir), or None
+        self.reticle_aiming = False     # the crosshair is coloured (on a surface within reach)
         self.crafting = VoxelRecipes.Crafting()   # the recipes the player knows, and the crafting panel's dropdown
         self.craft_hover = None         # the recipe row under the mouse on the crafting panel
         self.mouse_before_inventory = False   # the mouse was captured when the screen opened, so it is again when it closes
@@ -327,7 +331,7 @@ class VoxelGame(PyScript):
             # Made a frame after the world, not during the scene's start: the outlines first, then the labels, so the
             # labels are drawn over the bars.
             self.show_outline("target_break", None, None)
-            self.show_outline("target_place", None, None)
+            self.hide_placement_outlines()
             self.setup_hud()
             self.hud_ready = True
             self.apply_window_settings()
@@ -357,6 +361,7 @@ class VoxelGame(PyScript):
             self.edit_blocks()
             self.learn_recipes()
         self.update_outlines()
+        self.update_preview()
         self.update_hud()
         self.update_sky(dt)
         self.update_held_torch()
@@ -680,6 +685,14 @@ class VoxelGame(PyScript):
             self.step_time_speed(1)
         self.show_menu(True)
 
+    def update_reticle(self):
+        """The crosshair is coloured while it is on a surface within reach (self.target), and white otherwise."""
+        aiming = self.target is not None and not (self.paused or self.inventory_open or self.console.open)
+        if aiming != self.reticle_aiming:
+            self.reticle_aiming = aiming
+            cge.set_text_body("hud_cross", self.menu_text.get("hud_cross", ""),
+                              colour=cge.Color(*(RETICLE_AIM if aiming else RETICLE_PLAIN)))
+
     def set_target_text(self, text):
         if self.target_text != text:
             self.target_text = text
@@ -695,6 +708,7 @@ class VoxelGame(PyScript):
             self.layout_hud()
         # The crosshair is for aiming, so it is hidden while a menu, the inventory or the console is open.
         self.set_menu_text("hud_cross", "" if self.paused or self.inventory_open or self.console.open else "+")
+        self.update_reticle()
         biome = self.world.biome_at(math.floor(self.pos[0]), math.floor(self.pos[2])).capitalize()
         if self.paused or self.inventory_open or self.console.open:
             self.set_target_text("")
@@ -1142,8 +1156,18 @@ class VoxelGame(PyScript):
         if surface is None:
             self.target = physics.raycast(self.solid, eye, look)
             return
-        start = tuple(surface[i] - look[i] * 0.5 for i in range(3))
-        self.target = physics.raycast(self.solid, start, look, max_distance=physics.REACH + 0.5)
+        # The ray starts half a block back from the surface. A start inside a block has no face to place against (its normal is
+        # zero), so the start moves further back until the ray enters a block from outside.
+        first = None
+        for back in (0.5, 1.0, 1.5):
+            start = tuple(surface[i] - look[i] * back for i in range(3))
+            hit = physics.raycast(self.solid, start, look, max_distance=physics.REACH + back)
+            if first is None:
+                first = hit
+            if hit is not None and hit[1] != (0, 0, 0):
+                self.target = hit
+                return
+        self.target = first
 
     def torch_under_aim(self, eye, look):
         """The nearest torch the look ray meets within reach, as (distance, cell, lo, hi), or None: lo and hi are the corners of
@@ -1238,41 +1262,37 @@ class VoxelGame(PyScript):
             cge.update_mesh_body(name, *arrays)
         else:
             cge.create_mesh_body(name, *arrays, materials=["voxel"], position=cge.Vector3f(0, 0, 0))
+            cge.set_xray(name, True)
             self.outline_bodies.add(name)
 
     def update_outlines(self):
-        """Outline what a break takes (the block the crosshair is on, or the torch it is on), and the cell the selected item
-        would go into, in the colour it would have. A hit flashes the break outline white for a moment."""
+        """Outline what a break takes when it is a creature or a torch. A block is not outlined: its ghost and the reticle show it.
+        A hit on a creature flashes its outline white for a moment."""
         if self.paused or self.inventory_open:
             self.show_outline("target_break", None, None)
-            self.show_outline("target_place", None, None)
+            self.hide_placement_outlines()
             return
         if self.aims_at_walker():
             lo, hi = self.walker_target[1].box()
             flash = time.time() < self.flash_until
             self.show_outline("target_break", (lo, hi), WHITE if flash else BREAK_COLOUR)
-            self.show_outline("target_place", None, None)
+            self.hide_placement_outlines()
             return
         if self.aims_at_torch():
             self.show_outline("target_break", (self.torch_target[2], self.torch_target[3]), BREAK_COLOUR)
-            self.show_outline("target_place", None, None)
+            self.hide_placement_outlines()
             return
         if self.target is None:
             self.show_outline("target_break", None, None)
-            self.show_outline("target_place", None, None)
+            self.hide_placement_outlines()
             return
-        block, normal = self.target
-        flash = time.time() < self.flash_until
-        self.show_outline("target_break", (tuple(float(v) for v in block),
-                                           tuple(float(v + 1) for v in block)), WHITE if flash else BREAK_COLOUR)
-        cell = (block[0] + normal[0], block[1] + normal[1], block[2] + normal[2])
-        item = self.selected()
-        if normal == (0, 0, 0) or physics.cell_in_player(cell, self.pos) or item is None:
-            self.show_outline("target_place", None, None)
-            return
-        colour = mix(VoxelGen.COLOURS.get(item, (1.0, 1.0, 1.0)), (1.0, 1.0, 1.0), 0.4)
-        self.show_outline("target_place", (tuple(float(v) for v in cell),
-                                           tuple(float(v + 1) for v in cell)), colour)
+        # A block is shown by the ghost of what it would become and by the reticle: no outline of the block, its face or the cell.
+        self.show_outline("target_break", None, None)
+        self.hide_placement_outlines()
+
+    def hide_placement_outlines(self):
+        self.show_outline("target_place", None, None)
+        self.show_outline("target_face", None, None)
 
     def choose_hotbar(self):
         for slot in range(COLUMNS):
@@ -1451,28 +1471,63 @@ class VoxelGame(PyScript):
                 face = [centre[i] + normal[i] * 0.5 for i in range(3)]
                 self.bursts.add(face, tuple(c * 0.7 for c in colour), 3, 0.14, 0.35)
         elif placing:
-            cell = (block[0] + normal[0], block[1] + normal[1], block[2] + normal[2])
-            if physics.cell_in_player(cell, self.pos):
+            placement, reason = self.placement_check()
+            if placement is None:
+                if reason is not None:
+                    self.notify(reason)
                 return
-            item = self.selected()
-            if item is None:
-                if not self.creative:
-                    self.notify("This slot is empty")
-                return
-            if item not in VoxelGen.COLOURS:
-                self.notify("A %s cannot be placed" % VoxelGen.NAMES[item])
-                return
+            cell, item, direction = placement
             if item == VoxelGen.TORCH:
-                # A torch goes on a face: into the air cell in front of a solid block, leaning on it.
-                if self.world.is_solid(block[0], block[1], block[2]) and self.world.get_block(cell[0], cell[1], cell[2]) == VoxelGen.AIR:
-                    direction = DIRECTION_INDEX[(-normal[0], -normal[1], -normal[2])]
-                    self.world.set_prop(cell[0], cell[1], cell[2], direction)
-                    self.send_request({"op": "prop", "c": list(cell), "s": list(block), "dir": direction})
-                    self.spend()
+                # A torch leans on the block it is aimed at: the request names that block, so the host can check it.
+                self.world.set_prop(cell[0], cell[1], cell[2], direction)
+                self.send_request({"op": "prop", "c": list(cell), "s": list(block), "dir": direction})
             else:
                 self.world.set_block(cell[0], cell[1], cell[2], item)
                 self.send_request({"op": "place", "c": list(cell), "id": item})
-                self.spend()
+            self.spend()
+
+    def placement_check(self):
+        """Whether the selected item can go where the crosshair is. Returns (placement, None), with placement (cell, item, dir) and
+        dir the torch's direction (-1 for a block), or (None, reason) with the reason to tell the player (None says nothing)."""
+        if self.target is None:
+            return None, "Aim at a block to place against"
+        block, normal = self.target
+        if normal == (0, 0, 0):
+            return None, "Aim at a face to place against"
+        cell = (block[0] + normal[0], block[1] + normal[1], block[2] + normal[2])
+        if physics.cell_in_player(cell, self.pos):
+            return None, "You are standing there"
+        item = self.selected()
+        if item is None:
+            return None, None if self.creative else "This slot is empty"
+        if item not in VoxelGen.COLOURS:
+            return None, "A %s cannot be placed" % VoxelGen.NAMES[item]
+        if self.world.get_block(*cell) != VoxelGen.AIR or self.world.prop_at(*cell) != -1:
+            return None, "That space is taken"
+        if item == VoxelGen.TORCH:
+            # A torch goes on a face: into the air cell in front of a solid block, leaning on it.
+            if not self.world.is_solid(*block):
+                return None, "A torch needs a block to lean on"
+            return (cell, item, DIRECTION_INDEX[(-normal[0], -normal[1], -normal[2])]), None
+        return (cell, item, -1), None
+
+    def update_preview(self):
+        """The ghost of the placement: the mesh the selected item would have where it goes, built by the world (VoxelWorld.set_preview).
+        It is shown only while the placement would succeed, and rebuilt only when the cell or the item changes."""
+        placement = None
+        if not (self.paused or self.inventory_open or self.console.open or self.aims_at_walker() or self.aims_at_torch()):
+            placement, _ = self.placement_check()
+        if placement == self.preview_key:
+            return
+        self.preview_key = placement
+        if placement is None:
+            self.world.clear_preview()
+            return
+        cell, item, direction = placement
+        if item == VoxelGen.TORCH:
+            self.world.set_preview_prop(cell[0], cell[1], cell[2], direction)
+        else:
+            self.world.set_preview(cell[0], cell[1], cell[2], item)
 
     # ----- the other process (VoxelNet) ---------------------------------------------------
 
