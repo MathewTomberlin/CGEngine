@@ -118,7 +118,6 @@ namespace CGEngine {
 		// Check for any OpenGL errors that may have occurred during initialization
 		checkGLError("initializeOpenGL", __FILE__, __LINE__);
 
-		commitGL();
 		if (!setGLWindowState(false)) return;
 	}
 
