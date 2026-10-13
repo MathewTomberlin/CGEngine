@@ -77,7 +77,7 @@ void bindVoxel(py::module_& m) {
         .def("stats", [](const VoxelWorld& world) {
             return py::dict("chunks"_a = world.chunkCount(), "loaded"_a = world.loadedCount(), "pending"_a = world.pendingCount(),
                 "dirty"_a = world.dirtyCount(), "meshing"_a = world.meshingCount(), "quads"_a = world.quadCount(),
-                "upload_ms"_a = world.lastUploadMs(), "edits"_a = world.editCount());
+                "upload_ms"_a = world.lastUploadMs(), "uploads"_a = world.uploadCount(), "edits"_a = world.editCount());
         }, "Counts of chunks by state, quads in the meshes, edited blocks, and how long the last update's uploads took.")
         .def("set_smoothing", &VoxelWorld::setSmoothing, py::arg("resolution"),
              "The surface style: 0 for cubes, or the number of samples per block for a smooth skin (1 for the block scale, 2 for half blocks). Loaded chunks are re-meshed.")
@@ -204,5 +204,11 @@ void bindVoxel(py::module_& m) {
              "Add the edits from a file written by save_edits. Loaded chunks change at once. False if the file is unreadable.")
         .def("edit_count", &VoxelWorld::editCount, "How many blocks differ from what the player has edited (all edits, loaded or not).")
         .def("clear_edits", &VoxelWorld::clearEdits, "Forget every edit. Loaded chunks keep their current blocks until they are unloaded or changed.")
+        .def("set_recording", &VoxelWorld::setRecordChanges, py::arg("on"),
+             "Record the cells that change (blocks, torches, damage) for take_changes. The host turns it on.")
+        .def("take_changes", &VoxelWorld::takeChanges, "The cells changed since the last call, as (x, y, z), each once.")
+        .def("edited_cells", &VoxelWorld::editedCells, "Every cell with an edit, a torch or damage, loaded or not, as (x, y, z).")
+        .def("set_damage", &VoxelWorld::setDamage, py::arg("x"), py::arg("y"), py::arg("z"), py::arg("stage"),
+             "Set the damage stage of a block; 0 clears it. A client takes the stage the host sends.")
         .def("clear", &VoxelWorld::clear, "Remove every chunk and its body. Call this before dropping the world.");
 }

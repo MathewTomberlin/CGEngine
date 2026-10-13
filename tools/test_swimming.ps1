@@ -10,6 +10,9 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+# Unattended: no window is shown and no real keyboard, mouse or cursor input is read (see CGENGINE_UNATTENDED in src/Bindings/GameBindings.cpp).
+$env:CGENGINE_UNATTENDED = "1"
+. (Join-Path $PSScriptRoot "unattended.ps1")
 $exeDir = (Resolve-Path $ExeDir).Path
 $control = Join-Path $exeDir "cg_control"
 $inbox = Join-Path $control "inbox"
@@ -70,8 +73,10 @@ $env:CGENGINE_SCENE = "scenes/voxels.json"
 $env:VOXEL_SEED = "1"
 $env:VOXEL_SPAWN = "0.5,-30.5"
 $env:VOXEL_FIXED_STEP = "0.0166667"
-$app = Start-Process -FilePath (Join-Path $exeDir "main.exe") -WorkingDirectory $exeDir -PassThru
-Remove-Item Env:CGENGINE_SCENE; Remove-Item Env:VOXEL_SEED; Remove-Item Env:VOXEL_SPAWN; Remove-Item Env:VOXEL_FIXED_STEP
+# No ambient creatures and survival mode: a bite would send the swimmer back to the spawn.
+$env:VOXEL_WALKERS = "0"; $env:VOXEL_CREATIVE = "0"
+$app = Start-Unattended (Join-Path $exeDir "main.exe") $exeDir
+Remove-Item Env:CGENGINE_SCENE; Remove-Item Env:VOXEL_SEED; Remove-Item Env:VOXEL_SPAWN; Remove-Item Env:VOXEL_FIXED_STEP; Remove-Item Env:VOXEL_WALKERS, Env:VOXEL_CREATIVE
 
 try {
     # The pool's floor is the solid block at y = 11, so the player's feet rest at 12 on the bottom of the water.

@@ -6,6 +6,7 @@
 #include <deque>
 #include <functional>
 #include <map>
+#include <memory>
 #include <set>
 #include <mutex>
 #include <string>
@@ -20,14 +21,20 @@
 #include "VoxelTerrain.h"
 
 namespace CGEngine {
+	// One chunk's meshes, one per group (see buildChunkMesh), in the chunk's own coordinates. A chunk keeps the one it was last
+	// built to (see Chunk::mesh), so a change to one chunk meshes that chunk and not the rest of its region.
+	struct ChunkMesh {
+		std::map<int, MeshArrays> groups;
+	};
+
+
 	// A world of blocks split into square chunks, built in the background. A chunk goes through three steps:
 	//   requestChunk: a worker generates its blocks (VoxelTerrain);
-	//   update: the blocks are installed, and the chunk's region is marked changed;
-	//   update: a worker meshes the changed region from copies of its loaded chunks and their neighbours (VoxelMesher), and
+	//   update: the blocks are installed, and the chunk is marked changed, with the neighbours its light and skin reach;
+	//   update: a worker meshes the changed chunks of a region from copies of them and their neighbours (VoxelMesher), and
 	//           update uploads the region's mesh as one body per mesh group (see RuntimeMesh.h) within a time budget.
 	// A region is RegionChunks by RegionChunks chunks (see VoxelWorld.cpp), so the view draws a region's groups in one body
-	// each instead of one per chunk. Nothing of a chunk's mesh is kept after its region is uploaded: a changed region is meshed
-	// again from the blocks.
+	// each instead of one per chunk. A chunk keeps the mesh it was last built to, so a change re-meshes only the chunks it touches.
 	// Only update() and the block setters touch the world; workers see copies. Block 0 is air. Blocks in chunks that are
 	// not loaded count as air. Chunk (cx, cz) covers x in [cx * size, cx * size + size) and z likewise, and its body sits
 	// at that corner, so its vertices are local to the chunk.
@@ -148,6 +155,8 @@ namespace CGEngine {
 		int meshingCount() const;       // chunks being meshed on a worker
 		int quadCount() const;          // quads in the loaded chunks' meshes, as last uploaded
 		double lastUploadMs() const { return uploadMs; }
+		// Regions uploaded so far: it rises by one each time a region's mesh is shown (see uploadMesh).
+		int uploadCount() const { return uploads; }
 		// Removes every chunk and its body. Work still on the workers is dropped when it finishes. The edits stay.
 		void clear();
 
@@ -158,6 +167,14 @@ namespace CGEngine {
 		bool loadEdits(const std::string& path);
 		int editCount() const;
 		void clearEdits() { edits.clear(); }
+		// Records the cells that change from now on (blocks, torches and damage), for the host to send (VoxelNet). Off by default.
+		void setRecordChanges(bool on);
+		// The cells changed since the last call, as (x, y, z), each once. Forgets them.
+		std::vector<std::array<int, 3>> takeChanges();
+		// Every cell with an edit, a torch or damage, loaded or not, as (x, y, z).
+		std::vector<std::array<int, 3>> editedCells() const;
+		// Sets the damage stage of the block at (x, y, z); 0 clears it. A client takes the stage a host sends this way.
+		void setDamage(int x, int y, int z, int stage);
 
 	private:
 		struct Chunk {
@@ -168,14 +185,15 @@ namespace CGEngine {
 			int resolution = 0;             // the smooth skin's samples per block for this chunk (0: cubes); see resolutionFor
 			int stride = 1;                 // the sample grid's stride for this chunk (2 for a far chunk); see strideFor
 			std::map<int, int> groupQuads;  // the quads of each group's mesh as last uploaded
+			bool dirty = true;                       // its blocks changed since its mesh was built, so it is meshed again (see markDirty)
+			std::shared_ptr<const ChunkMesh> mesh;   // its meshes as last built, reused by a region job while it is not dirty
 		};
 
 		// A region: the bodies that draw its chunks, one per mesh group (0: the terrain). It is meshed as a whole.
 		struct Region {
 			std::map<int, id_t> bodies;     // the body of each group drawn, by its asset id
-			bool dirty = true;              // a chunk changed, so the region is meshed again
-			bool meshing = false;           // a mesh for the current version is on a worker
-			uint32_t version = 0;           // bumped by each change, so a mesh made from older blocks is dropped
+			bool meshing = false;           // a mesh is on a worker
+			uint32_t epoch = 0;             // bumped when the bodies are removed, so a mesh made before that is dropped
 			int settle = 0;                 // updates since the last change; see RegionSettleUpdates in VoxelWorld.cpp
 		};
 
@@ -193,20 +211,20 @@ namespace CGEngine {
 			int quads = 0;
 		};
 
-		// The quads each chunk of a region has, as the region was meshed.
-		struct ChunkQuads {
+		// A chunk as a region job left it: its mesh, which the chunk keeps, and the generation it was meshed for (see Chunk).
+		struct ChunkBuilt {
 			int cx;
 			int cz;
-			int quads;
-			std::map<int, int> groupQuads;
+			uint32_t generation;
+			std::shared_ptr<const ChunkMesh> mesh;
 		};
 
 		struct RegionResult {
 			int rx;
 			int rz;
-			uint32_t version;
+			uint32_t epoch;
 			std::vector<GroupMesh> groups;  // each group's mesh for the whole region, chunks merged
-			std::vector<ChunkQuads> chunks;
+			std::vector<ChunkBuilt> chunks;
 		};
 
 		int size;
@@ -239,9 +257,14 @@ namespace CGEngine {
 		std::map<std::pair<int, int>, std::map<int, uint8_t>> propsByChunk;
 		// Damage by chunk: local index -> stage (see hitBlock). Saved with the edits (version 3 of the edit file).
 		std::map<std::pair<int, int>, std::map<int, uint8_t>> damageByChunk;
+		// Cells changed while recordChanges is on (see takeChanges).
+		bool recordChanges = false;
+		std::set<std::array<int, 3>> changedCells;
+		void noteChange(int x, int y, int z) { if (recordChanges) changedCells.insert(std::array<int, 3>{ x, y, z }); }
 		void clearDamage(int x, int y, int z);
 		uint32_t nextGeneration = 1;
 		double uploadMs = 0.0;
+		int uploads = 0;
 
 		// Background work. Jobs run on the workers; their results wait in the result queues until update() takes them.
 		std::vector<std::thread> workers;

@@ -11,6 +11,9 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+# Unattended: no window is shown and no real keyboard, mouse or cursor input is read (see CGENGINE_UNATTENDED in src/Bindings/GameBindings.cpp).
+$env:CGENGINE_UNATTENDED = "1"
+. (Join-Path $PSScriptRoot "unattended.ps1")
 $exeDir = (Resolve-Path $ExeDir).Path
 $control = Join-Path $exeDir "cg_control"
 $inbox = Join-Path $control "inbox"
@@ -64,10 +67,12 @@ $env:VOXEL_SEED = "1"
 $env:VOXEL_FIXED_STEP = "0.0166667"
 # The start is noon, whatever time the player saved: the sun checks below depend on it.
 $env:VOXEL_TIME = "0.25"
+# No ambient creatures and survival mode: a bite sends the player back to the spawn and moves the walk and the checks.
+$env:VOXEL_WALKERS = "0"; $env:VOXEL_CREATIVE = "0"
 # The game starts from its saved settings, so the test writes a known baseline first: noon, normal time speed, windowed.
 Set-Content -Path (Join-Path $exeDir "voxel_settings.json") -Value '{"mouse_sensitivity": 500, "time_of_day": 0.25, "view_radius": 14, "time_speed": 1.0, "fullscreen": false}' -Encoding utf8
-$app = Start-Process -FilePath (Join-Path $exeDir "main.exe") -WorkingDirectory $exeDir -PassThru
-Remove-Item Env:VOXEL_TIME
+$app = Start-Unattended (Join-Path $exeDir "main.exe") $exeDir
+Remove-Item Env:VOXEL_TIME, Env:VOXEL_WALKERS, Env:VOXEL_CREATIVE
 Remove-Item Env:CGENGINE_SCENE
 Remove-Item Env:VOXEL_SEED
 Remove-Item Env:VOXEL_FIXED_STEP

@@ -10,6 +10,9 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+# Unattended: no window is shown and no real keyboard, mouse or cursor input is read (see CGENGINE_UNATTENDED in src/Bindings/GameBindings.cpp).
+$env:CGENGINE_UNATTENDED = "1"
+. (Join-Path $PSScriptRoot "unattended.ps1")
 $exeDir = (Resolve-Path $ExeDir).Path
 $control = Join-Path $exeDir "cg_control"
 $inbox = Join-Path $control "inbox"
@@ -71,7 +74,7 @@ function Sample-Frames($label, $seconds) {
 Remove-Item -Recurse -Force $control -ErrorAction SilentlyContinue
 $env:CGENGINE_SCENE = "scenes/voxels.json"; $env:VOXEL_SEED = "1"
 $launched = Get-Date
-$app = Start-Process -FilePath (Join-Path $exeDir "main.exe") -WorkingDirectory $exeDir -PassThru
+$app = Start-Unattended (Join-Path $exeDir "main.exe") $exeDir
 Remove-Item Env:CGENGINE_SCENE; Remove-Item Env:VOXEL_SEED
 try {
     while (-not (Test-Path $stateFile)) { Start-Sleep -Milliseconds 200 }

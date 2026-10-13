@@ -97,13 +97,19 @@ class Walker:
             self.timer = self.rng.uniform(1.0, 4.0)
         # A wall stops the creature short of the distance it meant to walk (seen in last frame's move): it turns, and
         # jumps a block if it stands on the ground.
-        if self.last is not None:
+        # A creature held at the player's side is not stuck on a wall: it stands there and bites.
+        touching = distance < physics.CONTACT + physics.CONTACT_SLACK
+        if self.last is not None and not touching:
             walked = math.hypot(pos[0] - self.last[0], pos[2] - self.last[2])
             if walked < 0.5 * pace * dt and on_ground:
                 self.heading += self.rng.choice((-1.0, 1.0)) * self.rng.uniform(math.pi / 3, 2.0 * math.pi / 3)
                 cge.voxel_jump(self.name, physics.JUMP_SPEED)
         self.last = pos
-        cge.set_voxel_velocity(self.name, math.cos(self.heading) * pace, math.sin(self.heading) * pace)
+        vx, vz = math.cos(self.heading) * pace, math.sin(self.heading) * pace
+        if player is not None:
+            # The player is a body too: a creature does not walk into it (the same contact rule as the player's own moves).
+            vx, vz = physics.keep_out(vx, vz, player[0] - pos[0], player[1] - pos[2])
+        cge.set_voxel_velocity(self.name, vx, vz)
         return bite
 
     def hurt(self, from_xz, damage=1):

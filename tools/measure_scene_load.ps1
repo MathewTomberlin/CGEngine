@@ -10,6 +10,9 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+# Unattended: no window is shown and no real keyboard, mouse or cursor input is read (see CGENGINE_UNATTENDED in src/Bindings/GameBindings.cpp).
+$env:CGENGINE_UNATTENDED = "1"
+. (Join-Path $PSScriptRoot "unattended.ps1")
 $exeDir = (Resolve-Path $ExeDir).Path
 $control = Join-Path $exeDir "cg_control"
 $inbox = Join-Path $control "inbox"
@@ -43,7 +46,7 @@ $rows = @()
 foreach ($scenario in $scenarios) {
     for ($run = 1; $run -le $Repeats; $run++) {
         Remove-Item -Recurse -Force $control -ErrorAction SilentlyContinue
-        $app = Start-Process -FilePath (Join-Path $exeDir "main.exe") -WorkingDirectory $exeDir -PassThru
+        $app = Start-Unattended (Join-Path $exeDir "main.exe") $exeDir
         try {
             $deadline = (Get-Date).AddSeconds(30)
             while (-not (Test-Path $inbox)) {

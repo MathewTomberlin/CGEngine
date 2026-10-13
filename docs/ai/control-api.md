@@ -150,6 +150,25 @@ Saves the next rendered frame as a PNG.
 `tools/test_control_channel.ps1` starts the engine with `scenes/example.json`, runs every command
 above, and checks the results. Run it from the repo root after a Debug build.
 
+## Commands from Python
+
+A script can add a command with `cge.add_command(name, handler)`. The channel runs it for a name that has no built-in
+command. The handler gets the command's `params` as JSON text and returns the result as JSON text; an exception it raises
+is the command's `error`. Built-in names win. Registered in the voxel sample:
+
+### `voxel_edit`
+An edit made as a player's click makes it (`docs/games/voxels.md`), under the same rules.
+
+- params: `op` (required: `hit`, `place`, `prop` or `unprop`), `c` (the cell, required), `id` (for `place`), `s` (the
+  block a torch leans on, for `prop`), `dir` (for `prop`), `swings` (1 or 2, for `hit`)
+- result: `{ "sent", "block", "damage", "prop" }`: the cell now. `sent` is true in a client, where the host applies the
+  edit and sends the cell back, so the result can differ from what the host ends with.
+- errors: a bad `op`, or a cell whose chunk is not loaded. A request the host refuses is not an error (the cell shows that).
+
+```json
+{ "command": "voxel_edit", "params": { "op": "hit", "c": [12, 30, -4], "swings": 1 } }
+```
+
 ## Security
 
 The channel reads and writes local files and loads any path it is given. It is intended for a

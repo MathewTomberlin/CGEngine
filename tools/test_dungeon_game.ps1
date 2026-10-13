@@ -10,6 +10,9 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+# Unattended: no window is shown and no real keyboard, mouse or cursor input is read (see CGENGINE_UNATTENDED in src/Bindings/GameBindings.cpp).
+$env:CGENGINE_UNATTENDED = "1"
+. (Join-Path $PSScriptRoot "unattended.ps1")
 $exeDir = (Resolve-Path $ExeDir).Path
 $control = Join-Path $exeDir "cg_control"
 $inbox = Join-Path $control "inbox"
@@ -77,8 +80,7 @@ $env:DUNGEON_FIXED_STEP = "0.0166667"
 $outLog = Join-Path $exeDir "dungeon_test_out.txt"
 $errLog = Join-Path $exeDir "dungeon_test_err.txt"
 Remove-Item -Force $outLog, $errLog -ErrorAction SilentlyContinue
-$app = Start-Process -FilePath (Join-Path $exeDir "main.exe") -WorkingDirectory $exeDir -PassThru `
-    -RedirectStandardOutput $outLog -RedirectStandardError $errLog
+$app = Start-Unattended (Join-Path $exeDir "main.exe") $exeDir $outLog $errLog
 Remove-Item Env:CGENGINE_SCENE
 Remove-Item Env:DUNGEON_SEED
 Remove-Item Env:DUNGEON_FIXED_STEP

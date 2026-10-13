@@ -25,6 +25,8 @@ namespace CGEngine {
 			int resolution = 0;
 			int stride = 1;
 			unsigned skirtSides = 0;
+			uint32_t generation = 0;
+			std::shared_ptr<const ChunkMesh> reuse;   // the mesh the chunk kept, when it has not changed since: then it is not meshed again
 			PaddedChunk padded;
 		};
 
@@ -343,6 +345,7 @@ namespace CGEngine {
 		clearDamage(x, y, z);
 		// The edit is recorded even if the chunk is not loaded, so it is in place when the chunk loads.
 		edits[std::make_pair(cx, cz)][localIndex(lx, y, lz)] = block;
+		noteChange(x, y, z);
 		Chunk* chunk = findChunk(cx, cz);
 		if (!chunk || !chunk->loaded) return;
 		chunk->blocks[localIndex(lx, y, lz)] = block;
@@ -375,6 +378,7 @@ namespace CGEngine {
 		const int lz = z - cz * size;
 		propsByChunk[std::make_pair(cx, cz)][localIndex(lx, y, lz)] = static_cast<uint8_t>(dir);
 		markLight(cx, cz, lx, lz);
+		noteChange(x, y, z);
 		return true;
 	}
 
@@ -389,6 +393,7 @@ namespace CGEngine {
 		if (chunk->second.erase(localIndex(lx, y, lz)) == 0) return;
 		if (chunk->second.empty()) propsByChunk.erase(chunk);
 		markLight(cx, cz, lx, lz);
+		noteChange(x, y, z);
 	}
 
 	int VoxelWorld::propAt(int x, int y, int z) const {
@@ -414,6 +419,7 @@ namespace CGEngine {
 		const int cz = floorDiv(z, size);
 		damageByChunk[std::make_pair(cx, cz)][localIndex(x - cx * size, y, z - cz * size)] = static_cast<uint8_t>(stage);
 		markLight(cx, cz, x - cx * size, z - cz * size);   // the stage shows in this chunk's mesh, and in the neighbours that draw its skin
+		noteChange(x, y, z);
 		return stage;
 	}
 
@@ -427,6 +433,7 @@ namespace CGEngine {
 		const int cz = floorDiv(z, size);
 		damageByChunk[std::make_pair(cx, cz)][localIndex(x - cx * size, y, z - cz * size)] = static_cast<uint8_t>(stage - 1);
 		markLight(cx, cz, x - cx * size, z - cz * size);
+		noteChange(x, y, z);
 		return stage - 1;
 	}
 
@@ -449,6 +456,46 @@ namespace CGEngine {
 		if (chunk->second.erase(localIndex(x - cx * size, y, z - cz * size)) == 0) return;
 		if (chunk->second.empty()) damageByChunk.erase(chunk);
 		markLight(cx, cz, x - cx * size, z - cz * size);
+		noteChange(x, y, z);
+	}
+
+	void VoxelWorld::setDamage(int x, int y, int z, int stage) {
+		if (stage <= 0) {
+			clearDamage(x, y, z);
+			return;
+		}
+		if (y < 0 || y >= height) return;
+		const int cx = floorDiv(x, size);
+		const int cz = floorDiv(z, size);
+		damageByChunk[std::make_pair(cx, cz)][localIndex(x - cx * size, y, z - cz * size)] = static_cast<uint8_t>(stage);
+		markLight(cx, cz, x - cx * size, z - cz * size);
+		noteChange(x, y, z);
+	}
+
+	void VoxelWorld::setRecordChanges(bool on) {
+		recordChanges = on;
+		if (!on) changedCells.clear();
+	}
+
+	std::vector<std::array<int, 3>> VoxelWorld::takeChanges() {
+		std::vector<std::array<int, 3>> out(changedCells.begin(), changedCells.end());
+		changedCells.clear();
+		return out;
+	}
+
+	std::vector<std::array<int, 3>> VoxelWorld::editedCells() const {
+		std::set<std::array<int, 3>> cells;
+		// A cell's key in a chunk is localIndex: (y * size + lz) * size + lx, so x, y and z come back out of it.
+		auto add = [&](const std::pair<int, int>& chunk, int local) {
+			const int lx = local % size;
+			const int lz = (local / size) % size;
+			const int y = local / (size * size);
+			cells.insert(std::array<int, 3>{ chunk.first * size + lx, y, chunk.second * size + lz });
+		};
+		for (const auto& chunk : edits) for (const auto& entry : chunk.second) add(chunk.first, entry.first);
+		for (const auto& chunk : damageByChunk) for (const auto& entry : chunk.second) add(chunk.first, entry.first);
+		for (const auto& chunk : propsByChunk) for (const auto& entry : chunk.second) add(chunk.first, entry.first);
+		return std::vector<std::array<int, 3>>(cells.begin(), cells.end());
 	}
 
 	float VoxelWorld::propAnchor(int x, int y, int z, int dir) const {
@@ -503,21 +550,22 @@ namespace CGEngine {
 		}
 	}
 
-	void VoxelWorld::markDirty(int cx, int cz) {
-		if (findChunk(cx, cz)) markRegionDirty(regionOf(cx, cz));
-	}
+		void VoxelWorld::markDirty(int cx, int cz) {
+			Chunk* chunk = findChunk(cx, cz);
+			if (!chunk) return;
+			chunk->dirty = true;
+			markRegionDirty(regionOf(cx, cz));
+		}
 
 	std::pair<int, int> VoxelWorld::regionOf(int cx, int cz) {
 		return { floorDiv(cx, RegionChunks), floorDiv(cz, RegionChunks) };
 	}
 
-	void VoxelWorld::markRegionDirty(std::pair<int, int> key) {
-		Region& region = regions[key];
-		region.dirty = true;
-		++region.version;
-		region.settle = 0;
-		dirtyRegions.insert(key);
-	}
+		void VoxelWorld::markRegionDirty(std::pair<int, int> key) {
+			Region& region = regions[key];
+			region.settle = 0;
+			dirtyRegions.insert(key);
+		}
 
 	int VoxelWorld::loadedChunksIn(std::pair<int, int> key) const {
 		int count = 0;
@@ -538,8 +586,7 @@ namespace CGEngine {
 			if (Body* mesh = assets.get<Body>(body.second)) removeRuntimeMesh(mesh);
 		}
 		region.bodies.clear();
-		region.dirty = false;
-		++region.version;   // a mesh still on a worker is for the old version, and is dropped when it arrives
+		++region.epoch;   // a mesh still on a worker is for the old bodies, and is dropped when it arrives
 		dirtyRegions.erase(key);
 	}
 
@@ -841,100 +888,105 @@ namespace CGEngine {
 		return padded;
 	}
 
-	void VoxelWorld::startMeshing(std::pair<int, int> key) {
-		Region& region = regions[key];
-		region.dirty = false;
-		region.meshing = true;
-		dirtyRegions.erase(key);
-		// Each loaded chunk of the region is copied here, on this thread, with its neighbours, so the worker sees a fixed copy.
-		std::vector<ChunkInput> inputs;
-		for (int lz = 0; lz < RegionChunks; ++lz) {
-			for (int lx = 0; lx < RegionChunks; ++lx) {
-				const int cx = key.first * RegionChunks + lx;
-				const int cz = key.second * RegionChunks + lz;
-				const Chunk* chunk = findChunk(cx, cz);
-				if (!chunk || !chunk->loaded) continue;
-				ChunkInput input;
-				input.cx = cx;
-				input.cz = cz;
-				input.resolution = chunk->resolution;
-				input.stride = chunk->stride;
-				// Skirts on the sides that meet a neighbour at another level of detail (bit 1: -x, 2: +x, 4: -z, 8: +z).
-				if (input.resolution > 0) {
-					const int dxs[4] = { -1, 1, 0, 0 };
-					const int dzs[4] = { 0, 0, -1, 1 };
-					for (int side = 0; side < 4; ++side) {
-						const Chunk* neighbour = findChunk(cx + dxs[side], cz + dzs[side]);
-						if (neighbour && neighbour->loaded && (neighbour->resolution != input.resolution || neighbour->stride != input.stride)) {
-							input.skirtSides |= 1u << side;
+		void VoxelWorld::startMeshing(std::pair<int, int> key) {
+			Region& region = regions[key];
+			region.meshing = true;
+			dirtyRegions.erase(key);
+			// Each loaded chunk of the region is copied here, on this thread, with its neighbours, so the worker sees a fixed copy.
+			// A chunk that has not changed keeps the mesh it was built to, so it is not copied or meshed again.
+			std::vector<ChunkInput> inputs;
+			for (int lz = 0; lz < RegionChunks; ++lz) {
+				for (int lx = 0; lx < RegionChunks; ++lx) {
+					const int cx = key.first * RegionChunks + lx;
+					const int cz = key.second * RegionChunks + lz;
+					Chunk* chunk = findChunk(cx, cz);
+					if (!chunk || !chunk->loaded) continue;
+					ChunkInput input;
+					input.cx = cx;
+					input.cz = cz;
+					input.generation = chunk->generation;
+					input.resolution = chunk->resolution;
+					input.stride = chunk->stride;
+					// Skirts on the sides that meet a neighbour at another level of detail (bit 1: -x, 2: +x, 4: -z, 8: +z).
+					if (input.resolution > 0) {
+						const int dxs[4] = { -1, 1, 0, 0 };
+						const int dzs[4] = { 0, 0, -1, 1 };
+						for (int side = 0; side < 4; ++side) {
+							const Chunk* neighbour = findChunk(cx + dxs[side], cz + dzs[side]);
+							if (neighbour && neighbour->loaded && (neighbour->resolution != input.resolution || neighbour->stride != input.stride)) {
+								input.skirtSides |= 1u << side;
+							}
 						}
 					}
-				}
-				input.padded = snapshot(cx, cz, VoxelLightReach);
-				inputs.push_back(std::move(input));
-			}
-		}
-		const std::array<glm::vec3, 256> colours = palette;
-		std::array<bool, 256> cubeShape{};
-		for (size_t id = 0; id < 256; ++id) cubeShape[id] = types[id].cube;
-		const uint32_t version = region.version;
-		enqueue([this, key, version, inputs = std::move(inputs), colours, cubeShape]() mutable {
-			RegionResult result;
-			result.rx = key.first;
-			result.rz = key.second;
-			result.version = version;
-			std::map<int, MeshArrays> merged;
-			std::map<int, int> mergedQuads;
-			for (ChunkInput& input : inputs) {
-				computeLight(input.padded);
-				// The terrain, and a mesh of its own for each block type in the chunk that has one (see PaddedChunk::rule).
-				std::array<bool, 256> present{};
-				for (uint8_t block : input.padded.blocks) {
-					if (input.padded.rule[block].group != 0) present[input.padded.rule[block].group] = true;
-				}
-				std::vector<uint8_t> groups = { 0 };
-				for (size_t id = 1; id < 256; ++id) {
-					if (present[id]) groups.push_back(static_cast<uint8_t>(id));
-				}
-				// The chunk's place in the region: its meshes are local to the chunk, and the region's body is at its corner.
-				const float offsetX = static_cast<float>((input.cx - key.first * RegionChunks) * size);
-				const float offsetZ = static_cast<float>((input.cz - key.second * RegionChunks) * size);
-				ChunkQuads chunkQuads;
-				chunkQuads.cx = input.cx;
-				chunkQuads.cz = input.cz;
-				chunkQuads.quads = 0;
-				for (uint8_t group : groups) {
-					MeshArrays part;
-					// A cube block is always cubes; the others are cubes only while the world draws cubes (smoothing 0).
-					const bool cubes = input.resolution <= 0 || (group != 0 && cubeShape[group]);
-					if (cubes) {
-						buildChunkMesh(input.padded, colours, group, part);
+					if (chunk->dirty || !chunk->mesh) {
+						input.padded = snapshot(cx, cz, VoxelLightReach);
 					} else {
-						buildSmoothMesh(input.padded, colours, input.resolution, input.stride, input.skirtSides, group, part);
+						input.reuse = chunk->mesh;
 					}
-					// The torches are drawn with the terrain (their cells are air to it, so they are not part of any block's mesh).
-					if (group == 0) buildPropMesh(input.padded, part);
-					const int quads = static_cast<int>(part.indices.size() / 6);
-					// A group with no faces in this chunk is not one of its groups (the terrain is always considered).
-					if (!part.vertices.empty()) chunkQuads.groupQuads[group] = quads;
-					chunkQuads.quads += quads;
-					mergedQuads[group] += quads;
-					appendMesh(merged[group], part, offsetX, offsetZ);
+					chunk->dirty = false;
+					inputs.push_back(std::move(input));
 				}
-				result.chunks.push_back(std::move(chunkQuads));
 			}
-			for (auto& entry : merged) {
-				if (entry.second.vertices.empty()) continue;
-				GroupMesh group;
-				group.group = static_cast<uint8_t>(entry.first);
-				group.mesh = std::move(entry.second);
-				group.quads = mergedQuads[entry.first];
-				result.groups.push_back(std::move(group));
-			}
-			std::lock_guard<std::mutex> lock(resultMutex);
-			meshResults.push_back(std::move(result));
-		});
-	}
+			const std::array<glm::vec3, 256> colours = palette;
+			std::array<bool, 256> cubeShape{};
+			for (size_t id = 0; id < 256; ++id) cubeShape[id] = types[id].cube;
+			const uint32_t epoch = region.epoch;
+			enqueue([this, key, epoch, inputs = std::move(inputs), colours, cubeShape]() mutable {
+				RegionResult result;
+				result.rx = key.first;
+				result.rz = key.second;
+				result.epoch = epoch;
+				std::map<int, MeshArrays> merged;
+				std::map<int, int> mergedQuads;
+				for (ChunkInput& input : inputs) {
+					std::shared_ptr<const ChunkMesh> mesh = input.reuse;
+					if (!mesh) {
+						computeLight(input.padded);
+						auto built = std::make_shared<ChunkMesh>();
+						// The terrain, and a mesh of its own for each block type in the chunk that has one (see PaddedChunk::rule).
+						std::array<bool, 256> present{};
+						for (uint8_t block : input.padded.blocks) {
+							if (input.padded.rule[block].group != 0) present[input.padded.rule[block].group] = true;
+						}
+						std::vector<uint8_t> groups = { 0 };
+						for (size_t id = 1; id < 256; ++id) {
+							if (present[id]) groups.push_back(static_cast<uint8_t>(id));
+						}
+						for (uint8_t group : groups) {
+							MeshArrays& part = built->groups[group];
+							// A cube block is always cubes; the others are cubes only while the world draws cubes (smoothing 0).
+							const bool cubes = input.resolution <= 0 || (group != 0 && cubeShape[group]);
+							if (cubes) {
+								buildChunkMesh(input.padded, colours, group, part);
+							} else {
+								buildSmoothMesh(input.padded, colours, input.resolution, input.stride, input.skirtSides, group, part);
+							}
+							// The torches are drawn with the terrain (their cells are air to it, so they are not part of any block's mesh).
+							if (group == 0) buildPropMesh(input.padded, part);
+						}
+						mesh = built;
+					}
+					// The chunk's place in the region: its meshes are local to the chunk, and the region's body is at its corner.
+					const float offsetX = static_cast<float>((input.cx - key.first * RegionChunks) * size);
+					const float offsetZ = static_cast<float>((input.cz - key.second * RegionChunks) * size);
+					for (const auto& entry : mesh->groups) {
+						appendMesh(merged[entry.first], entry.second, offsetX, offsetZ);
+						mergedQuads[entry.first] += static_cast<int>(entry.second.indices.size() / 6);
+					}
+					result.chunks.push_back({ input.cx, input.cz, input.generation, mesh });
+				}
+				for (auto& entry : merged) {
+					if (entry.second.vertices.empty()) continue;
+					GroupMesh group;
+					group.group = static_cast<uint8_t>(entry.first);
+					group.mesh = std::move(entry.second);
+					group.quads = mergedQuads[entry.first];
+					result.groups.push_back(std::move(group));
+				}
+				std::lock_guard<std::mutex> lock(resultMutex);
+				meshResults.push_back(std::move(result));
+			});
+		}
 
 	std::string VoxelWorld::bodyName(int rx, int rz, uint8_t group) const {
 		std::string name = "voxel_region_" + std::to_string(rx) + "_" + std::to_string(rz);
@@ -942,23 +994,29 @@ namespace CGEngine {
 		return name;
 	}
 
-	void VoxelWorld::uploadMesh(RegionResult& result) {
-		const auto key = std::make_pair(result.rx, result.rz);
-		auto it = regions.find(key);
-		if (it == regions.end()) return;
-		Region& region = it->second;
-		region.meshing = false;
-		// The region changed while it was being meshed. It is dirty again, so the next update meshes it again.
-		if (result.version != region.version) {
-			if (loadedChunksIn(key) > 0) markRegionDirty(key);
-			return;
-		}
-		for (const ChunkQuads& chunkQuads : result.chunks) {
-			Chunk* chunk = findChunk(chunkQuads.cx, chunkQuads.cz);
-			if (!chunk || !chunk->loaded) continue;
-			chunk->quads = chunkQuads.quads;
-			chunk->groupQuads = chunkQuads.groupQuads;
-		}
+		void VoxelWorld::uploadMesh(RegionResult& result) {
+			const auto key = std::make_pair(result.rx, result.rz);
+			auto it = regions.find(key);
+			if (it == regions.end()) return;
+			Region& region = it->second;
+			region.meshing = false;
+			// The region's bodies were removed while it was being meshed, so this mesh is dropped.
+			if (result.epoch != region.epoch) return;
+		++uploads;
+			// Each chunk keeps the mesh it was built to, so the next region job reuses it. A chunk that changed while its mesh was
+			// built is dirty again, so its region is meshed again after this upload; until then the body is one change behind.
+			for (const ChunkBuilt& built : result.chunks) {
+				Chunk* chunk = findChunk(built.cx, built.cz);
+				if (!chunk || !chunk->loaded || chunk->generation != built.generation) continue;
+				chunk->mesh = built.mesh;
+				chunk->quads = 0;
+				chunk->groupQuads.clear();
+				for (const auto& entry : built.mesh->groups) {
+					const int quads = static_cast<int>(entry.second.indices.size() / 6);
+					chunk->quads += quads;
+					if (!entry.second.vertices.empty()) chunk->groupQuads[entry.first] = quads;
+				}
+			}
 
 		const Vector3f position(static_cast<float>(key.first * RegionChunks * size), 0.0f,
 			static_cast<float>(key.second * RegionChunks * size));
@@ -1068,13 +1126,13 @@ namespace CGEngine {
 		return count;
 	}
 
-	int VoxelWorld::dirtyCount() const {
-		int count = 0;
-		for (const auto& entry : regions) {
-			if (entry.second.dirty) count += loadedChunksIn(entry.first);
+		int VoxelWorld::dirtyCount() const {
+			int count = 0;
+			for (const auto& entry : chunks) {
+				if (entry.second.loaded && entry.second.dirty) ++count;
+			}
+			return count;
 		}
-		return count;
-	}
 
 	int VoxelWorld::meshingCount() const {
 		int count = 0;

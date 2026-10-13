@@ -1,18 +1,25 @@
-"""Loopback multiplayer for the voxel sample (roadmap 18.2): two game processes on one machine share their edits over a TCP socket.
+"""Loopback multiplayer for the voxel sample (roadmap 18.2, 18.3): two game processes on one machine share their edits over a TCP
+socket, and the listening one is the host, which owns the world.
 
 One process listens (VOXEL_NET=listen:7790) and the other connects (VOXEL_NET=connect:127.0.0.1:7790). Both must run the same
 world (the same VOXEL_SEED), because the terrain is generated in each process; only the edits and the player's position are
-sent. The messages are JSON lines: {"t": "block", "c": [x, y, z], "id": id}, {"t": "prop", "c": [x, y, z], "dir": dir} (dir -1
-removes the torch), {"t": "hit", "c": [x, y, z], "stage": stage} and {"t": "pos", "p": [x, y, z], "yaw": yaw}.
+sent. The messages are JSON lines:
+  client -> host: {"t": "req", "op": "hit", "c": cell, "swings": n}, {"t": "req", "op": "place", "c": cell, "id": id},
+                  {"t": "req", "op": "prop", "c": cell, "s": support, "dir": dir}, {"t": "req", "op": "unprop", "c": cell}
+  host -> client: {"t": "cells", "cells": [[x, y, z, block, damage, prop], ...]}, the state of each cell that changed
+  both ways:      {"t": "pos", "p": [x, y, z], "yaw": yaw}
 
-The socket is not blocking: poll() is called once a frame, reads what has arrived, and returns it. A connecting process retries
-until the listener is up. Nothing here is secure or authenticated: it is for two players on one machine, as a first step."""
+The host applies a request with its own rules and then sends the state of the cell, so a request it refuses is undone on the
+client. A new connection gets every edited cell at once. The socket is not blocking: poll() is called once a frame, reads what has
+arrived, and returns it. A connecting process retries until the listener is up. Nothing here is secure or authenticated: it is for
+two players on one machine, as a first step."""
 import json
 import socket
 import time
 
 RETRY_SECONDS = 1.0         # a connecting process tries again this often until the listener is up
 CONNECT_TIMEOUT = 0.2       # seconds a connection attempt may block the frame
+MAX_READS = 16              # socket reads per poll (64 KB each): a snapshot of many edits arrives over a few frames
 
 
 def parse(spec):
@@ -56,10 +63,11 @@ class Link:
         messages = []
         if self.sock is not None:
             try:
-                data = self.sock.recv(65536)
-                if data == b"":
-                    self.drop()
-                else:
+                for _ in range(MAX_READS):
+                    data = self.sock.recv(65536)
+                    if data == b"":
+                        self.drop()
+                        break
                     self.buffer += data
             except BlockingIOError:
                 pass
