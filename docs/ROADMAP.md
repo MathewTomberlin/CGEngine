@@ -26,6 +26,7 @@ The order I am working in, and why:
    night (33), which turns a day's work into a choice.
 2. **Goal 3, several people in one world.** The headless host (31) is the step that makes a host a server rather than a player.
 3. **Goal 4, measured.** The meshing cost (26) is the largest number that every load and every move pays.
+   Animated creatures and item meshes (33, 34) are the next thing the player will see, so they follow the night.
 4. **For the player to judge.** The sounds (27.4), the far skins (22.4, 25.4), and the moon's disc in play.
 
 Still waiting on the player: 11.14 (the square shadow) and 11.15 (the fall through the ground). Both need a snapshot.
@@ -722,10 +723,33 @@ Goal: the game runs as a server with no window, so a host owns the world while p
 
 ## Phase 32: a night that matters (from the vision: goal 1, and the review's first idea)
 Goal: the day is for building and mining, and the night is for staying in.
-- [ ] **32.1** After dark the creatures' chase range grows and more of them come out (`VoxelWalkers`); the moon's phase (VoxelGame's moon_share)
+- [x] **32.1** After dark the creatures' chase range grows and more of them come out (`VoxelWalkers`); the moon's phase (VoxelGame's moon_share)
   scales it, so a full moon is the worst night.
 - [ ] **32.2** A closed room of solid blocks with no gap keeps the biters out: they path around it, and a test checks a room that
   a biter cannot enter.
+
+## Phase 33: animated creatures (from the player: real animated meshes; goal 1)
+Goal: a creature is a body that moves like one: legs that step, a head that turns to what it wants, a bite that is seen, a death that
+is seen. Today a creature is a single box that slides; it is the first thing a player notices.
+- [ ] **33.1** A procedural body from parts: each creature is a torso, a head, four legs and, for a biter, a tail, built from boxes. The
+  legs swing with the distance walked, the head bobs and turns to its heading, and a biter lunges when it bites. The parts are
+  rebuilt as a runtime mesh each frame, for the creatures in view only (12 creatures is a few hundred boxes). Checked by a test
+  that a walking creature's legs are not all in one place, and by a screenshot.
+- [ ] **33.2** A Blender model for each creature kind, modelled with BlenderMCP (port 9877 when the Blender side is open): a rig with
+  idle, walk, bite, hurt and die clips, exported as an FBX and played through the engine's animator, as the knight is
+  (`tools/blender/knight_rig.py`). The voxel walker moves the body; the animation plays on it.
+- [ ] **33.3** The creature kinds in the data file (29.2) name their model and clips, so a new creature is a model and an edit.
+- [ ] **33.4** Feedback that reads: a hit flashes and knocks the creature back with a hit clip, a death falls over and fades, and a
+  biter's bite shows a lunge before the damage. Each is a clip or a part's motion, not a sound alone.
+
+## Phase 34: item meshes (from the player: real item models; goal 1)
+Goal: an item looks like what it is: a tool is a tool on the ground, in the hand, and in the hotbar.
+- [ ] **34.1** Tool meshes built from boxes: a pickaxe is a handle and a head, an iron pickaxe has a head of its own colour. A dropped
+  tool lies on the ground as its mesh, turning slowly, and the hotbar shows a small picture of it in place of a colour swatch.
+- [ ] **34.2** A held tool in the first-person view: the selected tool is drawn in the hand, and each swing that hits a block swings it
+  (the swing is a short rotation of the mesh, not a sound alone).
+- [ ] **34.3** Blender item models for the tools (BlenderMCP, when open), exported as meshes, with the same shapes as 34.1 so the game
+  does not depend on Blender to run.
 
 ## Tooling and quality
 - [x] CI build on Windows (`.github/workflows/build.yml`) with Mesa software OpenGL smoke run

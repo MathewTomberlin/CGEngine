@@ -11,6 +11,7 @@ import random
 
 import cg_engine_bindings as cge
 import VoxelGen
+import VoxelNight
 import VoxelPhysics as physics
 from VoxelShapes import boxes_arrays
 
@@ -27,7 +28,7 @@ KNOCK_SECONDS = 0.25        # a hit pushes the creature away for this long
 KNOCK_PACE = 4.5            # blocks per second while it is pushed back
 FLASH_SECONDS = 0.15        # a hit tints the creature for this long
 BITER_SHARE = 0.3           # the share of creatures that bite
-CHASE_RANGE = 7.0           # a biter this close to the player comes after it
+CHASE_RANGE = VoxelNight.CHASE_RANGE   # a biter this close to the player comes after it by day; further at night (VoxelNight)
 CHASE_PACE = 2.0            # blocks per second while it chases
 BITE_RANGE = 1.3            # a biter this close to the player bites
 BITE_DAMAGE = 1.0           # health the player loses to one bite
@@ -62,7 +63,7 @@ class Walker:
         cge.find_body(name).get_mesh().set_position(cge.Vector3f(*spawn))
         cge.add_voxel_walker(name, world, HALF_WIDTH, HEIGHT)
 
-    def update(self, dt, player=None, prey=None, player_feet=None):
+    def update(self, dt, player=None, prey=None, player_feet=None, night=0.0):
         """Move the creature one frame. Returns the health a biter takes from the player this frame (0 for most frames). prey is
         the (x, z) of a timid creature a biter hunts when the player is not near. player_feet is the height of the player's feet: a
         creature whose body does not reach the player's body (above or below it) neither bites it nor pushes against it. None
@@ -88,7 +89,7 @@ class Walker:
         distance = math.inf if player is None else math.hypot(pos[0] - player[0], pos[2] - player[1])
         level = player is not None and (player_feet is None
                                         or physics.overlaps_vertically(pos[1], HEIGHT, player_feet, physics.PLAYER_HEIGHT))
-        if self.biter and distance < CHASE_RANGE:
+        if self.biter and distance < VoxelNight.chase_range(night):
             # A biter heads for the player, and bites each time it is close and the last bite has had time to recover.
             self.heading = math.atan2(player[1] - pos[2], player[0] - pos[0])
             self.timer = 1.0
@@ -212,7 +213,7 @@ class Walkers:
                     break
         return None
 
-    def update(self, dt, player=None, player_feet=None):
+    def update(self, dt, player=None, player_feet=None, night=0.0):
         """player is the (x, z) of the player, which the creatures run from or chase. A creature that is about to bump another
         turns away from it, so the herd does not stack up in one place. Returns the health the biters took from the player.
         A biter with no player near hunts the nearest timid creature and bites it; a creature a bite kills is in self.killed."""
@@ -221,7 +222,7 @@ class Walkers:
         self.killed = []
         for i, walker in enumerate(self.walkers):
             prey = self.prey_for(i, spots) if walker.biter else None
-            bites += walker.update(dt, player, None if prey is None else (spots[prey][0], spots[prey][2]), player_feet)
+            bites += walker.update(dt, player, None if prey is None else (spots[prey][0], spots[prey][2]), player_feet, night)
             for j, other in enumerate(spots):
                 if i != j and math.hypot(spots[i][0] - other[0], spots[i][2] - other[2]) < BUMP_RANGE:
                     walker.turn_away(other[0], other[2])
