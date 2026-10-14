@@ -728,28 +728,36 @@ Goal: the day is for building and mining, and the night is for staying in.
 - [ ] **32.2** A closed room of solid blocks with no gap keeps the biters out: they path around it, and a test checks a room that
   a biter cannot enter.
 
-## Phase 33: animated creatures (from the player: real animated meshes; goal 1)
-Goal: a creature is a body that moves like one: legs that step, a head that turns to what it wants, a bite that is seen, a death that
-is seen. Today a creature is a single box that slides; it is the first thing a player notices.
-- [ ] **33.1** A procedural body from parts: each creature is a torso, a head, four legs and, for a biter, a tail, built from boxes. The
-  legs swing with the distance walked, the head bobs and turns to its heading, and a biter lunges when it bites. The parts are
-  rebuilt as a runtime mesh each frame, for the creatures in view only (12 creatures is a few hundred boxes). Checked by a test
-  that a walking creature's legs are not all in one place, and by a screenshot.
-- [ ] **33.2** A Blender model for each creature kind, modelled with BlenderMCP (port 9877 when the Blender side is open): a rig with
-  idle, walk, bite, hurt and die clips, exported as an FBX and played through the engine's animator, as the knight is
-  (`tools/blender/knight_rig.py`). The voxel walker moves the body; the animation plays on it.
+## Phase 33: realistic animated creatures (from the player: real animated meshes, not boxes; goal 1)
+Goal: a creature looks and moves like an animal: a shaped body with a skin, a rig, and clips for walk, idle, bite, hurt and death.
+Boxes are not the target (the player's word: "highly realistic"); the look comes from a Blender model, as the dungeon's rigs do.
+- [ ] **33.1** A creature model in Blender through BlenderMCP (port 9877, `tools/blender/*_rig.py` is the pattern): a shaped mesh
+  with smooth shading, a rig, and the clips idle, walk, bite, hurt and die, exported as FBX to `resources/models/voxel/`. The first
+  kind is the timid one; the biter follows. Checked by loading the FBX and listing its clips.
+- [ ] **33.2** The walker plays the model: each creature's body is a skinned model, placed at the walker's feet and yaw each frame,
+  its walk clip speed set from its pace, and its bite and hurt clips played by the walker's own events. The box body goes.
 - [ ] **33.3** The creature kinds in the data file (29.2) name their model and clips, so a new creature is a model and an edit.
-- [ ] **33.4** Feedback that reads: a hit flashes and knocks the creature back with a hit clip, a death falls over and fades, and a
-  biter's bite shows a lunge before the damage. Each is a clip or a part's motion, not a sound alone.
+- [ ] **33.4** Feedback that reads: a hit plays the hurt clip and knocks the creature back; a death plays the die clip and fades; a
+  bite lunges (the bite clip) before the damage lands.
 
-## Phase 34: item meshes (from the player: real item models; goal 1)
-Goal: an item looks like what it is: a tool is a tool on the ground, in the hand, and in the hotbar.
-- [ ] **34.1** Tool meshes built from boxes: a pickaxe is a handle and a head, an iron pickaxe has a head of its own colour. A dropped
-  tool lies on the ground as its mesh, turning slowly, and the hotbar shows a small picture of it in place of a colour swatch.
-- [ ] **34.2** A held tool in the first-person view: the selected tool is drawn in the hand, and each swing that hits a block swings it
-  (the swing is a short rotation of the mesh, not a sound alone).
-- [ ] **34.3** Blender item models for the tools (BlenderMCP, when open), exported as meshes, with the same shapes as 34.1 so the game
-  does not depend on Blender to run.
+## Phase 34: realistic item models (from the player: real item models; goal 1)
+Goal: an item looks like the thing it is: a tool is shaped, textured and held, and its icon is a render of it.
+- [ ] **34.1** Tool models in Blender: a pickaxe with a handle that is turned and worn, and a head with bevelled edges and a material
+  (stone for the pickaxe, iron for the iron pickaxe), exported as FBX. A dropped tool lies on the ground as its model and turns slowly.
+- [ ] **34.2** A held tool in the first-person view: the selected tool's model is drawn in the hand, and each swing that hits a block
+  plays its swing clip (the hand moves; a sound alone is not enough).
+- [ ] **34.3** Icons: each tool's icon is a render of its model (the viewport screenshot through BlenderMCP, saved as a PNG), shown on
+  the hotbar in place of the colour swatch.
+
+## Phase 35: a shader that can make the models look real (from the review: the engine's look is the limit)
+Goal: the engine can light a surface the way a surface looks: normal maps and a physically based material, so the Blender models
+and the textures show their detail, not only their shape.
+- [ ] **35.1** Normal maps in the standard shader: a material takes a normal texture, and the lighting uses it. Checked on a test model
+  by a screenshot against its flat version.
+- [ ] **35.2** A roughness and metallic term, so the iron pickaxe's head shines and the wood does not; the existing ambient and sun
+  stay as they are.
+- [ ] **35.3** Textures for the creatures' skin and the items, made in Blender with the same procedural materials, baked to PNG so the
+  game does not depend on Blender at run time.
 
 ## Tooling and quality
 - [x] CI build on Windows (`.github/workflows/build.yml`) with Mesa software OpenGL smoke run
