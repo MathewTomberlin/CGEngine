@@ -117,6 +117,45 @@ except ValueError as error:
 os.remove(bad)
 check("a recipe that takes an unknown item is refused, and the error names it", "gold" in raised)
 
+# Shaped recipes (30.1): a pattern in the file gives the items it takes, and the grid matches the pattern exactly.
+pick = [r for r in VoxelRecipes.RECIPES if r["name"] == "Pickaxe"][0]
+check("the pickaxe is shaped, and takes the same items its pattern counts", pick["pattern"] is not None and pick["takes"] == {STONE: 3, WOOD: 2})
+check("a shapeless recipe has no pattern", [r for r in VoxelRecipes.RECIPES if r["name"] == "Torch"][0]["pattern"] is None)
+E = None
+grid = [[STONE, STONE, STONE], [E, WOOD, E], [E, WOOD, E]]
+check("the pickaxe's pattern in the grid matches", VoxelRecipes.matches(pick, grid))
+# A two-high pattern of wood can sit at the bottom right of the grid, and the cells above and to its left must be empty.
+two_wood = {"name": "Two wood", "pattern": ((WOOD,), (WOOD,))}
+check("a two-high pattern matches at the bottom right of the grid", VoxelRecipes.matches(two_wood, [[E, E, E], [E, E, E], [E, WOOD, WOOD]]) is False
+      and VoxelRecipes.matches(two_wood, [[E, E, E], [E, E, WOOD], [E, E, WOOD]]))
+check("a two-high pattern is not a match with an item beside it", not VoxelRecipes.matches(two_wood, [[E, E, E], [E, WOOD, E], [E, E, WOOD]]))
+check("an empty grid is not a match for a pattern", not VoxelRecipes.matches(pick, [[E, E, E], [E, E, E], [E, E, E]]))
+check("a stone in the wrong place is not a match", not VoxelRecipes.matches(pick, [[STONE, STONE, E], [E, WOOD, E], [E, WOOD, STONE]]))
+check("an extra item outside the pattern is not a match", not VoxelRecipes.matches(pick, [[STONE, STONE, STONE], [E, WOOD, E], [WOOD, WOOD, E]]))
+check("a mirrored pattern is not a match", not VoxelRecipes.matches(pick, [[STONE, STONE, STONE], [E, E, WOOD], [E, E, WOOD]]) and
+      not VoxelRecipes.matches(pick, [[STONE, STONE, STONE], [WOOD, E, E], [WOOD, E, E]]))
+check("a shapeless recipe never matches a grid", not VoxelRecipes.matches([r for r in VoxelRecipes.RECIPES if r["name"] == "Torch"][0], grid))
+bad_shapes = {
+    "a row of a different length": {"pattern": ["SS", "W"], "key": {"S": "stone", "W": "wood"}},
+    "a character the key does not name": {"pattern": ["SX"], "key": {"S": "stone"}},
+    "a key to an unknown item": {"pattern": ["S"], "key": {"S": "gold"}},
+    "a pattern bigger than the grid": {"pattern": ["SSSS"], "key": {"S": "stone"}},
+    "a shaped recipe that also lists takes": {"pattern": ["S"], "key": {"S": "stone"}, "takes": {"stone": 1}},
+}
+for label, extra in bad_shapes.items():
+    recipe = {"name": "Bad", "category": "Tools", "makes": {"torch": 1}}
+    recipe.update(extra)
+    path = os.path.join(tempfile.gettempdir(), "voxel_shape_bad_test.json")
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump({"recipes": [recipe]}, f)
+    try:
+        VoxelRecipes.load(path)
+        refused = False
+    except ValueError:
+        refused = True
+    os.remove(path)
+    check("a bad shape is refused: " + label, refused)
+
 print()
 if failures:
     print("%d check(s) failed" % len(failures))

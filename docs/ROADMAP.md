@@ -710,8 +710,7 @@ Goal: a recipe is an edit to a file, and the game reads it, so an agent can add 
 
 ## Phase 30: a crafting grid (from the vision: goal 1)
 Goal: crafting is a small puzzle: the items go in a grid, and the pattern makes the output, so a recipe is a shape, not a list.
-- [ ] **30.1** Shaped recipes: a recipe has a pattern (for example a pickaxe is a row of stone over a column of wood), and it is made when
-  the grid holds the pattern. The list recipes stay, as the shapeless ones.
+- [x] **30.1** Shaped recipes: a recipe may have a `pattern` (up to 3 rows of 3 characters, a space for an empty cell) and a `key` naming the item for each character; its counts come from the pattern. The Pickaxe is the first shaped recipe. `VoxelRecipes.matches` checks a 3 by 3 grid: the pattern may sit anywhere, but every other cell must be empty. Checked by `tools/test_voxel_recipes.py`. The panel still crafts by counts until 30.2 adds the grid.
 - [ ] **30.2** A 3 by 3 grid on the crafting panel, filled by clicks, showing the pattern it matches.
 
 ## Phase 31: a headless host (from the vision: goal 3, and 18.1 and 23.5)

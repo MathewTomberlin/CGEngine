@@ -37,9 +37,75 @@ def load(path):
 
     recipes = []
     for entry in data["recipes"]:
-        recipes.append({"name": entry["name"], "category": entry["category"],
-                        "takes": items(entry["takes"], entry["name"]), "makes": items(entry["makes"], entry["name"])})
+        name = entry["name"]
+        if "pattern" in entry:
+            pattern, takes = shape(entry, name)
+        else:
+            pattern, takes = None, items(entry["takes"], name)
+        recipes.append({"name": name, "category": entry["category"], "takes": takes,
+                        "makes": items(entry["makes"], name), "pattern": pattern})
     return tuple(recipes)
+
+
+GRID = 3    # the crafting grid is GRID by GRID cells; a pattern is at most that big
+
+
+def shape(entry, name):
+    """A shaped recipe's pattern as rows of item ids (None for an empty cell), and the items it takes, counted from the pattern.
+    The rows are a list of strings; a space is an empty cell and every other character is a key to an item name."""
+    if "takes" in entry:
+        raise ValueError("recipe %r: a shaped recipe takes its items from its pattern, not from 'takes'" % name)
+    rows = entry["pattern"]
+    if not isinstance(rows, list) or not rows or len(rows) > GRID:
+        raise ValueError("recipe %r: a pattern is between 1 and %d rows" % (name, GRID))
+    width = len(rows[0]) if isinstance(rows[0], str) else 0
+    if not 1 <= width <= GRID or any(not isinstance(row, str) or len(row) != width for row in rows):
+        raise ValueError("recipe %r: every row of a pattern is the same length, from 1 to %d" % (name, GRID))
+    key = entry.get("key", {})
+    if not isinstance(key, dict) or any(len(char) != 1 or char == " " for char in key):
+        raise ValueError("recipe %r: a key maps one character (not a space) to an item name" % name)
+    for char, item_name in key.items():
+        if item_name not in ITEM_IDS:
+            raise ValueError("recipe %r: %r is not an item the game knows" % (name, item_name))
+    pattern, takes = [], {}
+    for row in rows:
+        cells = []
+        for char in row:
+            if char == " ":
+                cells.append(None)
+                continue
+            if char not in key:
+                raise ValueError("recipe %r: the pattern uses %r, which the key does not name" % (name, char))
+            item = ITEM_IDS[key[char]]
+            cells.append(item)
+            takes[item] = takes.get(item, 0) + 1
+        pattern.append(tuple(cells))
+    return tuple(pattern), takes
+
+
+def matches(recipe, grid):
+    """True when a shaped recipe's pattern is in the crafting grid: grid is GRID rows of GRID item ids (None for an empty cell).
+    The pattern may sit anywhere in the grid, but every cell it does not cover must be empty, so a shape must be exact.
+    A recipe that is not shaped never matches here."""
+    pattern = recipe.get("pattern")
+    if not pattern:
+        return False
+    height, width = len(pattern), len(pattern[0])
+    for top in range(GRID - height + 1):
+        for left in range(GRID - width + 1):
+            fits = True
+            for row in range(GRID):
+                for col in range(GRID):
+                    inside = top <= row < top + height and left <= col < left + width
+                    want = pattern[row - top][col - left] if inside else None
+                    if grid[row][col] != want:
+                        fits = False
+                        break
+                if not fits:
+                    break
+            if fits:
+                return True
+    return False
 
 
 def data_file():
