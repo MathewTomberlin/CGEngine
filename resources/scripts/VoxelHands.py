@@ -20,7 +20,7 @@ import VoxelGen
 
 RIGHT_ARM = "models/viewmodel/viewarm_right.fbx"    # the arm on the right of the view, reaching toward the centre
 LEFT_ARM = "models/viewmodel/viewarm_left.fbx"      # the arm on the left of the view
-ARM_OFFSET = (0.25, 0.0, 0.60)                    # where each shoulder sits from the eye: right, up, forward (the left mirrors the right)
+ARM_OFFSET = (0.42, -0.12, 0.50)                    # where each shoulder sits from the eye: right, up, forward (the left mirrors the right)
 HOLD = (0.19, -0.15, 0.62)                          # in the arm's frame, where the held item's middle is (the wrist is near (0.19, -0.15, 0.45))
 ITEM_MODELS = {
     VoxelGen.PICKAXE: "models/viewmodel/item_pickaxe.fbx",
