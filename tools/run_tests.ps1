@@ -29,7 +29,8 @@ $python = @(
     "tools/test_voxel_rules.py",
     "tools/test_voxel_tiles.py",
     "tools/test_voxel_moon.py",
-    "tools/test_voxel_creatures.py"
+    "tools/test_voxel_creatures.py",
+    "tools/test_voxel_paths.py"
 )
 $engineSuites = @(
     "tools/test_voxels.ps1",

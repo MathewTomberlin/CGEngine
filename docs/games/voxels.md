@@ -52,7 +52,8 @@ rate, build and run the Release configuration.
   pattern, the output box names the recipe; click it to make it. A pickaxe is a row of three stone, with two wood
   going down from its middle stone. The grid's items return to the inventory when you close the screen or save.
 - Creatures wander the terrain. A left click on one takes a hit (three hits kill it, and it leaves a hide). One in three is a
-  dark red biter: it chases you inside 7 blocks and bites, 1 health a bite. The bar above the hotbar is your health (ten
+  dark red biter: it chases you inside 7 blocks and bites, 1 health a bite. A wall in its way does not stop it: it walks round by a gap
+  (up to 14 blocks away), or wanders when there is none. The bar above the hotbar is your health (ten
   points): it heals after a few seconds without a hit, a fall past 4 blocks hurts, and at zero you are back at the spawn with
   the inventory kept.
 - C toggles creative mode: placing takes nothing from the slots and breaking adds nothing to them (the old unlimited

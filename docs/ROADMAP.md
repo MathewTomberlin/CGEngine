@@ -725,8 +725,7 @@ Goal: the game runs as a server with no window, so a host owns the world while p
 Goal: the day is for building and mining, and the night is for staying in.
 - [x] **32.1** After dark the creatures' chase range grows and more of them come out (`VoxelWalkers`); the moon's phase (VoxelGame's moon_share)
   scales it, so a full moon is the worst night.
-- [ ] **32.2** A closed room of solid blocks with no gap keeps the biters out: they path around it, and a test checks a room that
-  a biter cannot enter.
+- [x] **32.2** A closed room of solid blocks with no gap keeps the biters out: a biter stopped by a wall plans a route round it (`VoxelPaths`: a breadth-first search on the block grid, one block up or down at a time, within 14 blocks); with no route it wanders. `tools/test_voxel_paths.py` checks the search, including a closed room that has no route in and a gap that has one. The walk round a wall in play is not yet watched.
 
 ## Phase 33: realistic animated creatures (from the player: real animated meshes, not boxes; goal 1)
 Goal: a creature looks and moves like an animal: a shaped body with a skin, a rig, and clips for walk, idle, bite, hurt and death.

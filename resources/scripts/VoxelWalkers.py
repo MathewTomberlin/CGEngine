@@ -5,7 +5,8 @@ This script is the brain: it picks a heading and a pace each frame, turns when a
 when it can. A creature is put back at its spawn if it falls out of the world.
 
 Most creatures are timid: they run from the player when it comes close. Some bite: a biter chases the player when it is near
-and bites when it is close, which is what lowers the player's health (VoxelGame). A creature can be hit: it has HEALTH hits,
+and bites when it is close, which is what lowers the player's health (VoxelGame). A biter stopped by a wall plans a route round
+it (VoxelPaths), and walks it when there is one; with none it wanders. A creature can be hit: it has HEALTH hits,
 each pushes it away and flashes it red, and when it dies it is taken out of the world and leaves a hide (VoxelGen.HIDE)."""
 import json
 import math
@@ -15,6 +16,7 @@ import cg_engine_bindings as cge
 import VoxelCreatures
 import VoxelGen
 import VoxelNight
+import VoxelPaths
 import VoxelPhysics as physics
 
 HALF_WIDTH = 0.3            # the creature is 0.6 wide and 1.2 tall
@@ -27,6 +29,8 @@ KNOCK_PACE = 4.5            # blocks per second while it is pushed back
 FLASH_SECONDS = 0.15        # a hit tints the creature for this long
 CHASE_RANGE = VoxelNight.CHASE_RANGE   # a biter this close to the player comes after it by day; further at night (VoxelNight)
 ATTACK_SECONDS = 0.8               # how long a bite's clip plays before the creature goes back to walking or running
+ROUTE_SECONDS = 1.0                # a biter works out a route round a wall at most this often
+ROUTE_REACH = 0.45                 # blocks: a route cell is reached when the creature is this close to its centre
 CHUNK = VoxelGen.CHUNK
 # The numbers of the two kinds the game starts with, for the checks and the console (the kinds themselves are in the data file).
 TIMID = VoxelCreatures.by_name("timid")
@@ -56,6 +60,8 @@ class Walker:
         self.knock_heading = 0.0
         self.bite_timer = 0.0       # seconds until a biter may bite again
         self.removed = False        # taken out of the world (it is dead): its walker and mesh are gone
+        self.route = []             # the cells a biter walks round a wall to reach the player (VoxelPaths), next first
+        self.route_timer = 0.0      # seconds until a biter may work out a route again
         # The creature is a model body: a horse that the clips animate and the walker moves.
         cge.load_scene_json(json.dumps({"version": 1, "bodies": [{"name": name, "model": self.kind["model"], "position": list(spawn), "material": self.kind["material"],
                                                                   "rotation": [0, 0, 0]}]}))
@@ -77,6 +83,7 @@ class Walker:
             self.last = None
             return 0.0
         self.bite_timer = max(0.0, self.bite_timer - dt)
+        self.route_timer = max(0.0, self.route_timer - dt)
         if self.knock_timer > 0.0:
             # A hit pushes the creature away: it goes straight back, and its own choices wait until the push ends.
             self.knock_timer -= dt
@@ -97,11 +104,17 @@ class Walker:
             cge.set_voxel_position(self.name, player[0] + dx / gap * physics.CONTACT, pos[1], player[1] + dz / gap * physics.CONTACT)
             pos = (player[0] + dx / gap * physics.CONTACT, pos[1], player[1] + dz / gap * physics.CONTACT)
             distance = physics.CONTACT
-        if self.biter and distance < VoxelNight.chase_range(night):
+        chasing = self.biter and distance < VoxelNight.chase_range(night)
+        if not chasing:
+            self.route = []
+        if chasing:
             # A biter heads for the player, and bites each time it is close and the last bite has had time to recover.
             self.heading = math.atan2(player[1] - pos[2], player[0] - pos[0])
             self.timer = 1.0
             pace = self.kind["chase_pace"]
+            heading = self.follow_route(pos) if self.route else None
+            if heading is not None:
+                self.heading = heading
             if distance < self.kind["bite_range"] and self.bite_timer <= 0.0 and level:
                 bite = self.kind["bite_damage"]
                 self.bite_timer = self.kind["bite_interval"]
@@ -125,7 +138,11 @@ class Walker:
         if self.last is not None and not touching:
             walked = math.hypot(pos[0] - self.last[0], pos[2] - self.last[2])
             if walked < 0.5 * pace * dt and on_ground:
-                self.heading += self.rng.choice((-1.0, 1.0)) * self.rng.uniform(math.pi / 3, 2.0 * math.pi / 3)
+                heading = self.follow_route(pos) if chasing and self.plan_route(pos, player, player_feet) else None
+                if heading is not None:
+                    self.heading = heading   # a way round the wall: no random turn
+                else:
+                    self.heading += self.rng.choice((-1.0, 1.0)) * self.rng.uniform(math.pi / 3, 2.0 * math.pi / 3)
                 cge.voxel_jump(self.name, physics.JUMP_SPEED)
         self.last = pos
         if self.lava_ahead(pos):
@@ -139,6 +156,31 @@ class Walker:
         cge.set_voxel_velocity(self.name, vx, vz)
         self.animate(dt, pace, bite > 0.0)
         return bite
+
+    def plan_route(self, pos, player, player_feet):
+        """Work out a route from the creature's cell to a cell beside the player (VoxelPaths), at most once every ROUTE_SECONDS.
+        Returns True when a route is there to walk. With no route found, the creature keeps to its own choices."""
+        if self.route_timer > 0.0:
+            return bool(self.route)
+        self.route_timer = ROUTE_SECONDS
+        here = (math.floor(pos[0]), math.floor(pos[1] + 0.1), math.floor(pos[2]))
+        feet = here[1] if player_feet is None else math.floor(player_feet + 0.1)
+        px, pz = math.floor(player[0]), math.floor(player[1])
+
+        def beside_player(x, y, z):
+            return abs(x - px) <= 1 and abs(z - pz) <= 1 and abs(y - feet) <= 1
+        self.route = VoxelPaths.find_path(self.world.get_block, here, beside_player) or []
+        return bool(self.route)
+
+    def follow_route(self, pos):
+        """The heading toward the next cell of the route, which is dropped once the creature has reached it. None when no route is
+        left to walk."""
+        while self.route:
+            x, _y, z = self.route[0]
+            if math.hypot(x + 0.5 - pos[0], z + 0.5 - pos[2]) >= ROUTE_REACH:
+                return math.atan2(z + 0.5 - pos[2], x + 0.5 - pos[0])
+            self.route.pop(0)
+        return None
 
     def hurt(self, from_xz, damage=1):
         """A hit from the point from_xz (x, z): the creature loses health, is pushed away from the hit and flashes red.
