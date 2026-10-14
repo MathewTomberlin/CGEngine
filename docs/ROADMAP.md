@@ -757,6 +757,13 @@ and the textures show their detail, not only their shape.
 - [ ] **35.3** Textures for the creatures' skin and the items, made in Blender with the same procedural materials, baked to PNG so the
   game does not depend on Blender at run time.
 
+## Phase 36: first-person hands (from the player: the arms hold what you hold, swing, and place)
+Goal: the player sees a right arm that holds the selected item and swings it on a strike, and a left arm that reaches out to place a block.
+- [x] **36.1** A viewmodel path: `cge.set_viewmodel` draws a body last, after the depth buffer is cleared, so the walls never clip a hand (commit 7ca9348). Not yet used by the game.
+- [ ] **36.2** Arm and item models in Blender, through BlenderMCP (port 9877): the right and left arms from the HumanFootman mesh (its DEF arm vertex groups), then the held items: a sword and a bow (Sword.blend, Bow.blend), a pickaxe, a lantern, and a spear (no spear is in the asset library, so it is modelled). Exported to `resources/models/viewmodel/`.
+- [ ] **36.3** The right arm holds the selected item. A left click starts a swing (a wind-up, then the strike), and the strike's effect depends on the item: a pickaxe throws sparks off stone, a sword draws a slash across a creature, a spear thrusts, a lantern is not swung.
+- [ ] **36.4** The left arm reaches out to place on a right click, and draws back.
+
 ## Tooling and quality
 - [x] CI build on Windows (`.github/workflows/build.yml`) with Mesa software OpenGL smoke run
 - [~] Unit tests for pure logic runnable without a GPU. Done for the dungeon generator (`python -I tools/test_dungeon_gen.py`) and for the scene format and command list (`python -I tools/test_scene_format.py`: example scenes, invalid fixtures, documented commands). The C++ parsers in `SceneLoader` and `ControlChannel` are still covered only by the GPU integration test.
