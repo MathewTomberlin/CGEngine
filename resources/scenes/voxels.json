@@ -149,6 +149,8 @@
     "clips/horse_walk.json",
     "clips/horse_idle.json",
     "clips/horse_attack.json",
-    "clips/horse_bound.json"
+    "clips/horse_bound.json",
+    "clips/arm_attack_L.json",
+    "clips/arm_attack_R.json"
   ]
 }

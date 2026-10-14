@@ -44,6 +44,7 @@ ITEM_MATERIALS = {
     VoxelGen.IRON_PICKAXE: "viewmodel_steel",
     VoxelGen.TORCH: "viewmodel_brass",
 }
+ARM_CLIP = "arm_attack_R"           # the right arm's swing, played on each strike (resources/clips, tools/clips/arm_clips.py)
 HELD = "hand_held"
 LEFT = "hand_left"
 RIGHT = "hand_right"
@@ -136,6 +137,7 @@ class HandsMixin:
             self.set_held_model(model)
         if self.pressed("HandsStrike", bool(self.mouse_captured and cge.mouse_down("Left"))):
             self.start_swing(item)
+            cge.play_clip(RIGHT, ARM_CLIP, False, 1.0)
         if self.swing_time is not None:
             self.swing_time += dt
             if self.swing_time >= self.swing_length:
@@ -156,7 +158,8 @@ class HandsMixin:
         right_shoulder = to_world(origin, frame, (-ARM_OFFSET[0], ARM_OFFSET[1], ARM_OFFSET[2]))
         left_shoulder = to_world(origin, frame, (ARM_OFFSET[0], ARM_OFFSET[1], ARM_OFFSET[2]))
         left_shoulder = [left_shoulder[i] + frame[2][i] * reached * REACH_DISTANCE for i in range(3)]
-        right_rotation = (pitch + swung, yaw, 0.0)
+        # The arm's own swing is the clip (arm_attack_R, played on a strike); the body turns with the view only.
+        right_rotation = (pitch, yaw, 0.0)
         left_rotation = (pitch - 15.0 * reached, yaw, 0.0)
         self.place_hand(RIGHT, right_shoulder, right_rotation)
         self.place_hand(LEFT, left_shoulder, left_rotation)
