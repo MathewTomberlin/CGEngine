@@ -45,6 +45,11 @@
       "diffuseTexture": "voxel_noise.png",
       "specular": 0,
       "repeat": true
+    },
+    {
+      "name": "horse",
+      "diffuseTexture": "Horse_Atlas_Color.png",
+      "specular": 0
     }
   ],
   "environment": {

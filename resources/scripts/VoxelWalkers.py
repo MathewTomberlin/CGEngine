@@ -59,7 +59,7 @@ class Walker:
         self.bite_timer = 0.0       # seconds until a biter may bite again
         self.removed = False        # taken out of the world (it is dead): its walker and mesh are gone
         # The creature is a model body: a horse that the clips animate and the walker moves.
-        cge.load_scene_json(json.dumps({"version": 1, "bodies": [{"name": name, "model": MODEL, "position": list(spawn),
+        cge.load_scene_json(json.dumps({"version": 1, "bodies": [{"name": name, "model": MODEL, "position": list(spawn), "material": "horse",
                                                                   "rotation": [0, 0, 0]}]}))
         self.body = cge.find_body(name)
         self.attack_timer = 0.0     # seconds left of the bite clip
