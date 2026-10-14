@@ -671,11 +671,12 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
             self.load_world()
 
     def save_world(self):
-        """The edits and the inventory go to cg_control. The held stack goes back into the inventory first, so a save does not
-        lose it."""
+        """The edits and the inventory go to cg_control. The held stack and the crafting grid go back into the inventory first, so a
+        save does not lose them."""
         os.makedirs("cg_control", exist_ok=True)
         self.world.settle_moves()   # blocks in flight land first, so none is missing from the file
         self.world.save_edits(EDITS_FILE)
+        self.crafting.return_grid(self.inventory)
         self.inventory.return_held()
         StateFile.write_json(INVENTORY_FILE, {"slots": self.inventory.to_list(), "slot": self.slot,
                                               "drops": self.drops.to_list(), "recipes": self.crafting.to_list()})

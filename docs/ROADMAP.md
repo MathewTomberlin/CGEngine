@@ -705,18 +705,18 @@ Goal: a recipe is an edit to a file, and the game reads it, so an agent can add 
 - [x] **29.1** The recipes are `resources/voxel_recipes.json`, by item name (torch, pickaxe, iron pickaxe). `VoxelRecipes.load`
   turns the names into ids and names an unknown item in its error; `VOXEL_RECIPES` picks another file. Checked by
   `tools/test_voxel_recipes.py`, including a bad file, and by the engine check of the panel.
-- [ ] **29.2** Creatures as data: a file of creature kinds (speed, health, sight, colour, whether it bites), read by the walkers.
+- [x] **29.2** Creatures as data: `resources/voxel_creatures.json` lists the kinds (pace, health, colours, whether it bites, its bite or flee numbers, its model and clip prefix), read and checked by `VoxelCreatures.py`; the walkers take their numbers from the kind. Sight is not a field yet (the walkers see the player by range). `tools/test_voxel_creatures.py` checks the file and the shares; `tools/test_voxels.ps1` and the contact test still pass.
 - [ ] **29.3** Blocks as data: the block table (colour, hits, tier, tile) in a file, so a new block is an edit.
 
 ## Phase 30: a crafting grid (from the vision: goal 1)
 Goal: crafting is a small puzzle: the items go in a grid, and the pattern makes the output, so a recipe is a shape, not a list.
-- [ ] **30.1** Shaped recipes: a recipe has a pattern (for example a pickaxe is a row of stone over a column of wood), and it is made when
-  the grid holds the pattern. The list recipes stay, as the shapeless ones.
-- [ ] **30.2** A 3 by 3 grid on the crafting panel, filled by clicks, showing the pattern it matches.
+- [x] **30.1** Shaped recipes: a recipe may have a `pattern` (up to 3 rows of 3 characters, a space for an empty cell) and a `key` naming the item for each character; its counts come from the pattern. The Pickaxe is the first shaped recipe. `VoxelRecipes.matches` checks a 3 by 3 grid: the pattern may sit anywhere, but every other cell must be empty. Checked by `tools/test_voxel_recipes.py`. A shaped recipe is made from the grid (30.2), not by counts.
+- [x] **30.2** A 3 by 3 grid on the crafting panel: a click puts a held item in a cell (or takes it back; right click returns it to the inventory), the output names the recipe the grid matches and a click makes it, and a shaped recipe's row shows its pattern as faint swatches. The grid's items go back to the inventory when the screen closes or the game saves. Checked by `tools/test_voxel_recipes.py` and the engine check `tools/voxel_game_check.py`; the panel's layout is not yet checked by eye.
 
 ## Phase 31: a headless host (from the vision: goal 3, and 18.1 and 23.5)
 Goal: the game runs as a server with no window, so a host owns the world while players connect (and an AI can play).
-- [ ] **31.1** `World::startWorld` makes the window and the renderer. A `--headless` start (an environment variable is enough for
+- [~] **31.1** Measured (2026-10-14): the OpenGL calls outside the renderer are in the texture loader (`AssetLoader.h`, an `sf::Texture`), the shader and program code (`Shader/Shader.cpp`, `Shader/Program.cpp`), `Types.h` and `Body`; meshes and voxel chunks keep their buffers in the renderer and need no context to build. `World::startWorld` makes the window and the renderer first, so a headless start has to skip those and let textures and programs fail to the defaults (a named warning) until a context exists. Not started.
+- [ ] **31.1a** `World::startWorld` makes the window and the renderer. A `--headless` start (an environment variable is enough for
   the tests) makes neither, and runs the game's update loop at a fixed step.
 - [ ] **31.2** The state file and the control channel work headless, and `tools/test_voxel_net.ps1` runs with a headless host and a
   windowed client.
@@ -725,8 +725,7 @@ Goal: the game runs as a server with no window, so a host owns the world while p
 Goal: the day is for building and mining, and the night is for staying in.
 - [x] **32.1** After dark the creatures' chase range grows and more of them come out (`VoxelWalkers`); the moon's phase (VoxelGame's moon_share)
   scales it, so a full moon is the worst night.
-- [ ] **32.2** A closed room of solid blocks with no gap keeps the biters out: they path around it, and a test checks a room that
-  a biter cannot enter.
+- [x] **32.2** A closed room of solid blocks with no gap keeps the biters out: a biter stopped by a wall plans a route round it (`VoxelPaths`: a breadth-first search on the block grid, one block up or down at a time, within 14 blocks); with no route it wanders. `tools/test_voxel_paths.py` checks the search, including a closed room that has no route in and a gap that has one. The walk round a wall in play is not yet watched.
 
 ## Phase 33: realistic animated creatures (from the player: real animated meshes, not boxes; goal 1)
 Goal: a creature looks and moves like an animal: a shaped body with a skin, a rig, and clips for walk, idle, bite, hurt and death.
@@ -735,7 +734,7 @@ Boxes are not the target (the player's word: "highly realistic"); the look comes
 - [ ] **33.1a** Remodel the creature (superseded by the library models above; kept for the record). The box-modelled roe deer was taken out (not good enough). The earlier ellipsoid model was removed too. The clips in `resources/clips` and their `tools/clips/creature_clips.py` script stay, since they key the eight bones of the rig the new model must have; until the remodel they name a model file that is not in the repository. The new model needs more edge loops on the head and neck, sculpted joints, and a proper surface, then the same rig and clips.
 - [ ] **33.2** The walker plays the model: each creature's body is a skinned model, placed at the walker's feet and yaw each frame,
   its walk clip speed set from its pace, and its bite and hurt clips played by the walker's own events. The box body goes.
-- [ ] **33.3** The creature kinds in the data file (29.2) name their model and clips, so a new creature is a model and an edit.
+- [x] **33.3** The creature kinds in the data file (29.2) name their model and clips, so a new creature is a model and an edit.
 - [ ] **33.4** Feedback that reads: a hit plays the hurt clip and knocks the creature back; a death plays the die clip and fades; a
   bite lunges (the bite clip) before the damage lands.
 
