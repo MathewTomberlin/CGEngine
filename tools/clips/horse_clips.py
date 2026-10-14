@@ -31,26 +31,30 @@ for action_name, clip_name in ACTIONS.items():
         bone = fc.data_path.split('"')[1]
         bones.setdefault(bone, {})[(fc.data_path.split(".")[-1], fc.array_index)] = fc
     channels = []
+    # One channel per bone, holding its rotation and its position together: the loader rejects a bone listed twice.
     for bone, curves in sorted(bones.items()):
+        channel = {"bone": bone}
         if any(k[0] == "rotation_quaternion" for k in curves):
             keys = []
             for f in frames:
                 q = Quaternion([curves[("rotation_quaternion", i)].evaluate(f) if ("rotation_quaternion", i) in curves else (1.0 if i == 0 else 0.0) for i in range(4)])
                 e = q.to_euler("XYZ")
                 keys.append({"t": round((f - start) / fps, 5), "euler": [round(e.x, 5), round(e.y, 5), round(e.z, 5)]})
-            channels.append({"bone": bone, "rotation": keys})
+            channel["rotation"] = keys
         elif any(k[0] == "rotation_euler" for k in curves):
             keys = []
             for f in frames:
                 e = [curves[("rotation_euler", i)].evaluate(f) if ("rotation_euler", i) in curves else 0.0 for i in range(3)]
                 keys.append({"t": round((f - start) / fps, 5), "euler": [round(v, 5) for v in e]})
-            channels.append({"bone": bone, "rotation": keys})
+            channel["rotation"] = keys
         if any(k[0] == "location" for k in curves):
             keys = []
             for f in frames:
                 v = [curves[("location", i)].evaluate(f) if ("location", i) in curves else 0.0 for i in range(3)]
                 keys.append({"t": round((f - start) / fps, 5), "v": [round(c * scale, 5) for c in v]})
-            channels.append({"bone": bone, "position": keys})
+            channel["position"] = keys
+        if len(channel) > 1:
+            channels.append(channel)
     clip = {"version": 1, "name": clip_name, "model": model_path, "durationSeconds": round(duration, 5), "channels": channels}
     path = os.path.join(out_dir, clip_name + ".json")
     os.makedirs(out_dir, exist_ok=True)

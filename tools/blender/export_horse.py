@@ -24,6 +24,8 @@ if rotate:
 os.makedirs(os.path.dirname(out_fbx), exist_ok=True)
 bpy.ops.export_scene.fbx(filepath=out_fbx, use_selection=True, object_types={"ARMATURE", "MESH"},
                          global_scale=scale, apply_scale_options="FBX_SCALE_NONE", apply_unit_scale=True,
-                         bake_space_transform=True, add_leaf_bones=False, bake_anim=False,
+                         bake_space_transform=True, add_leaf_bones=False, bake_anim=True,
+                         bake_anim_use_all_actions=True, bake_anim_use_nla_strips=False,
+                         bake_anim_force_startend_keying=True,
                          use_armature_deform_only=False, mesh_smooth_type="FACE")
 print("EXPORTED", out_fbx, "rotated" if rotate else "as-is", "scale", scale)

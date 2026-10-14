@@ -2,22 +2,128 @@
   "version": 1,
   "replaceWorld": true,
   "materials": [
-    { "name": "voxel", "diffuseTexture": "voxel_noise.png", "specular": 0, "repeat": true },
-    { "name": "voxel_wood", "diffuseTexture": "voxel_noise.png", "specular": 0, "repeat": true },
-    { "name": "voxel_leaves", "diffuseTexture": "voxel_noise.png", "specular": 0, "repeat": true },
-    { "name": "voxel_brick", "diffuseTexture": "voxel_noise.png", "specular": 0, "repeat": true },
-    { "name": "voxel_water", "diffuseTexture": "voxel_noise.png", "specular": 0, "repeat": true, "opacity": 0.55 },
-    { "name": "voxel_ghost", "diffuseTexture": "voxel_noise.png", "specular": 0, "repeat": true, "opacity": 0.45 },
-    { "name": "voxel_lava", "diffuseTexture": "voxel_noise.png", "specular": 0, "repeat": true }
+    {
+      "name": "voxel",
+      "diffuseTexture": "voxel_noise.png",
+      "specular": 0,
+      "repeat": true
+    },
+    {
+      "name": "voxel_wood",
+      "diffuseTexture": "voxel_noise.png",
+      "specular": 0,
+      "repeat": true
+    },
+    {
+      "name": "voxel_leaves",
+      "diffuseTexture": "voxel_noise.png",
+      "specular": 0,
+      "repeat": true
+    },
+    {
+      "name": "voxel_brick",
+      "diffuseTexture": "voxel_noise.png",
+      "specular": 0,
+      "repeat": true
+    },
+    {
+      "name": "voxel_water",
+      "diffuseTexture": "voxel_noise.png",
+      "specular": 0,
+      "repeat": true,
+      "opacity": 0.55
+    },
+    {
+      "name": "voxel_ghost",
+      "diffuseTexture": "voxel_noise.png",
+      "specular": 0,
+      "repeat": true,
+      "opacity": 0.45
+    },
+    {
+      "name": "voxel_lava",
+      "diffuseTexture": "voxel_noise.png",
+      "specular": 0,
+      "repeat": true
+    }
   ],
-  "environment": { "skyColour": [0.56, 0.76, 0.95], "fogColour": [0.56, 0.76, 0.95], "fogStart": 84, "fogEnd": 168 },
+  "environment": {
+    "skyColour": [
+      0.56,
+      0.76,
+      0.95
+    ],
+    "fogColour": [
+      0.56,
+      0.76,
+      0.95
+    ],
+    "fogStart": 84,
+    "fogEnd": 168
+  },
   "lights": [
-    { "name": "sun", "directional": true, "direction": [0.4, -1, 0.3], "brightness": 0.9, "ambiance": 0.5, "color": [1, 1, 0.95] },
-    { "name": "moon", "directional": true, "direction": [-0.4, -1, -0.3], "brightness": 0.0, "ambiance": 0.25, "color": [0.86, 0.92, 1.0] },
-    { "name": "held_torch", "directional": false, "position": [0, 0, 0], "brightness": 0.0, "ambiance": 0.0, "attenuation": 0.02, "color": [1.0, 0.72, 0.4] }
+    {
+      "name": "sun",
+      "directional": true,
+      "direction": [
+        0.4,
+        -1,
+        0.3
+      ],
+      "brightness": 0.9,
+      "ambiance": 0.5,
+      "color": [
+        1,
+        1,
+        0.95
+      ]
+    },
+    {
+      "name": "moon",
+      "directional": true,
+      "direction": [
+        -0.4,
+        -1,
+        -0.3
+      ],
+      "brightness": 0.0,
+      "ambiance": 0.25,
+      "color": [
+        0.86,
+        0.92,
+        1.0
+      ]
+    },
+    {
+      "name": "held_torch",
+      "directional": false,
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "brightness": 0.0,
+      "ambiance": 0.0,
+      "attenuation": 0.02,
+      "color": [
+        1.0,
+        0.72,
+        0.4
+      ]
+    }
   ],
   "bodies": [],
   "scripts": [
-    { "body": "Root", "module": "VoxelGame", "domain": "update" }
+    {
+      "body": "Root",
+      "module": "VoxelGame",
+      "domain": "update"
+    }
+  ],
+  "clips": [
+    "clips/horse_walk.json",
+    "clips/horse_idle.json",
+    "clips/horse_attack.json",
+    "clips/horse_bound.json"
   ]
 }
