@@ -1,4 +1,4 @@
-import bpy, sys, json, os
+import bpy, sys, json, os, math
 from mathutils import Quaternion
 argv = sys.argv[sys.argv.index("--") + 1:]
 out_dir, scale, model_path = argv[0], float(argv[1]), argv[2]
@@ -31,6 +31,7 @@ for action_name, clip_name in ACTIONS.items():
         bone = fc.data_path.split('"')[1]
         bones.setdefault(bone, {})[(fc.data_path.split(".")[-1], fc.array_index)] = fc
     channels = []
+    # Rotations are written in degrees (the clip format's unit); Blender's curves are radians.
     # One channel per bone, holding its rotation and its position together: the loader rejects a bone listed twice.
     for bone, curves in sorted(bones.items()):
         channel = {"bone": bone}
@@ -39,13 +40,13 @@ for action_name, clip_name in ACTIONS.items():
             for f in frames:
                 q = Quaternion([curves[("rotation_quaternion", i)].evaluate(f) if ("rotation_quaternion", i) in curves else (1.0 if i == 0 else 0.0) for i in range(4)])
                 e = q.to_euler("XYZ")
-                keys.append({"t": round((f - start) / fps, 5), "euler": [round(e.x, 5), round(e.y, 5), round(e.z, 5)]})
+                keys.append({"t": round((f - start) / fps, 5), "euler": [round(math.degrees(e.x), 5), round(math.degrees(e.y), 5), round(math.degrees(e.z), 5)]})
             channel["rotation"] = keys
         elif any(k[0] == "rotation_euler" for k in curves):
             keys = []
             for f in frames:
                 e = [curves[("rotation_euler", i)].evaluate(f) if ("rotation_euler", i) in curves else 0.0 for i in range(3)]
-                keys.append({"t": round((f - start) / fps, 5), "euler": [round(v, 5) for v in e]})
+                keys.append({"t": round((f - start) / fps, 5), "euler": [round(math.degrees(v), 5) for v in e]})
             channel["rotation"] = keys
         if any(k[0] == "location" for k in curves):
             keys = []
