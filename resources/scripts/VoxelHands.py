@@ -31,6 +31,7 @@ ITEM_MODELS = {
 # How far each item's swing turns the arm, in degrees, and how long the swing lasts. An empty hand swings like a fist.
 SWING = {VoxelGen.PICKAXE: (70.0, 0.45), VoxelGen.IRON_PICKAXE: (70.0, 0.45), VoxelGen.TORCH: (12.0, 0.25)}
 EMPTY_SWING = (35.0, 0.35)
+SWING_SECONDS = 0.967       # the arm's swing clip is this long (arm_attack_R.json); a held button starts the next swing when it ends
 REACH_DISTANCE = 0.22       # how far the left arm reaches toward the block it places, in blocks
 REACH_SECONDS = 0.28        # how long a placement's reach lasts
 # The effect a strike throws, by the item and by what it hit ("block" or "creature"): (effect, colour). A missing entry throws none.
@@ -124,11 +125,12 @@ class HandsMixin:
             cge.set_viewmodel(HELD, True)
 
     def start_swing(self, item):
-        """A strike: the held item (or the empty hand) swings for its length of time."""
-        turn, length = SWING.get(item, EMPTY_SWING)
+        """A strike: the held item swings, and the right arm plays its clip for the whole swing."""
+        turn, _ = SWING.get(item, EMPTY_SWING)
         self.swing_time = 0.0
-        self.swing_length = length
+        self.swing_length = SWING_SECONDS
         self.swing_turn = turn
+        cge.play_clip(RIGHT, PICKAXE_CLIP if self.right_model == PICKAXE_ARM else ARM_CLIP, False, 1.0)
 
     def reach(self):
         """A block was placed: the left arm reaches out to it and draws back."""
@@ -151,9 +153,9 @@ class HandsMixin:
         model = ITEM_MODELS.get(item)
         if model != self.held_model:
             self.set_held_model(model)
-        if self.pressed("HandsStrike", bool(self.mouse_captured and cge.mouse_down("Left"))):
+        # Holding the left button swings again each time the last swing ends.
+        if self.mouse_captured and cge.mouse_down("Left") and self.swing_time is None:
             self.start_swing(item)
-            cge.play_clip(RIGHT, PICKAXE_CLIP if self.right_model == PICKAXE_ARM else ARM_CLIP, False, 1.0)
         if self.swing_time is not None:
             self.swing_time += dt
             if self.swing_time >= self.swing_length:
