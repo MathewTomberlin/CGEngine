@@ -731,7 +731,7 @@ Goal: the day is for building and mining, and the night is for staying in.
 ## Phase 33: realistic animated creatures (from the player: real animated meshes, not boxes; goal 1)
 Goal: a creature looks and moves like an animal: a shaped body with a skin, a rig, and clips for walk, idle, bite, hurt and death.
 Boxes are not the target (the player's word: "highly realistic"); the look comes from a Blender model, as the dungeon's rigs do.
-- [ ] **33.1** A creature model in Blender through BlenderMCP (port 9877, `tools/blender/*_rig.py` is the pattern): a shaped mesh
+- [~] **33.1** First pass done: `tools/blender/creature_model.py` builds a quadruped from smooth ellipsoids, subdivided, rigged to 8 bones with automatic weights (about 7,200 vertices), exported to `resources/models/voxel/creature.fbx`; the clips creature_walk, idle, bite, hurt and die are in `resources/clips` (`tools/clips/creature_clips.py`). It reads as a creature but as a toy, not as realistic: the proportions, the surface and the detail are the gap, so this is a start to replace, not a finished model. The original goal: a creature model in Blender through BlenderMCP (port 9877, `tools/blender/*_rig.py` is the pattern): a shaped mesh
   with smooth shading, a rig, and the clips idle, walk, bite, hurt and die, exported as FBX to `resources/models/voxel/`. The first
   kind is the timid one; the biter follows. Checked by loading the FBX and listing its clips.
 - [ ] **33.2** The walker plays the model: each creature's body is a skinned model, placed at the walker's feet and yaw each frame,
