@@ -17,3 +17,17 @@ function Start-Unattended([string]$exe, [string]$workingDirectory, [string]$outL
     }
     return [System.Diagnostics.Process]::Start($info)
 }
+
+# Gives a test run its own copy of an engine folder, so the test's control folder, settings and state never touch the folder the
+# player runs the game from (the tests used to write voxel_settings.json and delete cg_control there). The copy is made fresh in
+# the temp folder under cgengine_tests, and its name says which test made it. Returns the copy's full path.
+function New-TestCopy([string]$source, [string]$name) {
+    $root = Join-Path $env:TEMP "cgengine_tests"
+    $copy = Join-Path $root $name
+    if (Test-Path $copy) { Remove-Item -Recurse -Force $copy }
+    New-Item -ItemType Directory -Force -Path $root | Out-Null
+    Copy-Item -Recurse -Force $source $copy
+    Remove-Item -Recurse -Force (Join-Path $copy "cg_control") -ErrorAction SilentlyContinue
+    Remove-Item -Force (Join-Path $copy "voxel_settings.json") -ErrorAction SilentlyContinue
+    return $copy
+}
