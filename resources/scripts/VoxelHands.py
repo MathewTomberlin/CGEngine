@@ -18,8 +18,8 @@ import math
 import cg_engine_bindings as cge
 import VoxelGen
 
-RIGHT_ARM = "models/viewmodel/viewarm_right.fbx"    # the arm on the right of the view, reaching toward the centre
-LEFT_ARM = "models/viewmodel/viewarm_left.fbx"      # the arm on the left of the view
+RIGHT_ARM = "models/viewmodel/viewarm_left.fbx"     # the arm on the right of the view (the file made from the left arm)
+LEFT_ARM = "models/viewmodel/viewarm_right.fbx"     # the arm on the left of the view (the file made from the right arm)
 ARM_OFFSET = (0.42, 1.00, 2.50)                    # where each shoulder sits from the eye: right, up, forward (the left mirrors the right)
 HOLD = (0.19, -0.15, 0.62)                          # in the arm's frame, where the held item's middle is (the wrist is near (0.19, -0.15, 0.45))
 ITEM_MODELS = {
@@ -44,7 +44,7 @@ ITEM_MATERIALS = {
     VoxelGen.IRON_PICKAXE: "viewmodel_steel",
     VoxelGen.TORCH: "viewmodel_brass",
 }
-ARM_CLIP = "arm_attack_R"           # the right arm's swing, played on each strike (resources/clips, tools/clips/arm_clips.py)
+ARM_CLIP = "arm_attack_L"           # the right arm's swing, played on each strike (resources/clips, tools/clips/arm_clips.py)
 HELD = "hand_held"
 LEFT = "hand_left"
 RIGHT = "hand_right"
