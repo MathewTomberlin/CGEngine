@@ -313,7 +313,7 @@ def main():
         game.update_hands(0.016)
         checks["the arms are made, and the right hand holds the pickaxe"] = (
             cge.find_body("hand_right") is not None and cge.find_body("hand_left") is not None
-            and game.held_model == VoxelHands.ITEM_MODELS[VoxelGen.PICKAXE] and cge.find_body("hand_held") is not None)
+            and game.right_model == VoxelHands.PICKAXE_ARM and cge.find_body("hand_held") is None)
         inv.slots[0] = None
         game.update_hands(0.016)
         checks["an empty hand holds no item model"] = game.held_model is None and cge.find_body("hand_held") is None

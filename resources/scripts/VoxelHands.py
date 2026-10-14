@@ -22,9 +22,10 @@ RIGHT_ARM = "models/viewmodel/viewarm_right.fbx"    # the arm on the right of th
 LEFT_ARM = "models/viewmodel/viewarm_left.fbx"      # the arm on the left of the view
 ARM_OFFSET = (0.42, 0.00, 0.50)                    # where each shoulder sits from the eye: right, up, forward (the left mirrors the right)
 HOLD = (0.19, -0.15, 0.62)                          # in the arm's frame, where the held item's middle is (the wrist is near (0.19, -0.15, 0.45))
+# A pickaxe is in the right arm's own model (viewarm_right_pickaxe.fbx): its head and handle are skinned to the hand bone.
+PICKAXE_ARM = "models/viewmodel/viewarm_right_pickaxe.fbx"
+PICKAXES = (VoxelGen.PICKAXE, VoxelGen.IRON_PICKAXE)
 ITEM_MODELS = {
-    VoxelGen.PICKAXE: "models/viewmodel/item_pickaxe.fbx",
-    VoxelGen.IRON_PICKAXE: "models/viewmodel/item_pickaxe.fbx",
     VoxelGen.TORCH: "models/viewmodel/item_lantern.fbx",   # the carried torch is the lantern
 }
 # How far each item's swing turns the arm, in degrees, and how long the swing lasts. An empty hand swings like a fist.
@@ -40,8 +41,6 @@ HIT_EFFECTS = {
 # The materials (resources/scenes/voxels.json) the arms and held items are drawn with: a flat skin, and a colour per item.
 SKIN = "viewmodel_skin"
 ITEM_MATERIALS = {
-    VoxelGen.PICKAXE: "viewmodel_steel",
-    VoxelGen.IRON_PICKAXE: "viewmodel_steel",
     VoxelGen.TORCH: "viewmodel_brass",
 }
 ARM_CLIP = "arm_attack_R"           # the right arm's swing, played on each strike (resources/clips, tools/clips/arm_clips.py)
@@ -91,11 +90,26 @@ class HandsMixin:
         for name in (RIGHT, LEFT):
             cge.set_viewmodel(name, True)
         self.hands_ready = True
+        self.right_model = RIGHT_ARM
         self.held_model = None
         self.swing_time = None
         self.swing_length = 0.0
         self.swing_turn = 0.0
         self.reach_time = None
+
+    def set_right_model(self, item):
+        """The right arm's model: the pickaxe arm while a pickaxe is selected (the head and handle are in the arm, so they follow the
+        hand), otherwise the plain skinned arm. The body is replaced when the model changes."""
+        model = PICKAXE_ARM if item in PICKAXES else RIGHT_ARM
+        if model == self.right_model:
+            return
+        cge.remove_body(RIGHT)
+        body = {"name": RIGHT, "model": model, "position": [0.0, 0.0, 0.0], "rotation": [0, 0, 0]}
+        if model == RIGHT_ARM:
+            body["material"] = SKIN   # the plain arm has no textures of its own; the pickaxe arm carries its wood and steel
+        cge.load_scene_json(json.dumps({"version": 1, "bodies": [body]}))
+        cge.set_viewmodel(RIGHT, True)
+        self.right_model = model
 
     def set_held_model(self, model):
         """Show the held item as model (a path, or None for an empty hand). Its body is replaced when the item changes."""
@@ -132,6 +146,7 @@ class HandsMixin:
         """Place the arms and the held item for this frame, and run the swing and the reach."""
         self.hands_setup()
         item = self.selected()
+        self.set_right_model(item)
         model = ITEM_MODELS.get(item)
         if model != self.held_model:
             self.set_held_model(model)
