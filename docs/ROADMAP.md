@@ -705,7 +705,7 @@ Goal: a recipe is an edit to a file, and the game reads it, so an agent can add 
 - [x] **29.1** The recipes are `resources/voxel_recipes.json`, by item name (torch, pickaxe, iron pickaxe). `VoxelRecipes.load`
   turns the names into ids and names an unknown item in its error; `VOXEL_RECIPES` picks another file. Checked by
   `tools/test_voxel_recipes.py`, including a bad file, and by the engine check of the panel.
-- [ ] **29.2** Creatures as data: a file of creature kinds (speed, health, sight, colour, whether it bites), read by the walkers.
+- [x] **29.2** Creatures as data: `resources/voxel_creatures.json` lists the kinds (pace, health, colours, whether it bites, its bite or flee numbers, its model and clip prefix), read and checked by `VoxelCreatures.py`; the walkers take their numbers from the kind. Sight is not a field yet (the walkers see the player by range). `tools/test_voxel_creatures.py` checks the file and the shares; `tools/test_voxels.ps1` and the contact test still pass.
 - [ ] **29.3** Blocks as data: the block table (colour, hits, tier, tile) in a file, so a new block is an edit.
 
 ## Phase 30: a crafting grid (from the vision: goal 1)
@@ -735,7 +735,7 @@ Boxes are not the target (the player's word: "highly realistic"); the look comes
 - [ ] **33.1a** Remodel the creature (superseded by the library models above; kept for the record). The box-modelled roe deer was taken out (not good enough). The earlier ellipsoid model was removed too. The clips in `resources/clips` and their `tools/clips/creature_clips.py` script stay, since they key the eight bones of the rig the new model must have; until the remodel they name a model file that is not in the repository. The new model needs more edge loops on the head and neck, sculpted joints, and a proper surface, then the same rig and clips.
 - [ ] **33.2** The walker plays the model: each creature's body is a skinned model, placed at the walker's feet and yaw each frame,
   its walk clip speed set from its pace, and its bite and hurt clips played by the walker's own events. The box body goes.
-- [ ] **33.3** The creature kinds in the data file (29.2) name their model and clips, so a new creature is a model and an edit.
+- [x] **33.3** The creature kinds in the data file (29.2) name their model and clips, so a new creature is a model and an edit.
 - [ ] **33.4** Feedback that reads: a hit plays the hurt clip and knocks the creature back; a death plays the die clip and fades; a
   bite lunges (the bite clip) before the damage lands.
 
