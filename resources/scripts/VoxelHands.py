@@ -44,6 +44,7 @@ ITEM_MATERIALS = {
     VoxelGen.TORCH: "viewmodel_brass",
 }
 ARM_CLIP = "arm_attack_R"           # the right arm's swing, played on each strike (resources/clips, tools/clips/arm_clips.py)
+PICKAXE_CLIP = "arm_attack_pick"    # the same swing, for the pickaxe arm model (its own clip, named for its model)
 HELD = "hand_held"
 LEFT = "hand_left"
 RIGHT = "hand_right"
@@ -152,7 +153,7 @@ class HandsMixin:
             self.set_held_model(model)
         if self.pressed("HandsStrike", bool(self.mouse_captured and cge.mouse_down("Left"))):
             self.start_swing(item)
-            cge.play_clip(RIGHT, ARM_CLIP, False, 1.0)
+            cge.play_clip(RIGHT, PICKAXE_CLIP if self.right_model == PICKAXE_ARM else ARM_CLIP, False, 1.0)
         if self.swing_time is not None:
             self.swing_time += dt
             if self.swing_time >= self.swing_length:

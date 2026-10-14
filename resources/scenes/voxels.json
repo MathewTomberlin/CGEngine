@@ -151,6 +151,7 @@
     "clips/horse_attack.json",
     "clips/horse_bound.json",
     "clips/arm_attack_L.json",
-    "clips/arm_attack_R.json"
+    "clips/arm_attack_R.json",
+    "clips/arm_attack_pick.json"
   ]
 }
