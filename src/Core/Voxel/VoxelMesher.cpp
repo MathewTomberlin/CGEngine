@@ -447,6 +447,31 @@ namespace CGEngine {
 			return value;
 		}
 
+		// The splat channel of the nearest terrain block that has one, looking out a block from the point's cell. The dirt channel
+		// is the fallback when there is none.
+		int nearestSplatChannel(const PaddedChunk& chunk, glm::vec3 p) {
+			const glm::vec3 base = glm::floor(p - glm::vec3(0.5f));
+			int channel = 1;
+			float nearest = 1e30f;
+			for (int z = -1; z <= 2; ++z) {
+				for (int y = -1; y <= 2; ++y) {
+					for (int x = -1; x <= 2; ++x) {
+						const int bx = static_cast<int>(base.x) + x, by = static_cast<int>(base.y) + y, bz = static_cast<int>(base.z) + z;
+						if (!solidAt(chunk, 0, bx, by, bz)) continue;
+						const int splat = chunk.rule[chunk.at(bx, by, bz)].splat;
+						if (splat < 0) continue;
+						const glm::vec3 centre(bx + 0.5f, by + 0.5f, bz + 0.5f);
+						const float distance = glm::dot(centre - p, centre - p);
+						if (distance < nearest) {
+							nearest = distance;
+							channel = splat;
+						}
+					}
+				}
+			}
+			return channel;
+		}
+
 		// The vertex at p (chunk block units): a normal from the density gradient, the colour of the solid block that
 		// weighs most there, darkened where the air beside it is walled in, and a texture coordinate from the normal's axis.
 		VoxelVertex smoothVertex(const PaddedChunk& chunk, const std::array<glm::vec3, 256>& palette, uint8_t group, glm::vec3 p) {
@@ -499,7 +524,15 @@ namespace CGEngine {
 
 			VoxelVertex vertex;
 			vertex.position = p;
-			if (group == 0 && splatTotal > 0.0f) {
+			if (group == 0) {
+				if (splatTotal <= 0.0f) {
+					// No splat block among the corners: the density can come from the smoothed corners of blocks a step away, so a
+					// vertex just off a ledge can have only air beside it. It takes the nearest splat block around it. A terrain vertex
+					// must never fall back to the tile layers: the fragment shader's tiles are flat, so one such vertex would paint its
+					// whole triangle with them (the green triangles on the sand).
+					splatTotal = 1.0f;
+					splat[nearestSplatChannel(chunk, p)] = 1.0f;
+				}
 				// Terrain: the splat weights carry the tiles (the tile layers are not used), normalised to sum to 1.
 				for (int k = 0; k < 4; ++k) {
 					vertex.splatA[k] = splat[k] / splatTotal;
