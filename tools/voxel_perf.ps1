@@ -13,7 +13,7 @@ $ErrorActionPreference = "Stop"
 # Unattended: no window is shown and no real keyboard, mouse or cursor input is read (see CGENGINE_UNATTENDED in src/Bindings/GameBindings.cpp).
 $env:CGENGINE_UNATTENDED = "1"
 . (Join-Path $PSScriptRoot "unattended.ps1")
-$exeDir = (Resolve-Path $ExeDir).Path
+$exeDir = New-TestCopy (Resolve-Path $ExeDir).Path "voxel_perf"
 $control = Join-Path $exeDir "cg_control"
 $inbox = Join-Path $control "inbox"
 $outbox = Join-Path $control "outbox"

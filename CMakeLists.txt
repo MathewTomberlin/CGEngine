@@ -53,6 +53,7 @@ target_include_directories(CGEngineCore PUBLIC
 )
 target_link_libraries(CGEngineCore PUBLIC
     SFML::Graphics
+    SFML::Audio
     nlohmann_json::nlohmann_json
     # Add other direct dependencies IF CGEngineCore code uses them directly:
     ${OPENGL_LIBRARIES}

@@ -155,6 +155,7 @@ DUSK_ZENITH = (0.30, 0.30, 0.52)
 MOON_LIGHT = (0.86, 0.92, 1.0)      # the moon's light: white, like the sun's but fainter
 MOON_BRIGHTNESS = 0.6              # the moon's brightness at full night (it is off by day)
 MOON_DISC = (0.92, 0.95, 1.0)      # the colour of the moon's disc in the sky (white, a little blue)
+STEP_SECONDS = 0.45                # seconds between footsteps while the player walks on the ground (the step sound)
 MOON_SIZE = 2.0                    # the moon's angular radius in degrees, a little larger than the sun's (1.6)
 MOON_MONTH_DAYS = float(os.environ.get("VOXEL_MOON_MONTH_DAYS", "30"))   # in-game days for one full cycle of the moon's phases
 MOON_START_PHASE = 0.5             # where a new game starts in the cycle: 0 new moon, 0.25 first quarter, 0.5 full, 0.75 last quarter
