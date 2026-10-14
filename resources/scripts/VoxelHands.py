@@ -64,6 +64,13 @@ def swing_amount(t, length):
     return math.sin(math.pi * t / length)
 
 
+def turn_x(point, degrees):
+    """A point turned about the X axis (the arm's swing) by degrees, about the shoulder at the origin of the arm's frame."""
+    a = math.radians(degrees)
+    x, y, z = point
+    return (x, y * math.cos(a) - z * math.sin(a), y * math.sin(a) + z * math.cos(a))
+
+
 def to_world(origin, basis, point):
     """A point in the arm's frame (X left, Y up, Z forward of the view) as a world point, from the eye origin and the camera's basis."""
     right, up, forward = basis
@@ -154,7 +161,8 @@ class HandsMixin:
         self.place_hand(RIGHT, right_shoulder, right_rotation)
         self.place_hand(LEFT, left_shoulder, left_rotation)
         if self.held_model is not None:
-            held = to_world(right_shoulder, frame, HOLD)
+            # The item swings with the hand: its place turns about the shoulder by the swing, as the arm does.
+            held = to_world(right_shoulder, frame, turn_x(HOLD, swung))
             self.place_hand(HELD, held, right_rotation)
 
     def place_hand(self, name, position, rotation):
