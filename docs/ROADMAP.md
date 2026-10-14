@@ -715,7 +715,8 @@ Goal: crafting is a small puzzle: the items go in a grid, and the pattern makes 
 
 ## Phase 31: a headless host (from the vision: goal 3, and 18.1 and 23.5)
 Goal: the game runs as a server with no window, so a host owns the world while players connect (and an AI can play).
-- [ ] **31.1** `World::startWorld` makes the window and the renderer. A `--headless` start (an environment variable is enough for
+- [~] **31.1** Measured (2026-10-14): the OpenGL calls outside the renderer are in the texture loader (`AssetLoader.h`, an `sf::Texture`), the shader and program code (`Shader/Shader.cpp`, `Shader/Program.cpp`), `Types.h` and `Body`; meshes and voxel chunks keep their buffers in the renderer and need no context to build. `World::startWorld` makes the window and the renderer first, so a headless start has to skip those and let textures and programs fail to the defaults (a named warning) until a context exists. Not started.
+- [ ] **31.1a** `World::startWorld` makes the window and the renderer. A `--headless` start (an environment variable is enough for
   the tests) makes neither, and runs the game's update loop at a fixed step.
 - [ ] **31.2** The state file and the control channel work headless, and `tools/test_voxel_net.ps1` runs with a headless host and a
   windowed client.
