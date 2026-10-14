@@ -764,17 +764,30 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
             if kind in VoxelGen.LAVA_BLOCKS:
                 self.notify("Lava cannot be broken")
                 return
-            # A pickaxe in the selected slot takes two swings at the blocks it mines (VoxelGen.PICKAXE_BLOCKS).
-            swings = 2 if self.selected() == VoxelGen.PICKAXE and kind in VoxelGen.PICKAXE_BLOCKS else 1
+            # A tool in the selected slot must be able to mine the block (VoxelGen.BLOCK_TIER), and takes two swings at the blocks it
+            # mines faster (VoxelGen.PICKAXE_BLOCKS). Creative mode has no tools to wear out and no tiers to meet.
+            tool = self.selected()
+            if not self.creative and not VoxelGen.can_mine(tool, kind):
+                self.notify("You need an iron pickaxe to mine %s" % VoxelGen.NAMES.get(kind, "that"))
+                return
+            swings = 2 if tool in VoxelGen.TOOLS and kind in VoxelGen.PICKAXE_BLOCKS else 1
             breaks = self.world.damage_at(*block) + swings >= VoxelGen.HITS.get(kind, 1)
             if breaks and not self.creative and not self.inventory.fits(kind):
                 self.notify("Inventory full")
                 return
             stage = -2
+            hits = 0
             for _ in range(swings):
                 stage = self.world.hit_block(block[0], block[1], block[2])
+                if stage == -2:
+                    break
+                hits += 1
                 if stage < 0:
                     break
+            if hits and tool in VoxelGen.TOOLS and not self.creative:
+                if self.inventory.wear(self.slot, hits):
+                    self.notify("Your %s broke" % VoxelGen.NAMES.get(tool, "tool"))
+                    cge.play_sound("tool_break", 0.8)
             colour = VoxelGen.COLOURS.get(kind, (0.5, 0.5, 0.5))
             centre = [block[i] + 0.5 for i in range(3)]
             if stage == -1:

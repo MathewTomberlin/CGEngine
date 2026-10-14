@@ -15,9 +15,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SOUNDS = os.path.join(ROOT, "resources", "sounds")
 GAME = os.path.join(ROOT, "resources", "scripts", "VoxelGame.py")
 
-EFFECTS = ["break", "place", "hurt", "step", "pickup", "bite", "splash"]
+EFFECTS = ["break", "place", "hurt", "step", "pickup", "bite", "splash", "tool_break"]
 # The event each effect is played for, as the game's code spells it (play_sound("name", ...)).
-WIRED = {"break": "break", "place": "place", "hurt": "hurt", "step": "step", "pickup": "pickup", "bite": "bite", "splash": "splash"}
+WIRED = {"break": "break", "place": "place", "hurt": "hurt", "step": "step", "pickup": "pickup", "bite": "bite", "splash": "splash", "tool_break": "tool_break"}
 
 failures = []
 

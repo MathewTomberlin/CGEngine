@@ -13,12 +13,19 @@ ROWS = 3
 SLOTS = COLUMNS * ROWS
 HOTBAR_SLOTS = COLUMNS
 STACK_LIMIT = 64            # the most of one item in one slot
-UNSTACKED = (VoxelGen.PICKAXE,)   # tools: one to a slot
+UNSTACKED = tuple(VoxelGen.TOOLS)   # tools: one to a slot, each with its own durability
 
 
 def limit(item):
     """The most of an item one slot holds."""
     return 1 if item in UNSTACKED else STACK_LIMIT
+
+
+def new_stack(item, count):
+    """A slot's contents for an item: [item, count], and for a tool [item, 1, uses left], a new tool having all its uses."""
+    if item in VoxelGen.TOOLS:
+        return [item, count, VoxelGen.TOOLS[item]["durability"]]
+    return [item, count]
 
 
 class Inventory:
@@ -51,9 +58,28 @@ class Inventory:
         for index, s in enumerate(self.slots):
             if left > 0 and s is None:
                 moved = min(left, limit(item))
-                self.slots[index] = [item, moved]
+                self.slots[index] = new_stack(item, moved)
                 left -= moved
         return left
+
+    def wear(self, index, uses=1):
+        """Use up uses of the tool in a slot (one per swing that hits a block). Returns True when the tool breaks, which empties
+        its slot. An item that is not a tool is not worn."""
+        s = self.slots[index]
+        if s is None or s[0] not in VoxelGen.TOOLS or len(s) < 3:
+            return False
+        s[2] -= uses
+        if s[2] > 0:
+            return False
+        self.slots[index] = None
+        return True
+
+    def durability(self, index):
+        """The share of a tool's uses left (0 to 1) in a slot, or None when the slot holds no tool."""
+        s = self.slots[index]
+        if s is None or s[0] not in VoxelGen.TOOLS or len(s) < 3:
+            return None
+        return s[2] / VoxelGen.TOOLS[s[0]]["durability"]
 
     def take(self, index, amount=1):
         """Remove up to amount from a slot. Returns how many were removed; a slot that empties becomes None."""
@@ -82,7 +108,7 @@ class Inventory:
         if self.held is None:
             if s is None:
                 return
-            if secondary:
+            if secondary and s[0] not in VoxelGen.TOOLS:
                 half = (s[1] + 1) // 2
                 self.held = [s[0], half]
                 self.take(index, half)
@@ -90,10 +116,10 @@ class Inventory:
                 self.held = list(s)
                 self.slots[index] = None
             return
-        item, count = self.held
-        if secondary:
+        item, count = self.held[0], self.held[1]   # a tool's stack has a third entry, its uses left
+        if secondary and item not in VoxelGen.TOOLS:
             if s is None:
-                self.slots[index] = [item, 1]
+                self.slots[index] = new_stack(item, 1)
             elif s[0] == item and s[1] < limit(item):
                 s[1] += 1
             else:
@@ -103,7 +129,7 @@ class Inventory:
             self.slots[index] = self.held
             self.held = None
             return
-        elif s[0] == item:
+        elif s[0] == item and item not in VoxelGen.TOOLS:
             moved = min(count, limit(item) - s[1])
             s[1] += moved
             self.held[1] -= moved
@@ -122,11 +148,11 @@ class Inventory:
     def start(self, items, amount):
         """A starting kit: each item in its own slot, from the first slot, amount of each."""
         for index, item in enumerate(items[:SLOTS]):
-            self.slots[index] = [item, amount]
+            self.slots[index] = new_stack(item, amount)
 
     def to_list(self):
         """The slots as a list, for the save file: None for an empty slot, else [item, count]."""
-        return [None if s is None else [s[0], s[1]] for s in self.slots]
+        return [None if s is None else list(s) for s in self.slots]
 
     def load_list(self, data):
         """Replace the slots with a saved list (see to_list). Entries that are not a valid stack become empty, so a damaged
@@ -138,5 +164,15 @@ class Inventory:
                 item, count = int(entry[0]), int(entry[1])
             except (TypeError, ValueError, IndexError, KeyError):
                 continue
-            if 0 < item < 256 and 0 < count <= limit(item):
+            if not (0 < item < 256 and 0 < count <= limit(item)):
+                continue
+            if item in VoxelGen.TOOLS:
+                # A saved tool keeps its uses; a file without them gives a new tool, and the uses stay within the tool's durability.
+                best = VoxelGen.TOOLS[item]["durability"]
+                try:
+                    uses = int(entry[2])
+                except (TypeError, ValueError, IndexError, KeyError):
+                    uses = best
+                self.slots[index] = [item, count, min(max(uses, 1), best)]
+            else:
                 self.slots[index] = [item, count]

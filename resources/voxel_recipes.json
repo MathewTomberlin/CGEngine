@@ -1,0 +1,8 @@
+{
+  "about": "The voxel sample's crafting recipes (the crafting panel on I). Each recipe has a name, a category, and the items it takes and makes as {item name: count}. Item names are the game's (VoxelGen.NAMES, e.g. wood, stone, iron, iron pickaxe). Edit this file to change recipes; no rebuild is needed.",
+  "recipes": [
+    {"name": "Torch", "category": "Light", "takes": {"wood": 1}, "makes": {"torch": 1}},
+    {"name": "Pickaxe", "category": "Tools", "takes": {"stone": 3, "wood": 2}, "makes": {"pickaxe": 1}},
+    {"name": "Iron pickaxe", "category": "Tools", "takes": {"iron": 3, "wood": 2}, "makes": {"iron pickaxe": 1}}
+  ]
+}

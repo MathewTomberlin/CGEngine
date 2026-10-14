@@ -61,6 +61,7 @@ class InventoryMixin:
             if not shown:
                 self.hide_rect("slot_%d" % index, box)
                 self.hide_rect("swatch_%d" % index, box)
+                self.hide_rect("wear_%d" % index, box)
                 self.draw_text("count_%d" % index, "", (left, top), 14)
                 self.draw_text("key_%d" % index, "", (left, top), 12)
                 continue
@@ -77,6 +78,15 @@ class InventoryMixin:
                 self.draw_rect("swatch_%d" % index, swatch, self.item_colour(stack[0]), (0, 0, 0, 170), 1, layer=992)
             else:
                 self.hide_rect("swatch_%d" % index, swatch)
+            # A tool shows its uses left as a bar along the foot of the swatch: green while it is new, red as it nears breaking.
+            wear = self.inventory.durability(index) if stack else None
+            bar_box = (left + inset, top + SLOT_SIZE - inset - 5, SLOT_SIZE - 2 * inset, 4)
+            if wear is None:
+                self.hide_rect("wear_%d" % index, bar_box)
+            else:
+                colour = (int(60 + 195 * (1.0 - wear)), int(40 + 200 * wear), 60, 235)
+                self.draw_rect("wear_%d" % index, (bar_box[0], bar_box[1], int(bar_box[2] * wear), bar_box[3]), colour,
+                               (0, 0, 0, 0), 0, layer=993)
             count = str(stack[1]) if stack and stack[1] > 1 else ""
             self.draw_text("count_%d" % index, count, (left + 5, top + SLOT_SIZE - 21), 14)
             key = hotbar_key(index) if row == 0 else ""
