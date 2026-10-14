@@ -1094,7 +1094,8 @@ namespace CGEngine {
 		const double now = time.getElapsedSec();
 		const bool moved = glm::distance(focus, shadowFocus) > radius * 0.05f;
 		const bool turned = glm::distance(travel, shadowTravel) > 0.002f;
-		const bool stale = now - shadowDrawnAt >= 0.1;
+		// Redrawn every frame: the animated creatures move and turn every frame, and a map kept for longer lags their shadows
+		const bool stale = now - shadowDrawnAt >= 0.0;
 		if (shadowsDrawn && shadowRadiusDrawn == radius && !moved && !turned && !stale) {
 			// The map still matches the matrix it was drawn with, which stays in shadowMatrix.
 			shadowsActive = true;
