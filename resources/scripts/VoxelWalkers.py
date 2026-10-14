@@ -6,13 +6,14 @@ when it can. A creature is put back at its spawn if it falls out of the world.
 Most creatures are timid: they run from the player when it comes close. Some bite: a biter chases the player when it is near
 and bites when it is close, which is what lowers the player's health (VoxelGame). A creature can be hit: it has HEALTH hits,
 each pushes it away and flashes it red, and when it dies it is taken out of the world and leaves a hide (VoxelGen.HIDE)."""
+import json
 import math
 import random
 
 import cg_engine_bindings as cge
 import VoxelGen
+import VoxelNight
 import VoxelPhysics as physics
-from VoxelShapes import boxes_arrays
 
 HALF_WIDTH = 0.3            # the creature is 0.6 wide and 1.2 tall
 HEIGHT = 1.2
@@ -27,12 +28,14 @@ KNOCK_SECONDS = 0.25        # a hit pushes the creature away for this long
 KNOCK_PACE = 4.5            # blocks per second while it is pushed back
 FLASH_SECONDS = 0.15        # a hit tints the creature for this long
 BITER_SHARE = 0.3           # the share of creatures that bite
-CHASE_RANGE = 7.0           # a biter this close to the player comes after it
+CHASE_RANGE = VoxelNight.CHASE_RANGE   # a biter this close to the player comes after it by day; further at night (VoxelNight)
 CHASE_PACE = 2.0            # blocks per second while it chases
 BITE_RANGE = 1.3            # a biter this close to the player bites
 BITE_DAMAGE = 1.0           # health the player loses to one bite
 BITE_INTERVAL = 1.2         # seconds between a biter's bites
 PREY_RANGE = 6.0            # a biter this close to a timid creature, with no player near, hunts it and bites it
+MODEL = "models/voxel/horse.fbx"   # the creature's model: a horse from the asset library, with the clips named below
+ATTACK_SECONDS = 0.8               # how long a bite's clip plays before the creature goes back to walking or running
 CHUNK = VoxelGen.CHUNK
 PALETTE = [(0.92, 0.90, 0.85), (0.55, 0.36, 0.22), (0.20, 0.20, 0.24), (0.85, 0.62, 0.30)]
 BITER_COLOUR = (0.42, 0.10, 0.08)
@@ -53,16 +56,17 @@ class Walker:
         self.last = None            # the feet last frame, to see how far the creature got
         self.knock_timer = 0.0      # seconds left of being pushed back by a hit
         self.knock_heading = 0.0
-        self.flash_timer = 0.0      # seconds left of the hit's red flash
         self.bite_timer = 0.0       # seconds until a biter may bite again
         self.removed = False        # taken out of the world (it is dead): its walker and mesh are gone
-        self.arrays = boxes_arrays([((-HALF_WIDTH, 0.0, -HALF_WIDTH), (HALF_WIDTH, HEIGHT, HALF_WIDTH), colour)])
-        self.flash_arrays = boxes_arrays([((-HALF_WIDTH, 0.0, -HALF_WIDTH), (HALF_WIDTH, HEIGHT, HALF_WIDTH), FLASH_COLOUR)])
-        cge.create_mesh_body(name, *self.arrays, materials=["voxel"], position=cge.Vector3f(0.0, 0.0, 0.0))
-        cge.find_body(name).get_mesh().set_position(cge.Vector3f(*spawn))
+        # The creature is a model body: a horse that the clips animate and the walker moves.
+        cge.load_scene_json(json.dumps({"version": 1, "bodies": [{"name": name, "model": MODEL, "position": list(spawn),
+                                                                  "rotation": [0, 0, 0]}]}))
+        self.body = cge.find_body(name)
+        self.attack_timer = 0.0     # seconds left of the bite clip
+        self.clip = None            # the clip the model is playing
         cge.add_voxel_walker(name, world, HALF_WIDTH, HEIGHT)
 
-    def update(self, dt, player=None, prey=None, player_feet=None):
+    def update(self, dt, player=None, prey=None, player_feet=None, night=0.0):
         """Move the creature one frame. Returns the health a biter takes from the player this frame (0 for most frames). prey is
         the (x, z) of a timid creature a biter hunts when the player is not near. player_feet is the height of the player's feet: a
         creature whose body does not reach the player's body (above or below it) neither bites it nor pushes against it. None
@@ -74,7 +78,6 @@ class Walker:
             cge.set_voxel_position(self.name, *self.spawn)
             self.last = None
             return 0.0
-        self.update_flash(dt)
         self.bite_timer = max(0.0, self.bite_timer - dt)
         if self.knock_timer > 0.0:
             # A hit pushes the creature away: it goes straight back, and its own choices wait until the push ends.
@@ -88,7 +91,15 @@ class Walker:
         distance = math.inf if player is None else math.hypot(pos[0] - player[0], pos[2] - player[1])
         level = player is not None and (player_feet is None
                                         or physics.overlaps_vertically(pos[1], HEIGHT, player_feet, physics.PLAYER_HEIGHT))
-        if self.biter and distance < CHASE_RANGE:
+        if level and distance < physics.CONTACT:
+            # A frame that ends with the creature inside contact (a long frame lets its move carry it past the limit the
+            # velocity rule keeps): it is set back on the contact distance, beside the player, before it moves again.
+            dx, dz = (pos[0] - player[0], pos[2] - player[1]) if distance > 0.0 else (math.cos(self.heading), math.sin(self.heading))
+            gap = math.hypot(dx, dz) or 1.0
+            cge.set_voxel_position(self.name, player[0] + dx / gap * physics.CONTACT, pos[1], player[1] + dz / gap * physics.CONTACT)
+            pos = (player[0] + dx / gap * physics.CONTACT, pos[1], player[1] + dz / gap * physics.CONTACT)
+            distance = physics.CONTACT
+        if self.biter and distance < VoxelNight.chase_range(night):
             # A biter heads for the player, and bites each time it is close and the last bite has had time to recover.
             self.heading = math.atan2(player[1] - pos[2], player[0] - pos[0])
             self.timer = 1.0
@@ -128,6 +139,7 @@ class Walker:
             if level:
                 vx, vz = physics.keep_out(vx, vz, player[0] - pos[0], player[1] - pos[2])
         cge.set_voxel_velocity(self.name, vx, vz)
+        self.animate(dt, pace, bite > 0.0)
         return bite
 
     def hurt(self, from_xz, damage=1):
@@ -139,16 +151,25 @@ class Walker:
         pos = self.state()[0]
         self.knock_heading = math.atan2(pos[2] - from_xz[1], pos[0] - from_xz[0])
         self.knock_timer = KNOCK_SECONDS
-        self.flash_timer = FLASH_SECONDS
-        cge.update_mesh_body(self.name, *self.flash_arrays)
         return self.health <= 0
 
-    def update_flash(self, dt):
-        """The red flash lasts FLASH_SECONDS: the creature's own colour comes back when it ends."""
-        if self.flash_timer > 0.0:
-            self.flash_timer -= dt
-            if self.flash_timer <= 0.0:
-                cge.update_mesh_body(self.name, *self.arrays)
+    def animate(self, dt, pace, bit):
+        """Play the horse's clips: a bite plays the attack once, a chase or a flight the bound, and a walk otherwise. The model
+        turns to face its heading (the model faces +Z, as the dungeon's do, so the yaw is atan2(x, z))."""
+        if bit:
+            self.attack_timer = ATTACK_SECONDS
+        self.attack_timer = max(0.0, self.attack_timer - dt)
+        if self.attack_timer > 0.0:
+            clip = "horse_attack"
+        elif pace > PACE + 0.1:
+            clip = "horse_bound"
+        else:
+            clip = "horse_walk"
+        if clip != self.clip or (clip == "horse_attack" and bit):
+            cge.play_clip(self.name, clip, clip != "horse_attack", 1.0)
+            self.clip = clip
+        yaw = math.degrees(math.atan2(math.cos(self.heading), math.sin(self.heading)))
+        self.body.get_mesh().set_rotation(cge.Vector3f(0.0, yaw, 0.0))
 
     def remove(self):
         """Take the creature out of the world: its walker and its mesh."""
@@ -156,7 +177,7 @@ class Walker:
             return
         self.removed = True
         cge.remove_voxel_walker(self.name)
-        cge.remove_mesh_body(self.name)
+        cge.remove_body(self.name)
 
     def box(self):
         """The creature's box as (lo, hi) corners, where it stands now."""
@@ -212,7 +233,7 @@ class Walkers:
                     break
         return None
 
-    def update(self, dt, player=None, player_feet=None):
+    def update(self, dt, player=None, player_feet=None, night=0.0):
         """player is the (x, z) of the player, which the creatures run from or chase. A creature that is about to bump another
         turns away from it, so the herd does not stack up in one place. Returns the health the biters took from the player.
         A biter with no player near hunts the nearest timid creature and bites it; a creature a bite kills is in self.killed."""
@@ -221,7 +242,7 @@ class Walkers:
         self.killed = []
         for i, walker in enumerate(self.walkers):
             prey = self.prey_for(i, spots) if walker.biter else None
-            bites += walker.update(dt, player, None if prey is None else (spots[prey][0], spots[prey][2]), player_feet)
+            bites += walker.update(dt, player, None if prey is None else (spots[prey][0], spots[prey][2]), player_feet, night)
             for j, other in enumerate(spots):
                 if i != j and math.hypot(spots[i][0] - other[0], spots[i][2] - other[2]) < BUMP_RANGE:
                     walker.turn_away(other[0], other[2])

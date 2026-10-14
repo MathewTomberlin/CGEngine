@@ -26,6 +26,7 @@ import VoxelGen
 import VoxelInventory
 import VoxelNet
 import VoxelParticles
+import VoxelNight
 import VoxelRecipes
 import VoxelRules
 import VoxelPhysics as physics
@@ -65,6 +66,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
         self.was_swimming = False       # for the splash when the player goes under
         self.step_timer = 0.0           # seconds until the next footstep sound
         self.music_on = False           # the night loop is playing
+        self.night = 0.0                # how dark it is, 0 to 1 (update_sky)
         self.sound_rng = random.Random(self.seed + 7)   # the pitch of each footstep and placement: its own sequence, not the global one
         self.walkers = None             # the creatures, made once the spawn area has loaded
         self.vel = [0.0, 0.0, 0.0]
@@ -300,7 +302,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
             if not self.world.is_loaded(0, 0):
                 return
             self.walkers = VoxelWalkers.Walkers(self.world, (8.5, 8.5), WALKERS, self.seed)
-        bites = self.walkers.update(dt, (self.pos[0], self.pos[2]), self.pos[1])
+        bites = self.walkers.update(dt, (self.pos[0], self.pos[2]), self.pos[1], self.night)
         if bites > 0.0:
             cge.play_sound("bite", 0.8)
         self.hurt_player(bites)
@@ -764,17 +766,34 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
             if kind in VoxelGen.LAVA_BLOCKS:
                 self.notify("Lava cannot be broken")
                 return
-            # A pickaxe in the selected slot takes two swings at the blocks it mines (VoxelGen.PICKAXE_BLOCKS).
-            swings = 2 if self.selected() == VoxelGen.PICKAXE and kind in VoxelGen.PICKAXE_BLOCKS else 1
+            # A tool in the selected slot must be able to mine the block (VoxelGen.BLOCK_TIER), and takes two swings at the blocks it
+            # mines faster (VoxelGen.PICKAXE_BLOCKS). Creative mode has no tools to wear out and no tiers to meet.
+            tool = self.selected()
+            if not self.creative and not VoxelGen.can_mine(tool, kind):
+                self.notify("You need an iron pickaxe to mine %s" % VoxelGen.NAMES.get(kind, "that"))
+                return
+            swings = 2 if tool in VoxelGen.TOOLS and kind in VoxelGen.PICKAXE_BLOCKS else 1
             breaks = self.world.damage_at(*block) + swings >= VoxelGen.HITS.get(kind, 1)
             if breaks and not self.creative and not self.inventory.fits(kind):
                 self.notify("Inventory full")
                 return
             stage = -2
+            hits = 0
             for _ in range(swings):
                 stage = self.world.hit_block(block[0], block[1], block[2])
+                if stage == -2:
+                    break
+                hits += 1
                 if stage < 0:
                     break
+            if hits and tool in VoxelGen.TOOLS and not self.creative:
+                share_before = self.inventory.durability(self.slot)
+                if self.inventory.wear(self.slot, hits):
+                    self.notify("Your %s broke" % VoxelGen.NAMES.get(tool, "tool"))
+                    cge.play_sound("tool_break", 0.8)
+                elif share_before is not None and share_before > 0.1 and self.inventory.durability(self.slot) <= 0.1:
+                    # Told once, as it crosses a tenth of its uses left, so the player can choose to finish the job or not.
+                    self.notify("Your %s is nearly broken" % VoxelGen.NAMES.get(tool, "tool"))
             colour = VoxelGen.COLOURS.get(kind, (0.5, 0.5, 0.5))
             centre = [block[i] + 0.5 for i in range(3)]
             if stage == -1:
@@ -987,7 +1006,8 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
         # The sun gives light only above the horizon: below it, its direction points up and would light the undersides of everything.
         sun_up = min(1.0, max(0.0, (height + 0.02) / 0.07))
         # The moon is opposite the sun, so at night its light comes down from above: faint, and white.
-        night = min(1.0, max(0.0, -height / 0.2))
+        night = VoxelNight.night_share(height)
+        self.night = night   # the creatures' chase range grows with it (VoxelNight)
         cge.set_light("sun", direction=cge.Vector3f(*travel), colour=cge.Vector3f(*light),
                       brightness=(0.45 + 0.55 * day) * sun_up)
         cge.set_light("moon", direction=cge.Vector3f(*toward_sun), colour=cge.Vector3f(*MOON_LIGHT),

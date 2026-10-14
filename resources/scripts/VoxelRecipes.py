@@ -5,8 +5,13 @@ A recipe is known once the player holds one of the items it takes, and creative 
 under its category, and it is disabled while the inventory lacks an item it takes. A recipe that is not known is not listed.
 In creative mode each item counts as CREATIVE_COUNT for the check, and crafting takes nothing from the inventory.
 
+The recipes are data: resources/voxel_recipes.json (or the file named by VOXEL_RECIPES) lists them by item name.
+
 Pure Python with no engine calls, so tools/test_voxel_recipes.py checks it without a window.
 """
+
+import json
+import os
 
 import VoxelGen
 
@@ -14,9 +19,41 @@ CREATIVE_COUNT = 99     # what creative mode counts each item as when it checks 
 ALL = "All"             # the category that lists every recipe
 
 # A recipe: its name, its category, the items it takes and the items it makes, each as {item id: count}.
-RECIPES = (
-    {"name": "Torch", "category": "Light", "takes": {VoxelGen.WOOD: 1}, "makes": {VoxelGen.TORCH: 1}},
-)
+ITEM_IDS = {name: item for item, name in VoxelGen.NAMES.items()}
+
+
+def load(path):
+    """The recipes in a JSON file, with the item names turned into ids. A name the game does not know is an error, named."""
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+
+    def items(counts, recipe):
+        out = {}
+        for name, count in counts.items():
+            if name not in ITEM_IDS:
+                raise ValueError("recipe %r: %r is not an item the game knows" % (recipe, name))
+            out[ITEM_IDS[name]] = int(count)
+        return out
+
+    recipes = []
+    for entry in data["recipes"]:
+        recipes.append({"name": entry["name"], "category": entry["category"],
+                        "takes": items(entry["takes"], entry["name"]), "makes": items(entry["makes"], entry["name"])})
+    return tuple(recipes)
+
+
+def data_file():
+    """VOXEL_RECIPES if it is set; else voxel_recipes.json beside this script (the game folder) or in resources (the repository)."""
+    if os.environ.get("VOXEL_RECIPES"):
+        return os.environ["VOXEL_RECIPES"]
+    here = os.path.dirname(os.path.abspath(__file__))
+    for path in (os.path.join(here, "voxel_recipes.json"), os.path.join(here, os.pardir, "voxel_recipes.json")):
+        if os.path.isfile(path):
+            return path
+    raise FileNotFoundError("voxel_recipes.json was not found beside the scripts or in resources")
+
+
+RECIPES = load(data_file())
 CATEGORIES = (ALL,) + tuple(sorted({recipe["category"] for recipe in RECIPES}))
 
 

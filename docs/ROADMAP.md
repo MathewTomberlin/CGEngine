@@ -19,17 +19,41 @@ The engine's job is to let an AI and a person build a playable world together, f
 
 Status: `[ ]` not started, `[~]` in progress, `[x]` done.
 
-## Current priorities (lead developer, after playtesting round 3)
+## Current priorities (lead developer, 2026-10-14)
 The order I am working in, and why:
-1. **Phase 22, far-view load latency.** Measured and mostly done: a view of 40 settles 12 s after launch, and the near ground is ready
-   about a second after a move. What remains is the meshing cost (Phase 26), which every load and every move pays.
-2. **Phases 24 and 25, placement and the skin's shape.** The ghost's cost is still unmeasured (24.5); the far skin's look is to judge
-   in play (22.4, 25.4).
-3. **Phase 23, upkeep.** The split and the test runner are done; the Debug speed (23.3) is next, since the Debug build is what a
-   developer runs under a debugger.
-4. **Phase 26, meshing cost.** The light pass is the largest single cost after the surface.
+1. **Goal 1, a game with a reason to go on.** Tools that wear out, mining tiers and recipes are in (Phases 28 and 29), so iron
+   matters and the first hour has a shape: stone, a pickaxe, iron, an iron pickaxe, obsidian. Next the crafting grid (30) and the
+   night (33), which turns a day's work into a choice.
+2. **Goal 3, several people in one world.** The headless host (31) is the step that makes a host a server rather than a player.
+3. **Goal 4, measured.** The meshing cost (26) is the largest number that every load and every move pays.
+   Animated creatures and item meshes (33, 34) are the next thing the player will see, so they follow the night.
+4. **For the player to judge.** The sounds (27.4), the far skins (22.4, 25.4), and the moon's disc in play.
 
 Still waiting on the player: 11.14 (the square shadow) and 11.15 (the fall through the ground). Both need a snapshot.
+
+## Lead developer's review (2026-10-14)
+What I see when I read the roadmap against the vision:
+- The engine is ahead of the game. Chunks, meshes, physics, the control channel, two processes and sound all work; the game gives the
+  player little to choose. Before this round the pickaxe could not be obtained, so the tool system was dead code outside creative mode,
+  and the crafting panel had one recipe. That is the gap between goal 1 and what exists.
+- The data path (goal 2) is partly there: rules are a file, and now recipes are too. Creatures, blocks and tools are still Python or C++.
+- Goal 3 is blocked by one thing I can name: `World::startWorld` makes the window and the renderer, so a host cannot run without a screen.
+  Fixing that is a C++ change with a clear test (the state file, the unattended control channel), so it is worth doing before anything bigger.
+- Goal 4 is where the numbers are honest: the load is measured, and the meshing (26) is the cost to beat. Every feature in this round
+  had a test; the one that did not (the walk stall) turned out to be the other process, not the code.
+
+Ideas, ranked by how much they change the game for a player:
+- **A night that matters**: creatures are more numerous and bolder after dark (their chase range grows), and the moon's phase sets it
+  (33). It uses what exists (the moon, the walkers, the sound) and makes the day's mining a preparation.
+- **Shelter**: a player's enclosure (a room of solid blocks with a door) keeps the creatures out. It needs the creatures to path
+  around a closed room, which they do not yet do; the test is a room that a biter cannot enter.
+- **Ore veins**: coal and iron in clusters near caves, not single blocks, so finding one is a search (the terrain generator already
+  places them; a vein is a seeded blob).
+- **Creatures as data**: a file of creature kinds (speed, health, colour, sight, whether it bites), read by the walkers, so a new
+  creature is an edit (goal 2).
+- **Generated art and sound through the tools that exist**: the sounds come from ComfyUI (the comfyui-audio skill); BlenderMCP (port 9877)
+  could model the tools and creatures when the Blender side is open. Neither is needed for the next steps.
+
 
 ## Phase 1: data-driven content (in progress)
 - [x] **1.1** JSON scene loader (materials, lights, model bodies) - `src/Core/Scene/SceneLoader.*`
@@ -661,6 +685,78 @@ Goal: the sample has sounds for what the player does, and a night loop, through 
   moon's disc and the sounds need a listen.
 - [ ] **27.5** Music from the medium model (`stable_audio_3_medium`) for a day theme. Its clips are not seamless loops, so it would
   play once per part of the day, not as a loop.
+
+## Phase 28: tools that wear out, and mining tiers (from the vision: goal 1)
+Goal: a tool is a choice: it is needed for some blocks, it wears out, and a better one lasts longer and mines more.
+- [x] **28.1** A tool has durability: each swing that hits a block takes one use, and a tool that runs out breaks (its slot empties,
+  the player is told, and the break sound plays). `VoxelGen.TOOLS` holds the uses and the tier of each tool; the inventory keeps
+  a tool's uses with its slot, through moves, saves and loads (`VoxelInventory.wear`, `durability`). Checked by
+  `tools/test_voxel_inventory.py`, and in the engine by a probe: a pickaxe breaks stone in 3 uses, and an iron pickaxe breaks
+  obsidian in 5.
+- [x] **28.2** Mining tiers: `VoxelGen.BLOCK_TIER` lists the blocks that need a tool (obsidian needs tier 2, the iron pickaxe).
+  Stone, coal and iron are mined by hand, so the ore is reachable without a tool. A pickaxe that cannot mine a block refuses the
+  swing with a reason. Creative mode has no tiers and no wear.
+- [x] **28.3** The hotbar shows a tool's uses left as a bar along its slot, green while new and red as it nears breaking.
+- [~] **28.4** Open: a durability for the pickaxe that the player sees before it breaks (a notice at a tenth left); the iron
+  pickaxe's recipe needs iron ore that is found, not only mined near the surface.
+
+## Phase 29: recipes as data (from the vision: goal 2)
+Goal: a recipe is an edit to a file, and the game reads it, so an agent can add one and test it without rebuilding.
+- [x] **29.1** The recipes are `resources/voxel_recipes.json`, by item name (torch, pickaxe, iron pickaxe). `VoxelRecipes.load`
+  turns the names into ids and names an unknown item in its error; `VOXEL_RECIPES` picks another file. Checked by
+  `tools/test_voxel_recipes.py`, including a bad file, and by the engine check of the panel.
+- [ ] **29.2** Creatures as data: a file of creature kinds (speed, health, sight, colour, whether it bites), read by the walkers.
+- [ ] **29.3** Blocks as data: the block table (colour, hits, tier, tile) in a file, so a new block is an edit.
+
+## Phase 30: a crafting grid (from the vision: goal 1)
+Goal: crafting is a small puzzle: the items go in a grid, and the pattern makes the output, so a recipe is a shape, not a list.
+- [ ] **30.1** Shaped recipes: a recipe has a pattern (for example a pickaxe is a row of stone over a column of wood), and it is made when
+  the grid holds the pattern. The list recipes stay, as the shapeless ones.
+- [ ] **30.2** A 3 by 3 grid on the crafting panel, filled by clicks, showing the pattern it matches.
+
+## Phase 31: a headless host (from the vision: goal 3, and 18.1 and 23.5)
+Goal: the game runs as a server with no window, so a host owns the world while players connect (and an AI can play).
+- [ ] **31.1** `World::startWorld` makes the window and the renderer. A `--headless` start (an environment variable is enough for
+  the tests) makes neither, and runs the game's update loop at a fixed step.
+- [ ] **31.2** The state file and the control channel work headless, and `tools/test_voxel_net.ps1` runs with a headless host and a
+  windowed client.
+
+## Phase 32: a night that matters (from the vision: goal 1, and the review's first idea)
+Goal: the day is for building and mining, and the night is for staying in.
+- [x] **32.1** After dark the creatures' chase range grows and more of them come out (`VoxelWalkers`); the moon's phase (VoxelGame's moon_share)
+  scales it, so a full moon is the worst night.
+- [ ] **32.2** A closed room of solid blocks with no gap keeps the biters out: they path around it, and a test checks a room that
+  a biter cannot enter.
+
+## Phase 33: realistic animated creatures (from the player: real animated meshes, not boxes; goal 1)
+Goal: a creature looks and moves like an animal: a shaped body with a skin, a rig, and clips for walk, idle, bite, hurt and death.
+Boxes are not the target (the player's word: "highly realistic"); the look comes from a Blender model, as the dungeon's rigs do.
+- [~] **33.1** Models from the asset library (Documents/Assets/Blends, not the repository's own). The timid creature is the horse (Horse.blend: 77,000 vertices, a full skeleton, walk, idle, attack and bound actions). tools/blender/export_horse.py exports it to resources/models/voxel/horse.fbx at 0.67 scale (about 1.0 tall and 2.1 long, a horse rather than a roe deer). tools/clips/horse_clips.py writes horse_walk, horse_idle, horse_attack and horse_bound to resources/clips, keyed on the horse's own bones. The wolf in Wolf.blend has a messy shell and is not used. The library has no hurt or die clip. The notes below are superseded.
+- [ ] **33.1a** Remodel the creature (superseded by the library models above; kept for the record). The box-modelled roe deer was taken out (not good enough). The earlier ellipsoid model was removed too. The clips in `resources/clips` and their `tools/clips/creature_clips.py` script stay, since they key the eight bones of the rig the new model must have; until the remodel they name a model file that is not in the repository. The new model needs more edge loops on the head and neck, sculpted joints, and a proper surface, then the same rig and clips.
+- [ ] **33.2** The walker plays the model: each creature's body is a skinned model, placed at the walker's feet and yaw each frame,
+  its walk clip speed set from its pace, and its bite and hurt clips played by the walker's own events. The box body goes.
+- [ ] **33.3** The creature kinds in the data file (29.2) name their model and clips, so a new creature is a model and an edit.
+- [ ] **33.4** Feedback that reads: a hit plays the hurt clip and knocks the creature back; a death plays the die clip and fades; a
+  bite lunges (the bite clip) before the damage lands.
+
+## Phase 34: realistic item models (from the player: real item models; goal 1)
+Goal: an item looks like the thing it is: a tool is shaped, textured and held, and its icon is a render of it.
+- [ ] **34.1** Tool models in Blender: a pickaxe with a handle that is turned and worn, and a head with bevelled edges and a material
+  (stone for the pickaxe, iron for the iron pickaxe), exported as FBX. A dropped tool lies on the ground as its model and turns slowly.
+- [ ] **34.2** A held tool in the first-person view: the selected tool's model is drawn in the hand, and each swing that hits a block
+  plays its swing clip (the hand moves; a sound alone is not enough).
+- [ ] **34.3** Icons: each tool's icon is a render of its model (the viewport screenshot through BlenderMCP, saved as a PNG), shown on
+  the hotbar in place of the colour swatch.
+
+## Phase 35: a shader that can make the models look real (from the review: the engine's look is the limit)
+Goal: the engine can light a surface the way a surface looks: normal maps and a physically based material, so the Blender models
+and the textures show their detail, not only their shape.
+- [ ] **35.1** Normal maps in the standard shader: a material takes a normal texture, and the lighting uses it. Checked on a test model
+  by a screenshot against its flat version.
+- [ ] **35.2** A roughness and metallic term, so the iron pickaxe's head shines and the wood does not; the existing ambient and sun
+  stay as they are.
+- [ ] **35.3** Textures for the creatures' skin and the items, made in Blender with the same procedural materials, baked to PNG so the
+  game does not depend on Blender at run time.
 
 ## Tooling and quality
 - [x] CI build on Windows (`.github/workflows/build.yml`) with Mesa software OpenGL smoke run

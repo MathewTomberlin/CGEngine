@@ -116,7 +116,22 @@ REACTIONS = [{"block": "lava", "touches": "water", "becomes": "obsidian", "secon
 # holding one cannot place it (the game checks COLOURS, which lists the blocks only), and the world never defines them.
 HIDE = 40
 PICKAXE = 41                        # a tool: it does not stack, and when it is the selected slot its swings on PICKAXE_BLOCKS count double
-ITEM_COLOURS = {HIDE: (0.72, 0.56, 0.40), PICKAXE: (0.62, 0.62, 0.68)}
-ITEM_NAMES = {HIDE: "hide", PICKAXE: "pickaxe"}
+IRON_PICKAXE = 42                   # a tool that mines obsidian, and lasts four times as long as a pickaxe
+ITEM_COLOURS = {HIDE: (0.72, 0.56, 0.40), PICKAXE: (0.62, 0.62, 0.68), IRON_PICKAXE: (0.74, 0.72, 0.70)}
+ITEM_NAMES = {HIDE: "hide", PICKAXE: "pickaxe", IRON_PICKAXE: "iron pickaxe"}
 NAMES.update(ITEM_NAMES)
 PICKAXE_BLOCKS = (STONE, COAL, IRON, BRICK, OBSIDIAN)   # the blocks a pickaxe mines faster (VoxelWorld.hit_block takes two hits from it)
+# A tool's durability is the swings that hit a block it can use before it breaks (one use a swing), and its tier is the hardest
+# block it mines (BLOCK_TIER). A block that is not listed in BLOCK_TIER needs no tool: stone, coal and iron are mined by hand.
+TOOLS = {PICKAXE: {"durability": 40, "tier": 1}, IRON_PICKAXE: {"durability": 160, "tier": 2}}
+BLOCK_TIER = {OBSIDIAN: 2}
+
+
+def mining_tier(item):
+    """The tier a tool mines at; 0 for no tool, and for an item that is not a tool."""
+    return TOOLS[item]["tier"] if item in TOOLS else 0
+
+
+def can_mine(item, block):
+    """Whether the item in the selected slot (or None) can break the block: its tier must be at least the block's."""
+    return mining_tier(item) >= BLOCK_TIER.get(block, 0)

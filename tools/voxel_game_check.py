@@ -238,9 +238,9 @@ def main():
         checks["a new player's crafting panel lists nothing"] = crafting.visible(False) == []
         inv.add(VoxelGen.WOOD, 1)
         game.learn_recipes()
-        checks["picking up wood teaches the torch recipe"] = "Torch" in crafting.known
-        _, button, options, rows = game.craft_layout(1)
-        checks["the torch recipe is listed once it is known"] = crafting.visible(False) == [torch]
+        checks["picking up wood teaches the torch and the pickaxe recipes"] = {"Torch", "Pickaxe"} <= crafting.known
+        _, button, options, rows = game.craft_layout(len(crafting.visible(False)))   # the panel as the game lays it out
+        checks["the known recipes are listed, the torch first"] = [r["name"] for r in crafting.visible(False)] ==             ["Torch", "Pickaxe", "Iron pickaxe"] and crafting.visible(False)[0] == torch
         panel_click(game, rows[0])
         checks["a click on the recipe makes one torch from one wood"] = inv.count(TORCH) == 1 and inv.count(VoxelGen.WOOD) == 0
         inv.slots = [None] * VoxelInventory.SLOTS
@@ -253,7 +253,9 @@ def main():
         checks["a category picks the list and closes it"] = crafting.category == "Light" and not crafting.dropdown_open
         game.creative = True
         crafting.known = set()
-        checks["creative mode lists every recipe, known or not"] = crafting.visible(True) == [torch]
+        crafting.category = VoxelRecipes.ALL
+        _, button, options, rows = game.craft_layout(len(crafting.visible(True)))
+        checks["creative mode lists every recipe, known or not"] = [r["name"] for r in crafting.visible(True)] ==             ["Torch", "Pickaxe", "Iron pickaxe"]
         panel_click(game, rows[0])
         checks["creative mode makes a torch with nothing in the inventory"] = inv.count(TORCH) == 1
         game.creative = False
