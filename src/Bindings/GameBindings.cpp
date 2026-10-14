@@ -24,6 +24,7 @@
 #include <algorithm>
 #include "../Core/Scene/SceneLoader.h"
 #include "../Core/World/Renderer.h"
+#include "../Core/Audio/AudioPlayer.h"
 
 namespace py = pybind11;
 using namespace py::literals;
@@ -59,6 +60,12 @@ namespace {
     bool unattended() {
         static const bool value = std::getenv("CGENGINE_UNATTENDED") != nullptr;
         return value;
+    }
+
+    // The sounds the game plays (AudioPlayer): one player for the process, made when it is first used.
+    AudioPlayer& audioPlayer() {
+        static AudioPlayer player;
+        return player;
     }
 
     RenderWindow& gameWindow() {
@@ -325,6 +332,22 @@ void bindGame(py::module_& m) {
         }
         return text;
     }, "The characters typed since the last call, in order (ASCII only). Use key_down for Backspace and Enter.");
+
+    m.def("play_sound", [](const std::string& name, float volume, float pitch) {
+        return audioPlayer().playEffect(name, volume, pitch);
+    }, py::arg("name"), py::arg("volume") = 1.0f, py::arg("pitch") = 1.0f,
+        "Play the sound sounds/<name>.wav (beside the executable) at a volume from 0 to 1 and a pitch (1 is as recorded). Returns False "
+        "if the file cannot be loaded. Under CGENGINE_UNATTENDED nothing is heard, but the call is counted (sound_count).");
+
+    m.def("play_music", [](const std::string& name, float volume) {
+        return audioPlayer().playMusic(name, volume);
+    }, py::arg("name"), py::arg("volume") = 0.5f,
+        "Loop the music sounds/<name>.wav at a volume from 0 to 1, replacing any music that plays. Returns False if it cannot be opened.");
+
+    m.def("stop_music", []() { audioPlayer().stopMusic(); }, "Stop the music.");
+
+    m.def("sound_count", []() { return audioPlayer().effectCount(); },
+        "How many sound effects the game has asked for since it started, whether or not they were heard.");
 
     m.def("set_fullscreen", [](bool on) {
         if (!screen) throw std::runtime_error("the window is not running yet");

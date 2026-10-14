@@ -645,6 +645,23 @@ Things worth doing, roughly by what they would change for a player. Each one nee
 - **Measure the HUD's share of the frame** (17.3), and the cost of many damaged blocks (16.2), in Release.
 - **Save file per world**: the edits, inventory and time of day in one folder, so a run can be copied or shared.
 
+## Phase 27: sound and music (from the vision: a game people want to play, goal 1)
+Goal: the sample has sounds for what the player does, and a night loop, through the engine's audio, with the sounds made from data.
+- [x] **27.1** The engine plays sounds: `AudioPlayer` (SFML audio, `src/Core/Audio`) loads `sounds/<name>.wav` beside the
+  executable, plays effects on eight voices, and streams a looping music track. Bindings: `play_sound`, `play_music`,
+  `stop_music`, `sound_count`. Under `CGENGINE_UNATTENDED` nothing is heard but the calls are counted. Checked with a windowed
+  run: the device accepts an effect and the music.
+- [x] **27.2** The effects are generated with Stable Audio 3 (sound effects) through ComfyUI, with the `comfyui-audio` skill
+  (`~/.claude/skills/comfyui-audio`). Prompts and seeds are in `resources/sounds/SOURCES.md`. The game plays them for breaking
+  (a hit and the break), placing, a hurt, a footstep every 0.45 s on the ground, a pickup, a creature's bite, and a splash when
+  the player goes under.
+- [x] **27.3** The night loop (`ambient`) is made from sines by `tools/make_voxel_sounds.py`, so it joins without a click; it plays
+  while it is dark and stops by day.
+- [ ] **27.4** Not heard in play yet: the levels of each effect against the music, and whether the footsteps are too many. The
+  moon's disc and the sounds need a listen.
+- [ ] **27.5** Music from the medium model (`stable_audio_3_medium`) for a day theme. Its clips are not seamless loops, so it would
+  play once per part of the day, not as a loop.
+
 ## Tooling and quality
 - [x] CI build on Windows (`.github/workflows/build.yml`) with Mesa software OpenGL smoke run
 - [~] Unit tests for pure logic runnable without a GPU. Done for the dungeon generator (`python -I tools/test_dungeon_gen.py`) and for the scene format and command list (`python -I tools/test_scene_format.py`: example scenes, invalid fixtures, documented commands). The C++ parsers in `SceneLoader` and `ControlChannel` are still covered only by the GPU integration test.

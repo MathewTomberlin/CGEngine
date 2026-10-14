@@ -62,6 +62,9 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
             spawn_x, spawn_z = (float(v) for v in os.environ["VOXEL_SPAWN"].split(","))
             self.pos = [spawn_x, SPAWN_HEIGHT, spawn_z]
         self.swimming = False
+        self.was_swimming = False       # for the splash when the player goes under
+        self.step_timer = 0.0           # seconds until the next footstep sound
+        self.music_on = False           # the night loop is playing
         self.walkers = None             # the creatures, made once the spawn area has loaded
         self.vel = [0.0, 0.0, 0.0]
         self.on_ground = False
@@ -297,6 +300,8 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
                 return
             self.walkers = VoxelWalkers.Walkers(self.world, (8.5, 8.5), WALKERS, self.seed)
         bites = self.walkers.update(dt, (self.pos[0], self.pos[2]), self.pos[1])
+        if bites > 0.0:
+            cge.play_sound("bite", 0.8)
         self.hurt_player(bites)
         for walker in self.walkers.killed:
             if not walker.removed:          # a creature is removed once, however many biters bit it in the same frame
@@ -411,6 +416,9 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
         self.turn((self.key("Right") - self.key("Left")) * TURN_SPEED * dt,
                   (self.key("Up") - self.key("Down")) * TURN_SPEED * dt)
         self.swimming = not self.flying and self.in_water()
+        if self.swimming and not self.was_swimming:
+            cge.play_sound("splash", 0.7)
+        self.was_swimming = self.swimming
 
         # Walk along the ground in the direction the player faces (flat, so looking down does not sink the player).
         yaw = math.radians(self.yaw)
@@ -453,6 +461,15 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
             self.pos = list(pos)
             self.vel = list(vel)
         self.track_fall()
+        # Footsteps: while the player walks on the ground, a step every STEP_SECONDS, each a little different in pitch.
+        walking = self.on_ground and not self.flying and not self.swimming and math.hypot(self.vel[0], self.vel[2]) > 0.5
+        if walking:
+            self.step_timer -= dt
+            if self.step_timer <= 0.0:
+                cge.play_sound("step", 0.35, 0.9 + 0.2 * random.random())
+                self.step_timer = STEP_SECONDS
+        else:
+            self.step_timer = 0.0
         if self.pos[1] < RESPAWN_DEPTH:
             # Keep the state from the moment of the fall: where the player was, and whether the chunk under them was loaded.
             folder = os.path.abspath("cg_control/snapshots")
@@ -555,8 +572,12 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
         since it keeps no stock: an item taken there would be lost."""
         if self.creative:
             return
+        taken = False
         for item in self.drops.take_in_reach(self.pos, self.inventory):
+            taken = True
             self.notify("Picked up a %s" % VoxelGen.NAMES[item])
+        if taken:
+            cge.play_sound("pickup", 0.6)
         blocked = self.drops.blocked_in_reach(self.pos, self.inventory)
         if blocked is not None:
             self.notify("Inventory full: no room for the %s" % VoxelGen.NAMES[blocked])
@@ -755,6 +776,10 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
                     break
             colour = VoxelGen.COLOURS.get(kind, (0.5, 0.5, 0.5))
             centre = [block[i] + 0.5 for i in range(3)]
+            if stage == -1:
+                cge.play_sound("break", 0.8)
+            elif stage > 0:
+                cge.play_sound("break", 0.35, 1.4)
             if stage != -2:
                 self.flash_until = time.time() + HIT_FLASH_SECONDS
                 self.send_request({"op": "hit", "c": list(block), "swings": swings})
@@ -782,6 +807,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
             else:
                 self.world.set_block(cell[0], cell[1], cell[2], item)
                 self.send_request({"op": "place", "c": list(cell), "id": item})
+            cge.play_sound("place", 0.7, 0.95 + 0.1 * random.random())
             self.spend()
 
     def placement_check(self):
@@ -870,6 +896,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
         if amount <= 0.0 or self.creative:
             return
         self.health -= amount
+        cge.play_sound("hurt", 0.8)
         self.hurt_at = time.time()
         self.hurt_flash_until = self.hurt_at + HURT_FLASH_SECONDS
         if self.health > 0.0:
@@ -964,6 +991,12 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
                       brightness=(0.45 + 0.55 * day) * sun_up)
         cge.set_light("moon", direction=cge.Vector3f(*toward_sun), colour=cge.Vector3f(*MOON_LIGHT),
                       brightness=MOON_BRIGHTNESS * night * moon)
+        # The night loop plays while it is dark, and stops once it is day again (the hysteresis keeps it from flickering at dusk).
+        if night > 0.5 and not self.music_on:
+            self.music_on = cge.play_music("ambient", 0.3)
+        elif night < 0.2 and self.music_on:
+            cge.stop_music()
+            self.music_on = False
         # The sun's shadows are off under the water: the water surface is a shadow over everything below it, which is dark.
         cge.set_environment(sky=cge.Vector3f(*sky), zenith=cge.Vector3f(*zenith), fog=cge.Vector3f(*fog_colour),
                             fog_start=fog_start, fog_end=fog_end,
@@ -1029,6 +1062,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
                  "biome": self.world.biome_at(math.floor(self.pos[0]), math.floor(self.pos[2])),
                  "mouse_captured": self.mouse_captured, "yaw": round(self.yaw, 3), "pitch": round(self.pitch, 3),
                  "max_frame_ms": round(self.max_dt * 1000.0, 2),
+                 "sounds": cge.sound_count(), "music": self.music_on,
                  "time_of_day": round(self.clock, 5), "moon_phase": round((self.moon_days / MOON_MONTH_DAYS) % 1.0, 4), "moon_share": round(moon_share((self.moon_days / MOON_MONTH_DAYS) % 1.0), 4), "sun": [round(v, 5) for v in self.sun],
                  "fog": [round(v, 3) for v in self.fog],
                  "look": [round(v, 6) for v in self.look_direction()],
