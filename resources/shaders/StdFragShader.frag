@@ -75,7 +75,7 @@ in vec2 uv;
 in vec3 normal;
 in vec3 vertex;
 in float matId;
-in vec3 vertexColour;
+in vec4 vertexColour;
 in vec3 vertexGlow;
 in float vertexSky;
 in float vertexFlicker;     //The phase of a wavering flame (a placed torch), 0 for every other surface
@@ -282,7 +282,7 @@ void main() {
         }
     }
     surfColor *=  diffuseColor;                                                                 //Modulate diffuse texture color with diffuse color
-    surfColor.rgb *= vertexColour;                                                              //Per-vertex tint (white unless the mesh sets it)
+    surfColor.rgb *= vertexColour.rgb;                                                          //Per-vertex tint (white unless the mesh sets it)
     //Cracks: a damaged voxel gets dark lines on its surface (the damage is 0 for every other mesh). The damage is interpolated
     //across the triangles, so a triangle that reaches a hit block from a clean one fades its cracks out (the envelope).
     if(triplanar != 0 && vertexDamage > 0.0) surfColor.rgb *= 1.0 - 0.6 * crackMask(surfPos, vertexDamage) * smoothstep(0.2, 0.5, vertexDamage);
@@ -305,6 +305,7 @@ void main() {
     }
     //Voxel materials can be see-through (the water): their opacity multiplies the surface's.
     if(triplanar != 0 && materials[mtl].opacity > 0.0) surfOpacity *= opacity;
+    surfOpacity *= vertexColour.a;                                                              //A vertex's own opacity (1 unless a ghost fades it)
     if(surfOpacity < materials[mtl].alphaCutoff) discard;                                       //Discard fragments with alpha below the cutoff
 
     //Surface lighting
@@ -330,6 +331,11 @@ void main() {
         }
     }
 
+	//A voxel surface that neither the sun nor a lamp reaches is not black: it keeps a faint share of its own tile, so a dark tunnel's
+    //walls still show their texture. The sun's share of the light is what the sky lets through (skyVisible), so this fills the rest.
+    const float CaveFill = 0.12;
+    if(triplanar != 0 && materials[mtl].useLighting != 0) linearColor += surfColor.rgb * CaveFill * (1.0 - skyVisible);
+
 	//Post-lighting Gamma correction
     vec3 fragColor = linearColor.rgb;
     if(materials[mtl].useGammaCorrection != 0){
@@ -344,7 +350,11 @@ void main() {
     //Emission: a light block's own glow, added after the lighting so the sun and the shadows do not dim it. Fog still applies.
     //A torch's flame wavers: its glow is scaled by two slow sines, each torch on its own phase (vertexFlicker is 0 elsewhere).
     float flameWaver = vertexFlicker > 0.0 ? 0.88 + 0.12 * sin(timeSec * 7.3 + vertexFlicker * 6.283) * sin(timeSec * 2.9 + vertexFlicker * 3.7) : 1.0;
-    fragColor += vertexGlow * flameWaver;
+    //A block's glow and the light of nearby lamps are its own texture lit up, so a lamp-lit wall or a lava surface shows its tiles.
+    //A torch's flame (flicker above 0) is a plain colour. EmissiveGain brings the lit tiles up to a bright glow in a cave.
+    const float EmissiveGain = 1.5;
+    vec3 emitted = vertexFlicker > 0.0 ? vertexGlow * flameWaver : vertexGlow * surfColor.rgb * EmissiveGain;
+    fragColor += emitted;
 
     //Distance fog: fades the surface into the fog colour between the start and end distances
     if(fogRange.y > fogRange.x){

@@ -197,6 +197,18 @@ check("a player walking into a creature is blocked", p.blocks_move((0.0, 0.0), (
 check("a player stepping away from a creature in contact is not blocked", not p.blocks_move((4.5, 0.0), (4.2, 0.0), creature))
 check("a player far from a creature is not blocked", not p.blocks_move((0.0, 0.0), (1.0, 0.0), creature))
 
+# Creatures are only in the way at the height they stand: a player high in the air is not touched by one on the ground.
+player_height, creature_height = p.PLAYER_HEIGHT, 1.2
+check("a creature on the ground is level with a player standing on it",
+      p.overlaps_vertically(0.0, player_height, 0.0, creature_height))
+check("a creature below a player flying high is not level with it",
+      not p.overlaps_vertically(10.0, player_height, 5.0, creature_height))
+check("a creature whose top is under the player's feet is not level with it",
+      not p.overlaps_vertically(10.0, player_height, 8.5, creature_height))
+check("a creature that reaches the player's feet is level with it",
+      p.overlaps_vertically(10.0, player_height, 10.5, creature_height))
+check("a creature above a player's head is not level with it", not p.overlaps_vertically(0.0, player_height, 1.9, creature_height))
+
 if failures:
     print(f"\n{len(failures)} check(s) failed")
     sys.exit(1)

@@ -1,18 +1,23 @@
 """
-Reaction rules as data (roadmap 10.3). A rule file is JSON:
+Reactions as data (roadmap 10.3). A rule file is JSON:
 
-    {"rules": [{"block": "grass", "touches": "water", "becomes": "dirt", "chance": 0.5}]}
+    {"rules": [{"block": "grass", "touches": "water", "becomes": "dirt", "chance": 0.5},
+               {"block": "lava", "touches": "water", "becomes": "obsidian", "seconds": 4}]}
 
-A rule says that a block touching the kind "touches" becomes "becomes", with this chance per simulation tick. Blocks are
-names from VoxelGen.NAMES (only a name that belongs to one block id: "flowing water" is not one) or ids from 0 to 255.
-"chance" is optional (1 by default) and must be above 0 and at most 1. A file is checked as a whole before any rule is
-added, so a bad entry is reported and the world keeps its rules.
+A rule says that a block touching one of the kinds in "touches" becomes "becomes". Without "seconds" the change comes with
+"chance" per simulation tick (1 by default, above 0 and at most 1). With "seconds" the block must keep touching for that long:
+it shows its progress as damage stages, and then becomes the other block, as a block breaks when it is hit. Air is a block
+too, so "block": "air" grows a block into the air beside it (leaves growing into the air, say).
+
+Blocks are names from VoxelGen.NAMES (a name that belongs to one block id) or ids from 0 to 255. The families "water" and "lava"
+stand for every block of that liquid, the source and its flowing levels, and can be used for "block" and in "touches".
+A reaction is installed in the world by add_reaction (VoxelWorld). VoxelGen.REACTIONS are the ones the game always has.
 """
 import json
 
 import VoxelGen
 
-KEYS = {"block", "touches", "becomes", "chance"}
+KEYS = {"block", "touches", "becomes", "chance", "seconds"}
 
 
 def _name_ids():
@@ -24,18 +29,27 @@ def _name_ids():
 
 
 NAME_IDS = _name_ids()
+FAMILIES = {"water": VoxelGen.WATER_BLOCKS, "lava": VoxelGen.LAVA_BLOCKS}
 
 
-def _block(value, where):
+def _one(value, where):
     if isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= 255:
         return value
     if isinstance(value, str) and value in NAME_IDS:
         return NAME_IDS[value]
-    raise ValueError("%s: %r is not a block name or an id from 0 to 255" % (where, value))
+    raise ValueError("%s: %r is not a block name, a family or an id from 0 to 255" % (where, value))
+
+
+def _blocks(value, where):
+    """The block ids a name, a family or an id stands for."""
+    if isinstance(value, str) and value in FAMILIES:
+        return list(FAMILIES[value])
+    return [_one(value, where)]
 
 
 def parse(data):
-    """The rules in a parsed file, as (block, touches, becomes, chance) tuples. Raises ValueError naming the first bad entry."""
+    """The rules in a parsed file, as (block, touches, becomes, chance, seconds) tuples, one per block id a family names, with
+    touches a sorted list of ids. Raises ValueError naming the first bad entry."""
     if not isinstance(data, dict) or not isinstance(data.get("rules"), list):
         raise ValueError('a rule file is an object with a "rules" list')
     rules = []
@@ -46,25 +60,54 @@ def parse(data):
         unknown = sorted(set(entry) - KEYS)
         if unknown:
             raise ValueError("%s: unknown keys %s" % (where, ", ".join(unknown)))
-        missing = sorted(KEYS - {"chance"} - set(entry))
+        missing = sorted({"block", "touches", "becomes"} - set(entry))
         if missing:
             raise ValueError("%s: missing %s" % (where, ", ".join(missing)))
-        block = _block(entry["block"], where + " block")
-        touches = _block(entry["touches"], where + " touches")
-        becomes = _block(entry["becomes"], where + " becomes")
+        blocks = _blocks(entry["block"], where + " block")
+        touches = entry["touches"] if isinstance(entry["touches"], list) else [entry["touches"]]
+        if not touches:
+            raise ValueError("%s: touches needs at least one kind" % where)
+        kinds = set()
+        for kind in touches:
+            kinds.update(_blocks(kind, where + " touches"))
+        becomes = _one(entry["becomes"], where + " becomes")
         chance = entry.get("chance", 1)
         if isinstance(chance, bool) or not isinstance(chance, (int, float)) or not 0 < chance <= 1:
             raise ValueError("%s: chance must be above 0 and at most 1, not %r" % (where, chance))
-        rules.append((block, touches, becomes, float(chance)))
+        seconds = entry.get("seconds", 0)
+        if isinstance(seconds, bool) or not isinstance(seconds, (int, float)) or seconds < 0:
+            raise ValueError("%s: seconds must not be negative, not %r" % (where, seconds))
+        for block in blocks:
+            rules.append((block, sorted(kinds), becomes, float(chance), float(seconds)))
     return rules
 
 
+def install(world, reactions):
+    """Replace the world's reactions with these (a list of entries like a rule file's) and return how many there are. Raises
+    ValueError for a bad entry, and then the world keeps the reactions it had."""
+    rules = parse({"rules": list(reactions)})
+    world.clear_rules()
+    return _add(world, rules)
+
+
+def add_file(world, path):
+    """Add the rules of a rule file to the world's reactions and return how many it added. Raises OSError or ValueError, and then
+    nothing is added."""
+    with open(path, encoding="utf-8") as f:
+        rules = parse(json.load(f))
+    return _add(world, rules)
+
+
 def load(world, path):
-    """Replace the world's rules with the file's and return how many there are. Raises OSError or ValueError, and then the
-    world keeps the rules it had."""
+    """Replace the world's reactions with the file's and return how many there are. Raises OSError or ValueError, and then the
+    world keeps the reactions it had."""
     with open(path, encoding="utf-8") as f:
         rules = parse(json.load(f))
     world.clear_rules()
-    for block, touches, becomes, chance in rules:
-        world.add_rule(block, touches, becomes, chance)
+    return _add(world, rules)
+
+
+def _add(world, rules):
+    for block, kinds, becomes, chance, seconds in rules:
+        world.add_reaction(block, kinds, becomes, chance, seconds)
     return len(rules)

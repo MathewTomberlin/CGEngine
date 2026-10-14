@@ -64,7 +64,7 @@ in vec2 texCoord;
 in vec3 vertNormal;
 in float materialId;
 in mat4 instanceMatrix;	//Read only when instanced is set (see Renderer::drawInstances)
-in vec3 vertColour;
+in vec4 vertColour;
 in vec4 vertGlow;	//The light the surface gives off (xyz), and the phase of a wavering flame (w), see VoxelVertex::glow
 in vec3 vertTiles;
 in vec4 vertSplatA;	//The terrain's splat weights, channels 0 to 3 (see VoxelVertex::splatA)
@@ -79,7 +79,7 @@ out vec2 uv;
 out vec3 normal;
 out vec3 vertex;
 out float matId;
-out vec3 vertexColour;
+out vec4 vertexColour;
 out vec3 vertexGlow;
 out float vertexSky;
 out float vertexDamage;

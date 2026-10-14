@@ -15,6 +15,18 @@ namespace CGEngine {
 	// The placement ghost is built from the blocks this far each side of its cell, and keeps the surface this close to it.
 	const int PreviewRadius = 4;
 	const float PreviewKeep = 2.5f;
+
+	// A smooth step from 0 at from to 1 at to (0 and 1 outside them).
+	float smoothRamp(float from, float to, float x) {
+		const float t = std::clamp((x - from) / (to - from), 0.0f, 1.0f);
+		return t * t * (3.0f - 2.0f * t);
+	}
+
+	// How far a ghost's vertex has risen out of the terrain: 0 on its surface, 1 a fifth of a block above it. The ghost fades in from
+	// the ground it stands on, so it does not end on a hard line where it meets the terrain (roadmap 24.3).
+	float ghostRise(const PaddedChunk& terrain, glm::vec3 p) {
+		return smoothRamp(0.0f, 0.2f, VoxelSkinIso - densityAtPoint(terrain, 0, p));
+	}
 		// A region is RegionChunks by RegionChunks chunks, drawn as one body per mesh group. The view then draws a few
 		// hundred regions' groups instead of a body per chunk (roadmap 15.5).
 		const int RegionChunks = 4;
@@ -58,6 +70,8 @@ namespace CGEngine {
 		types[VoxelTerrain::Sand].falls = true;
 		types[Water::Source] = BlockType{ false, false, true };
 		for (int id = Water::FlowFirst; id <= Water::FlowLast; ++id) types[static_cast<size_t>(id)] = BlockType{ false, false, true };
+		for (int id = LavaFlow.first; id <= LavaFlow.last; ++id) types[static_cast<size_t>(id)] = BlockType{ false, false, true };
+		types[LavaFlow.source] = BlockType{ false, false, true };
 		startWorkers();
 	}
 
@@ -1051,6 +1065,7 @@ namespace CGEngine {
 			padded.rule[id].join = types[id].joinAbove;
 			padded.rule[id].joinBelow = types[id].joinBelow;
 			padded.rule[id].cube = types[id].cube;
+			padded.rule[id].transparent = types[id].transparent;
 			padded.rule[id].textured = types[id].textured;
 			padded.rule[id].splat = types[id].splat;
 			for (int k = 0; k < 3; ++k) padded.rule[id].tiles[k] = types[id].tiles[k];
@@ -1443,6 +1458,7 @@ namespace CGEngine {
 			padded.rule[id].join = types[id].joinAbove;
 			padded.rule[id].joinBelow = types[id].joinBelow;
 			padded.rule[id].cube = types[id].cube;
+			padded.rule[id].transparent = types[id].transparent;
 		}
 		const int cx = x - ox;
 		const int cy = y - oy;
@@ -1458,30 +1474,43 @@ namespace CGEngine {
 			const uint8_t group = padded.rule[static_cast<size_t>(blockId)].group;
 			if (types[static_cast<size_t>(blockId)].cube || resolution <= 0) {
 				// A cube is its own mesh: the copy holds only the new block, so nothing else in its group is drawn.
-				std::fill(padded.blocks.begin(), padded.blocks.end(), 0);
+				PaddedChunk terrain = padded;
+			computeSkin(terrain);
+			std::fill(padded.blocks.begin(), padded.blocks.end(), 0);
 				padded.blocks[padded.index(cx, cy, cz)] = static_cast<uint8_t>(blockId);
 				computeLight(padded);
 				buildChunkMesh(padded, colours, group, out);
+				for (VoxelVertex& vertex : out.vertices) vertex.colour.a = ghostRise(terrain, vertex.position);
 			} else {
 				// The terrain as it is is kept for the filter below; the copy with the block added is meshed.
 				PaddedChunk before = padded;
 				padded.blocks[padded.index(cx, cy, cz)] = static_cast<uint8_t>(blockId);
 				computeLight(padded);
-				if (group == 0) {
-					computeSkin(before);
-					computeSkin(padded);
-				}
+				computeSkin(before);
+				if (group == 0) computeSkin(padded);
 				MeshArrays full;
 				buildSmoothMesh(padded, colours, resolution, 1, 0, group, full);
 				const glm::vec3 centre(cx + 0.5f, cy + 0.5f, cz + 0.5f);
+				// The triangles kept, and the vertices they use. The ghost keeps a little past PreviewKeep and fades out there.
+				std::vector<bool> kept(full.vertices.size(), false);
 				for (size_t t = 0; t + 2 < full.indices.size(); t += 3) {
 					glm::vec3 corner(0.0f);
 					for (size_t k = 0; k < 3; ++k) corner += full.vertices[full.indices[t + k]].position;
 					const glm::vec3 middle = corner / 3.0f;
-					if (glm::distance(middle, centre) > PreviewKeep) continue;
+					if (glm::distance(middle, centre) > PreviewKeep * 1.2f) continue;
 					// A triangle inside the terrain as it stands is the terrain itself, not new, so only the new ones are drawn.
 					if (densityAtPoint(before, group, middle) > VoxelSkinIso) continue;
-					for (size_t k = 0; k < 3; ++k) out.indices.push_back(full.indices[t + k]);
+					for (size_t k = 0; k < 3; ++k) {
+					out.indices.push_back(full.indices[t + k]);
+					kept[full.indices[t + k]] = true;
+				}
+				}
+				// The alpha of each kept vertex: it fades to nothing at the edge of the keep radius, and it fades in from the ground it stands on.
+				for (size_t v = 0; v < full.vertices.size(); ++v) {
+					if (!kept[v]) continue;
+					VoxelVertex& vertex = full.vertices[v];
+					const float edge = 1.0f - smoothRamp(PreviewKeep * 0.5f, PreviewKeep * 1.2f, glm::distance(vertex.position, centre));
+					vertex.colour.a = edge * ghostRise(before, vertex.position);
 				}
 				out.vertices = std::move(full.vertices);
 			}

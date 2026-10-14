@@ -51,4 +51,28 @@ namespace CGEngine {
 		}
 		inline uint8_t flowing(int level) { return static_cast<uint8_t>(16 - level); }
 	}
+
+	// A liquid's blocks: its source (a full block), and its flowing levels from 7 down to 1 as block ids first to last, with
+	// id = top - level. Water and lava flow the same way (VoxelSimulation).
+	struct Liquid {
+		uint8_t source;
+		uint8_t first;
+		uint8_t last;
+		int top;
+		// The level of a block of this liquid: 8 for the source, 1 to 7 for flowing, 0 for anything else.
+		int level(uint8_t block) const {
+			if (block == source) return 8;
+			if (block >= first && block <= last) return top - block;
+			return 0;
+		}
+		uint8_t flowing(int level) const { return static_cast<uint8_t>(top - level); }
+	};
+	inline const Liquid WaterFlow{ Water::Source, Water::FlowFirst, Water::FlowLast, 16 };
+	inline const Liquid LavaFlow{ 22, 23, 29, 30 };   // lava is block 22 (VoxelTerrain::Lava); its flows are 23 to 29 (VoxelGen.py)
+	// The liquid a block is, or nullptr for a block that is not a liquid.
+	inline const Liquid* liquidOf(uint8_t block) {
+		if (WaterFlow.level(block) > 0) return &WaterFlow;
+		if (LavaFlow.level(block) > 0) return &LavaFlow;
+		return nullptr;
+	}
 }

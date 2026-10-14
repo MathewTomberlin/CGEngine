@@ -18,20 +18,24 @@ LAMP = 17                           # a full block that gives off light (the sam
 BRICK = 18                          # a cube block: it never merges with its neighbours, so it keeps sharp edges
 TORCH = 19                          # a torch: a prop on a block's face (VoxelWorld.set_prop), not a block; only the hotbar names it
 COAL, IRON = 20, 21                 # ore in the stone: coal at any depth, iron deep (the same ids as VoxelTerrain::Coal and Iron)
-LAVA = 22                           # a liquid that does not flow: lakes in the deep caves (the same id as VoxelTerrain::Lava)
+LAVA = 22                           # a liquid: lakes in the deep caves (the same id as VoxelTerrain::Lava), a source that flows as water does
+LAVA_FLOW_FIRST, LAVA_FLOW_LAST = 23, 29   # flowing lava, levels 7 to 1 (the block id is 30 - level), as the water's are
+LAVA_BLOCKS = (LAVA,) + tuple(range(LAVA_FLOW_FIRST, LAVA_FLOW_LAST + 1))   # the lava family: one mesh, named after the source
 DIRECTIONS = ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1))   # a prop's dir, to the block it leans on (PropDirs)
 FLOW_FIRST, FLOW_LAST = 9, 15       # flowing water, levels 7 to 1 (the block id is 16 - level); WATER is the full source
 WATER_BLOCKS = (WATER,) + tuple(range(FLOW_FIRST, FLOW_LAST + 1))   # the water family: one mesh, drawn see-through
-LIQUIDS = WATER_BLOCKS + (LAVA,)    # every liquid: swimming and the fog under the surface
-STILL_LIQUIDS = (LAVA,)             # liquids that do not spread (define_block flows=False)
+LIQUIDS = WATER_BLOCKS + LAVA_BLOCKS    # every liquid: swimming and the fog under the surface
+STILL_LIQUIDS = ()                   # liquids that do not spread (define_block flows=False): none now, lava flows like water
 FALLS = (SAND, GRAVEL)              # blocks that fall into air or liquid
 HITS = {STONE: 3, WOOD: 4, BRICK: 3, COAL: 4, IRON: 5}   # hits to break a block (the others take one); see VoxelWorld.hit_block
-EMITS = {LAMP: 255, LAVA: 80}      # the light each block gives off at its own cell, 0 to 255; the light falls off through air
+EMITS = {LAMP: 255, LAVA: 255}      # the light each block gives off at its own cell, 0 to 255; the light falls off through air
 # How each block is drawn (BlockType::own and cube). A block in OWN has its own mesh per chunk, drawn with MATERIALS[block]
 # (a material in scenes/voxels.json); the rest are the terrain's smooth skin. A cube block is always in OWN.
-OWN = (WOOD, LEAVES, BRICK, LAMP) + LIQUIDS   # liquids are in their own meshes too, so the ground under them has a skin to be seen by
-CUBES = (BRICK,)
-MATERIALS = {WOOD: "voxel_wood", LEAVES: "voxel_leaves", BRICK: "voxel_brick", WATER: "voxel_water", LAVA: "voxel_lava"}
+OBSIDIAN = 30                       # a hard cube: a lava block that water touches for a while becomes it (REACTIONS)
+OWN = (WOOD, LEAVES, BRICK, LAMP, OBSIDIAN) + LIQUIDS   # liquids are in their own meshes too, so the ground under them has a skin to be seen by
+CUBES = (BRICK, OBSIDIAN)
+MATERIALS = {WOOD: "voxel_wood", LEAVES: "voxel_leaves", BRICK: "voxel_brick", WATER: "voxel_water", LAVA: "voxel_lava",
+             OBSIDIAN: "voxel_brick"}
 JOINS = {WOOD: LEAVES}              # a block whose top is covered by the mesh of this block joins that mesh (the trunk top joins the canopy)
 GROUND = (GRASS, DIRT, STONE, SAND, GRAVEL, SNOW)   # natural ground
 # A trunk base stays in the trunk's own skin (no join below): a base joined to the terrain pinched the drawn trunk to 0.8 of a
@@ -93,6 +97,19 @@ NAMES = {AIR: "air", GRASS: "grass", DIRT: "dirt", STONE: "stone", SAND: "sand",
          LAVA: "lava"}
 for _block in range(FLOW_FIRST, FLOW_LAST + 1):
     NAMES[_block] = "flowing water"
+for _block in range(LAVA_FLOW_FIRST, LAVA_FLOW_LAST + 1):
+    TILES[_block] = TILES[LAVA]
+    COLOURS[_block] = COLOURS[LAVA]
+    EMITS[_block] = EMITS[LAVA]
+    NAMES[_block] = "flowing lava"
+COLOURS[OBSIDIAN] = (0.10, 0.07, 0.15)
+NAMES[OBSIDIAN] = "obsidian"
+HITS[OBSIDIAN] = 5
+for _block in LAVA_BLOCKS:
+    HITS[_block] = 4                    # lava takes four stages of damage when a reaction works on it (see REACTIONS)
+# The reactions every world has (VoxelRules): a lava block that water touches takes four seconds to become obsidian, showing its
+# damage as it goes. Other reactions are data too: a rule file (VOXEL_RULES) adds to them.
+REACTIONS = [{"block": "lava", "touches": "water", "becomes": "obsidian", "seconds": 4}]
 
 
 # Items that are not blocks: a creature leaves a hide when it dies. They are held in the inventory like blocks, but a slot
@@ -102,4 +119,4 @@ PICKAXE = 41                        # a tool: it does not stack, and when it is 
 ITEM_COLOURS = {HIDE: (0.72, 0.56, 0.40), PICKAXE: (0.62, 0.62, 0.68)}
 ITEM_NAMES = {HIDE: "hide", PICKAXE: "pickaxe"}
 NAMES.update(ITEM_NAMES)
-PICKAXE_BLOCKS = (STONE, COAL, IRON, BRICK)   # the blocks a pickaxe mines faster (VoxelWorld.hit_block takes two hits from it)
+PICKAXE_BLOCKS = (STONE, COAL, IRON, BRICK, OBSIDIAN)   # the blocks a pickaxe mines faster (VoxelWorld.hit_block takes two hits from it)

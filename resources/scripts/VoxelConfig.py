@@ -152,7 +152,25 @@ DUSK_LIGHT = (1.0, 0.60, 0.38)
 DAY_ZENITH = (0.22, 0.48, 0.90)
 NIGHT_ZENITH = (0.01, 0.015, 0.05)
 DUSK_ZENITH = (0.30, 0.30, 0.52)
-MOON_LIGHT = (0.45, 0.55, 0.85)
+MOON_LIGHT = (0.86, 0.92, 1.0)      # the moon's light: white, like the sun's but fainter
+MOON_BRIGHTNESS = 0.6              # the moon's brightness at full night (it is off by day)
+MOON_DISC = (0.92, 0.95, 1.0)      # the colour of the moon's disc in the sky (white, a little blue)
+MOON_SIZE = 2.0                    # the moon's angular radius in degrees, a little larger than the sun's (1.6)
+MOON_MONTH_DAYS = float(os.environ.get("VOXEL_MOON_MONTH_DAYS", "30"))   # in-game days for one full cycle of the moon's phases
+MOON_START_PHASE = 0.5             # where a new game starts in the cycle: 0 new moon, 0.25 first quarter, 0.5 full, 0.75 last quarter
+# The share of the moon's light at each phase of the cycle (phase 0 to 1): new 0%, crescent 25%, half 50%, gibbous 75%, full
+# 100%, then the same back down through the waning phases. The share between two keys is lerped.
+MOON_LIGHT_KEYS = ((0.0, 0.0), (0.125, 0.25), (0.25, 0.5), (0.375, 0.75), (0.5, 1.0), (0.625, 0.75), (0.75, 0.5), (0.875, 0.25),
+                   (1.0, 0.0))
+
+
+def moon_share(phase):
+    """The share of the moon's light at a phase of its cycle (0 to 1, wrapping), lerped between MOON_LIGHT_KEYS."""
+    p = phase % 1.0
+    for (p0, s0), (p1, s1) in zip(MOON_LIGHT_KEYS, MOON_LIGHT_KEYS[1:]):
+        if p0 <= p <= p1:
+            return s0 + (s1 - s0) * (p - p0) / (p1 - p0)
+    return 0.0
 
 
 # The pause menu's pages: the title, and the items on each page. The settings page holds the mouse sensitivity.

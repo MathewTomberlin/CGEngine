@@ -210,6 +210,27 @@ def main():
                 if walker in game.walkers.walkers:
                     game.walkers.remove(walker)
             game.walkers.killed = []
+            # Two biters next to a prey with one hit left: it dies once, and is queued for removal once (a second bite in the same
+            # frame used to queue it again, and the game then failed to find its body).
+            console.run("spawn creature 1 biter")
+            console.run("spawn creature 1 biter")
+            console.run("spawn creature 1")
+            trio = game.walkers.walkers[-3:]
+            prey = next((w for w in trio if not w.biter), None)
+            biters = [w for w in trio if w.biter]
+            if prey is not None and len(biters) == 2:
+                px, py, pz = prey.state()[0]
+                for biter in biters:
+                    cge.set_voxel_position(biter.name, px + 0.5, py, pz + 0.5)
+                prey.health = 1
+                game.walkers.update(0.1, (px + 500.0, pz))
+                queued = [w for w in game.walkers.killed if w is prey]
+                checks["two biters bite one prey in a frame: it is queued for removal once"] = len(queued) == 1
+                game.walkers.killed = []
+            for walker in game.walkers.walkers[-3:]:
+                if walker in game.walkers.walkers:
+                    game.walkers.remove(walker)
+            game.walkers.killed = []
         # The view distance and the window.
         console.run("view 20")
         checks["view sets the nearest view step"] = game.view_radius == 18

@@ -183,6 +183,12 @@ def blocks_move(before, after, other):
     return d_after < CONTACT and d_after < d_before
 
 
+def overlaps_vertically(feet_a, height_a, feet_b, height_b):
+    """True if two bodies share some height. A body wholly above or below another does not touch it, however close they are
+    across the floor: a creature under a flying player is not in its reach."""
+    return feet_a < feet_b + height_b and feet_b < feet_a + height_a
+
+
 def step(solid, pos, vel, dt, flying=False, on_ground=False):
     """
     One physics step. vel is (vx, vy, vz) in blocks per second: the horizontal part is set by the caller each frame
