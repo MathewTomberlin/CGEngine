@@ -62,9 +62,11 @@ class Walker:
         cge.find_body(name).get_mesh().set_position(cge.Vector3f(*spawn))
         cge.add_voxel_walker(name, world, HALF_WIDTH, HEIGHT)
 
-    def update(self, dt, player=None, prey=None):
+    def update(self, dt, player=None, prey=None, player_feet=None):
         """Move the creature one frame. Returns the health a biter takes from the player this frame (0 for most frames). prey is
-        the (x, z) of a timid creature a biter hunts when the player is not near."""
+        the (x, z) of a timid creature a biter hunts when the player is not near. player_feet is the height of the player's feet: a
+        creature whose body does not reach the player's body (above or below it) neither bites it nor pushes against it. None
+        means the player is level with the creature."""
         if self.removed:
             return 0.0
         pos, _vel, on_ground = cge.voxel_walker_state(self.name)
@@ -84,12 +86,14 @@ class Walker:
         pace = PACE
         self.timer -= dt
         distance = math.inf if player is None else math.hypot(pos[0] - player[0], pos[2] - player[1])
+        level = player is not None and (player_feet is None
+                                        or physics.overlaps_vertically(pos[1], HEIGHT, player_feet, physics.PLAYER_HEIGHT))
         if self.biter and distance < CHASE_RANGE:
             # A biter heads for the player, and bites each time it is close and the last bite has had time to recover.
             self.heading = math.atan2(player[1] - pos[2], player[0] - pos[0])
             self.timer = 1.0
             pace = CHASE_PACE
-            if distance < BITE_RANGE and self.bite_timer <= 0.0:
+            if distance < BITE_RANGE and self.bite_timer <= 0.0 and level:
                 bite = BITE_DAMAGE
                 self.bite_timer = BITE_INTERVAL
         elif self.biter and prey is not None:
@@ -108,7 +112,7 @@ class Walker:
         # A wall stops the creature short of the distance it meant to walk (seen in last frame's move): it turns, and
         # jumps a block if it stands on the ground.
         # A creature held at the player's side is not stuck on a wall: it stands there and bites.
-        touching = distance < physics.CONTACT + physics.CONTACT_SLACK
+        touching = level and distance < physics.CONTACT + physics.CONTACT_SLACK
         if self.last is not None and not touching:
             walked = math.hypot(pos[0] - self.last[0], pos[2] - self.last[2])
             if walked < 0.5 * pace * dt and on_ground:
@@ -121,7 +125,8 @@ class Walker:
         vx, vz = math.cos(self.heading) * pace, math.sin(self.heading) * pace
         if player is not None:
             # The player is a body too: a creature does not walk into it (the same contact rule as the player's own moves).
-            vx, vz = physics.keep_out(vx, vz, player[0] - pos[0], player[1] - pos[2])
+            if level:
+                vx, vz = physics.keep_out(vx, vz, player[0] - pos[0], player[1] - pos[2])
         cge.set_voxel_velocity(self.name, vx, vz)
         return bite
 
@@ -166,7 +171,7 @@ class Walker:
         """True when the cell a step ahead, at the creature's feet, is lava."""
         x = pos[0] + math.cos(self.heading) * LOOK_AHEAD
         z = pos[2] + math.sin(self.heading) * LOOK_AHEAD
-        return self.world.get_block(math.floor(x), math.floor(pos[1] + 0.1), math.floor(z)) == VoxelGen.LAVA
+        return self.world.get_block(math.floor(x), math.floor(pos[1] + 0.1), math.floor(z)) in VoxelGen.LAVA_BLOCKS
 
     def turn_away(self, x, z):
         """Head away from the point (x, z), a little off straight, so two creatures do not turn towards each other."""
@@ -207,7 +212,7 @@ class Walkers:
                     break
         return None
 
-    def update(self, dt, player=None):
+    def update(self, dt, player=None, player_feet=None):
         """player is the (x, z) of the player, which the creatures run from or chase. A creature that is about to bump another
         turns away from it, so the herd does not stack up in one place. Returns the health the biters took from the player.
         A biter with no player near hunts the nearest timid creature and bites it; a creature a bite kills is in self.killed."""
@@ -216,16 +221,18 @@ class Walkers:
         self.killed = []
         for i, walker in enumerate(self.walkers):
             prey = self.prey_for(i, spots) if walker.biter else None
-            bites += walker.update(dt, player, None if prey is None else (spots[prey][0], spots[prey][2]))
+            bites += walker.update(dt, player, None if prey is None else (spots[prey][0], spots[prey][2]), player_feet)
             for j, other in enumerate(spots):
                 if i != j and math.hypot(spots[i][0] - other[0], spots[i][2] - other[2]) < BUMP_RANGE:
                     walker.turn_away(other[0], other[2])
                     break
-            if prey is not None and walker.bite_timer <= 0.0 and not self.walkers[prey].removed:
+            # A prey already killed this frame (by another biter) is not hit again: it is in self.killed once, and is removed once.
+            victim = self.walkers[prey] if prey is not None else None
+            if victim is not None and walker.bite_timer <= 0.0 and not victim.removed and victim not in self.killed:
                 if math.hypot(spots[i][0] - spots[prey][0], spots[i][2] - spots[prey][2]) < BITE_RANGE:
                     walker.bite_timer = BITE_INTERVAL
-                    if self.walkers[prey].hurt((spots[i][0], spots[i][2])):
-                        self.killed.append(self.walkers[prey])
+                    if victim.hurt((spots[i][0], spots[i][2])):
+                        self.killed.append(victim)
         return bites
 
     def prey_for(self, index, spots):

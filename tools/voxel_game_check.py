@@ -354,6 +354,14 @@ def main():
         first_bite = biter.update(0.0, player_xz)
         second_bite = biter.update(0.0, player_xz)
         checks["a biter bites when it is close, not again at once"] = first_bite == VoxelWalkers.BITE_DAMAGE and second_bite == 0.0
+        # A biter below a player high in the air does not bite it; once the player is level with it, it does.
+        high = VoxelWalkers.Walker(world, "test_biter_high", spawn, (0.4, 0.1, 0.1), random.Random(2), biter=True)
+        high_xz = (high.state()[0][0], high.state()[0][2])
+        high_feet = high.state()[0][1]
+        high_bite = high.update(0.0, high_xz, None, high_feet + 10.0)
+        level_bite = high.update(0.0, high_xz, None, high_feet)
+        checks["a biter below a player high in the air does not bite it"] = high_bite == 0.0 and level_bite == VoxelWalkers.BITE_DAMAGE
+        high.remove()
         biter.remove()
 
         # The player's health: bites and falls lower it, it heals once it has not been hurt for a while, and a death puts it

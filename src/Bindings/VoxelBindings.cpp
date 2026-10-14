@@ -1,3 +1,6 @@
+#include <bitset>
+#include <stdexcept>
+#include <vector>
 #include <algorithm>
 #include <optional>
 #include <pybind11/pybind11.h>
@@ -11,6 +14,19 @@ using namespace py::literals;
 using namespace CGEngine;
 
 // VoxelWorld: blocks in chunks, generated and meshed on worker threads and uploaded by update() (docs/games/voxels.md).
+// Adds a reaction for a block: it becomes another block when it touches one of the neighbour kinds (see VoxelSimulation::Rule).
+// Block ids must be from 0 to 255, and the seconds must not be negative.
+static void addReaction(VoxelWorld& world, int block, const std::vector<int>& neighbours, int becomes, float chance, float seconds) {
+    auto byteOf = [](int id) {
+        if (id < 0 || id > 255) throw std::runtime_error("a block id must be from 0 to 255");
+        return static_cast<uint8_t>(id);
+    };
+    if (seconds < 0.0f) throw std::runtime_error("a reaction's seconds must not be negative");
+    std::bitset<256> kinds;
+    for (int neighbour : neighbours) kinds[byteOf(neighbour)] = true;
+    world.physics().addRule(VoxelSimulation::Rule{ byteOf(block), kinds, byteOf(becomes), chance, seconds });
+}
+
 void bindVoxel(py::module_& m) {
     py::class_<VoxelWorld>(m, "VoxelWorld")
         .def(py::init<int, int, const std::string&>(), py::arg("chunk_size") = 16, py::arg("chunk_height") = 64,
@@ -203,10 +219,14 @@ void bindVoxel(py::module_& m) {
         .def("active_count", [](VoxelWorld& world) { return world.physics().activeCount(); },
              "Cells queued for the simulation. A world with nothing moving has none.")
         .def("add_rule", [](VoxelWorld& world, int block, int neighbour, int becomes, float chance) {
-            world.physics().addRule(VoxelSimulation::Rule{ static_cast<uint8_t>(block), static_cast<uint8_t>(neighbour),
-                static_cast<uint8_t>(becomes), chance });
+            addReaction(world, block, { neighbour }, becomes, chance, 0.0f);
         }, py::arg("block"), py::arg("neighbour"), py::arg("becomes"), py::arg("chance") = 1.0f,
            "A reaction: a block that touches the neighbour kind becomes the other block, with this chance per tick.")
+        .def("add_reaction", [](VoxelWorld& world, int block, const std::vector<int>& neighbours, int becomes, float chance, float seconds) {
+            addReaction(world, block, neighbours, becomes, chance, seconds);
+        }, py::arg("block"), py::arg("neighbours"), py::arg("becomes"), py::arg("chance") = 1.0f, py::arg("seconds") = 0.0f,
+           "A reaction: a block that touches one of the neighbour kinds becomes the other block. With no seconds the change has this "
+           "chance per tick. With seconds the block must keep touching for that long, and shows its progress as damage.")
         .def("clear_rules", [](VoxelWorld& world) { world.physics().clearRules(); }, "Remove every reaction rule.")
         .def("set_tick_hook", [](VoxelWorld& world, py::object fn) {
             if (fn.is_none()) {

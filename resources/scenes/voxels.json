@@ -13,6 +13,7 @@
   "environment": { "skyColour": [0.56, 0.76, 0.95], "fogColour": [0.56, 0.76, 0.95], "fogStart": 84, "fogEnd": 168 },
   "lights": [
     { "name": "sun", "directional": true, "direction": [0.4, -1, 0.3], "brightness": 0.9, "ambiance": 0.5, "color": [1, 1, 0.95] },
+    { "name": "moon", "directional": true, "direction": [-0.4, -1, -0.3], "brightness": 0.0, "ambiance": 0.25, "color": [0.86, 0.92, 1.0] },
     { "name": "held_torch", "directional": false, "position": [0, 0, 0], "brightness": 0.0, "ambiance": 0.0, "attenuation": 0.02, "color": [1.0, 0.72, 0.4] }
   ],
   "bodies": [],

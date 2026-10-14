@@ -138,6 +138,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
             self.clock = START_TIME % 1.0   # fraction of a day
         else:
             self.clock = saved["time_of_day"]
+        self.moon_days = MOON_START_PHASE * MOON_MONTH_DAYS   # the game days the moon's cycle has run: its phase is this over a month
         self.sun = (0.0, -1.0, 0.0)     # the direction the sun's light travels
         self.fog = (0.0, 0.0)           # fog start and end distances, in blocks
         self.clip_planes = None         # the camera's (near, far) clipping distances, as last set
@@ -245,16 +246,18 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
                                     shape="cube" if block in VoxelGen.CUBES else "smooth",
                                     group="own" if block in VoxelGen.OWN else "terrain",
                                     material=VoxelGen.MATERIALS.get(block),
-                                    mesh=VoxelGen.WATER if block in VoxelGen.WATER_BLOCKS else 0,
+                                    mesh=VoxelGen.WATER if block in VoxelGen.WATER_BLOCKS else (VoxelGen.LAVA if block in VoxelGen.LAVA_BLOCKS else 0),
                                     join_above=VoxelGen.JOINS.get(block, 0),
                                     join_below=list(VoxelGen.JOINS_BELOW[block]) if block in VoxelGen.JOINS_BELOW else None,
                                     hits=VoxelGen.HITS.get(block, 1), flows=block not in VoxelGen.STILL_LIQUIDS,
                                     transparent=block in VoxelGen.TRANSPARENT)
+        count = VoxelRules.install(self.world, VoxelGen.REACTIONS)
         if RULES_FILE:
             try:
-                print("VoxelRules: %d rules from %s" % (VoxelRules.load(self.world, RULES_FILE), RULES_FILE))
+                count += VoxelRules.add_file(self.world, RULES_FILE)
             except (OSError, ValueError) as error:
                 print("VoxelRules: %s was not loaded: %s" % (RULES_FILE, error))
+        print("VoxelRules: %d reactions" % count)
         self.world.set_smoothing(SMOOTH_RESOLUTION)
         self.world.set_move_seconds(SIM_TICK * 0.9)   # a falling block lands just before the next tick
         # Smooth skin nearest the camera is finer: NEAR_SAMPLES per block within NEAR_RADIUS chunks.
@@ -293,10 +296,11 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
             if not self.world.is_loaded(0, 0):
                 return
             self.walkers = VoxelWalkers.Walkers(self.world, (8.5, 8.5), WALKERS, self.seed)
-        bites = self.walkers.update(dt, (self.pos[0], self.pos[2]))
+        bites = self.walkers.update(dt, (self.pos[0], self.pos[2]), self.pos[1])
         self.hurt_player(bites)
         for walker in self.walkers.killed:
-            self.creature_died(walker)      # killed by a biter: the same hide as a hit leaves
+            if not walker.removed:          # a creature is removed once, however many biters bit it in the same frame
+                self.creature_died(walker)  # killed by a biter: the same hide as a hit leaves
         self.walkers.killed = []
         self.burn_creatures(dt)
         self.closest_creature = self.nearest_creature()
@@ -308,8 +312,8 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
                 continue
             x, y, z = walker.state()[0]
             x, z = math.floor(x), math.floor(z)
-            in_lava = (self.world.get_block(x, math.floor(y + 0.1), z) == VoxelGen.LAVA
-                       or self.world.get_block(x, math.floor(y + 1.0), z) == VoxelGen.LAVA)
+            in_lava = (self.world.get_block(x, math.floor(y + 0.1), z) in VoxelGen.LAVA_BLOCKS
+                       or self.world.get_block(x, math.floor(y + 1.0), z) in VoxelGen.LAVA_BLOCKS)
             if not in_lava:
                 walker.lava_timer = 0.0
                 continue
@@ -338,11 +342,13 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
                      for c in (w.state()[0] for w in self.walkers.walkers if not w.removed)]
         return round(min(distances), 3) if distances else None
 
-    def creature_blocks(self, before, after):
-        """True if the player's move from before to after (x, z) closes on a creature in contact (physics.blocks_move)."""
+    def creature_blocks(self, before, after, feet):
+        """True if the player's move from before to after (x, z) closes on a creature in contact (physics.blocks_move), and the
+        creature is at the player's height: one above or below the player's body is not in the way. feet is the player's feet."""
         if self.walkers is None:
             return False
         return any(physics.blocks_move(before, after, (c[0], c[2]))
+                   and physics.overlaps_vertically(feet, physics.PLAYER_HEIGHT, c[1], VoxelWalkers.HEIGHT)
                    for c in (w.state()[0] for w in self.walkers.walkers if not w.removed))
 
     def in_water(self):
@@ -360,8 +366,8 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
     def in_lava(self):
         """True while a lava block is at the player's feet or chest. Lava hurts; it does not hold the player up."""
         x, z = math.floor(self.pos[0]), math.floor(self.pos[2])
-        return (self.world.get_block(x, math.floor(self.pos[1] + 0.1), z) == VoxelGen.LAVA
-                or self.world.get_block(x, math.floor(self.pos[1] + 1.0), z) == VoxelGen.LAVA)
+        return (self.world.get_block(x, math.floor(self.pos[1] + 0.1), z) in VoxelGen.LAVA_BLOCKS
+                or self.world.get_block(x, math.floor(self.pos[1] + 1.0), z) in VoxelGen.LAVA_BLOCKS)
 
     def eye_in_water(self):
         eye = self.eye()
@@ -440,7 +446,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
             # Swimming has no gravity of its own: the swim speed above takes its place, so the mover runs without it.
             pos, vel, self.on_ground = self.world.step_body(tuple(self.pos), tuple(self.vel), dt,
                                                            self.flying or self.swimming, on_ground=self.on_ground)
-            if self.creature_blocks((self.pos[0], self.pos[2]), (pos[0], pos[2])):
+            if self.creature_blocks((self.pos[0], self.pos[2]), (pos[0], pos[2]), pos[1]):
                 # A creature is in the way: the player stops at its side, as a creature stops at the player's.
                 pos = (self.pos[0], pos[1], self.pos[2])
                 vel = (0.0, vel[1], 0.0)
@@ -733,7 +739,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
             # A block takes its hits (VoxelGen.HITS) to break. The hit that would break it needs room for it in the inventory;
             # a hit that leaves it standing does not, so a full inventory can still damage a block.
             kind = self.world.get_block(*block)
-            if kind == VoxelGen.LAVA:
+            if kind in VoxelGen.LAVA_BLOCKS:
                 self.notify("Lava cannot be broken")
                 return
             # A pickaxe in the selected slot takes two swings at the blocks it mines (VoxelGen.PICKAXE_BLOCKS).
@@ -923,6 +929,9 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
         """The sun crosses the sky in DAY_SECONDS. The light, the sky and the fog follow it: at night the sky is dark and
         the moon gives a dim blue light; at sunrise and sunset the light and the sky turn orange."""
         self.clock = (self.clock + dt * self.time_speed / DAY_SECONDS) % 1.0
+        self.moon_days += dt * self.time_speed / DAY_SECONDS
+        moon_phase = (self.moon_days / MOON_MONTH_DAYS) % 1.0
+        moon = moon_share(moon_phase)   # the share of the moon's light this phase gives
         angle = 2.0 * math.pi * self.clock
         height = math.sin(angle)                  # -1 at midnight, 0 at sunrise and sunset, 1 at noon
         toward_sun = (0.45 * math.cos(angle), height, 0.3 * math.cos(angle))
@@ -932,7 +941,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
 
         day = min(1.0, max(0.0, height * 3.0))     # 0 at night, full once the sun is 20 degrees up
         dusk = max(0.0, 1.0 - abs(height) * 6.0)   # strongest at the horizon
-        light = mix(mix(MOON_LIGHT, SUN_LIGHT, day), DUSK_LIGHT, dusk * 0.7)
+        light = mix(SUN_LIGHT, DUSK_LIGHT, dusk * 0.7)
         sky = mix(mix(NIGHT_SKY, DAY_SKY, day), DUSK_SKY, dusk * 0.8)
         zenith = mix(mix(NIGHT_ZENITH, DAY_ZENITH, day), DUSK_ZENITH, dusk * 0.5)
         sun_disc = light if height > 0.0 else (0.0, 0.0, 0.0)   # the disc shows only above the horizon
@@ -944,11 +953,17 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
             # Under the water the view is short and blue-green, whatever the time of day. The sky is that colour too, since
             # the faces of the water a player is inside are back faces, and the sky shows through them.
             eye = self.eye()
-            in_lava = self.world.get_block(math.floor(eye[0]), math.floor(eye[1]), math.floor(eye[2])) == VoxelGen.LAVA
+            in_lava = self.world.get_block(math.floor(eye[0]), math.floor(eye[1]), math.floor(eye[2])) in VoxelGen.LAVA_BLOCKS
             sky = zenith = fog_colour = LAVA_FOG if in_lava else WATER_FOG
             fog_start, fog_end = (LAVA_FOG_START, LAVA_FOG_END) if in_lava else (WATER_FOG_START, WATER_FOG_END)
+        # The sun gives light only above the horizon: below it, its direction points up and would light the undersides of everything.
+        sun_up = min(1.0, max(0.0, (height + 0.02) / 0.07))
+        # The moon is opposite the sun, so at night its light comes down from above: faint, and white.
+        night = min(1.0, max(0.0, -height / 0.2))
         cge.set_light("sun", direction=cge.Vector3f(*travel), colour=cge.Vector3f(*light),
-                      brightness=0.45 + 0.55 * day)
+                      brightness=(0.45 + 0.55 * day) * sun_up)
+        cge.set_light("moon", direction=cge.Vector3f(*toward_sun), colour=cge.Vector3f(*MOON_LIGHT),
+                      brightness=MOON_BRIGHTNESS * night * moon)
         # The sun's shadows are off under the water: the water surface is a shadow over everything below it, which is dark.
         cge.set_environment(sky=cge.Vector3f(*sky), zenith=cge.Vector3f(*zenith), fog=cge.Vector3f(*fog_colour),
                             fog_start=fog_start, fog_end=fog_end,
@@ -1011,7 +1026,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
                  "biome": self.world.biome_at(math.floor(self.pos[0]), math.floor(self.pos[2])),
                  "mouse_captured": self.mouse_captured, "yaw": round(self.yaw, 3), "pitch": round(self.pitch, 3),
                  "max_frame_ms": round(self.max_dt * 1000.0, 2),
-                 "time_of_day": round(self.clock, 5), "sun": [round(v, 5) for v in self.sun],
+                 "time_of_day": round(self.clock, 5), "moon_phase": round((self.moon_days / MOON_MONTH_DAYS) % 1.0, 4), "moon_share": round(moon_share((self.moon_days / MOON_MONTH_DAYS) % 1.0), 4), "sun": [round(v, 5) for v in self.sun],
                  "fog": [round(v, 3) for v in self.fog],
                  "look": [round(v, 6) for v in self.look_direction()],
                  "camera_forward": [round(v, 6) for v in basis["forward"]],

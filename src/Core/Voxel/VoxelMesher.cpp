@@ -110,12 +110,12 @@ namespace CGEngine {
 				vertex.normal = normal;
 				// Texture repeats once per block across the quad, so a big quad tiles like its blocks would.
 				vertex.texCoord = glm::vec2(static_cast<float>(cornerU[k] * w), static_cast<float>(cornerV[k] * h));
-				vertex.colour = base * occlusionLight[face.occlusion[k]];
+				vertex.colour = glm::vec4(base * occlusionLight[face.occlusion[k]], 1.0f);
 				vertex.tiles = face.tiles;
 				vertex.skyDamage.x = face.light / 255.0f;
 				vertex.skyDamage.y = face.damage / 255.0f;
 				vertex.glow = glm::vec4(VoxelLightTint * (face.emission / 255.0f * VoxelGlow)
-					+ vertex.colour * VoxelLightTint * (face.lamp / 255.0f * lampGain(face.light / 255.0f)), 0.0f);
+					+ VoxelLightTint * (face.lamp / 255.0f * lampGain(face.light / 255.0f)), 0.0f);
 				out.vertices.push_back(vertex);
 			}
 			// Split the quad along the diagonal between its less occluded corners, so the shading does not streak.
@@ -131,6 +131,11 @@ namespace CGEngine {
 		// Light kept per block walked through air from the open sky, and the least a cell gets beyond that reach.
 		const float LightPerStep = 0.8f;
 		const float LightFloor = 0.0f;
+	}
+
+	// Whether light goes through a block: air, and the water (its mesh is blended, so the ground under it is lit as well).
+	bool lightPasses(const PaddedChunk& chunk, uint8_t block) {
+		return block == 0 || chunk.rule[block].transparent;
 	}
 
 	void computeLight(PaddedChunk& chunk) {
@@ -149,7 +154,7 @@ namespace CGEngine {
 				// Walking down the column, the air above the first block is open to the sky; the air under a block is not.
 				bool open = true;
 				for (int y = h - 1; y >= 0; --y) {
-					if (chunk.at(x, y, z) != 0) {
+					if (!lightPasses(chunk, chunk.at(x, y, z))) {
 						open = false;
 						continue;
 					}
@@ -170,7 +175,7 @@ namespace CGEngine {
 					const int x = cell.x + d[0], y = cell.y + d[1], z = cell.z + d[2];
 					if (x < lo || x >= hi || z < lo || z >= hi || y < 0 || y >= h) continue;
 					const size_t i = chunk.index(x, y, z);
-					if (chunk.blocks[i] != 0 || steps[i] != 0xFF) continue;
+					if (!lightPasses(chunk, chunk.blocks[i]) || steps[i] != 0xFF) continue;
 					steps[i] = static_cast<uint8_t>(step + 1);
 					next.push_back({ x, y, z });
 				}
@@ -236,7 +241,7 @@ namespace CGEngine {
 					const size_t i = chunk.index(x, y, z);
 					if (y >= h) {
 						chunk.light[i] = 255;
-					} else if (y >= 0 && chunk.blocks[i] == 0) {
+					} else if (y >= 0 && lightPasses(chunk, chunk.blocks[i])) {
 						chunk.light[i] = steps[i] == 0xFF ? floorByte : stepByte[steps[i]];
 					}
 					if (!emitted.empty() && emitted[i] > 0.0f) chunk.lamp[i] = static_cast<uint8_t>(std::lround(emitted[i] * 255.0f));
@@ -474,7 +479,7 @@ namespace CGEngine {
 
 		// The vertex at p (chunk block units): a normal from the density gradient, the colour of the solid block that
 		// weighs most there, darkened where the air beside it is walled in, and a texture coordinate from the normal's axis.
-		VoxelVertex smoothVertex(const PaddedChunk& chunk, const std::array<glm::vec3, 256>& palette, uint8_t group, glm::vec3 p) {
+		VoxelVertex smoothVertex(const PaddedChunk& chunk, const std::array<glm::vec3, 256>& palette, uint8_t group, glm::vec3 p, int stride = 1) {
 			const float h = 0.25f;
 			const glm::vec3 gradient(
 				densityAt(chunk, group,p + glm::vec3(h, 0, 0)) - densityAt(chunk, group,p - glm::vec3(h, 0, 0)),
@@ -519,7 +524,19 @@ namespace CGEngine {
 			if (block == 0) block = 1;
 
 			// Ambient occlusion: the density a little way out along the normal. Walls close by darken the corner.
-			const float outside = densityAt(chunk, group,p + normal * 0.25f);
+			float outside = densityAt(chunk, group,p + normal * 0.25f);
+				if (stride > 1) {
+					// A far vertex stands for a stride by stride patch of blocks, so its occlusion is the average over that patch. One
+					// sample would darken the whole triangle between two far vertices (roadmap 15.8).
+					const float reach = 0.5f * static_cast<float>(stride);
+					float sum = 0.0f;
+					for (int dz = -1; dz <= 1; ++dz) {
+						for (int dx = -1; dx <= 1; ++dx) {
+							sum += densityAt(chunk, group, p + normal * 0.25f + glm::vec3(dx * reach, 0.0f, dz * reach));
+						}
+					}
+					outside = sum / 9.0f;
+				}
 			const float occlusion = std::clamp(1.0f - 0.6f * outside, 0.5f, 1.0f);
 
 			VoxelVertex vertex;
@@ -561,7 +578,7 @@ namespace CGEngine {
 			bool sawAir = false;
 			for (int c = 0; c < 8; ++c) {
 				const int ax = static_cast<int>(corner.x) + (c & 1), ay = static_cast<int>(corner.y) + ((c >> 1) & 1), az = static_cast<int>(corner.z) + ((c >> 2) & 1);
-				if (chunk.at(ax, ay, az) != 0) continue;
+				if (!lightPasses(chunk, chunk.at(ax, ay, az))) continue;
 				sawAir = true;
 				sky = std::max(sky, chunk.lightAt(ax, ay, az) / 255.0f);
 				lamp = std::max(lamp, chunk.lampAt(ax, ay, az) / 255.0f);
@@ -572,19 +589,37 @@ namespace CGEngine {
 					for (int dy = -1; dy <= 2; ++dy) {
 						for (int dx = -1; dx <= 2; ++dx) {
 							const int ax = static_cast<int>(corner.x) + dx, ay = static_cast<int>(corner.y) + dy, az = static_cast<int>(corner.z) + dz;
-							if (chunk.at(ax, ay, az) != 0) continue;
+							if (!lightPasses(chunk, chunk.at(ax, ay, az))) continue;
 							sky = std::max(sky, chunk.lightAt(ax, ay, az) / 255.0f);
 							lamp = std::max(lamp, chunk.lampAt(ax, ay, az) / 255.0f);
 						}
 					}
 				}
 			}
-			vertex.colour = (chunk.rule[block].textured ? glm::vec3(1.0f) : palette[static_cast<size_t>(block)]) * occlusion
-				* (chunk.damage.empty() ? 1.0f : 1.0f - DamageTint * chunk.damage[dominant] / 255.0f);
+			// A far vertex takes the average light of the air over its patch, not the brightest cell at its corner (roadmap 15.8).
+				if (stride > 1) {
+					const float reach = 0.5f * static_cast<float>(stride);
+					float skySum = 0.0f;
+					int airCount = 0;
+					for (int dz = -1; dz <= 1; ++dz) {
+						for (int dx = -1; dx <= 1; ++dx) {
+							const glm::vec3 q = p + glm::vec3(dx * reach, 0.0f, dz * reach);
+							// The air row just above the point: the light the surface looks at.
+							const int ax = static_cast<int>(std::floor(q.x - 0.5f)), ay = static_cast<int>(std::floor(q.y));
+							const int az = static_cast<int>(std::floor(q.z - 0.5f));
+							if (!lightPasses(chunk, chunk.at(ax, ay, az))) continue;
+							skySum += chunk.lightAt(ax, ay, az) / 255.0f;
+							++airCount;
+						}
+					}
+					if (airCount > 0) sky = skySum / static_cast<float>(airCount);
+				}
+				vertex.colour = glm::vec4((chunk.rule[block].textured ? glm::vec3(1.0f) : palette[static_cast<size_t>(block)]) * occlusion
+				* (chunk.damage.empty() ? 1.0f : 1.0f - DamageTint * chunk.damage[dominant] / 255.0f), 1.0f);
 			vertex.skyDamage.x = sky;
 			vertex.skyDamage.y = chunk.damage.empty() ? 0.0f : chunk.damage[dominant] / 255.0f;
 			vertex.glow = glm::vec4(VoxelLightTint * (chunk.emission[block] / 255.0f * VoxelGlow)
-				+ vertex.colour * VoxelLightTint * (lamp * lampGain(sky)), 0.0f);
+				+ VoxelLightTint * (lamp * lampGain(sky)), 0.0f);
 			return vertex;
 		}
 	}
@@ -683,10 +718,14 @@ namespace CGEngine {
 			}
 		};
 
-		// Each edge belongs to the chunk that owns its lowest sample, so chunks share no quads.
+		// Each edge belongs to the chunk that owns its lowest sample, so chunks share no quads. Where a neighbour on the +x or +z side is
+		// at another level of detail, the surface runs one cell past the chunk's last sample: the neighbour's surface stops short of
+		// the shared plane, and the overlap covers the gap there (the skirts alone left a crack, roadmap 11.7).
+		const int iEnd = (skirtSides & 2u) ? NX + 1 : NX;
+		const int kEnd = (skirtSides & 8u) ? NX + 1 : NX;
 		for (int j = 0; j < NY; ++j) {
-			for (int k = 0; k < NX; ++k) {
-				for (int i = 0; i < NX; ++i) {
+			for (int k = 0; k < kEnd; ++k) {
+				for (int i = 0; i < iEnd; ++i) {
 					const bool here = sample(i, j, k) > SmoothIso;
 					// x edge: the cells around it have lowest corners (i, j-1, k-1), (i, j, k-1), (i, j, k), (i, j-1, k).
 					if (here != (sample(i + 1, j, k) > SmoothIso)) {
@@ -795,7 +834,7 @@ namespace CGEngine {
 						vertex.position = position;
 						vertex.normal = normal;
 						vertex.texCoord = glm::vec2(position[u], position[v]);
-						vertex.colour = colour;
+						vertex.colour = glm::vec4(colour, 1.0f);
 						vertex.glow = glm::vec4(glow, flicker);
 						vertex.skyDamage.x = sky;
 						out.vertices.push_back(vertex);
@@ -860,7 +899,7 @@ namespace CGEngine {
 					vertex.position = position;
 					vertex.normal = normal;
 					vertex.texCoord = glm::vec2(glm::dot(position, axes[u]), glm::dot(position, axes[v]));
-					vertex.colour = colour;
+					vertex.colour = glm::vec4(colour, 1.0f);
 					vertex.glow = glm::vec4(glow, flicker);
 					vertex.skyDamage.x = sky;
 					out.vertices.push_back(vertex);
@@ -902,7 +941,7 @@ namespace CGEngine {
 				vertex.position = centre + normal * radius;
 				vertex.normal = normal;
 				vertex.texCoord = glm::vec2(theta / (2.0f * pi), phi / pi);
-				vertex.colour = palette[static_cast<size_t>(block)];
+				vertex.colour = glm::vec4(palette[static_cast<size_t>(block)], 1.0f);
 				out.vertices.push_back(vertex);
 			}
 		}

@@ -96,7 +96,8 @@ namespace CGEngine {
 		glm::vec2 texCoord = { 0,0 };
 		glm::vec3 normal = { 0,0,0 };
 		float materialId = 0.0f;
-		glm::vec3 colour = { 1,1,1 };
+		// The tint (rgb) and the opacity (a, 1 for solid). The placement ghost fades its edges through the alpha.
+		glm::vec4 colour = { 1,1,1,1 };
 		// The light the surface gives off, added after the lighting so a lamp glows in the dark and in the sun. Black for
 		// most blocks.
 		// The light the surface gives off in xyz, added after the lighting so a lamp glows in the dark and in the sun. Black for

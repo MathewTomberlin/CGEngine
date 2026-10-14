@@ -286,7 +286,7 @@ namespace CGEngine {
 		bind("vertGlow", 4, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, glow));
 				bind("vertSkyDamage", 2, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, skyDamage));
 				bind("materialId", 1, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, materialId));
-		bind("vertColour", 3, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, colour));
+		bind("vertColour", 4, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, colour));
 		bind("vertTiles", 3, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, tiles));
 		bind("vertSplatA", 4, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, splatA));
 		bind("vertSplatB", 4, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, splatB));
@@ -1080,13 +1080,11 @@ namespace CGEngine {
 	void Renderer::renderShadowMap(RenderTarget* window) {
 		Light* sun = nullptr;
 		for (Light* light : assets.getAllResources<Light>()) {
-			if (light->position.w == 0.0f) {   // a directional light
-				sun = light;
-				break;
-			}
+			// The brightest directional light casts the shadows: the sun by day, the moon at night.
+			if (light->position.w == 0.0f && (!sun || light->parameters.brightness > sun->parameters.brightness)) sun = light;
 		}
 		shadowsActive = false;
-		if (!sun || !currentCamera) return;
+		if (!sun || !currentCamera || sun->parameters.brightness <= 0.0f) return;
 		const glm::vec3 travel = glm::normalize(toGlm(sun->parameters.lightDirection));
 		// Below the horizon the sun lights nothing, so there is no map to draw.
 		if (travel.y > -0.02f) return;

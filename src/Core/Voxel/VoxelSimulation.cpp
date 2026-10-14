@@ -86,9 +86,69 @@ namespace CGEngine {
 		}
 	}
 
-	void VoxelSimulation::tickCell(VoxelWorld& world, int x, int y, int z) {
+	namespace {
+		// Whether a neighbour of the cell holds one of the kinds.
+		bool touching(VoxelWorld& world, int x, int y, int z, const std::bitset<256>& kinds) {
+			for (const auto& d : Neighbours) {
+				if (kinds[static_cast<uint8_t>(world.getBlock(x + d[0], y + d[1], z + d[2]))]) return true;
+			}
+			return false;
+		}
+	}
+
+	// The reactions of a cell: each rule of the block the cell holds, whose neighbours hold one of its kinds. A rule without time
+	// changes the block with its chance per tick. A timed rule shows its progress as damage stages (out of the block's hits, as a hit
+	// shows) and changes the block when the time is up. Air is a block too, so a rule on air grows a block into it.
+	bool VoxelSimulation::react(VoxelWorld& world, int x, int y, int z, uint8_t block, double tickSeconds) {
+		const int64_t key = keyOf(x, y, z);
+		bool reacting = false;
+		for (size_t r = 0; r < rules.size() && !reacting; ++r) {
+			const Rule& rule = rules[r];
+			if (rule.block != block || !touching(world, x, y, z, rule.neighbours)) continue;
+			if (rule.seconds <= 0.0f) {
+				if (nextRandom() < rule.chance) {
+					set(world, x, y, z, rule.becomes);
+					return true;
+				}
+				continue;
+			}
+			const int hits = std::max(1, static_cast<int>(world.blockType(block).hits));
+			auto it = progress.find(key);
+			if (it == progress.end() || it->second.rule != r) {
+				// A reaction starts here. A cell already damaged (a reaction saved with the edits) carries on from its stage.
+				const double stage = world.damageAt(x, y, z);
+				it = progress.insert_or_assign(key, Progress{ static_cast<uint32_t>(r), rule.seconds * stage / hits }).first;
+			}
+			it->second.elapsed += tickSeconds;
+			if (it->second.elapsed >= rule.seconds) {
+				progress.erase(it);
+				set(world, x, y, z, rule.becomes);   // the block breaks into the new one (setBlock clears its damage)
+				return true;
+			}
+			const int stage = std::min(hits - 1, static_cast<int>(it->second.elapsed * hits / rule.seconds));
+			if (world.damageAt(x, y, z) != stage) world.setDamage(x, y, z, stage);
+			reacting = true;
+		}
+		if (reacting) {
+			activate(x, y, z);   // looked at again on the next tick, while the reaction runs
+		} else {
+			// Nothing reacts now: a reaction that was under way stops, and the damage it showed heals.
+			auto it = progress.find(key);
+			if (it != progress.end()) {
+				progress.erase(it);
+				world.setDamage(x, y, z, 0);
+			}
+		}
+		return false;
+	}
+
+	void VoxelSimulation::tickCell(VoxelWorld& world, int x, int y, int z, double tickSeconds) {
 		const uint8_t block = static_cast<uint8_t>(world.getBlock(x, y, z));
-		if (block == 0 || !world.loadedAt(x, z)) return;
+		if (!world.loadedAt(x, z)) return;
+		if (block == 0) {
+			react(world, x, y, z, block, tickSeconds);
+			return;
+		}
 
 		if (hook) {
 			const int replacement = hook(x, y, z, block);
@@ -98,20 +158,7 @@ namespace CGEngine {
 			}
 		}
 
-		for (const Rule& rule : rules) {
-			if (rule.block != block) continue;
-			bool touching = false;
-			for (const auto& d : Neighbours) {
-				if (world.getBlock(x + d[0], y + d[1], z + d[2]) == rule.neighbour) {
-					touching = true;
-					break;
-				}
-			}
-			if (touching && nextRandom() < rule.chance) {
-				set(world, x, y, z, rule.becomes);
-				return;
-			}
-		}
+		if (react(world, x, y, z, block, tickSeconds)) return;
 
 		const BlockType& type = world.blockType(block);
 		if (type.falls && y > 0) {
@@ -134,22 +181,23 @@ namespace CGEngine {
 		}
 
 		if (type.liquid && type.flows) {
-			// Water falls into air below, and otherwise spreads sideways one level at a time, so a flow is finite.
-			const int level = Water::level(block);
-			if (y > 0 && world.getBlock(x, y - 1, z) == 0) {
-				set(world, x, y - 1, z, Water::flowing(7));
-			} else if (level > 1) {
+			// A liquid (water or lava) falls into air below, and otherwise spreads sideways one level at a time, so a flow is finite.
+			const Liquid* liquid = liquidOf(block);
+			const int level = liquid ? liquid->level(block) : 0;
+			if (liquid && y > 0 && world.getBlock(x, y - 1, z) == 0) {
+				set(world, x, y - 1, z, liquid->flowing(7));
+			} else if (liquid && level > 1) {
 				for (const auto& side : Sides) {
 					const int nx = x + side[0];
 					const int nz = z + side[1];
-					if (world.getBlock(nx, y, nz) == 0) set(world, nx, y, nz, Water::flowing(level - 1));
+					if (world.getBlock(nx, y, nz) == 0) set(world, nx, y, nz, liquid->flowing(level - 1));
 				}
 			}
-			// A flow that nothing feeds drains: water above feeds level 7, a neighbour one level more feeds one less.
-			if (block != Water::Source) {
-				int feed = Water::level(static_cast<uint8_t>(world.getBlock(x, y + 1, z))) > 0 ? 7 : 0;
+			// A flow that nothing feeds drains: the same liquid above feeds level 7, a neighbour one level more feeds one less.
+			if (liquid && block != liquid->source) {
+				int feed = liquid->level(static_cast<uint8_t>(world.getBlock(x, y + 1, z))) > 0 ? 7 : 0;
 				for (const auto& side : Sides) {
-					const int neighbour = Water::level(static_cast<uint8_t>(world.getBlock(x + side[0], y, z + side[1])));
+					const int neighbour = liquid->level(static_cast<uint8_t>(world.getBlock(x + side[0], y, z + side[1])));
 					feed = std::max(feed, neighbour - 1);
 				}
 				if (feed < level) set(world, x, y, z, 0);
@@ -183,7 +231,7 @@ namespace CGEngine {
 				}
 				int x, y, z;
 				unkey(batch[n], x, y, z);
-				tickCell(world, x, y, z);
+				tickCell(world, x, y, z, tickSeconds);
 				++looked;
 			}
 		}

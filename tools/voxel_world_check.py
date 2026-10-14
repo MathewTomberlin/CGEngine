@@ -216,14 +216,58 @@ def check_trunk_base(results):
         any(w is None or w < 0.55 for w in joined))
 
 
-def check_lava(results):
-    """Lava is a liquid that does not flow (define_block flows=False): it is not solid, it is drawn in its own mesh, and it stays
-    where it is, while water beside it spreads (the control). The deep caves hold lava at or below the lava level, and nowhere
-    above it."""
+def check_reactions(results):
+    """Reactions (VoxelWorld.add_reaction): a lava block that water touches takes damage as it goes and becomes obsidian after its
+    seconds; if the water leaves first, it heals and stays lava. Dirt beside grass becomes grass after its second, and air beside
+    leaves grows leaves after its second. A reaction without time is a chance per tick, and is not checked here."""
     checks = results["check"]
     world = cge.VoxelWorld(SIZE, HEIGHT, "voxel")
-    world.define_block(VOXEL_LAVA, cge.Vector3f(1.0, 0.30, 0.05), solid=False, liquid=True, flows=False, emits=120,
+    world.define_block(VOXEL_LAVA, cge.Vector3f(1.0, 0.30, 0.05), solid=False, liquid=True, hits=4, emits=120,
                        group="own", material="voxel_lava")
+    world.define_block(5, cge.Vector3f(0.22, 0.45, 0.92), solid=False, liquid=True, group="own", material="voxel_water",
+                       transparent=True)
+    world.set_smoothing(1)
+    chunk = [(0, 0)]
+    load_chunks(world, chunk)
+    for x in range(SIZE):
+        for z in range(SIZE):
+            world.fill_column(x, z, 0, HEIGHT, 0)
+            world.fill_column(x, z, 0, 6, VOXEL_STONE)
+    world.add_reaction(VOXEL_LAVA, [5], 30, 1.0, 4.0)
+    world.add_reaction(2, [1], 1, 1.0, 1.0)
+    world.add_reaction(0, [VOXEL_LEAVES], VOXEL_LEAVES, 1.0, 1.0)
+    world.set_block(8, 6, 8, VOXEL_LAVA)
+    world.set_block(9, 6, 8, 5)
+    world.set_block(12, 6, 12, VOXEL_LAVA)
+    world.set_block(13, 6, 12, 5)
+    world.set_block(5, 5, 4, 2)
+    world.set_block(4, 5, 4, 1)
+    world.set_block(2, 7, 14, VOXEL_LEAVES)
+    world.simulate(0.5, 20.0)   # t = 0.5
+    checks["a dirt block beside grass is still dirt before its second"] = world.get_block(5, 5, 4) == 2
+    checks["air beside leaves is still air before its second"] = world.get_block(2, 6, 14) == 0
+    world.simulate(1.5, 20.0)   # t = 2.0
+    checks["a lava block that water touches takes damage as it goes"] = (
+        world.damage_at(8, 6, 8) >= 1 and world.get_block(8, 6, 8) == VOXEL_LAVA)
+    checks["dirt beside grass becomes grass after its second"] = world.get_block(5, 5, 4) == 1
+    checks["air beside leaves grows leaves after its second"] = world.get_block(2, 6, 14) == VOXEL_LEAVES
+    world.set_block(13, 6, 12, 0)   # the water leaves the second lava block
+    world.simulate(1.0, 20.0)   # t = 3.0
+    checks["lava the water has left heals and stays lava"] = world.damage_at(12, 6, 12) == 0 and world.get_block(12, 6, 12) == VOXEL_LAVA
+    world.simulate(1.5, 20.0)   # t = 4.5
+    checks["a lava block that water touches becomes obsidian after its seconds"] = world.get_block(8, 6, 8) == 30
+    world.clear()
+
+
+def check_lava(results):
+    """Lava is a liquid like water: it is not solid, it is drawn in its own mesh, and its source spreads into a flow of lava (ids
+    23 to 29) beside it, as water does (the control). The deep caves hold lava at or below the lava level, and nowhere above it."""
+    checks = results["check"]
+    world = cge.VoxelWorld(SIZE, HEIGHT, "voxel")
+    world.define_block(VOXEL_LAVA, cge.Vector3f(1.0, 0.30, 0.05), solid=False, liquid=True, emits=120,
+                       group="own", material="voxel_lava")
+    for flow in range(23, 30):   # the flowing lava: its levels, drawn in the lava's mesh
+        world.define_block(flow, cge.Vector3f(1.0, 0.30, 0.05), solid=False, liquid=True, emits=120, group="own", mesh=VOXEL_LAVA)
     world.define_block(5, cge.Vector3f(0.22, 0.45, 0.92), solid=False, liquid=True, group="own", material="voxel_water",
                        transparent=True)
     world.set_smoothing(1)
@@ -238,7 +282,8 @@ def check_lava(results):
     for _ in range(40):
         world.simulate(1.0, 20.0)
     checks["lava is not solid to collision"] = not world.is_solid(8, 6, 8)
-    checks["lava does not spread (the cell beside it stays air)"] = world.get_block(9, 6, 8) == 0 and world.get_block(8, 6, 8) == VOXEL_LAVA
+    checks["lava spreads like water: the cell beside its source is flowing lava"] = 23 <= world.get_block(9, 6, 8) <= 29
+    checks["lava stays a source where it was set"] = world.get_block(8, 6, 8) == VOXEL_LAVA
     checks["control: water beside a source spreads"] = world.get_block(4, 6, 3) != 0
     wait_meshed(world, chunk)
     checks["lava is drawn in its own mesh"] = world.chunk_group_quads(0, 0).get(VOXEL_LAVA, 0) > 0
@@ -659,6 +704,7 @@ def run(out_path="cg_control/voxel_check.json"):
     check_groups(results["check"])
     check_trunk_base(results)
     check_lava(results)
+    check_reactions(results)
     biomes ={world.biome_at(x, z) for x in range(-200, 200, 10) for z in range(-200, 200, 10)}
     results["check"]["biomes vary: plains, forest and desert occur"] = biomes == {"plains", "forest", "desert"}
     results["biomes"] = sorted(biomes)

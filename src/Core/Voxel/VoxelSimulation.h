@@ -1,5 +1,7 @@
 #pragma once
 
+#include <bitset>
+#include <unordered_map>
 #include <cstdint>
 #include <functional>
 #include <unordered_set>
@@ -21,12 +23,15 @@ namespace CGEngine {
 	// With moveSeconds at 0, moves are instant.
 	class VoxelSimulation {
 	public:
-		// A reaction: a block that has a neighbour of the given kind becomes another block, with a chance per tick.
+		// A reaction: a block that touches one of the neighbour kinds becomes another block. With seconds at 0 the change comes with
+		// the chance per tick. With seconds above 0 the block must keep touching for that long: it shows the progress as damage
+		// stages (out of its hits) and then becomes the other block, as a block breaks when it is hit.
 		struct Rule {
 			uint8_t block;
-			uint8_t neighbour;
+			std::bitset<256> neighbours;
 			uint8_t becomes;
 			float chance;
+			float seconds;
 		};
 
 		// A block on its way from one cell to the cell below (or any neighbour). Progress runs from 0 to 1.
@@ -60,6 +65,12 @@ namespace CGEngine {
 		std::vector<int64_t> queue;
 		std::unordered_set<int64_t> queued;
 		std::vector<Rule> rules;
+		// A timed reaction under way, by cell: which rule it is, and how long it has run.
+		struct Progress {
+			uint32_t rule;
+			double elapsed;
+		};
+		std::unordered_map<int64_t, Progress> progress;
 		Hook hook;
 		double accumulator = 0.0;
 		uint32_t randomState = 0x9E3779B9u;
@@ -71,7 +82,9 @@ namespace CGEngine {
 		static void unkey(int64_t key, int& x, int& y, int& z);
 		float nextRandom();
 		// Looks at one cell and changes what is there, through the world.
-		void tickCell(VoxelWorld& world, int x, int y, int z);
+		void tickCell(VoxelWorld& world, int x, int y, int z, double tickSeconds);
+		// Applies the reactions of a cell. Returns true when the cell became another block at once.
+		bool react(VoxelWorld& world, int x, int y, int z, uint8_t block, double tickSeconds);
 		void set(VoxelWorld& world, int x, int y, int z, uint8_t block);
 		// Starts a move: the source is cleared now, and the block is written at the destination when the move ends.
 		void beginMove(VoxelWorld& world, int fromX, int fromY, int fromZ, int toX, int toY, int toZ, uint8_t block);
