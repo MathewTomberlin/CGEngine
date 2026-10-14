@@ -6,12 +6,14 @@ through the control channel (run_script) and reads its result from cg_control/vo
 """
 import gc
 import json
+import math
 import os
 
 import cg_engine_bindings as cge
 import VoxelConsole
 import VoxelGame
 import VoxelGen
+import VoxelWalkers
 
 RESULT = "cg_control/voxel_console_check.json"
 
@@ -125,6 +127,89 @@ def main():
         checks["destroy removes blocks near the player"] = game.world.get_block(x, y, z) == VoxelGen.AIR
         checks["destroy leaves blocks beyond its radius"] = game.world.get_block(x + 2, y, z) == VoxelGen.STONE
 
+        # Speed: a multiplier on the walk and the flight, checked on its own, and refused outside 0.25 to 10.
+        console.run("speed 2")
+        checks["speed 2 doubles the player's speed"] = game.move_speed == 2.0
+        checks["speed with no argument shows it"] = console.run("speed") == ["Speed x2"]
+        refused = console.run("speed 50")
+        checks["speed above 10 is refused and keeps the speed"] = refused[0].startswith("error") and game.move_speed == 2.0
+        console.run("speed 1")
+        checks["speed 1 is normal again"] = game.move_speed == 1.0
+
+        # Tab: completes a command name when it is the only match, lists the names when they share no more, and completes an
+        # item after give or drop.
+        console.line = "fl"
+        console.complete()
+        checks["tab completes a command name that is the only match"] = console.line == "fly "
+        console.line = "f"
+        console.complete()
+        checks["tab on an ambiguous prefix completes as far as the names agree"] = console.line == "f"
+        checks["tab lists the names an ambiguous prefix could mean"] = any("fill" in line and "fly" in line for line in console.log)
+        console.line = "give gras"
+        console.complete()
+        checks["tab completes an item name after give"] = console.line == "give grass "
+        console.line = "give "
+        console.complete()
+        checks["tab with nothing typed after give lists items and changes nothing"] = console.line == "give "
+        console.line = ""
+
+        # Creatures in lava: a creature in lava loses a health each LAVA_INTERVAL and dies at its last, leaving a hide as a hit does.
+        drops_before = len(game.drops.live)
+        console.run("spawn creature 1")
+        walker = game.walkers.walkers[-1] if game.walkers.walkers else None
+        checks["a spawned creature can be made for the lava check"] = walker is not None
+        if walker is not None:
+            x, y, z = walker.state()[0]
+            lava_cells = [(math.floor(x), math.floor(y + 0.1), math.floor(z)), (math.floor(x), math.floor(y + 1.0), math.floor(z))]
+            saved_cells = [game.world.get_block(*cell) for cell in lava_cells]
+            for cell in lava_cells:
+                game.world.set_block(cell[0], cell[1], cell[2], VoxelGen.LAVA)
+            game.burn_creatures(VoxelGame.LAVA_INTERVAL)
+            game.burn_creatures(VoxelGame.LAVA_INTERVAL)
+            checks["a creature in lava loses a health each interval"] = walker.health == VoxelWalkers.HEALTH - 2 and not walker.removed
+            game.burn_creatures(VoxelGame.LAVA_INTERVAL)
+            checks["a creature in lava dies at its last health and leaves a hide"] = (
+                walker.removed and len(game.drops.live) == drops_before + 1)
+            for cell, block in zip(lava_cells, saved_cells):
+                game.world.set_block(cell[0], cell[1], cell[2], block)
+            for drop in game.drops.live[drops_before:]:
+                drop.remove()
+            del game.drops.live[drops_before:]
+            if walker in game.walkers.walkers:
+                game.walkers.remove(walker)
+        # Lava ahead of a creature turns it a quarter turn to one side (it does not walk into the lava).
+        console.run("spawn creature 1")
+        turner = game.walkers.walkers[-1] if game.walkers.walkers else None
+        if turner is not None:
+            turner.timer = 10.0
+            turner.heading = 0.0
+            x, y, z = turner.state()[0]
+            ahead = (math.floor(x + VoxelWalkers.LOOK_AHEAD), math.floor(y + 0.1), math.floor(z))
+            saved = game.world.get_block(*ahead)
+            game.world.set_block(ahead[0], ahead[1], ahead[2], VoxelGen.LAVA)
+            turner.update(0.016, None)
+            game.world.set_block(ahead[0], ahead[1], ahead[2], saved)
+            checks["a creature turns a quarter turn from lava ahead of it"] = abs(abs(turner.heading) - math.pi / 2) < 1e-9
+            game.walkers.remove(turner)
+        # Biters hunt the timid creatures near them when no player is near, and bite them until they die.
+        console.run("spawn creature 1 biter")
+        console.run("spawn creature 1")
+        pair = game.walkers.walkers[-2:]
+        biter = next((w for w in pair if w.biter), None)
+        prey = next((w for w in pair if not w.biter), None)
+        checks["a biter and a timid creature are made for the hunt check"] = biter is not None and prey is not None
+        if biter is not None and prey is not None:
+            bx, by, bz = biter.state()[0]
+            cge.set_voxel_position(prey.name, bx + 1.0, by, bz)
+            far = (bx + 500.0, bz)
+            for _ in range(40):
+                game.walkers.update(0.1, far)
+            checks["a biter bites a timid creature near it when no player is near"] = (
+                prey.health < VoxelWalkers.HEALTH or prey in game.walkers.killed)
+            for walker in pair:
+                if walker in game.walkers.walkers:
+                    game.walkers.remove(walker)
+            game.walkers.killed = []
         # The view distance and the window.
         console.run("view 20")
         checks["view sets the nearest view step"] = game.view_radius == 18

@@ -24,6 +24,7 @@ MAX_CREATURES = 20      # creatures spawned in one command
 
 TIME_NAMES = {"sunrise": 0.0, "noon": 0.25, "sunset": 0.5, "midnight": 0.75}
 SPEED_NAMES = {"paused": 0.0, "slow": 0.25, "normal": 1.0, "fast": 4.0}
+ITEM_NAMES = sorted(set(VoxelGen.NAMES.values()))   # what give and drop take: a block or an item, by name
 COMMANDS = {}
 
 
@@ -147,6 +148,21 @@ def cmd_timespeed(console, args):
         raise CommandError("the speed must be from 0 to 100")
     game.set_time_speed(speed)
     return ["Time speed set to %s" % speed_text(speed)]
+
+
+@command("speed", "speed [multiplier]", "how fast the player walks and flies, as a multiplier from 0.25 to 10 (1 is normal); no argument shows it")
+def cmd_speed(console, args):
+    game = console.game
+    if not args:
+        return ["Speed x%g" % game.move_speed]
+    try:
+        value = float(args[0])
+    except ValueError:
+        raise CommandError("speed must be a number from 0.25 to 10, not '%s'" % args[0])
+    if not 0.25 <= value <= 10.0:
+        raise CommandError("speed must be from 0.25 to 10")
+    game.move_speed = value
+    return ["Speed x%g" % value]
 
 
 @command("tp", "tp spawn | tp x z | tp x y z", "teleport the player; tp x z puts it on the ground at that place")
@@ -459,6 +475,8 @@ class Console:
             self.submit()
         elif game.pressed("ConsoleBackspace", bool(cge.key_down("Backspace"))):
             self.line = self.line[:-1]
+        elif game.pressed("ConsoleTab", bool(cge.key_down("Tab"))):
+            self.complete()
         elif game.pressed("ConsoleUp", bool(cge.key_down("Up"))):
             self.recall(-1)
         elif game.pressed("ConsoleDown", bool(cge.key_down("Down"))):
@@ -466,6 +484,32 @@ class Console:
         for ch in typed:
             if ch != "`" and " " <= ch <= "~":
                 self.line += ch
+
+    def complete(self):
+        """Tab completes the command name being typed, or the item after give or drop. A prefix that several names share is
+        completed as far as they agree; when they agree no further, the names are listed in the log."""
+        text = self.line.lstrip()
+        words = text.split(" ")
+        if len(words) == 1:
+            start, names, word = "", sorted(COMMANDS), text
+        elif len(words) == 2 and words[0].lower() in ("give", "drop"):
+            start, names, word = words[0] + " ", ITEM_NAMES, words[1]
+        else:
+            return
+        matches = [name for name in names if name.startswith(word.lower())]
+        if not matches:
+            return
+        if len(matches) == 1:
+            self.line = start + matches[0] + " "
+            return
+        common = matches[0]
+        for name in matches[1:]:
+            while not name.startswith(common):
+                common = common[:-1]
+        if len(common) > len(word):
+            self.line = start + common
+        else:
+            self.log = (self.log + ["  ".join(matches)])[-LOG_LINES:]
 
     def recall(self, step):
         """Up goes back through the history, Down forward; past the newest line the input is empty."""

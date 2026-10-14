@@ -7,6 +7,7 @@
 #include <SFML/Graphics/RectangleShape.hpp>
 #include <SFML/System/Vector3.hpp>
 #include <cstdlib>
+#include <array>
 #include <map>
 #include <optional>
 #include "../Core/Light/Light.h"
@@ -43,7 +44,7 @@ namespace {
             {"7", sf::Keyboard::Scan::Num7}, {"8", sf::Keyboard::Scan::Num8}, {"9", sf::Keyboard::Scan::Num9},
             {"0", sf::Keyboard::Scan::Num0}, {"-", sf::Keyboard::Scan::Hyphen}, {"=", sf::Keyboard::Scan::Equal},
             {"F5", sf::Keyboard::Scan::F5}, {"F9", sf::Keyboard::Scan::F9}, {"F12", sf::Keyboard::Scan::F12},
-            {"`", sf::Keyboard::Scan::Grave}, {"Backspace", sf::Keyboard::Scan::Backspace},
+            {"`", sf::Keyboard::Scan::Grave}, {"Backspace", sf::Keyboard::Scan::Backspace}, {"Tab", sf::Keyboard::Scan::Tab},
             {"L", sf::Keyboard::Scan::L}, {"I", sf::Keyboard::Scan::I}, {"C", sf::Keyboard::Scan::C},
         };
         return keys;
@@ -141,7 +142,7 @@ void bindGame(py::module_& m) {
         if (it == gameKeys().end()) throw std::invalid_argument("unknown key '" + name + "'");
         if (unattended()) return false;
         return sf::Keyboard::isKeyPressed(it->second);
-    }, py::arg("name"), "True while the named key is held. Names: W A S D Up Down Left Right J K Space Enter R Escape, 0 to 9, F5, F9, F12.");
+    }, py::arg("name"), "True while the named key is held. Names: W A S D Up Down Left Right J K Space Enter Tab R Escape, 0 to 9, F5, F9, F12.");
 
     m.def("find_body", [](const std::string& name) -> Body* {
         return findBody(name);
@@ -241,6 +242,15 @@ void bindGame(py::module_& m) {
         return removeRuntimeMeshBody(name);
     }, py::arg("name"), "Remove a body made by create_mesh_body, and free its mesh. Returns False if there is no such body.");
 
+    m.def("set_mesh_body_position", [](const std::string& name, sf::Vector3f position) {
+        Body* body = findBodyByName(name);
+        if (!body) throw std::invalid_argument("no body named '" + name + "'");
+        Mesh* mesh = body->get<Mesh*>();
+        if (!mesh) throw std::invalid_argument("body '" + name + "' has no mesh to move");
+        mesh->setPosition(position);
+    }, py::arg("name"), py::arg("position"),
+        "Move a body made by create_mesh_body. Its mesh is not rebuilt, so a body that only moves costs no upload.");
+
     m.def("mouse_down", [](const std::string& name) {
         if (name != "Left" && name != "Right" && name != "Middle") {
             throw std::invalid_argument("unknown mouse button '" + name + "' (use Left, Right or Middle)");
@@ -288,6 +298,16 @@ void bindGame(py::module_& m) {
         sf::Mouse::setPosition(centre, window);
         return { static_cast<float>(now.x - centre.x), static_cast<float>(now.y - centre.y) };
     }, "How far the mouse moved since the last call, in pixels (x right, y down), while the mouse is captured. Otherwise (0, 0).");
+
+    m.def("set_voxel_tiles", [](const std::string& path) {
+        if (!renderer) throw std::runtime_error("the renderer is not running yet");
+        renderer->setVoxelTiles(path);
+    }, py::arg("path"), "Load the voxel tile array from a PNG strip of square tiles (one per block face). Voxel meshes use it for their surfaces.");
+
+    m.def("set_voxel_splat_tiles", [](const std::vector<std::array<float, 3>>& tiles) {
+        if (!renderer) throw std::runtime_error("the renderer is not running yet");
+        renderer->setVoxelSplatTiles(tiles);
+    }, py::arg("tiles"), "The top, side and bottom tile layers of the eight splat blocks, in channel order. The terrain blends them per pixel.");
 
     m.def("set_camera", [](sf::Vector3f position, sf::Vector3f target) {
         if (!renderer) throw std::runtime_error("the renderer is not running yet");

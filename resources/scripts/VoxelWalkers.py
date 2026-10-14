@@ -22,6 +22,7 @@ FLEE_PACE = 3.0             # blocks per second while it runs
 BUMP_RANGE = 0.8            # two creatures this close turn away from each other
 RESPAWN_DEPTH = -10.0       # below this a creature is put back at its spawn point
 HEALTH = 3                  # hits a creature takes to die (each hit takes one)
+LOOK_AHEAD = 1.0            # blocks ahead a creature checks for lava before it walks on
 KNOCK_SECONDS = 0.25        # a hit pushes the creature away for this long
 KNOCK_PACE = 4.5            # blocks per second while it is pushed back
 FLASH_SECONDS = 0.15        # a hit tints the creature for this long
@@ -31,6 +32,7 @@ CHASE_PACE = 2.0            # blocks per second while it chases
 BITE_RANGE = 1.3            # a biter this close to the player bites
 BITE_DAMAGE = 1.0           # health the player loses to one bite
 BITE_INTERVAL = 1.2         # seconds between a biter's bites
+PREY_RANGE = 6.0            # a biter this close to a timid creature, with no player near, hunts it and bites it
 CHUNK = VoxelGen.CHUNK
 PALETTE = [(0.92, 0.90, 0.85), (0.55, 0.36, 0.22), (0.20, 0.20, 0.24), (0.85, 0.62, 0.30)]
 BITER_COLOUR = (0.42, 0.10, 0.08)
@@ -44,6 +46,8 @@ class Walker:
         self.rng = rng
         self.biter = biter
         self.health = HEALTH
+        self.lava_timer = 0.0       # seconds the creature has been in lava (VoxelGame.burn_creatures)
+        self.world = world          # the voxel world, which tells the creature where the lava is (lava_ahead)
         self.heading = rng.uniform(0.0, 2.0 * math.pi)
         self.timer = rng.uniform(1.0, 4.0)
         self.last = None            # the feet last frame, to see how far the creature got
@@ -58,8 +62,9 @@ class Walker:
         cge.find_body(name).get_mesh().set_position(cge.Vector3f(*spawn))
         cge.add_voxel_walker(name, world, HALF_WIDTH, HEIGHT)
 
-    def update(self, dt, player=None):
-        """Move the creature one frame. Returns the health a biter takes from the player this frame (0 for most frames)."""
+    def update(self, dt, player=None, prey=None):
+        """Move the creature one frame. Returns the health a biter takes from the player this frame (0 for most frames). prey is
+        the (x, z) of a timid creature a biter hunts when the player is not near."""
         if self.removed:
             return 0.0
         pos, _vel, on_ground = cge.voxel_walker_state(self.name)
@@ -87,6 +92,11 @@ class Walker:
             if distance < BITE_RANGE and self.bite_timer <= 0.0:
                 bite = BITE_DAMAGE
                 self.bite_timer = BITE_INTERVAL
+        elif self.biter and prey is not None:
+            # With no player near, a biter hunts the nearest timid creature (Walkers.update does the biting).
+            self.heading = math.atan2(prey[1] - pos[2], prey[0] - pos[0])
+            self.timer = 1.0
+            pace = CHASE_PACE
         elif not self.biter and distance < FLEE_RANGE:
             # Startled: it runs straight away from the player, and keeps running until it is out of range.
             self.heading = math.atan2(pos[2] - player[1], pos[0] - player[0])
@@ -105,6 +115,9 @@ class Walker:
                 self.heading += self.rng.choice((-1.0, 1.0)) * self.rng.uniform(math.pi / 3, 2.0 * math.pi / 3)
                 cge.voxel_jump(self.name, physics.JUMP_SPEED)
         self.last = pos
+        if self.lava_ahead(pos):
+            # Lava is a wall to a creature: it turns to one side of it, and keeps its other choices.
+            self.heading += self.rng.choice((-1.0, 1.0)) * math.pi / 2.0
         vx, vz = math.cos(self.heading) * pace, math.sin(self.heading) * pace
         if player is not None:
             # The player is a body too: a creature does not walk into it (the same contact rule as the player's own moves).
@@ -149,6 +162,12 @@ class Walker:
         """The creature's feet, velocity and ground contact, as the engine has them now."""
         return cge.voxel_walker_state(self.name)
 
+    def lava_ahead(self, pos):
+        """True when the cell a step ahead, at the creature's feet, is lava."""
+        x = pos[0] + math.cos(self.heading) * LOOK_AHEAD
+        z = pos[2] + math.sin(self.heading) * LOOK_AHEAD
+        return self.world.get_block(math.floor(x), math.floor(pos[1] + 0.1), math.floor(z)) == VoxelGen.LAVA
+
     def turn_away(self, x, z):
         """Head away from the point (x, z), a little off straight, so two creatures do not turn towards each other."""
         pos = self.state()[0]
@@ -161,6 +180,7 @@ class Walkers:
 
     def __init__(self, world, centre, count, seed, prefix="creature"):
         self.walkers = []
+        self.killed = []            # creatures a biter killed in the last update: the game takes them out and leaves hides
         rng = random.Random(seed)
         for i in range(count):
             spot = self.find_ground(world, centre, rng)
@@ -189,16 +209,35 @@ class Walkers:
 
     def update(self, dt, player=None):
         """player is the (x, z) of the player, which the creatures run from or chase. A creature that is about to bump another
-        turns away from it, so the herd does not stack up in one place. Returns the health the biters took from the player."""
+        turns away from it, so the herd does not stack up in one place. Returns the health the biters took from the player.
+        A biter with no player near hunts the nearest timid creature and bites it; a creature a bite kills is in self.killed."""
         spots = [w.state()[0] for w in self.walkers]
         bites = 0.0
+        self.killed = []
         for i, walker in enumerate(self.walkers):
-            bites += walker.update(dt, player)
+            prey = self.prey_for(i, spots) if walker.biter else None
+            bites += walker.update(dt, player, None if prey is None else (spots[prey][0], spots[prey][2]))
             for j, other in enumerate(spots):
                 if i != j and math.hypot(spots[i][0] - other[0], spots[i][2] - other[2]) < BUMP_RANGE:
                     walker.turn_away(other[0], other[2])
                     break
+            if prey is not None and walker.bite_timer <= 0.0 and not self.walkers[prey].removed:
+                if math.hypot(spots[i][0] - spots[prey][0], spots[i][2] - spots[prey][2]) < BITE_RANGE:
+                    walker.bite_timer = BITE_INTERVAL
+                    if self.walkers[prey].hurt((spots[i][0], spots[i][2])):
+                        self.killed.append(self.walkers[prey])
         return bites
+
+    def prey_for(self, index, spots):
+        """The index of the nearest timid creature within PREY_RANGE of the biter at index, or None."""
+        best = None
+        for j, other in enumerate(self.walkers):
+            if other.biter or other.removed or j == index:
+                continue
+            distance = math.hypot(spots[index][0] - spots[j][0], spots[index][2] - spots[j][2])
+            if distance < PREY_RANGE and (best is None or distance < best[0]):
+                best = (distance, j)
+        return None if best is None else best[1]
 
     def remove(self, walker):
         """Take a creature out of the herd and out of the world (when it dies)."""

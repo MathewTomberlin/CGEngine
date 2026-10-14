@@ -20,6 +20,14 @@ namespace CGEngine {
 		std::bitset<256> joinBelow;  // a smooth block standing on one of these terrain blocks joins the terrain (its bottom only)
 		bool transparent = false;    // its mesh is drawn blended, after the opaque ones (the water)
 		uint8_t hits = 1;           // how many hits break it (VoxelWorld::hitBlock); a hit on a damaged block shows its stage
+		bool flows = true;          // a liquid spreads as water does; false keeps it where it is (lava)
+		// A textured block shows the voxel tile array (Renderer::setVoxelTiles) instead of its colour: one layer for its top,
+		// its sides and its bottom. Its vertex colour is white, so the tile is the colour.
+		bool textured = false;
+		uint8_t tiles[3] = { 0, 0, 0 };   // the tile layers of the top, the sides and the bottom (when textured)
+		// A terrain block's splat channel, 0 to 7: its weight is blended per pixel from the splat tiles of the smooth skin. -1 for a
+		// block that is not a splat block (it takes its own tiles per vertex).
+		int8_t splat = -1;
 	};
 
 	// The mesh a block id is drawn in: 0 for the terrain, else the own mesh (see BlockType::own and mesh).

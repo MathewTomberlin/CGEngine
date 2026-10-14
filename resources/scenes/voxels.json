@@ -7,7 +7,8 @@
     { "name": "voxel_leaves", "diffuseTexture": "voxel_noise.png", "specular": 0, "repeat": true },
     { "name": "voxel_brick", "diffuseTexture": "voxel_noise.png", "specular": 0, "repeat": true },
     { "name": "voxel_water", "diffuseTexture": "voxel_noise.png", "specular": 0, "repeat": true, "opacity": 0.55 },
-    { "name": "voxel_ghost", "diffuseTexture": "voxel_noise.png", "specular": 0, "repeat": true, "opacity": 0.45 }
+    { "name": "voxel_ghost", "diffuseTexture": "voxel_noise.png", "specular": 0, "repeat": true, "opacity": 0.45 },
+    { "name": "voxel_lava", "diffuseTexture": "voxel_noise.png", "specular": 0, "repeat": true }
   ],
   "environment": { "skyColour": [0.56, 0.76, 0.95], "fogColour": [0.56, 0.76, 0.95], "fogStart": 84, "fogEnd": 168 },
   "lights": [

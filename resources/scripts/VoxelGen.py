@@ -18,21 +18,55 @@ LAMP = 17                           # a full block that gives off light (the sam
 BRICK = 18                          # a cube block: it never merges with its neighbours, so it keeps sharp edges
 TORCH = 19                          # a torch: a prop on a block's face (VoxelWorld.set_prop), not a block; only the hotbar names it
 COAL, IRON = 20, 21                 # ore in the stone: coal at any depth, iron deep (the same ids as VoxelTerrain::Coal and Iron)
+LAVA = 22                           # a liquid that does not flow: lakes in the deep caves (the same id as VoxelTerrain::Lava)
 DIRECTIONS = ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1))   # a prop's dir, to the block it leans on (PropDirs)
 FLOW_FIRST, FLOW_LAST = 9, 15       # flowing water, levels 7 to 1 (the block id is 16 - level); WATER is the full source
-LIQUIDS = (WATER,) + tuple(range(FLOW_FIRST, FLOW_LAST + 1))
+WATER_BLOCKS = (WATER,) + tuple(range(FLOW_FIRST, FLOW_LAST + 1))   # the water family: one mesh, drawn see-through
+LIQUIDS = WATER_BLOCKS + (LAVA,)    # every liquid: swimming and the fog under the surface
+STILL_LIQUIDS = (LAVA,)             # liquids that do not spread (define_block flows=False)
 FALLS = (SAND, GRAVEL)              # blocks that fall into air or liquid
 HITS = {STONE: 3, WOOD: 4, BRICK: 3, COAL: 4, IRON: 5}   # hits to break a block (the others take one); see VoxelWorld.hit_block
-EMITS = {LAMP: 255}                 # the light each block gives off at its own cell, 0 to 255; the light falls off through air
+EMITS = {LAMP: 255, LAVA: 80}      # the light each block gives off at its own cell, 0 to 255; the light falls off through air
 # How each block is drawn (BlockType::own and cube). A block in OWN has its own mesh per chunk, drawn with MATERIALS[block]
 # (a material in scenes/voxels.json); the rest are the terrain's smooth skin. A cube block is always in OWN.
-OWN = (WOOD, LEAVES, BRICK) + LIQUIDS   # water is in its own mesh too, so the ground under it has a skin to be seen by
+OWN = (WOOD, LEAVES, BRICK, LAMP) + LIQUIDS   # liquids are in their own meshes too, so the ground under them has a skin to be seen by
 CUBES = (BRICK,)
-MATERIALS = {WOOD: "voxel_wood", LEAVES: "voxel_leaves", BRICK: "voxel_brick", WATER: "voxel_water"}
+MATERIALS = {WOOD: "voxel_wood", LEAVES: "voxel_leaves", BRICK: "voxel_brick", WATER: "voxel_water", LAVA: "voxel_lava"}
 JOINS = {WOOD: LEAVES}              # a block whose top is covered by the mesh of this block joins that mesh (the trunk top joins the canopy)
-GROUND = (GRASS, DIRT, STONE, SAND, GRAVEL, SNOW)   # natural ground: a block standing on it joins the terrain (a trunk base)
-JOINS_BELOW = {WOOD: GROUND}
+GROUND = (GRASS, DIRT, STONE, SAND, GRAVEL, SNOW)   # natural ground
+# A trunk base stays in the trunk's own skin (no join below): a base joined to the terrain pinched the drawn trunk to 0.8 of a
+# block where it left the ground (roadmap 27.1). The own skin runs down into the ground, so the trunk flares out of it.
+JOINS_BELOW = {}
 TRANSPARENT = (WATER,) + tuple(range(FLOW_FIRST, FLOW_LAST + 1))   # drawn blended: the water's mesh is named after the source
+
+# The block textures (resources/voxel_tiles.png, written by tools/make_voxel_tiles.py): one layer per tile, in this order. A
+# textured block shows its tile instead of its colour: the top, the sides and the bottom each have a layer (TILES).
+TILE_NAMES = ["grass_top", "grass_side", "dirt", "stone", "sand", "water", "snow_top", "snow_side", "bark", "wood_rings",
+              "leaves", "gravel", "lamp", "brick", "coal_ore", "iron_ore", "lava"]
+TILE_SIZE = 32
+# The terrain's splat blocks, in channel order. The smooth skin carries eight weights per vertex, one for each of these, and
+# the fragment shader blends their tiles per pixel by them, so a boundary between two blocks has no triangle edges. Every
+# block of the smooth terrain must be one of these (or in OWN, with its own mesh).
+SPLAT = (GRASS, DIRT, STONE, SAND, SNOW, GRAVEL, COAL, IRON)
+GRASS_TILES = (0, 1, 2)                 # grass top, grass side, dirt
+TILES = {
+    GRASS: GRASS_TILES,
+    DIRT: (2, 2, 2),
+    STONE: (3, 3, 3),
+    SAND: (4, 4, 4),
+    WATER: (5, 5, 5),
+    SNOW: (6, 7, 2),
+    WOOD: (9, 8, 9),                    # the cut top shows its rings, the sides the bark
+    LEAVES: (10, 10, 10),
+    GRAVEL: (11, 11, 11),
+    LAMP: (12, 12, 12),
+    BRICK: (13, 13, 13),
+    COAL: (14, 14, 14),
+    IRON: (15, 15, 15),
+    LAVA: (16, 16, 16),
+}
+for _block in range(FLOW_FIRST, FLOW_LAST + 1):
+    TILES[_block] = TILES[WATER]
 
 COLOURS = {
     GRASS: (0.36, 0.72, 0.26),
@@ -48,13 +82,15 @@ COLOURS = {
     TORCH: (1.00, 0.62, 0.25),
     COAL: (0.16, 0.16, 0.18),
     IRON: (0.66, 0.46, 0.36),
+    LAVA: (1.00, 0.30, 0.05),
     BRICK: (0.66, 0.30, 0.22),
 }
 for _block in range(FLOW_FIRST, FLOW_LAST + 1):
     COLOURS[_block] = COLOURS[WATER]
 
 NAMES = {AIR: "air", GRASS: "grass", DIRT: "dirt", STONE: "stone", SAND: "sand", WATER: "water", SNOW: "snow",
-         WOOD: "wood", LEAVES: "leaves", GRAVEL: "gravel", LAMP: "lamp", BRICK: "brick", TORCH: "torch", COAL: "coal", IRON: "iron"}
+         WOOD: "wood", LEAVES: "leaves", GRAVEL: "gravel", LAMP: "lamp", BRICK: "brick", TORCH: "torch", COAL: "coal", IRON: "iron",
+         LAVA: "lava"}
 for _block in range(FLOW_FIRST, FLOW_LAST + 1):
     NAMES[_block] = "flowing water"
 

@@ -65,10 +65,11 @@ in vec3 vertNormal;
 in float materialId;
 in mat4 instanceMatrix;	//Read only when instanced is set (see Renderer::drawInstances)
 in vec3 vertColour;
-in vec3 vertGlow;
-in float vertFlicker;	//The phase of a flame that wavers (see VoxelVertex::flicker), 0 for other surfaces
-in float vertDamage;	//How much of the block has been hit, 0 to 1 (voxel meshes; see VoxelVertex::damage)
-in float vertSky;	//How much of the sun and ambient light reaches the surface, 0 to 1 (voxel meshes; see VoxelVertex::sky)	//Light the surface gives off (black unless the mesh sets it; see VoxelVertex::glow)
+in vec4 vertGlow;	//The light the surface gives off (xyz), and the phase of a wavering flame (w), see VoxelVertex::glow
+in vec3 vertTiles;
+in vec4 vertSplatA;	//The terrain's splat weights, channels 0 to 3 (see VoxelVertex::splatA)
+in vec4 vertSplatB;	//The terrain's splat weights, channels 4 to 7 (see VoxelVertex::splatB)
+in vec2 vertSkyDamage;	//The sky light (x) and the damage (y) of a voxel surface, see VoxelVertex::skyDamage
 uniform bool instanced;
 uniform bool skinned;	//Only meshes with bones read the bone attributes; others would read defaults (see Renderer::renderMesh)
 in ivec4 boneIds;
@@ -83,6 +84,9 @@ out vec3 vertexGlow;
 out float vertexSky;
 out float vertexDamage;
 out float vertexFlicker;
+flat out vec3 vertexTiles;
+out vec4 vertexSplatA;
+out vec4 vertexSplatB;
 
 void main() {
     vec4 bonePosition = vec4(0.0f);
@@ -119,10 +123,13 @@ void main() {
 	vertex = worldPos.xyz;
 	matId = materialId;
 	vertexColour = vertColour;
-	vertexGlow = vertGlow;
-	vertexSky = vertSky;
-	vertexDamage = vertDamage;
-	vertexFlicker = vertFlicker;
+	vertexGlow = vertGlow.xyz;
+	vertexSky = vertSkyDamage.x;
+	vertexDamage = vertSkyDamage.y;
+	vertexFlicker = vertGlow.w;
+	vertexTiles = vertTiles;
+	vertexSplatA = vertSplatA;
+	vertexSplatB = vertSplatB;
 
 	gl_Position = camera * worldPos;
 }

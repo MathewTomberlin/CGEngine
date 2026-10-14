@@ -4,6 +4,19 @@ Goal: an engine that an AI (or a person working with one) can use to create mode
 skeletons, animations and games through structured data and a control interface, with
 performance and documentation treated as first-class requirements.
 
+## Vision (where this is going)
+The engine's job is to let an AI and a person build a playable world together, from the same data. Four goals, in order:
+
+1. **A game people want to play.** The voxel sample becomes a survival-crafting game with caves worth exploring, ores worth
+   finding, lava worth avoiding, tools that wear out, a crafting grid, creatures with real behaviour, and a sound and music layer.
+   The bar is "a stranger plays it for an hour and asks what the next thing is", not "every system exists".
+2. **Authoring as data.** Blocks, recipes, rules, creatures, scenes and textures are data that an agent can read, change and test
+   without rebuilding the engine. Each new mechanic lands with a file format or a command, not only with code.
+3. **Several people in one world.** A host owns the world, clients join over the network, and an AI can act as a player. This
+   needs a headless host (18.1) and a state model that does not assume one process.
+4. **Engine quality that is measured.** Frame time, memory and load time are numbers in the roadmap, from Release builds, with a
+   check for every feature. A feature without a test and a measurement is not finished.
+
 Status: `[ ]` not started, `[~]` in progress, `[x]` done.
 
 ## Current priorities (lead developer, after playtesting round 3)
@@ -110,8 +123,9 @@ Goal: the terrain looks rounded and real, the blocks obey physics the scripts ca
   fall, and swap down past water. Water is a full source with flowing levels 7 to 1, so it spreads and drains and stays
   finite. Only changed cells are queued, so an idle world costs nothing. Checked by `tools/voxel_world_check.py`.
 - [~] **10.3** Programmable rules: done are reaction rules as data (`add_rule`, a block touching a kind becomes another, with
-  a chance) and a Python hook that sees each queued block per tick. The simulation runs only on loaded chunks. Not yet: a
-  rule file format, and rules that move blocks other than by falling.
+  a chance), a rule file (JSON, `VOXEL_RULES`, `resources/scripts/VoxelRules.py`, checked by `tools/test_voxel_rules.py`) and a
+  Python hook that sees each queued block per tick. The simulation runs only on loaded chunks. Not yet: rules that move blocks
+  other than by falling.
 - [x] **10.4** Collision in C++ (`VoxelBody.cpp`, `world.step_body`): the same mover as `VoxelPhysics.step`, on the block
   types. The player uses it. `tools/voxel_world_check.py` checks 300 random moves against the Python version and they agree
   to 1e-9. The world's dirty chunks are a set, so `update` no longer scans every chunk each frame.
@@ -198,6 +212,7 @@ Today every solid block is part of one smooth skin per chunk, which merges wood 
   above it. Checked by `check_groups`; seen in play (the trees worked).
 - [x] **12.7** A wood block standing on natural ground (stone, dirt, grass, sand, gravel, snow) joins the terrain at its bottom
   (`join_below=`, a list of block ids). A wood block on a brick or on water keeps its own skin. Checked by `check_groups`.
+  The sample no longer uses the join for trunks: it pinched the trunk where it left the ground (20.1).
 - [x] **12.8** Water is a semi-transparent mesh: `define_block(..., transparent=True)` draws its mesh after the opaque ones,
   blended and without writing depth (`Body::transparent`, `Renderer::render`), and the material's `opacity` (0.55 for
   `voxel_water`, read from the scene file) multiplies the surface's alpha. The shadow map skips transparent meshes.
@@ -350,18 +365,30 @@ Goal: blocks and creatures take several hits, and what the player has hit looks 
   hits left are on the HUD). A hit pushes it away and flashes it red. A dead one is taken out of the world (its walker and its
   mesh) and leaves a hide on the ground where it fell (16.7). The hide is `VoxelGen.HIDE`, an item that cannot be placed. One in three is a biter: it chases
   the player inside 7 blocks and bites at 1 health each 1.2 s when within 1.3 blocks. The others still run from the player.
-  Not yet: the creatures do not fight each other.
+  With no player near, a biter hunts the nearest timid creature within 6 blocks and bites it (`VoxelWalkers.PREY_RANGE`, one
+  health a 1.2 s); a creature a biter kills leaves a hide, as a hit does. Checked by `voxel_console_check.py`. Not yet: timid
+  creatures do not fight back, and biters do not hunt each other.
 - [x] **16.6** The player has health: ten points on a bar above the hotbar. Bites and falls lower it (a fall past 4 blocks costs
   1 point a block beyond that; the spawn drop does not count). It heals 0.25 a second after 6 s without a hit, and does not heal
   while the game is paused. At zero the player is back at the spawn with the inventory kept.
   The hurt shows on screen too: the whole window reddens at the moment of a bite or a fall and fades over 0.4 s
-  (`update_hurt_flash`, under the hotbar). Creative mode (C) takes no bites or falls. Not yet: lava (the sample has none).
+  (`update_hurt_flash`, under the hotbar). Creative mode (C) takes no bites or falls. Lava is 16.8.
 - [x] **16.7** Dropped items: a creature's hide lies on the ground where it died (`VoxelDrops.py`), a small bobbing cube in the
   item's colour, one mesh body each. Walking within 1.2 blocks of it (and no more than a floor away) takes it, when the inventory
   has room; a full inventory leaves it there. Drops are saved with the inventory (F5 and F9), and creative mode takes none and
   leaves them where they are. A hide dropped in the air falls to the first solid block under it. Checked by
   `tools/test_voxel_drops.py` (no GPU) and `voxel_game_check.py`. Standing on a drop the inventory has no room for says so
-  on the HUD. Not yet: each drop rebuilds its mesh every frame.
+  on the HUD. Each drop's mesh is built once and its bob moves the body (`cge.set_mesh_body_position`), so a heap of drops
+  costs no mesh uploads while it bobs.
+- [x] **16.8** Lava. A liquid that does not flow (`define_block(..., flows=False)`, `VoxelGen.LAVA`, id 22): it glows (light
+  120), it is drawn in its own mesh with `voxel_lava`, and the player swims in it as in water, losing 2 health a second while any
+  of the body is in it (`LAVA_DAMAGE`); the view inside is orange. The deep caves, at or below height 6 (`VoxelTerrain::LavaLevel`),
+  are full of it. Lava cannot be broken. A creature in lava loses a health every half second (`VoxelGame.burn_creatures`), and
+  dies to it with the same hide as a hit, and a creature turns a quarter turn from lava a block ahead of it (`VoxelWalkers.lava_ahead`).
+  Checked by `voxel_world_check.py` (no spread, water beside it does spread, its own
+  mesh, lava only at or below height 6), `voxel_game_check.py` (the player's health) and `voxel_console_check.py` (a creature).
+  Not yet: lava in the hotbar, and a sound for it. The fog was seen in code only; the glow and the colour were seen in a screenshot.
+
 ## Phase 17: inventory and a real hotbar (from playtesting: the hotbar is a line of text)
 Goal: items have quantities, the inventory is a grid the player can see and change, and the hotbar is a UI, not text.
 - [x] **17.1** An item model: an item is a block id (a torch is one too, though it is a prop), held in a slot with a count up to
@@ -378,14 +405,16 @@ Goal: items have quantities, the inventory is a grid the player can see and chan
   holds more than one. The selected slot is outlined in yellow and the slot under the mouse in white. It is the first row of
   the inventory, so the two are one model. The boxes are overlay rectangles, a new engine feature (`create_rect_body` and
   `set_rect_body`: rectangles over the scene in window pixels, like the labels). Their draw cost is not measured yet; the
-  voxel perf script should record it.
+  voxel perf script should record it. Measured with the HUD on (`tools/voxel_perf.ps1`, Release, view 14, 841 chunks): standing
+  243 fps, turning 249, walking 206; worst frame 8 to 12 ms. The HUD's own share is not split out yet.
 - [x] **17.4** The inventory is saved with the edits: F5 writes `cg_control/voxel_inventory.json` beside `voxel_edits.bin`, and F9
   loads both. A missing file keeps the current inventory, and a damaged entry is dropped. It is a JSON file, not part of the
   binary edit file, because the item model lives in Python. Checked by `voxel_game_check.py` (the save and load round trip).
 - [x] **17.5** Tools: a pickaxe (`VoxelGen.PICKAXE`, a tool: it does not stack, and cannot be placed). It starts in the first
   row below the hotbar, so the player drags it into the hotbar. When it is the selected slot, a click on stone, coal, iron or
   brick takes two swings (so stone takes two clicks and iron three, not three to five). It uses the hardness of 16.1, so the
-  ore is quicker to mine with it. Not yet: no crafting, no other tools, and no wear.
+  ore is quicker to mine with it. Crafting is origin's construction (Phase 20: recipes and the panel); the pickaxe has no
+  recipe yet, so it comes from `give` or creative.
 ## Phase 18: multi-user interaction (long-term goal; multiplayer voxel is the first stretch goal)
 Goal: several people (or an AI and a person) work in one CG Engine world at the same time.
 - [~] **18.1** Engine assumptions to change first: the engine is single-process by design. The globals (`world`, `renderer`,
@@ -427,7 +456,8 @@ Goal: the game can be driven from inside, and its window and sun are under the p
   [biter], kill creatures [all|near radius], destroy [radius], break, setblock, fill (up to 20,000 blocks), view, fullscreen, save,
   load, stats, seed and quit. A command that fails prints why, and the game goes on. Checked from inside the game by
   `tools/voxel_console_check.py` (40 checks, through `test_voxels.ps1`), which restores the time, view and window it changes.
-  Not yet: tab completion, and commands for the player's speed and the sky.
+  Tab completes command names and, after give or drop, item names (`VoxelConsole.complete`); `speed` sets the walk and flight
+  multiplier (0.25 to 10). Not yet: a command for the sky.
 - [x] **19.2** Settings page: Window (windowed or full screen) and Time speed (paused, slow, normal, fast), both saved with the
   other settings. Full screen is a borderless window the size of the desktop, switched in place (`set_fullscreen`, Windows): the
   window and its GL context are kept, the camera's aspect and the view follow the new size, and the HUD is laid out again. The
@@ -562,6 +592,59 @@ Goal: a chunk's mesh costs a few milliseconds, so a view of 40 settles in a few 
 - [ ] **26.3** Allocation: each chunk job copies its padded area and allocates its vectors. Reuse per-worker buffers. Measure first:
   more worker threads did not help, which points at the memory the threads share.
 
+## Phase 27: tree bases (from playing the voxel sample)
+Goal: a tree stands on the ground as one object, with its trunk and its base joined.
+- [x] **27.1** Tree bases looked disconnected from the trunk. The trunk's bottom block joined the terrain (12.7), so the ground
+  bulged one block up under it, and the trunk's own skin started a block higher. Between the two the drawn surface pinched to
+  a half-width of 0.4 block (0.8 across) at the block above the ground, against 0.7 for the trunk (1.4 across); it narrows to a
+  neck, not to nothing. The sample now sets no join for wood (`VoxelGen.JOINS_BELOW` is empty), so the base is the trunk's own
+  skin, which runs down into the grass, and the trunk flares out of the ground. The join stays an engine option (`join_below=`).
+  Checked by `voxel_world_check.py` (the half-widths of a trunk on stone, read with `skin_surface`: 0.6 to 0.7 without the join,
+  a neck of 0.4 with it as a control) and by a before and after screenshot of a sample tree. Not checked: other narrow joins,
+  such as a canopy on a one-block branch, which may still pinch.
+
+## Phase 28: input feel and the look of the blocks (from playing the voxel sample)
+Goal: holding a button does what a player expects, and the terrain reads by its materials, not by its tint.
+- [x] **28.1** Held mouse buttons repeat. A press breaks or places at once; holding the button repeats the action every
+  `REPEAT_RATE` (0.25 s) after `REPEAT_DELAY` (0.35 s). The wait runs in game time, so a paused game does not repeat
+  (`VoxelGame.repeating`, checked in `voxel_game_check.py`).
+- [x] **28.2** Block textures. The terrain's blocks show a texture from a tile array instead of a vertex colour. The engine
+  loads a PNG strip of square tiles as a `GL_TEXTURE_2D_ARRAY` (`Renderer::setVoxelTiles`, `cge.set_voxel_tiles`); each vertex
+  carries its layer (`VoxelVertex::layer`), chosen by the face's normal: the block's top, side or bottom tile. The shader samples
+  it triplanar in world space, so one texel is one texel on every face. A textured block's vertex colour is white, and the
+  shading, occlusion and damage cracks stay. Seventeen tiles: grass (top, side), dirt, stone, sand, water, snow (top, side), bark,
+  wood rings, leaves, gravel, lamp, brick, coal ore, iron ore, lava. The art is procedural (`tools/make_voxel_tiles.py`,
+  numpy and Pillow), and `tools/test_voxel_tiles.py` checks the strip against the block table. Props (torches) and flying or
+  dropped blocks keep their colours and the old noise texture (`NoTileLayer`).
+  Found while doing it: a missing tile file prints one line and the blocks fall back to grey noise, which looked like a broken
+  shader. The tile path is relative to the exe folder (`voxel_tiles.png`), since the build copies `resources/` there.
+  Seen in screenshots: grass, dirt, bark, and lava.
+  Fixed after playtesting: the game showed white and grey blocks. The tile file loaded, but the array was uploaded by the
+  renderer that the setup call reached, and the drawing renderer had none. The upload now also happens on the first voxel draw
+  (`Renderer::voxelTilesPath`), and the blocks fall back to their colours if the file cannot be read.
+  Terrain blends per pixel: the smooth skin carries eight splat weights per vertex, one for each terrain block (`VoxelGen.SPLAT`:
+  grass, dirt, stone, sand, snow, gravel, coal, iron), and the fragment shader blends the blocks' tiles by them. The weights are
+  continuous, so a boundary has no triangle edges. An earlier version picked one block pair per vertex, and the triangles between
+  pairs still showed in a screenshot. Lava is tuned: a warmer tile and a glow of 80 instead of 120. Lamps are their own mesh now.
+  Cost: the blend is measured at 230 fps on a quiet machine before the splat change; re-measure with Unity idle, since a running
+  Unity editor made the frame times vary from 9 to 40 fps during this work.
+
+## Ideas (not yet scheduled)
+(Items 28.2's slope blend and lava tuning are done; the list below is what is left.)
+Things worth doing, roughly by what they would change for a player. Each one needs a measurement or a check when it lands.
+- **Tint and glow tuning for water**: the water tile is still a flat blue in sun. Try a darker base and more ripples.
+- **Tile cost**: the blend samples up to three tiles per fragment. Measure the frame time with `tools/voxel_perf.ps1` before and
+  after, and skip the samples whose weight is zero (done) or move the blend into the mesh if it shows.
+- **Textures for props and flying blocks** (torch wood, falling blocks), so every visible block has a tile.
+- **Creature and item art**: the hide and creatures are colour-only.
+- **Tools with wear** (17.5 has none): a pickaxe that breaks after N blocks, and a tool-tier table in data.
+- **A crafting grid** instead of the craft list, and recipes that use blocks made by crafting (planks from wood, sticks).
+- **Lava that spreads slowly into water** and water that cools lava: one rule each, in the rule file (10.3).
+- **Sound**: footsteps by block, the splash, lava hiss. The engine has no audio yet; this needs an audio binding first.
+- **Headless host** (18.1): the same world, with no window, so a server can run on a machine with no screen.
+- **Measure the HUD's share of the frame** (17.3), and the cost of many damaged blocks (16.2), in Release.
+- **Save file per world**: the edits, inventory and time of day in one folder, so a run can be copied or shared.
+
 ## Tooling and quality
 - [x] CI build on Windows (`.github/workflows/build.yml`) with Mesa software OpenGL smoke run
 - [~] Unit tests for pure logic runnable without a GPU. Done for the dungeon generator (`python -I tools/test_dungeon_gen.py`) and for the scene format and command list (`python -I tools/test_scene_format.py`: example scenes, invalid fixtures, documented commands). The C++ parsers in `SceneLoader` and `ControlChannel` are still covered only by the GPU integration test.
@@ -628,6 +711,22 @@ Goal: a chunk's mesh costs a few milliseconds, so a view of 40 settles in a few 
   engine's shape, not just a feature. I am more excited by the damage and inventory work (it turns the sample from a walk into a
   game) than by anything else on this list, and I would start there after the far skins, because the view is where the
   player first notices the sample is empty.
+- Build notes for the voxel tests: `test_voxel_net.ps1` runs `voxel_game.exe`, which only `cmake --build ... --target voxel_game`
+  builds; `main` does not rebuild it, and a stale one fails with "no link". The control and dungeon tests default to Debug, which
+  is not rebuilt for these changes and may be locked by a running game. Run them with `-ExeDir build/bin/Release`.
+- Lava and biters (16.8, 16.5) were checked by tests, and the lava pad was seen in a screenshot. The game check for a craft line
+  (17.5) found a colour that was fixed at a label's creation: labels now keep their colour and are made again when it changes.
+- Findings from the white-texture bug: a build can be correct and still show the wrong thing when two objects both think they
+  own one resource. Here the tile array was made on one renderer and drawn by another (not proven: the reload from Python did
+  not fix it, and the upload on first draw did). Test the draw path with a magenta patch of the shader in the build folder, which
+  shows which branch a draw takes, before changing the code. A syntax error in a game script stops the game without a window,
+  so check the process list and the console after any script edit.
+- Findings from the texture round: a shader change that looks like a broken texture is often a missing file. The tile loader
+  prints one line when the file is not found, and the game then draws the old noise, so check the console first. The build copies
+  `resources/` into the exe folder itself (`bin/Release/voxel_tiles.png`), not into a `resources/` subfolder, so asset paths are
+  relative to the exe folder. A label's colour is set when the label is made; a change of colour needs the label made again.
+- Tests that run a game process must stop it. Two stuck Release games from earlier runs were found by a listing of running
+  processes, not by a test failure; the test harness kills only the wrapper when output is redirected.
 - The tests run through the control channel with scripted input. They are the best guard against regressions in the game, and they caught a real engine bug (the run loop), so keep adding one for each new interaction.
 - Review, round two (lead developer, after the host-owned edits PR was merged). The loop is explore, mine, light, fight and
   rest, and the two things the player keeps hitting are the look of the ground and the wait for the far view. Nothing the

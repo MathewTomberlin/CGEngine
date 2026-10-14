@@ -27,6 +27,7 @@ import VoxelInventory
 import VoxelNet
 import VoxelParticles
 import VoxelRecipes
+import VoxelRules
 import VoxelPhysics as physics
 from VoxelShapes import boxes_arrays, mix, outline_arrays
 import VoxelWalkers
@@ -35,6 +36,17 @@ from VoxelHud import HudMixin
 from VoxelInventoryScreen import InventoryMixin
 from VoxelNetSync import NetMixin
 from VoxelSettingsMenu import SettingsMixin
+
+
+LAVA_DAMAGE = 2.0           # health lost a second in lava (ten points last five seconds)
+LAVA_FOG = (1.00, 0.45, 0.12)   # the view inside lava: orange and short
+LAVA_FOG_START = 1.0
+LAVA_FOG_END = 9.0
+LAVA_INTERVAL = 0.5          # seconds between a creature's losses of health in lava
+REPEAT_DELAY = 0.35         # seconds a held mouse button waits before it repeats its break or place
+REPEAT_RATE = 0.25          # seconds between the repeats while it is held
+TILES_FILE = "voxel_tiles.png"   # the block textures, relative to the game's folder (tools/make_voxel_tiles.py)
+RULES_FILE = os.environ.get("VOXEL_RULES")   # a rule file (VoxelRules.py): the reactions the world runs, in place of none
 
 
 class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
@@ -54,6 +66,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
         self.vel = [0.0, 0.0, 0.0]
         self.on_ground = False
         self.flying = False
+        self.move_speed = 1.0          # the console's speed multiplier, for walking and flying (speed)
         self.mouse_captured = False
         self.yaw = 0.0                  # degrees; 0 looks down -z
         self.pitch = float(os.environ.get("VOXEL_PITCH", "-25"))   # degrees; negative looks down
@@ -70,6 +83,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
         self.hud_ready = False          # the label and the outline bodies exist (made on the second frame)
         self.paused = False             # the pause menu is open: the world stands still and the mouse is free
         self.frame_dt = 0.0             # the time this frame advances the game (0 while paused)
+        self.repeat_wait = {}           # per button, the seconds until a held button repeats its action (see repeating)
         self.view_y = None              # the height the camera is at, which follows the eye's height smoothly
         self.menu_page = "pause"        # the page of the pause menu: "pause" or "settings"
         saved = load_settings()
@@ -118,6 +132,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
         self.window = None              # the window's size, set when the HUD is made
         self.bodies = set()             # the HUD's rectangle and text bodies, made once each
         self.drawn = {}                 # the last value set on each HUD body, so unchanged ones are not set again
+        self.text_colour = {}   # the colour each label was made with (a label's colour is set only when it is made)
         # The time of day: VOXEL_TIME if it is set, else the time the player last chose on the settings page, else START_TIME.
         if "VOXEL_TIME" in os.environ or saved["time_of_day"] is None:
             self.clock = START_TIME % 1.0   # fraction of a day
@@ -191,7 +206,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
             self.collect_drops()
             self.update_walkers(dt)
             self.update_target()
-            self.edit_blocks()
+            self.edit_blocks(dt)
             self.learn_recipes()
         self.update_outlines()
         self.update_preview()
@@ -213,19 +228,33 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
     # ----- world --------------------------------------------------------------------------
 
     def setup(self):
+        # The block textures (VoxelGen.TILES). If the file cannot be read the blocks keep their colours, so the game still looks right.
+        try:
+            cge.set_voxel_tiles(TILES_FILE)
+            cge.set_voxel_splat_tiles([VoxelGen.TILES[block] for block in VoxelGen.SPLAT])
+            textured = True
+        except Exception as error:
+            textured = False
+            print("VoxelTiles: %s was not loaded, the blocks use their colours: %s" % (TILES_FILE, error))
         self.world = cge.VoxelWorld(VoxelGen.CHUNK, VoxelGen.HEIGHT, "voxel")
         for block, rgb in VoxelGen.COLOURS.items():
             self.world.define_block(block, cge.Vector3f(*rgb), solid=block not in VoxelGen.LIQUIDS,
                                     falls=block in VoxelGen.FALLS, liquid=block in VoxelGen.LIQUIDS,
-                                    emits=VoxelGen.EMITS.get(block, 0),
+                                    emits=VoxelGen.EMITS.get(block, 0), tiles=VoxelGen.TILES.get(block) if textured else None,
+                                    splat=VoxelGen.SPLAT.index(block) if textured and block in VoxelGen.SPLAT else -1,
                                     shape="cube" if block in VoxelGen.CUBES else "smooth",
                                     group="own" if block in VoxelGen.OWN else "terrain",
                                     material=VoxelGen.MATERIALS.get(block),
-                                    mesh=VoxelGen.WATER if block in VoxelGen.LIQUIDS else 0,
+                                    mesh=VoxelGen.WATER if block in VoxelGen.WATER_BLOCKS else 0,
                                     join_above=VoxelGen.JOINS.get(block, 0),
                                     join_below=list(VoxelGen.JOINS_BELOW[block]) if block in VoxelGen.JOINS_BELOW else None,
-                                    hits=VoxelGen.HITS.get(block, 1),
+                                    hits=VoxelGen.HITS.get(block, 1), flows=block not in VoxelGen.STILL_LIQUIDS,
                                     transparent=block in VoxelGen.TRANSPARENT)
+        if RULES_FILE:
+            try:
+                print("VoxelRules: %d rules from %s" % (VoxelRules.load(self.world, RULES_FILE), RULES_FILE))
+            except (OSError, ValueError) as error:
+                print("VoxelRules: %s was not loaded: %s" % (RULES_FILE, error))
         self.world.set_smoothing(SMOOTH_RESOLUTION)
         self.world.set_move_seconds(SIM_TICK * 0.9)   # a falling block lands just before the next tick
         # Smooth skin nearest the camera is finer: NEAR_SAMPLES per block within NEAR_RADIUS chunks.
@@ -266,7 +295,42 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
             self.walkers = VoxelWalkers.Walkers(self.world, (8.5, 8.5), WALKERS, self.seed)
         bites = self.walkers.update(dt, (self.pos[0], self.pos[2]))
         self.hurt_player(bites)
+        for walker in self.walkers.killed:
+            self.creature_died(walker)      # killed by a biter: the same hide as a hit leaves
+        self.walkers.killed = []
+        self.burn_creatures(dt)
         self.closest_creature = self.nearest_creature()
+
+    def burn_creatures(self, dt):
+        """A creature in lava loses one health every LAVA_INTERVAL seconds, as a hit would; one that dies leaves a hide."""
+        for walker in list(self.walkers.walkers):
+            if walker.removed:
+                continue
+            x, y, z = walker.state()[0]
+            x, z = math.floor(x), math.floor(z)
+            in_lava = (self.world.get_block(x, math.floor(y + 0.1), z) == VoxelGen.LAVA
+                       or self.world.get_block(x, math.floor(y + 1.0), z) == VoxelGen.LAVA)
+            if not in_lava:
+                walker.lava_timer = 0.0
+                continue
+            walker.lava_timer += dt
+            while walker.lava_timer >= LAVA_INTERVAL and not walker.removed:
+                walker.lava_timer -= LAVA_INTERVAL
+                if walker.hurt((x, z)):
+                    self.creature_died(walker)
+
+    def creature_died(self, walker):
+        """A creature's death: a burst of its colour, it leaves the world, and (unless creative) a hide where it fell."""
+        lo, hi = walker.box()
+        centre = [(lo[i] + hi[i]) / 2 for i in range(3)]
+        self.bursts.add(centre, (0.55, 0.45, 0.40), 12, 0.14, 0.7)
+        self.walkers.remove(walker)
+        if self.walker_target is not None and self.walker_target[1] is walker:
+            self.walker_target = None
+        if not self.creative:
+            # The hide lies where the creature fell, on the ground under its middle, for the player to walk up to.
+            rest = self.ground_under(centre[0], lo[1], centre[2])
+            self.drops.add(VoxelGen.HIDE, VoxelGen.ITEM_COLOURS[VoxelGen.HIDE], (centre[0], rest, centre[2]))
 
     def nearest_creature(self):
         """The horizontal distance from the player's centre to the nearest live creature, or None (for the state file)."""
@@ -292,6 +356,12 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
         """True when the feet are in water and the chest is above it: the player is floating at the surface."""
         x, z = math.floor(self.pos[0]), math.floor(self.pos[2])
         return self.world.get_block(x, math.floor(self.pos[1] + 1.0), z) not in VoxelGen.LIQUIDS
+
+    def in_lava(self):
+        """True while a lava block is at the player's feet or chest. Lava hurts; it does not hold the player up."""
+        x, z = math.floor(self.pos[0]), math.floor(self.pos[2])
+        return (self.world.get_block(x, math.floor(self.pos[1] + 0.1), z) == VoxelGen.LAVA
+                or self.world.get_block(x, math.floor(self.pos[1] + 1.0), z) == VoxelGen.LAVA)
 
     def eye_in_water(self):
         eye = self.eye()
@@ -346,6 +416,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
         dz = forward[1] * across + right[1] * sideways
         length = math.hypot(dx, dz)
         speed = FLY_SPEED if self.flying else (WALK_SPEED * WATER_SPEED if self.swimming else WALK_SPEED)
+        speed *= self.move_speed
         if length > 0.0:
             dx, dz = dx / length * speed, dz / length * speed
         self.vel[0], self.vel[2] = dx, dz
@@ -608,15 +679,32 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
             self.creative = not self.creative
             self.notify("Creative mode on" if self.creative else "Creative mode off")
 
-    def edit_blocks(self):
+    def repeating(self, name, down, dt):
+        """True on the frame a button goes down, and again every REPEAT_RATE seconds while it stays down after REPEAT_DELAY, so
+        holding a mouse button keeps breaking or placing. The wait runs in game time (dt), so a paused game does not repeat."""
+        if self.pressed(name, down):
+            self.repeat_wait[name] = REPEAT_DELAY
+            return True
+        if not down:
+            self.repeat_wait.pop(name, None)
+            return False
+        if name not in self.repeat_wait:
+            return False
+        self.repeat_wait[name] -= dt
+        if self.repeat_wait[name] <= 0.0:
+            self.repeat_wait[name] += REPEAT_RATE
+            return True
+        return False
+
+    def edit_blocks(self, dt=0.0):
         self.choose_hotbar()
         self.update_modes()
         self.save_and_load()
         self.snapshot_key()
         break_down = self.mouse_captured and bool(cge.mouse_down("Left"))
         place_down = self.mouse_captured and bool(cge.mouse_down("Right"))
-        breaking = self.pressed("Break", break_down or bool(cge.key_down("J")))
-        placing = self.pressed("Place", place_down or bool(cge.key_down("K")))
+        breaking = self.repeating("Break", break_down or bool(cge.key_down("J")), dt)
+        placing = self.repeating("Place", place_down or bool(cge.key_down("K")), dt)
         if breaking and self.aims_at_walker():
             # A creature the crosshair is on, nearer than the block behind it, is hit: each hit takes one of its HEALTH. The
             # one that kills it leaves a hide for the inventory.
@@ -625,14 +713,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
             lo, hi = walker.box()
             centre = [(lo[i] + hi[i]) / 2 for i in range(3)]
             if walker.hurt((self.pos[0], self.pos[2])):
-                self.bursts.add(centre, (0.55, 0.45, 0.40), 12, 0.14, 0.7)
-                self.walkers.remove(walker)
-                self.walker_target = None
-                if not self.creative:
-                    # The hide lies where the creature fell, on the ground under its middle, for the player to walk up to.
-                    rest = self.ground_under(centre[0], lo[1], centre[2])
-                    self.drops.add(VoxelGen.HIDE, VoxelGen.ITEM_COLOURS[VoxelGen.HIDE], (centre[0], rest, centre[2]))
-                self.notify("A creature died: a hide on the ground" if not self.creative else "A creature died")
+                self.creature_died(walker)
             else:
                 self.bursts.add(centre, (0.85, 0.25, 0.2), 4, 0.12, 0.4)
             return
@@ -652,6 +733,9 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
             # A block takes its hits (VoxelGen.HITS) to break. The hit that would break it needs room for it in the inventory;
             # a hit that leaves it standing does not, so a full inventory can still damage a block.
             kind = self.world.get_block(*block)
+            if kind == VoxelGen.LAVA:
+                self.notify("Lava cannot be broken")
+                return
             # A pickaxe in the selected slot takes two swings at the blocks it mines (VoxelGen.PICKAXE_BLOCKS).
             swings = 2 if self.selected() == VoxelGen.PICKAXE and kind in VoxelGen.PICKAXE_BLOCKS else 1
             breaks = self.world.damage_at(*block) + swings >= VoxelGen.HITS.get(kind, 1)
@@ -795,6 +879,8 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
     def update_health(self, dt):
         """The player heals REGEN_RATE a second once REGEN_DELAY seconds have passed without a hit. The world's time is dt, so
         nothing heals while the game is paused."""
+        if self.in_lava():
+            self.hurt_player(LAVA_DAMAGE * dt)
         if self.health < PLAYER_HEALTH and time.time() - self.hurt_at > REGEN_DELAY:
             self.health = min(PLAYER_HEALTH, self.health + REGEN_RATE * dt)
 
@@ -857,8 +943,10 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
         if self.world is not None and self.eye_in_water():
             # Under the water the view is short and blue-green, whatever the time of day. The sky is that colour too, since
             # the faces of the water a player is inside are back faces, and the sky shows through them.
-            sky = zenith = fog_colour = WATER_FOG
-            fog_start, fog_end = WATER_FOG_START, WATER_FOG_END
+            eye = self.eye()
+            in_lava = self.world.get_block(math.floor(eye[0]), math.floor(eye[1]), math.floor(eye[2])) == VoxelGen.LAVA
+            sky = zenith = fog_colour = LAVA_FOG if in_lava else WATER_FOG
+            fog_start, fog_end = (LAVA_FOG_START, LAVA_FOG_END) if in_lava else (WATER_FOG_START, WATER_FOG_END)
         cge.set_light("sun", direction=cge.Vector3f(*travel), colour=cge.Vector3f(*light),
                       brightness=0.45 + 0.55 * day)
         # The sun's shadows are off under the water: the water surface is a shadow over everything below it, which is dark.

@@ -18,6 +18,9 @@ namespace CGEngine {
 			uint8_t emission = 0;
 			// The damage of the block (PaddedChunk::damage): faces of different damage do not merge.
 			uint8_t damage = 0;
+			// The tile layers of the face's block (top, sides, bottom; see tileLayers), and whether it is drawn with the tile array.
+			glm::vec3 tiles = glm::vec3(255.0f);
+			bool textured = false;
 
 			bool operator==(const MaskCell& other) const {
 				return block == other.block && damage == other.damage && sign == other.sign && (light >> 5) == (other.light >> 5) && (lamp >> 5) == (other.lamp >> 5)
@@ -34,6 +37,13 @@ namespace CGEngine {
 
 		// Brightness of a corner by its occlusion (0 = walled in, 3 = open).
 		const float occlusionLight[4] = { 0.5f, 0.66f, 0.82f, 1.0f };
+
+		// The tile layers of a block: its top, its sides and its bottom, which the fragment shader blends by each surface's normal.
+		// A block that is not textured has none (255, NoTileLayer).
+		glm::vec3 tileLayers(const PaddedChunk::MeshRule& rule) {
+			if (!rule.textured) return glm::vec3(255.0f);
+			return glm::vec3(rule.tiles[0], rule.tiles[1], rule.tiles[2]);
+		}
 
 		// Brightness of a face by its direction: top full strength, sides darker, bottom darkest.
 		float faceShade(int axis, int sign) {
@@ -89,7 +99,7 @@ namespace CGEngine {
 			const unsigned int first = static_cast<unsigned int>(out.vertices.size());
 			glm::vec3 normal(0.0f);
 			normal[d] = static_cast<float>(sign);
-			const glm::vec3 base = palette[face.block] * faceShade(d, sign) * (1.0f - DamageTint * face.damage / 255.0f);
+			const glm::vec3 base = (face.textured ? glm::vec3(1.0f) : palette[face.block]) * faceShade(d, sign) * (1.0f - DamageTint * face.damage / 255.0f);
 			for (int k = 0; k < 4; ++k) {
 				VoxelVertex vertex;
 				glm::vec3 position(0.0f);
@@ -101,10 +111,11 @@ namespace CGEngine {
 				// Texture repeats once per block across the quad, so a big quad tiles like its blocks would.
 				vertex.texCoord = glm::vec2(static_cast<float>(cornerU[k] * w), static_cast<float>(cornerV[k] * h));
 				vertex.colour = base * occlusionLight[face.occlusion[k]];
-				vertex.sky = face.light / 255.0f;
-				vertex.damage = face.damage / 255.0f;
-				vertex.glow = VoxelLightTint * (face.emission / 255.0f * VoxelGlow)
-					+ vertex.colour * VoxelLightTint * (face.lamp / 255.0f * lampGain(face.light / 255.0f));
+				vertex.tiles = face.tiles;
+				vertex.skyDamage.x = face.light / 255.0f;
+				vertex.skyDamage.y = face.damage / 255.0f;
+				vertex.glow = glm::vec4(VoxelLightTint * (face.emission / 255.0f * VoxelGlow)
+					+ vertex.colour * VoxelLightTint * (face.lamp / 255.0f * lampGain(face.light / 255.0f)), 0.0f);
 				out.vertices.push_back(vertex);
 			}
 			// Split the quad along the diagonal between its less occluded corners, so the shading does not streak.
@@ -320,6 +331,8 @@ namespace CGEngine {
 							const uint8_t block = chunk.at(solid[0], solid[1], solid[2]);
 							cell.block = block;
 							cell.emission = chunk.emission[block];
+							cell.textured = chunk.rule[block].textured;
+							cell.tiles = tileLayers(chunk.rule[block]);
 							cell.damage = chunk.damage.empty() ? 0 : chunk.damage[chunk.index(solid[0], solid[1], solid[2])];
 							cell.sign = static_cast<int8_t>(sign);
 							cornerOcclusion(chunk, air, u, v, group, cell.occlusion);
@@ -434,6 +447,31 @@ namespace CGEngine {
 			return value;
 		}
 
+		// The splat channel of the nearest terrain block that has one, looking out a block from the point's cell. The dirt channel
+		// is the fallback when there is none.
+		int nearestSplatChannel(const PaddedChunk& chunk, glm::vec3 p) {
+			const glm::vec3 base = glm::floor(p - glm::vec3(0.5f));
+			int channel = 1;
+			float nearest = 1e30f;
+			for (int z = -1; z <= 2; ++z) {
+				for (int y = -1; y <= 2; ++y) {
+					for (int x = -1; x <= 2; ++x) {
+						const int bx = static_cast<int>(base.x) + x, by = static_cast<int>(base.y) + y, bz = static_cast<int>(base.z) + z;
+						if (!solidAt(chunk, 0, bx, by, bz)) continue;
+						const int splat = chunk.rule[chunk.at(bx, by, bz)].splat;
+						if (splat < 0) continue;
+						const glm::vec3 centre(bx + 0.5f, by + 0.5f, bz + 0.5f);
+						const float distance = glm::dot(centre - p, centre - p);
+						if (distance < nearest) {
+							nearest = distance;
+							channel = splat;
+						}
+					}
+				}
+			}
+			return channel;
+		}
+
 		// The vertex at p (chunk block units): a normal from the density gradient, the colour of the solid block that
 		// weighs most there, darkened where the air beside it is walled in, and a texture coordinate from the normal's axis.
 		VoxelVertex smoothVertex(const PaddedChunk& chunk, const std::array<glm::vec3, 256>& palette, uint8_t group, glm::vec3 p) {
@@ -447,24 +485,35 @@ namespace CGEngine {
 
 			// The dominant solid block: the one whose centre is nearest the point, among those with air beside them. A vertex on the
 			// ground takes the colour of the surface block, not of the dirt under the grass, which a coarse vertex can be nearer to.
-			// A block with no air beside it counts only when no surface block touches the point.
+			// A block with no air beside it counts only when no surface block touches the point. For terrain, the splat weights of the
+			// solid blocks carry the tiles: each is the trilinear weight of its cells, so across a triangle they change smoothly.
 			const glm::vec3 b = p - glm::vec3(0.5f);
 			const glm::vec3 base = glm::floor(b);
+			const glm::vec3 t = b - base;
 			int block = 0;
 			float blockDistance = 1e30f;
 			size_t dominant = 0;
+			float splat[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+			float splatTotal = 0.0f;
 			for (int c = 0; c < 8; ++c) {
 				const int dx = c & 1, dy = (c >> 1) & 1, dz = (c >> 2) & 1;
 				const int x = static_cast<int>(base.x) + dx, y = static_cast<int>(base.y) + dy, z = static_cast<int>(base.z) + dz;
+				const float w = (dx ? t.x : 1.0f - t.x) * (dy ? t.y : 1.0f - t.y) * (dz ? t.z : 1.0f - t.z);
+				if (!solidAt(chunk, group, x, y, z)) continue;
+				const int id = chunk.at(x, y, z);
 				// The solid block whose centre is nearest the point: a vertex on the ground takes the colour of the ground it stands on,
 				// not of a neighbouring bump, whose centre can outweigh the ground's in the trilinear share.
 				const glm::vec3 centre(x + 0.5f, y + 0.5f, z + 0.5f);
-				if (!solidAt(chunk, group, x, y, z)) continue;
 				const float distance = glm::dot(centre - p, centre - p) + (exposedBlock(chunk, x, y, z) ? 0.0f : 1000.0f);
 				if (distance < blockDistance) {
 					blockDistance = distance;
 					dominant = chunk.index(x, y, z);
-					block = chunk.at(x, y, z);
+					block = id;
+				}
+				const int channel = chunk.rule[id].splat;
+				if (group == 0 && channel >= 0) {
+					splat[channel] += w;
+					splatTotal += w;
 				}
 			}
 			if (block == 0) block = 1;
@@ -475,6 +524,24 @@ namespace CGEngine {
 
 			VoxelVertex vertex;
 			vertex.position = p;
+			if (group == 0) {
+				if (splatTotal <= 0.0f) {
+					// No splat block among the corners: the density can come from the smoothed corners of blocks a step away, so a
+					// vertex just off a ledge can have only air beside it. It takes the nearest splat block around it. A terrain vertex
+					// must never fall back to the tile layers: the fragment shader's tiles are flat, so one such vertex would paint its
+					// whole triangle with them (the green triangles on the sand).
+					splatTotal = 1.0f;
+					splat[nearestSplatChannel(chunk, p)] = 1.0f;
+				}
+				// Terrain: the splat weights carry the tiles (the tile layers are not used), normalised to sum to 1.
+				for (int k = 0; k < 4; ++k) {
+					vertex.splatA[k] = splat[k] / splatTotal;
+					vertex.splatB[k] = splat[k + 4] / splatTotal;
+				}
+				vertex.tiles = glm::vec3(255.0f);
+			} else {
+				vertex.tiles = tileLayers(chunk.rule[block]);
+			}
 			vertex.normal = normal;
 			const glm::vec3 absolute = glm::abs(normal);
 			if (absolute.y >= absolute.x && absolute.y >= absolute.z) {
@@ -512,12 +579,12 @@ namespace CGEngine {
 					}
 				}
 			}
-			vertex.colour = palette[static_cast<size_t>(block)] * occlusion
+			vertex.colour = (chunk.rule[block].textured ? glm::vec3(1.0f) : palette[static_cast<size_t>(block)]) * occlusion
 				* (chunk.damage.empty() ? 1.0f : 1.0f - DamageTint * chunk.damage[dominant] / 255.0f);
-			vertex.sky = sky;
-			vertex.damage = chunk.damage.empty() ? 0.0f : chunk.damage[dominant] / 255.0f;
-			vertex.glow = VoxelLightTint * (chunk.emission[block] / 255.0f * VoxelGlow)
-				+ vertex.colour * VoxelLightTint * (lamp * lampGain(sky));
+			vertex.skyDamage.x = sky;
+			vertex.skyDamage.y = chunk.damage.empty() ? 0.0f : chunk.damage[dominant] / 255.0f;
+			vertex.glow = glm::vec4(VoxelLightTint * (chunk.emission[block] / 255.0f * VoxelGlow)
+				+ vertex.colour * VoxelLightTint * (lamp * lampGain(sky)), 0.0f);
 			return vertex;
 		}
 	}
@@ -729,9 +796,8 @@ namespace CGEngine {
 						vertex.normal = normal;
 						vertex.texCoord = glm::vec2(position[u], position[v]);
 						vertex.colour = colour;
-						vertex.glow = glow;
-						vertex.flicker = flicker;
-						vertex.sky = sky;
+						vertex.glow = glm::vec4(glow, flicker);
+						vertex.skyDamage.x = sky;
 						out.vertices.push_back(vertex);
 					}
 					out.indices.insert(out.indices.end(), { first, first + 1, first + 2, first, first + 2, first + 3 });
@@ -795,9 +861,8 @@ namespace CGEngine {
 					vertex.normal = normal;
 					vertex.texCoord = glm::vec2(glm::dot(position, axes[u]), glm::dot(position, axes[v]));
 					vertex.colour = colour;
-					vertex.glow = glow;
-					vertex.flicker = flicker;
-					vertex.sky = sky;
+					vertex.glow = glm::vec4(glow, flicker);
+					vertex.skyDamage.x = sky;
 					out.vertices.push_back(vertex);
 				}
 				out.indices.insert(out.indices.end(), { first, first + 1, first + 2, first, first + 2, first + 3 });

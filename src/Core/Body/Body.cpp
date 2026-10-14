@@ -869,8 +869,12 @@ namespace CGEngine {
                 const bool drawOverlay = overlay || dynamic_cast<const sf::Text*>(entity.get()) != nullptr;
                 if (drawOverlay) {
                     const sf::View scene = target.getView();
+                    // The default view is sized once, when the window is made, and is not resized with the window: after a full
+                    // screen switch it would still map the old size, which put the overlay off centre. A view of the target's
+                    // current size maps window pixels to the window.
+                    const sf::View pixels(sf::FloatRect({ 0.f, 0.f }, sf::Vector2f(target.getSize())));
                     glDisable(GL_DEPTH_TEST);
-                    target.setView(target.getDefaultView());
+                    target.setView(pixels);
                     target.draw(*drawable, transform);
                     target.setView(scene);
                     glEnable(GL_DEPTH_TEST);

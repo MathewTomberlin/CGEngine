@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <SFML/Graphics/Image.hpp>
 #include "../Engine/Engine.h"
 #include "Renderer.h"
 #include "../../Standard/Models/CommonModels.h"
@@ -15,6 +16,35 @@ namespace CGEngine {
 	Renderer::Renderer() {
 		init();
 		importer = new MeshImporter();
+	}
+
+	void Renderer::uploadVoxelTiles(const std::string& path) {
+		sf::Image image;
+		if (!image.loadFromFile(path)) throw std::invalid_argument("cannot read the voxel tiles '" + path + "'");
+		const unsigned int size = image.getSize().x;
+		if (size == 0 || image.getSize().y % size != 0) throw std::invalid_argument("the voxel tiles must be square tiles in one strip");
+		const GLsizei layers = static_cast<GLsizei>(image.getSize().y / size);
+		// A strip is layer after layer in memory, so the whole image is the array's data.
+		if (voxelTiles == 0) GL_CHECK(glGenTextures(1, &voxelTiles));
+		GL_CHECK(glBindTexture(GL_TEXTURE_2D_ARRAY, voxelTiles));
+		GL_CHECK(glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_RGBA8, size, size, layers, 0, GL_RGBA, GL_UNSIGNED_BYTE, image.getPixelsPtr()));
+		GL_CHECK(glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_REPEAT));
+		GL_CHECK(glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_REPEAT));
+		GL_CHECK(glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_NEAREST));
+		GL_CHECK(glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR));
+		GL_CHECK(glGenerateMipmap(GL_TEXTURE_2D_ARRAY));
+		GL_CHECK(glBindTexture(GL_TEXTURE_2D_ARRAY, 0));
+	}
+
+	void Renderer::setVoxelSplatTiles(const std::vector<std::array<float, 3>>& tiles) {
+		if (tiles.size() != splatTiles.size()) throw std::invalid_argument("the splat tiles are eight blocks, each with three layers");
+		for (size_t k = 0; k < splatTiles.size(); ++k) splatTiles[k] = glm::vec3(tiles[k][0], tiles[k][1], tiles[k][2]);
+		splatTilesDirty = true;
+	}
+
+	void Renderer::setVoxelTiles(const std::string& path) {
+		uploadVoxelTiles(path);
+		voxelTilesPath = path;
 	}
 
 	void Renderer::setWindow(RenderWindow* window) {
@@ -253,12 +283,13 @@ namespace CGEngine {
 		bind("position", 3, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, position));
 		bind("texCoord", 2, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, texCoord));
 		bind("vertNormal", 3, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, normal));
-		bind("vertGlow", 3, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, glow));
-		bind("vertSky", 1, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, sky));
-		bind("vertDamage", 1, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, damage));
-		bind("vertFlicker", 1, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, flicker));
-		bind("materialId", 1, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, materialId));
+		bind("vertGlow", 4, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, glow));
+				bind("vertSkyDamage", 2, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, skyDamage));
+				bind("materialId", 1, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, materialId));
 		bind("vertColour", 3, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, colour));
+		bind("vertTiles", 3, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, tiles));
+		bind("vertSplatA", 4, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, splatA));
+		bind("vertSplatB", 4, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, splatB));
 		GL_CHECK(glBindVertexArray(0));
 	}
 
@@ -561,6 +592,33 @@ namespace CGEngine {
 			program->setUniform("shadowPass", shadowPass ? 1 : 0);
 			// Voxel meshes project their texture in world space (see triplanar in StdFragShader.frag).
 			program->setUniform("triplanar", meshData->compact ? 1 : 0);
+			// Voxel meshes take their surfaces from the tile array (its unit is above the material textures, below the shadow map's).
+			// The tile array is uploaded by the renderer that draws it, if it is not there yet (see voxelTilesPath).
+			if (meshData->compact && voxelTiles == 0 && !voxelTilesPath.empty()) {
+				try {
+					uploadVoxelTiles(voxelTilesPath);
+				} catch (const std::exception& error) {
+					log(this, LogError, "Voxel tiles: {}", error.what());
+					voxelTilesPath.clear();
+				}
+			}
+			const bool tiled = meshData->compact && voxelTiles != 0;
+			program->setUniform("tiled", tiled ? 1 : 0);
+			if (tiled) {
+				const GLint tileUnit = 14;
+				GL_CHECK(glActiveTexture(GL_TEXTURE0 + tileUnit));
+				GL_CHECK(glBindTexture(GL_TEXTURE_2D_ARRAY, voxelTiles));
+				GL_CHECK(glActiveTexture(GL_TEXTURE0));
+				program->setUniform("voxelTiles", tileUnit);
+			}
+				// The splat blocks' tile layers: each program takes them once, and again when they change, not on every draw.
+				if (meshData->compact && (splatTilesDirty || splatTilesProgram != program)) {
+					static const char* const splatNames[8] = { "splatTiles[0]", "splatTiles[1]", "splatTiles[2]", "splatTiles[3]",
+						"splatTiles[4]", "splatTiles[5]", "splatTiles[6]", "splatTiles[7]" };
+					for (size_t k = 0; k < splatTiles.size(); ++k) program->setUniform(splatNames[k], splatTiles[k]);
+					splatTilesProgram = program;
+					splatTilesDirty = false;
+				}
 			program->setUniform("shadowsOn", (shadowsActive && !shadowPass) ? 1 : 0);
 			if (shadowsActive && !shadowPass) {
 				const GLint shadowUnit = 15;   // above the material textures' units
