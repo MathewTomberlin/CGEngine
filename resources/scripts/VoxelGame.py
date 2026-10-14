@@ -65,6 +65,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
         self.was_swimming = False       # for the splash when the player goes under
         self.step_timer = 0.0           # seconds until the next footstep sound
         self.music_on = False           # the night loop is playing
+        self.sound_rng = random.Random(self.seed + 7)   # the pitch of each footstep and placement: its own sequence, not the global one
         self.walkers = None             # the creatures, made once the spawn area has loaded
         self.vel = [0.0, 0.0, 0.0]
         self.on_ground = False
@@ -466,7 +467,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
         if walking:
             self.step_timer -= dt
             if self.step_timer <= 0.0:
-                cge.play_sound("step", 0.35, 0.9 + 0.2 * random.random())
+                cge.play_sound("step", 0.35, 0.9 + 0.2 * self.sound_rng.random())
                 self.step_timer = STEP_SECONDS
         else:
             self.step_timer = 0.0
@@ -807,7 +808,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
             else:
                 self.world.set_block(cell[0], cell[1], cell[2], item)
                 self.send_request({"op": "place", "c": list(cell), "id": item})
-            cge.play_sound("place", 0.7, 0.95 + 0.1 * random.random())
+            cge.play_sound("place", 0.7, 0.95 + 0.1 * self.sound_rng.random())
             self.spend()
 
     def placement_check(self):
