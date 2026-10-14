@@ -7,6 +7,10 @@ In creative mode each item counts as CREATIVE_COUNT for the check, and crafting 
 
 The recipes are data: resources/voxel_recipes.json (or the file named by VOXEL_RECIPES) lists them by item name.
 
+A shaped recipe is made from the 3 by 3 crafting grid: the player puts items in its cells, one at a time, and when the grid holds
+the pattern the output is offered. The items in the grid came out of the inventory; they go back when the screen closes.
+Shapeless recipes are still made from the recipe's row, by counts.
+
 Pure Python with no engine calls, so tools/test_voxel_recipes.py checks it without a window.
 """
 
@@ -14,6 +18,7 @@ import json
 import os
 
 import VoxelGen
+import VoxelInventory
 
 CREATIVE_COUNT = 99     # what creative mode counts each item as when it checks a recipe
 ALL = "All"             # the category that lists every recipe
@@ -133,6 +138,8 @@ class Crafting:
         self.known = set()          # the names of the recipes the player has learned
         self.category = ALL         # the category the dropdown shows
         self.dropdown_open = False
+        self.grid = [None] * (GRID * GRID)   # the crafting grid, row by row: the item in each cell, or None
+        self.pattern = None         # the name of the shaped recipe whose pattern the grid shows as a guide, or None
 
     def learn(self, inventory):
         """Learn each recipe whose items the inventory holds one of. Returns the names learned now, so the game can say so."""
@@ -178,6 +185,73 @@ class Crafting:
                 inventory.slots = saved   # the output does not fit: the inventory is as it was
                 return False
         return True
+
+    def grid_recipe(self, creative):
+        """The first recipe the crafting grid matches, among those the player can make (known, or any in creative mode), or None."""
+        rows = [self.grid[r * GRID:(r + 1) * GRID] for r in range(GRID)]
+        for recipe in RECIPES:
+            if (creative or recipe["name"] in self.known) and matches(recipe, rows):
+                return recipe
+        return None
+
+    def pattern_recipe(self):
+        """The shaped recipe the grid shows as a guide, or None."""
+        for recipe in RECIPES:
+            if recipe["name"] == self.pattern:
+                return recipe
+        return None
+
+    def toggle_pattern(self, name):
+        """Show the pattern of a shaped recipe in the grid, or hide it when it is already shown. Returns True when it is shown."""
+        self.pattern = None if self.pattern == name else name
+        return self.pattern is not None
+
+    def click_cell(self, index, inventory, secondary=False):
+        """A click on a grid cell. The left button puts one item from the held stack into an empty cell, or takes the cell's item
+        into the held stack (onto the same item). The right button puts the cell's item back into the inventory. A tool does not
+        go in the grid: it has its own uses, which a grid cell does not keep."""
+        item = self.grid[index]
+        if secondary:
+            if item is not None and inventory.add(item) == 0:
+                self.grid[index] = None
+            return
+        held = inventory.held
+        if item is None:
+            if held is None or held[0] in VoxelGen.TOOLS:
+                return
+            self.grid[index] = held[0]
+            held[1] -= 1
+            if held[1] == 0:
+                inventory.held = None
+            return
+        if held is None:
+            inventory.held = [item, 1]
+        elif held[0] == item and held[1] < VoxelInventory.STACK_LIMIT:
+            held[1] += 1
+        else:
+            return
+        self.grid[index] = None
+
+    def craft_grid(self, inventory, creative):
+        """Make the recipe the grid matches: its output goes into the inventory and the grid empties. Returns the recipe made, or
+        None when the grid matches none or the output does not fit (then the grid and the inventory are as they were)."""
+        recipe = self.grid_recipe(creative)
+        if recipe is None:
+            return None
+        saved = [None if slot is None else list(slot) for slot in inventory.slots]
+        for item, count in recipe["makes"].items():
+            if inventory.add(item, count) > 0:
+                inventory.slots = saved
+                return None
+        self.grid = [None] * (GRID * GRID)
+        return recipe
+
+    def return_grid(self, inventory):
+        """Put the grid's items back into the inventory (when the screen closes, or before a save). An item that does not fit stays
+        in its cell, so none is lost."""
+        for index, item in enumerate(self.grid):
+            if item is not None and inventory.add(item) == 0:
+                self.grid[index] = None
 
     def to_list(self):
         """The known recipes for the save file, by name."""

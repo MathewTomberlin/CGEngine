@@ -156,6 +156,76 @@ for label, extra in bad_shapes.items():
     os.remove(path)
     check("a bad shape is refused: " + label, refused)
 
+# The crafting grid: items go in one at a time, the pattern makes the output, and the items come back out.
+PICK = [STONE, STONE, STONE, None, WOOD, None, None, WOOD, None]   # the pickaxe's pattern, from the top left
+grid_inv = VoxelInventory.Inventory()
+grid_crafting = VoxelRecipes.Crafting()
+grid_inv.add(STONE, 3)
+grid_inv.add(WOOD, 2)
+grid_crafting.learn(grid_inv)
+grid_inv.slots = [None] * VoxelInventory.SLOTS
+grid_inv.held = [STONE, 3]
+for index in (0, 1, 2):
+    grid_crafting.click_cell(index, grid_inv)
+check("a left click puts one held item in an empty cell, and the stack empties", grid_crafting.grid[:3] == [STONE] * 3
+      and grid_inv.held is None)
+grid_inv.held = [WOOD, 2]
+grid_crafting.click_cell(4, grid_inv)
+grid_crafting.click_cell(7, grid_inv)
+check("the held wood fills two cells and the stack empties", grid_crafting.grid[4] == WOOD and grid_crafting.grid[7] == WOOD
+      and grid_inv.held is None)
+check("the grid matches the pickaxe, named by grid_recipe", grid_crafting.grid == PICK
+      and grid_crafting.grid_recipe(False) is pickaxe)
+grid_crafting.grid[5] = STONE
+check("a stone on a cell the pattern does not use stops the match", grid_crafting.grid_recipe(False) is None)
+grid_crafting.grid[5] = None
+grid_inv.held = [IRON, 1]
+grid_crafting.click_cell(0, grid_inv)
+check("a different item in hand does not replace a cell's item", grid_crafting.grid[0] == STONE and grid_inv.held == [IRON, 1])
+grid_inv.held = None
+grid_crafting.click_cell(0, grid_inv)
+check("with the hand empty, a left click takes the cell's item into the hand", grid_inv.held == [STONE, 1] and grid_crafting.grid[0] is None)
+grid_inv.return_held()
+grid_crafting.grid[0] = STONE
+stone_before = grid_inv.count(STONE)
+grid_crafting.click_cell(0, grid_inv, secondary=True)
+check("the right button returns the cell's item to the inventory", grid_crafting.grid[0] is None
+      and grid_inv.count(STONE) == stone_before + 1)
+grid_crafting.grid = list(PICK)
+grid_inv.slots = [None] * VoxelInventory.SLOTS
+made = grid_crafting.craft_grid(grid_inv, False)
+check("the matched pattern's output is made and the grid empties", made is pickaxe and grid_inv.count(PICKAXE) == 1
+      and grid_crafting.grid == [None] * 9)
+grid_crafting.grid = list(PICK)
+full_inv = VoxelInventory.Inventory()
+full_inv.start([VoxelGen.DIRT] * VoxelInventory.SLOTS, 1)
+check("an output that does not fit is refused and the grid keeps its items",
+      grid_crafting.craft_grid(full_inv, False) is None and grid_crafting.grid == PICK)
+grid_crafting.grid = list(PICK)
+check("a recipe the player has not learned is not offered from the grid", VoxelRecipes.Crafting().grid_recipe(False) is None)
+check("creative mode offers the grid's recipe without learning it", VoxelRecipes.Crafting().grid_recipe(True) is None)
+fresh = VoxelRecipes.Crafting()
+fresh.grid = list(PICK)
+check("creative mode offers the grid's recipe, known or not", fresh.grid_recipe(True) is pickaxe)
+grid_crafting.grid = [STONE, None, None, None, WOOD, None, None, WOOD, None]
+grid_inv.slots = [None] * VoxelInventory.SLOTS
+grid_crafting.return_grid(grid_inv)
+check("returning the grid puts its items back in the inventory", grid_crafting.grid == [None] * 9
+      and grid_inv.count(STONE) == 1 and grid_inv.count(WOOD) == 2)
+full_again = VoxelInventory.Inventory()
+full_again.start([VoxelGen.DIRT] * VoxelInventory.SLOTS, 1)
+grid_crafting.grid[0] = STONE
+grid_crafting.return_grid(full_again)
+check("an item that does not fit when the grid returns stays in its cell", grid_crafting.grid[0] == STONE)
+tool_inv = VoxelInventory.Inventory()
+tool_inv.held = [PICKAXE, 1, VoxelGen.TOOLS[PICKAXE]["durability"]]
+grid_crafting.grid = [None] * 9
+grid_crafting.click_cell(0, tool_inv)
+check("a tool does not go in the grid", grid_crafting.grid[0] is None and tool_inv.held is not None)
+check("a shaped recipe's pattern is shown until toggled off", grid_crafting.toggle_pattern("Pickaxe") is True
+      and grid_crafting.pattern_recipe() is pickaxe and grid_crafting.toggle_pattern("Pickaxe") is False
+      and grid_crafting.pattern is None)
+
 print()
 if failures:
     print("%d check(s) failed" % len(failures))

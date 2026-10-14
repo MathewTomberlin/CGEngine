@@ -45,8 +45,12 @@ rate, build and run the Release configuration.
 - The player starts with nothing. The pickaxe is an item that a click on stone, coal, iron or brick uses (two swings with it
   selected). It does not stack and cannot be placed, and there is no recipe for it yet.
 - Crafting is on the inventory screen (I), above the inventory: a category dropdown and the recipes you know. A recipe is
-  learned when you first hold one of its items. A recipe with an item missing is dimmed; a click makes it. Right now one
-  recipe: a torch from one wood block. Creative mode knows every recipe and counts each item as 99.
+  learned when you first hold one of its items. A recipe with an item missing is dimmed; a click makes it. Creative mode
+  knows every recipe and counts each item as 99.
+- The crafting grid (3 by 3, above the list) makes shaped recipes. Click a shaped recipe to show its pattern as faint
+  swatches, then left click cells to put in the items you hold (right click returns an item). When the grid holds a
+  pattern, the output box names the recipe; click it to make it. A pickaxe is a row of three stone, with two wood
+  going down from its middle stone. The grid's items return to the inventory when you close the screen or save.
 - Creatures wander the terrain. A left click on one takes a hit (three hits kill it, and it leaves a hide). One in three is a
   dark red biter: it chases you inside 7 blocks and bites, 1 health a bite. The bar above the hotbar is your health (ten
   points): it heals after a few seconds without a hit, a fall past 4 blocks hurts, and at zero you are back at the spawn with

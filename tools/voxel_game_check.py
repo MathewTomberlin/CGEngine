@@ -266,6 +266,44 @@ def main():
         game.close_inventory()
         checks["closing the screen leaves the crafting list closed"] = not game.inventory_open and not crafting.dropdown_open
 
+        # The crafting grid: a shaped recipe's row shows its pattern, the held items fill its cells, and the output makes it.
+        game.open_inventory()
+        inv.slots = [None] * VoxelInventory.SLOTS
+        inv.slots[0] = [VoxelGen.STONE, 3]
+        inv.slots[1] = [VoxelGen.WOOD, 2]
+        crafting.known = set()
+        game.learn_recipes()
+        crafting.category = VoxelRecipes.ALL
+        crafting.dropdown_open = False
+        names = [r["name"] for r in crafting.visible(False)]
+        panel, _, _, rows = game.craft_layout(len(names))
+        cells, output = game.craft_grid_boxes(panel)
+        panel_click(game, rows[names.index("Pickaxe")])
+        checks["a shaped recipe's row shows its pattern and makes nothing"] = (
+            crafting.pattern == "Pickaxe" and inv.count(VoxelGen.PICKAXE) == 0 and inv.count(VoxelGen.STONE) == 3)
+        inv.click(0)
+        for index in (0, 1, 2):
+            panel_click(game, cells[index])
+        inv.click(1)
+        panel_click(game, cells[4])
+        panel_click(game, cells[7])
+        checks["the held items fill the pattern's cells, one a click"] = (
+            crafting.grid[:3] == [VoxelGen.STONE] * 3 and crafting.grid[4] == VoxelGen.WOOD and crafting.grid[7] == VoxelGen.WOOD
+            and inv.held is None)
+        checks["the grid names the pickaxe it matches"] = crafting.grid_recipe(False) is not None and crafting.grid_recipe(False)[
+            "name"] == "Pickaxe"
+        panel_click(game, output)
+        checks["a click on the output makes the pickaxe and empties the grid"] = (
+            inv.count(VoxelGen.PICKAXE) == 1 and crafting.grid == [None] * 9)
+        inv.slots = [None] * VoxelInventory.SLOTS
+        inv.slots[0] = [VoxelGen.WOOD, 1]
+        crafting.grid[4] = VoxelGen.WOOD
+        game.close_inventory()
+        checks["closing the screen puts the grid's items back in the inventory"] = (
+            crafting.grid == [None] * 9 and inv.count(VoxelGen.WOOD) == 2 and not game.inventory_open)
+        crafting.known, crafting.category, crafting.pattern = saved_known, saved_category, None
+        inv.slots = [None] * VoxelInventory.SLOTS
+
         # F5 saves the inventory with the edits, and F9 loads it back.
         inv.slots[0] = [DIRT, 7]
         game.slot = 2

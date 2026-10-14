@@ -124,18 +124,31 @@ class InventoryMixin:
 
     def craft_layout(self, count):
         """The crafting panel's boxes in window pixels, for count recipes: the panel, the dropdown button, its options (one a
-        category), and a row per recipe shown. The panel sits above the inventory screen."""
+        category), and a row per recipe shown. Under the header is the crafting grid (craft_grid_boxes), then the rows. The panel
+        sits above the inventory screen."""
         inv_left, inv_top = self.slot_origin(2 * COLUMNS)
         inv_width = COLUMNS * SLOT_SIZE + (COLUMNS - 1) * SLOT_GAP
         shown = min(max(count, 1), CRAFT_ROWS)
-        height = CRAFT_HEADER + shown * CRAFT_ROW + CRAFT_FOOTER
+        height = CRAFT_HEADER + CRAFT_GRID + shown * CRAFT_ROW + CRAFT_FOOTER
         left = inv_left - 14
         top = inv_top - 46 - 12 - height
         panel = (left, top, inv_width + 28, height)
         button = (left + 12, top + 8, CRAFT_BUTTON_WIDTH, 24)
         options = [(left + 12, top + CRAFT_HEADER + k * 24, CRAFT_BUTTON_WIDTH, 22) for k in range(len(VoxelRecipes.CATEGORIES))]
-        rows = [(left + 8, top + CRAFT_HEADER + i * CRAFT_ROW, inv_width + 12, CRAFT_ROW - 4) for i in range(shown)]
+        rows = [(left + 8, top + CRAFT_HEADER + CRAFT_GRID + i * CRAFT_ROW, inv_width + 12, CRAFT_ROW - 4) for i in range(shown)]
         return panel, button, options, rows
+
+    def craft_grid_boxes(self, panel):
+        """The crafting grid's cells (row by row, GRID by GRID) and the output box, in window pixels, for a panel from craft_layout.
+        The output sits to the right of the grid, with an arrow between them."""
+        left, top = panel[0], panel[1]
+        grid_left, grid_top = left + 12, top + CRAFT_HEADER + 6
+        step = CRAFT_GRID_CELL + CRAFT_GRID_GAP
+        span = VoxelRecipes.GRID * CRAFT_GRID_CELL + (VoxelRecipes.GRID - 1) * CRAFT_GRID_GAP
+        cells = [(grid_left + col * step, grid_top + row * step, CRAFT_GRID_CELL, CRAFT_GRID_CELL)
+                 for row in range(VoxelRecipes.GRID) for col in range(VoxelRecipes.GRID)]
+        output = (grid_left + span + 60, grid_top, 220, span)
+        return cells, output
 
     def crafting_at(self, x, y):
         """What a window point is on the crafting panel, while the inventory screen is open: ("button", None), ("option", the
@@ -144,7 +157,7 @@ class InventoryMixin:
         if not self.inventory_open:
             return None
         visible = self.crafting.visible(self.creative)
-        _, button, options, rows = self.craft_layout(len(visible))
+        panel, button, options, rows = self.craft_layout(len(visible))
         if inside(button, x, y):
             return ("button", None)
         if self.crafting.dropdown_open:
@@ -152,25 +165,47 @@ class InventoryMixin:
                 if inside(box, x, y):
                     return ("option", name)
             return None
+        cells, output = self.craft_grid_boxes(panel)
+        for index, box in enumerate(cells):
+            if inside(box, x, y):
+                return ("cell", index)
+        if inside(output, x, y):
+            return ("output", None)
         for index, box in enumerate(rows):
             if inside(box, x, y):
                 return ("row", index)
         return None
 
-    def click_crafting(self, target):
-        """A click on the crafting panel: the button opens or closes the dropdown, an option picks the category, and a recipe row
-        makes that recipe. A recipe that cannot be made says what is missing."""
+    def click_crafting(self, target, secondary=False):
+        """A click on the crafting panel: the button opens or closes the dropdown, an option picks the category, and a grid cell
+        takes or puts an item (secondary: the right button returns it to the inventory). The output makes the recipe the grid
+        matches. A shaped recipe's row shows its pattern in the grid; a shapeless recipe's row makes it. A recipe that cannot be
+        made says what is missing."""
         kind, value = target
         if kind == "button":
             self.crafting.dropdown_open = not self.crafting.dropdown_open
         elif kind == "option":
             self.crafting.category = value
             self.crafting.dropdown_open = False
+        elif kind == "cell":
+            self.crafting.click_cell(value, self.inventory, secondary)
+        elif kind == "output":
+            recipe = self.crafting.grid_recipe(self.creative)
+            if recipe is None:
+                self.notify("The grid matches no recipe")
+            elif self.crafting.craft_grid(self.inventory, self.creative):
+                self.notify("Made %s" % VoxelRecipes.describe(recipe["makes"]))
+            else:
+                self.notify("Inventory full: no room for the %s" % VoxelRecipes.describe(recipe["makes"]))
         elif kind == "row":
             recipes = self.crafting.visible(self.creative)
             if value >= len(recipes):
                 return
             recipe = recipes[value]
+            if recipe.get("pattern"):
+                if self.crafting.toggle_pattern(recipe["name"]):
+                    self.notify("Fill the grid as shown: %s" % recipe["name"])
+                return
             if self.crafting.craft(recipe, self.inventory, self.creative):
                 self.notify("Made %s" % VoxelRecipes.describe(recipe["makes"]))
             else:
@@ -186,7 +221,15 @@ class InventoryMixin:
         inventory screen is closed."""
         visible = self.crafting.visible(self.creative) if self.inventory_open else []
         panel, button, options, rows = self.craft_layout(len(visible))
+        cells, output = self.craft_grid_boxes(panel)
         if not self.inventory_open:
+            for index in range(VoxelRecipes.GRID * VoxelRecipes.GRID):
+                self.hide_rect("grid_cell_%d" % index, (0, 0, 1, 1))
+                self.hide_rect("grid_swatch_%d" % index, (0, 0, 1, 1))
+            self.hide_rect("grid_output", (0, 0, 1, 1))
+            self.draw_text("grid_output_name", "", (0, 0), 15)
+            self.draw_text("grid_output_detail", "", (0, 0), 13)
+            self.draw_text("grid_arrow", "", (0, 0), 16)
             self.hide_rect("craft_panel", (0, 0, 1, 1))
             self.hide_rect("craft_button", (0, 0, 1, 1))
             self.draw_text("craft_button_text", "", (0, 0), 14)
@@ -205,8 +248,9 @@ class InventoryMixin:
         self.draw_rect("craft_button", button, (32, 32, 40, 255), (150, 150, 160, 255), 1, layer=982)
         self.draw_text("craft_button_text", "Category: %s  v" % self.crafting.category, (button[0] + 8, button[1] + 4), 14)
         self.draw_text("craft_title", "Crafting", (button[0] + button[2] + 14, button[1] + 3), 16)
-        self.draw_text("craft_hint", "Click a recipe to make it. I or Esc: close",
+        self.draw_text("craft_hint", "Click a recipe to make it; a shaped one shows its pattern. I or Esc: close",
                        (panel[0] + 12, panel[1] + panel[3] - 20), 12, (200, 200, 200, 255))
+        self.draw_grid(cells, output)
         for k, name in enumerate(VoxelRecipes.CATEGORIES):
             if self.crafting.dropdown_open:
                 box = options[k]
@@ -235,12 +279,51 @@ class InventoryMixin:
             fill = (24, 24, 30, 220) if not lacking else (16, 16, 20, 200)
             self.draw_rect("craft_row_%d" % index, box, fill, edge, 1, layer=991)
             name_colour = (255, 255, 255, 255) if not lacking else (140, 140, 140, 255)
+            if recipe["name"] == self.crafting.pattern:
+                name_colour = (255, 217, 51, 255)   # the pattern shown in the grid
             self.draw_text("craft_name_%d" % index, recipe["name"], (box[0] + 8, box[1] + 5), 15, name_colour)
             if lacking:
                 detail, colour = "needs %s" % VoxelRecipes.describe(lacking), (230, 150, 120, 255)
             else:
                 detail, colour = "%s  ->  %s" % (VoxelRecipes.describe(recipe["takes"]), VoxelRecipes.describe(recipe["makes"])), (200, 200, 200, 255)
             self.draw_text("craft_detail_%d" % index, detail, (box[0] + 150, box[1] + 7), 13, colour)
+
+    def draw_grid(self, cells, output):
+        """The crafting grid: a cell per box, with the item in it. A shaped recipe whose pattern is shown puts its items as faint
+        swatches in the cells it needs, from the top left. The output box names the recipe the grid matches, or waits for one."""
+        ghost = self.crafting.pattern_recipe()
+        guide = {}
+        if ghost is not None:
+            for row, cells_row in enumerate(ghost["pattern"]):
+                for col, item in enumerate(cells_row):
+                    if item is not None:
+                        guide[row * VoxelRecipes.GRID + col] = item
+        for index, box in enumerate(cells):
+            item = self.crafting.grid[index]
+            wanted = guide.get(index) if item is None else None
+            edge = (200, 180, 90, 255) if wanted is not None else (110, 110, 120, 255)
+            self.draw_rect("grid_cell_%d" % index, box, (24, 24, 30, 235), edge, 1, layer=991)
+            inset = 4
+            swatch = (box[0] + inset, box[1] + inset, box[2] - 2 * inset, box[3] - 2 * inset)
+            if item is not None:
+                self.draw_rect("grid_swatch_%d" % index, swatch, self.item_colour(item), (0, 0, 0, 170), 1, layer=992)
+            elif wanted is not None:
+                r, g, b, _ = self.item_colour(wanted)
+                self.draw_rect("grid_swatch_%d" % index, swatch, (r, g, b, 90), (0, 0, 0, 0), 0, layer=992)
+            else:
+                self.hide_rect("grid_swatch_%d" % index, swatch)
+        recipe = self.crafting.grid_recipe(self.creative)
+        if recipe is None:
+            self.draw_rect("grid_output", output, (24, 24, 30, 220), (70, 70, 80, 255), 1, layer=991)
+            self.draw_text("grid_output_name", "Output", (output[0] + 8, output[1] + 8), 15, (140, 140, 140, 255))
+            self.draw_text("grid_output_detail", "Fill the grid to match a pattern",
+                           (output[0] + 8, output[1] + 32), 12, (140, 140, 140, 255))
+        else:
+            self.draw_rect("grid_output", output, (40, 34, 20, 235), (255, 217, 51, 255), 2, layer=991)
+            self.draw_text("grid_output_name", recipe["name"], (output[0] + 8, output[1] + 8), 15)
+            self.draw_text("grid_output_detail", "click to make  %s" % VoxelRecipes.describe(recipe["makes"]),
+                           (output[0] + 8, output[1] + 32), 13, (255, 217, 51, 255))
+        self.draw_text("grid_arrow", "->", (output[0] - 40, output[1] + output[3] / 2 - 9), 16, (200, 200, 200, 255))
 
     def learn_recipes(self):
         """A recipe is learned the first time the player holds one of its items, and the notice says so."""
@@ -267,6 +350,7 @@ class InventoryMixin:
         self.craft_hover = None
         self.inventory_open = False
         self.inventory_hover = None
+        self.crafting.return_grid(self.inventory)
         self.inventory.return_held()
         if self.mouse_before_inventory:
             cge.set_mouse_captured(True)
@@ -285,6 +369,8 @@ class InventoryMixin:
         if target is not None:
             if left:
                 self.click_crafting(target)
+            elif right and target[0] == "cell":
+                self.click_crafting(target, secondary=True)
             return
         if self.inventory_hover is None:
             return
