@@ -37,6 +37,13 @@ HIT_EFFECTS = {
     VoxelGen.PICKAXE: {"block": ("sparks", (1.0, 0.85, 0.45)), "creature": ("sparks", (1.0, 0.5, 0.3))},
     VoxelGen.IRON_PICKAXE: {"block": ("sparks", (0.8, 0.9, 1.0)), "creature": ("sparks", (1.0, 0.5, 0.3))},
 }
+# The materials (resources/scenes/voxels.json) the arms and held items are drawn with: a flat skin, and a colour per item.
+SKIN = "viewmodel_skin"
+ITEM_MATERIALS = {
+    VoxelGen.PICKAXE: "viewmodel_steel",
+    VoxelGen.IRON_PICKAXE: "viewmodel_steel",
+    VoxelGen.TORCH: "viewmodel_brass",
+}
 HELD = "hand_held"
 LEFT = "hand_left"
 RIGHT = "hand_right"
@@ -70,8 +77,8 @@ class HandsMixin:
         if getattr(self, "hands_ready", False):
             return
         cge.load_scene_json(json.dumps({"version": 1, "bodies": [
-            {"name": RIGHT, "model": RIGHT_ARM, "position": [0.0, 0.0, 0.0], "rotation": [0, 0, 0]},
-            {"name": LEFT, "model": LEFT_ARM, "position": [0.0, 0.0, 0.0], "rotation": [0, 0, 0]},
+            {"name": RIGHT, "model": RIGHT_ARM, "material": SKIN, "position": [0.0, 0.0, 0.0], "rotation": [0, 0, 0]},
+            {"name": LEFT, "model": LEFT_ARM, "material": SKIN, "position": [0.0, 0.0, 0.0], "rotation": [0, 0, 0]},
         ]}))
         for name in (RIGHT, LEFT):
             cge.set_viewmodel(name, True)
@@ -89,7 +96,8 @@ class HandsMixin:
         self.held_model = model
         if model is not None:
             cge.load_scene_json(json.dumps({"version": 1, "bodies": [
-                {"name": HELD, "model": model, "position": [0.0, 0.0, 0.0], "rotation": [0, 0, 0]}]}))
+                {"name": HELD, "model": model, "material": ITEM_MATERIALS[self.selected()], "position": [0.0, 0.0, 0.0],
+                 "rotation": [0, 0, 0]}]}))
             cge.set_viewmodel(HELD, True)
 
     def start_swing(self, item):

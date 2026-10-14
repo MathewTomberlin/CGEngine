@@ -50,6 +50,26 @@
       "name": "horse",
       "diffuseTexture": "Horse_Atlas_Color.png",
       "specular": 0
+    },
+    {
+      "name": "viewmodel_skin",
+      "diffuseTexture": "viewmodel_skin.png",
+      "specular": 0
+    },
+    {
+      "name": "viewmodel_steel",
+      "diffuseTexture": "viewmodel_steel.png",
+      "specular": 0
+    },
+    {
+      "name": "viewmodel_wood",
+      "diffuseTexture": "viewmodel_wood.png",
+      "specular": 0
+    },
+    {
+      "name": "viewmodel_brass",
+      "diffuseTexture": "viewmodel_brass.png",
+      "specular": 0
     }
   ],
   "environment": {
