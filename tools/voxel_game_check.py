@@ -385,6 +385,26 @@ def main():
             game.health == VoxelGame.PLAYER_HEALTH and abs(game.pos[0] - game.spawn_pos[0]) < 1e-6)
         checks["a death keeps the inventory"] = sum(stack[1] for stack in inv.slots if stack) == inv_total
         game.health = VoxelGame.PLAYER_HEALTH
+        # Holding a button repeats its action: the press fires, then every REPEAT_RATE while it is held, and a release stops it.
+        game.repeat_wait.pop("CheckHold", None)
+        fired = [game.repeating("CheckHold", True, 0.1) for _ in range(20)]
+        checks["a held button repeats its action after the first press"] = fired[0] is True and 4 <= sum(fired) <= 9
+        checks["a released button stops repeating"] = game.repeating("CheckHold", False, 0.1) is False and all(
+            not game.repeating("CheckHold", False, 0.5) for _ in range(3))
+        checks["a press after a release fires at once"] = game.repeating("CheckHold", True, 0.0) is True
+        game.repeat_wait.pop("CheckHold", None)
+        game.repeating("CheckHold", False, 0.0)
+        # Lava: a player with lava at the feet and chest loses LAVA_DAMAGE a second, and is in lava. The cells are put back below.
+        game.pos = [5.5, 40.0, 5.5]
+        for height in (0, 1):
+            cell = (5, int(game.pos[1] + 0.1) + height, 5) if height == 0 else (5, int(game.pos[1] + 1.0), 5)
+            test_cells.append(cell)
+            world.set_block(cell[0], cell[1], cell[2], VoxelGen.LAVA)
+        checks["a player in lava is in lava"] = game.in_lava()
+        game.update_health(1.0)
+        checks["lava takes LAVA_DAMAGE a second from the player"] = abs(game.health - (VoxelGame.PLAYER_HEALTH - VoxelGame.LAVA_DAMAGE)) < 1e-6
+        game.pos = [5.5, 40.0, 5.5]
+        game.health = VoxelGame.PLAYER_HEALTH
         game.landed_once = False
     except Exception as error:   # the checks above are the record; an error is a failure too
         errors.append("%s: %s\n%s" % (type(error).__name__, error, traceback.format_exc()))

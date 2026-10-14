@@ -1,6 +1,6 @@
 """Items on the ground (roadmap 16.5): a creature that dies leaves its hide where it fell, and the player takes it by walking up to
 it when the inventory has room. A drop is one small cube in the item's colour, one runtime mesh body (cge.create_mesh_body) that
-bobs up and down and is rebuilt each frame; it is removed when it is taken. Drops do not stack, do not despawn, and are saved with
+bobs up and down by moving its body (cge.set_mesh_body_position), so its mesh is built once; it is removed when it is taken. Drops do not stack, do not despawn, and are saved with
 the inventory (F5), so they survive a restart. This module has no game state of its own: the game passes its inventory in."""
 import math
 
@@ -23,19 +23,21 @@ class Drop:
         self.feet = tuple(feet)     # the ground under the drop, in world blocks
         self.phase = phase          # offsets the bob, so a heap of drops does not move in step
         self.age = 0.0
-        cge.create_mesh_body(name, *self.arrays(), materials=["voxel"], position=cge.Vector3f(0.0, 0.0, 0.0))
+        # The cube is built once, centred on its own origin; the body is moved to the drop's place each frame.
+        lo = (-SIZE / 2, 0.0, -SIZE / 2)
+        hi = (SIZE / 2, SIZE, SIZE / 2)
+        self.arrays = boxes_arrays([(lo, hi, self.colour)])
+        cge.create_mesh_body(name, *self.arrays, materials=["voxel"], position=cge.Vector3f(*self.place()))
 
-    def arrays(self):
+    def place(self):
+        """Where the cube's origin is: over its feet, lifted and bobbing."""
         x, y, z = self.feet
         bob = BOB_HEIGHT * (0.5 + 0.5 * math.sin(self.age * BOB_SPEED + self.phase))
-        base = y + LIFT + bob
-        lo = (x - SIZE / 2, base, z - SIZE / 2)
-        hi = (x + SIZE / 2, base + SIZE, z + SIZE / 2)
-        return boxes_arrays([(lo, hi, self.colour)])
+        return (x, y + LIFT + bob, z)
 
     def update(self, dt):
         self.age += dt
-        cge.update_mesh_body(self.name, *self.arrays())
+        cge.set_mesh_body_position(self.name, cge.Vector3f(*self.place()))
 
     def remove(self):
         cge.remove_mesh_body(self.name)

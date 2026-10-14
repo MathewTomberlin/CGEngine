@@ -17,6 +17,7 @@ calls = []
 fake = types.ModuleType("cg_engine_bindings")
 fake.create_mesh_body = lambda name, *a, **k: calls.append(("create", name))
 fake.update_mesh_body = lambda name, *a, **k: calls.append(("update", name))
+fake.set_mesh_body_position = lambda name, *a: calls.append(("move", name))
 fake.remove_mesh_body = lambda name: calls.append(("remove", name))
 fake.Vector3f = lambda *a: a
 sys.modules["cg_engine_bindings"] = fake
@@ -41,13 +42,21 @@ GROUND = (5.0, 10.0, 5.0)
 d = drops.Drops()
 d.add(HIDE, COLOUR, GROUND)
 check("a drop is made as one mesh body", calls == [("create", "drop_1")] and len(d.live) == 1)
-arrays = d.live[0].arrays()
+arrays = d.live[0].arrays
 check("a drop's arrays are a box (it has vertices and indices)", len(arrays) >= 2 and all(len(a) > 0 for a in arrays))
 calls.clear()
 d.update(0.0)
-check("a paused game (dt 0) does not rebuild the drops", calls == [])
+check("a paused game (dt 0) does not move the drops", calls == [])
 d.update(0.5)
-check("a running game rebuilds each drop once a frame", calls == [("update", "drop_1")])
+check("a running game moves each drop once a frame, without rebuilding its mesh", calls == [("move", "drop_1")])
+lift = drops.LIFT
+heights = []
+for step in range(60):
+    d.update(0.05)
+    heights.append(d.live[0].place()[1])
+check("a drop bobs between its feet's lift and the lift plus the bob, never below", all(
+    GROUND[1] + lift - 1e-9 <= h <= GROUND[1] + lift + drops.BOB_HEIGHT + 1e-9 for h in heights) and max(heights) - min(heights) > 0.05)
+check("a drop's place stays over its feet", d.live[0].place()[0] == GROUND[0] and d.live[0].place()[2] == GROUND[2])
 
 # The player takes the drops within reach while the inventory has room for them.
 i = inv.Inventory()

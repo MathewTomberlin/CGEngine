@@ -22,6 +22,7 @@ VOXEL_LAMP = 17   # VoxelGen.LAMP
 VOXEL_BRICK = 18  # VoxelGen.BRICK
 VOXEL_COAL = 20   # VoxelTerrain::Coal
 VOXEL_IRON = 21   # VoxelTerrain::Iron
+VOXEL_LAVA = 22   # VoxelTerrain::Lava
 
 
 def load_chunks(world, chunks, timeout=60.0):
@@ -173,6 +174,86 @@ def check_groups(checks):
     groups = world.chunk_group_quads(0, 0)
     checks["a joined trunk top is drawn with the leaves' mesh"] = groups.get(VOXEL_LEAVES, 0) > 0 and groups.get(VOXEL_WOOD, 0) > 0
     world.clear()
+
+
+def trunk_widths(join_below):
+    """The drawn half-width of a trunk one block wide on stone, at heights just above the ground: the first skin crossing from 3
+    blocks out (skin_surface). join_below is the terrain blocks a trunk base joins, or None for the sample's rule."""
+    world = cge.VoxelWorld(SIZE, HEIGHT, "voxel")
+    if join_below is None:
+        world.define_block(VOXEL_WOOD, cge.Vector3f(0.44, 0.29, 0.15), group="own")
+    else:
+        world.define_block(VOXEL_WOOD, cge.Vector3f(0.44, 0.29, 0.15), group="own", join_below=join_below)
+    world.set_smoothing(1)
+    chunk = [(0, 0)]
+    load_chunks(world, chunk)
+    for x in range(SIZE):
+        for z in range(SIZE):
+            world.fill_column(x, z, 0, HEIGHT, 0)
+            world.fill_column(x, z, 0, 6, VOXEL_STONE)
+    for y in range(6, 11):
+        world.set_block(6, y, 6, VOXEL_WOOD)
+    widths = []
+    for y in (6.25, 6.5, 6.75, 7.0, 7.25, 7.5):
+        # The ray starts in loaded air: a cell of an unloaded chunk counts as solid, so the trunk stays away from the chunk's edge.
+        surface = world.skin_surface((9.5, y, 6.5), (-1.0, 0.0, 0.0), 3.0)
+        widths.append(None if surface is None else surface[0] - 6.5)
+    world.clear()
+    return widths
+
+
+def check_trunk_base(results):
+    """A trunk one block wide on stone, with its own skin and no join below (VoxelGen.JOINS_BELOW is empty in the sample). The
+    drawn trunk must not pinch where it leaves the ground: a base joined to the terrain left a neck of 0.8 blocks against a trunk
+    of 1.4 (roadmap 27.1). The control is the joined trunk, which must show that neck, so the check is known to see it."""
+    widths = trunk_widths(None)
+    joined = trunk_widths([3, 2, 1, 4, 16, 6])
+    results["trunkWidths"] = {"plain": widths, "joined": joined}
+    checks = results["check"]
+    checks["a trunk on stone has no neck above its base (half-width at least 0.55 block)"] = (
+        all(w is not None and w >= 0.55 for w in widths))
+    checks["control: a trunk joined to the stone pinches (the neck the check above guards against)"] = (
+        any(w is None or w < 0.55 for w in joined))
+
+
+def check_lava(results):
+    """Lava is a liquid that does not flow (define_block flows=False): it is not solid, it is drawn in its own mesh, and it stays
+    where it is, while water beside it spreads (the control). The deep caves hold lava at or below the lava level, and nowhere
+    above it."""
+    checks = results["check"]
+    world = cge.VoxelWorld(SIZE, HEIGHT, "voxel")
+    world.define_block(VOXEL_LAVA, cge.Vector3f(1.0, 0.30, 0.05), solid=False, liquid=True, flows=False, emits=120,
+                       group="own", material="voxel_lava")
+    world.define_block(5, cge.Vector3f(0.22, 0.45, 0.92), solid=False, liquid=True, group="own", material="voxel_water",
+                       transparent=True)
+    world.set_smoothing(1)
+    chunk = [(0, 0)]
+    load_chunks(world, chunk)
+    for x in range(SIZE):
+        for z in range(SIZE):
+            world.fill_column(x, z, 0, HEIGHT, 0)
+            world.fill_column(x, z, 0, 6, VOXEL_STONE)
+    world.set_block(8, 6, 8, VOXEL_LAVA)
+    world.set_block(3, 6, 3, 5)
+    for _ in range(40):
+        world.simulate(1.0, 20.0)
+    checks["lava is not solid to collision"] = not world.is_solid(8, 6, 8)
+    checks["lava does not spread (the cell beside it stays air)"] = world.get_block(9, 6, 8) == 0 and world.get_block(8, 6, 8) == VOXEL_LAVA
+    checks["control: water beside a source spreads"] = world.get_block(4, 6, 3) != 0
+    wait_meshed(world, chunk)
+    checks["lava is drawn in its own mesh"] = world.chunk_group_quads(0, 0).get(VOXEL_LAVA, 0) > 0
+    world.clear()
+
+    # The deep caves: lava fills the caves at or below height 6 (VoxelTerrain::LavaLevel), so none is higher.
+    terrain = cge.VoxelWorld(SIZE, HEIGHT, "voxel")
+    terrain.set_terrain(seed=5, sea_level=14, base_height=8, height_range=44, snow_level=40, tree_chance=0.01, cave_width=0.05)
+    cells = [(x, z) for x in range(-1, 2) for z in range(-1, 2)]
+    load_chunks(terrain, cells)
+    lava = [(x, y, z) for x in range(-16, 32) for z in range(-16, 32) for y in range(1, 30)
+            if terrain.get_block(x, y, z) == VOXEL_LAVA]
+    checks["the deep caves hold lava"] = len(lava) > 0
+    checks["lava is at or below height 6 and nowhere higher"] = bool(lava) and max(y for _x, y, _z in lava) <= 6
+    terrain.clear()
 
 
 def check_detail(checks):
@@ -576,6 +657,8 @@ def run(out_path="cg_control/voxel_check.json"):
     check_damage(results["check"])
     measure_remesh(world, chunks, results)
     check_groups(results["check"])
+    check_trunk_base(results)
+    check_lava(results)
     biomes ={world.biome_at(x, z) for x in range(-200, 200, 10) for z in range(-200, 200, 10)}
     results["check"]["biomes vary: plains, forest and desert occur"] = biomes == {"plains", "forest", "desert"}
     results["biomes"] = sorted(biomes)

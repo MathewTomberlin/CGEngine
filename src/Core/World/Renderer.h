@@ -89,6 +89,8 @@ namespace CGEngine {
 	// A vertex of a voxel mesh: 48 bytes, against 80 for VertexData. It leaves out the bone fields, and every attribute
 	// is a float, since the driver reads byte attributes slowly. The shader sees the same attributes (see
 	// Renderer::createCompactMeshBuffers).
+	constexpr float NoTileLayer = 255.0f;
+
 	struct VoxelVertex {
 		glm::vec3 position = { 0,0,0 };
 		glm::vec2 texCoord = { 0,0 };
@@ -97,14 +99,24 @@ namespace CGEngine {
 		glm::vec3 colour = { 1,1,1 };
 		// The light the surface gives off, added after the lighting so a lamp glows in the dark and in the sun. Black for
 		// most blocks.
-		glm::vec3 glow = { 0,0,0 };
+		// The light the surface gives off in xyz, added after the lighting so a lamp glows in the dark and in the sun. Black for
+		// most blocks. The fourth component is the phase of a flame that wavers (a placed torch's flame, 1 to 2, so each torch wavers
+		// on its own); 0 for other surfaces.
+		glm::vec4 glow = { 0,0,0,0 };
 		// How much of the sun and the ambient light reaches the surface (0 to 1). The lighting is multiplied by it, so a sealed
 		// cave gets none whatever the time of day. Meshes that are not voxels ignore it (see the fragment shader).
-		float sky = 1.0f;
+		// The sky light (x) and the damage (y) of the surface, as one attribute: the vertex shader has a limit on attributes.
+		glm::vec2 skyDamage = glm::vec2(1.0f, 0.0f);
 		// How much of the block has been hit (0 for none, up to 1 just before it breaks): the cracks on the surface grow with it.
-		float damage = 0.0f;
-		// The phase of a flame that wavers (a placed torch's flame, 1 to 2, so each torch wavers on its own); 0 for other surfaces.
-		float flicker = 0.0f;
+		// The tile array layers (Renderer::setVoxelTiles) of the block this surface belongs to: its top, its sides and its bottom. The
+		// fragment shader blends them by the surface's normal. NoTileLayer for a surface with no tiles (props, flying blocks), which
+		// keeps its vertex colour and the material's texture.
+		glm::vec3 tiles = glm::vec3(NoTileLayer);
+		// The terrain's splat weights: how much of each of the 8 splat blocks lies at this vertex (channel 0 to 3 in splatA, 4 to 7 in
+		// splatB), summing to 1. They change smoothly across a triangle, and the fragment shader blends the splat blocks' tiles by them.
+		// All zero for a surface that takes its tiles from `tiles`.
+		glm::vec4 splatA = glm::vec4(0.0f);
+		glm::vec4 splatB = glm::vec4(0.0f);
 	};
 
 	struct MeshData : public IResource {
@@ -200,7 +212,15 @@ namespace CGEngine {
 			glDeleteBuffers(1, &lightUBO);
 			glDeleteBuffers(1, &boneUBO);
 			glDeleteBuffers(1, &transformUBO);
+			if (voxelTiles) glDeleteTextures(1, &voxelTiles);
 		}
+		/// Load the voxel tile array from a PNG strip: square tiles one under the other, one per array layer. Voxel meshes use it
+		/// for their surfaces (VoxelVertex::tiles). Throws if the file cannot be read or is not such a strip.
+		void setVoxelTiles(const std::string& path);
+		/// Upload the tile array from a path (setVoxelTiles and the first voxel draw both use it).
+		void uploadVoxelTiles(const std::string& path);
+		/// The top, side and bottom tile layers of each splat block, in channel order (0 to 7). Set from VoxelGen.SPLAT.
+		void setVoxelSplatTiles(const std::vector<std::array<float, 3>>& tiles);
 		/// <summary>
 		/// Add the Body to the renderOrder and and it and its transform to the bodyTransform map for this frame
 		/// </summary>
@@ -346,6 +366,11 @@ namespace CGEngine {
 		float shadowRadiusDrawn = 0.0f;
 		GLuint shadowFbo = 0;
 		GLuint shadowDepthTexture = 0;
+		GLuint voxelTiles = 0;   // the tile array of the voxel meshes (setVoxelTiles), 0 until one is loaded
+		std::array<glm::vec3, 8> splatTiles{};   // the splat blocks' tile layers (setVoxelSplatTiles)
+		bool splatTilesDirty = true;             // the tile layers changed: each program must take them again
+		Program* splatTilesProgram = nullptr;    // the program that last took the tile layers
+		std::string voxelTilesPath;   // where the tile array comes from; a draw uploads it if it is not loaded on this renderer yet
 		int shadowResolution = 2048;
 		glm::mat4 shadowMatrix = glm::mat4(1.0f);
 

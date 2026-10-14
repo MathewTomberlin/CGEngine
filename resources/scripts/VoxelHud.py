@@ -196,10 +196,15 @@ class HudMixin:
 
     def draw_text(self, name, text, position, size, colour=(255, 255, 255, 255)):
         """A label on the HUD at position (window pixels). Its text, and its position, change only when they differ from last time."""
-        key = (text, position)
+        key = (text, position, colour)
         if self.drawn.get(name) == key:
             return
         self.drawn[name] = key
+        if name in self.bodies and self.text_colour.get(name) != colour:
+            # The colour is fixed when a label is made, so a label that changes colour is made again.
+            cge.remove_body(name)
+            self.bodies.discard(name)
+        self.text_colour[name] = colour
         if name in self.bodies:
             cge.set_text_body(name, text, position=cge.Vector2f(position[0], position[1]))
         else:

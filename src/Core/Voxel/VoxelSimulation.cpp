@@ -133,7 +133,7 @@ namespace CGEngine {
 			}
 		}
 
-		if (type.liquid) {
+		if (type.liquid && type.flows) {
 			// Water falls into air below, and otherwise spreads sideways one level at a time, so a flow is finite.
 			const int level = Water::level(block);
 			if (y > 0 && world.getBlock(x, y - 1, z) == 0) {

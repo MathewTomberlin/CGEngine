@@ -24,6 +24,8 @@ namespace CGEngine {
 		const float IronChance = 0.006f;
 		const float CoalChance = 0.02f;
 		const int IronDepth = 20;
+		// Caves at or below this height are full of lava instead of air, so the deep caves hold lakes of it.
+		const int LavaLevel = 6;
 
 		// Smooth noise in [0, 1]: lattice values blended with smoothstep.
 		float valueNoise(float x, float z, uint32_t seed) {
@@ -121,7 +123,7 @@ namespace CGEngine {
 				// Caves are carved below the surface, which stays whole, so they open out only where the noise reaches it.
 				if (caveWidth > 0.0f) {
 					for (int y = 1; y < std::min(height, top - 2); ++y) {
-						if (isCave(cx * size + lx, y, cz * size + lz)) blocks[(static_cast<size_t>(y) * size + lz) * size + lx] = Air;
+						if (isCave(cx * size + lx, y, cz * size + lz)) blocks[(static_cast<size_t>(y) * size + lz) * size + lx] = y <= LavaLevel ? Lava : Air;
 					}
 				}
 			}

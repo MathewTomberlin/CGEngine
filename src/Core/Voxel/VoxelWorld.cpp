@@ -1051,6 +1051,9 @@ namespace CGEngine {
 			padded.rule[id].join = types[id].joinAbove;
 			padded.rule[id].joinBelow = types[id].joinBelow;
 			padded.rule[id].cube = types[id].cube;
+			padded.rule[id].textured = types[id].textured;
+			padded.rule[id].splat = types[id].splat;
+			for (int k = 0; k < 3; ++k) padded.rule[id].tiles[k] = types[id].tiles[k];
 		}
 		return padded;
 	}

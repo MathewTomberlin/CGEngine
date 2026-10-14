@@ -78,6 +78,9 @@ namespace CGEngine {
 			bool cube = false;
 			uint8_t join = 0;   // the mesh this block joins when the block above is in it (BlockType::joinAbove), else 0
 			std::bitset<256> joinBelow;   // the blocks below that make this block join the terrain (BlockType::joinBelow)
+			bool textured = false;        // drawn with the tile array (BlockType::textured)
+			uint8_t tiles[3] = { 0, 0, 0 };   // its tile layers: top, sides, bottom (BlockType::tiles)
+			int8_t splat = -1;                // its terrain splat channel, 0 to 7, or -1 (BlockType::splat)
 		};
 		std::array<MeshRule, 256> rule{};
 		// The props (torches) in the chunk and its border, in chunk coordinates. A prop's cell is air: it gives light there, and

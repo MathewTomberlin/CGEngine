@@ -79,6 +79,9 @@ in vec3 vertexColour;
 in vec3 vertexGlow;
 in float vertexSky;
 in float vertexFlicker;     //The phase of a wavering flame (a placed torch), 0 for every other surface
+flat in vec3 vertexTiles;
+in vec4 vertexSplatA;
+in vec4 vertexSplatB;
 in float vertexDamage;      //How much of the voxel's block has been hit, 0 to 1 (see crackMask)
 
 out vec4 FragColor;
@@ -87,6 +90,40 @@ out vec4 FragColor;
 //surface faces each axis. One texel is then one block on every face, so slopes and walls are not stretched the way a single
 //planar projection stretches them.
 uniform int triplanar;
+
+//The tile array (Renderer::setVoxelTiles): one layer per block face, sampled in world space like the texture above. Tiles are
+//repeated once per block, so a block's tile reads the same on every face it shows.
+uniform int tiled;
+uniform sampler2DArray voxelTiles;
+//The splat blocks' tile layers (top, sides, bottom), by channel: Renderer::setVoxelSplatTiles.
+uniform vec3 splatTiles[8];
+vec4 triplanarTile(vec3 pos, vec3 n, float layer){
+    vec3 weights = pow(abs(n), vec3(4.0));
+    weights /= weights.x + weights.y + weights.z + 1e-6;
+    vec4 alongX = texture(voxelTiles, vec3(pos.zy, layer));
+    vec4 alongY = texture(voxelTiles, vec3(pos.xz, layer));
+    vec4 alongZ = texture(voxelTiles, vec3(pos.xy, layer));
+    return alongX * weights.x + alongY * weights.y + alongZ * weights.z;
+}
+//One block's tile set (its top, sides and bottom layers), blended by the normal: the top tile where the surface looks up, the
+//bottom tile where it looks down, the side tile between. So a slope passes from one tile to another across its surface.
+vec4 tileColour(vec3 tiles, vec3 n, vec3 pos){
+    float up = smoothstep(0.1, 0.9, n.y);
+    float down = smoothstep(0.1, 0.9, -n.y);
+    float side = max(0.0, 1.0 - up - down);
+    //Along a side the top tile fades in by height, over the top and (more weakly) the bottom of each block's row, so a grass top
+    //runs down a cliff in a soft fade instead of ending on a line where the normal turns. The three weights still sum to 1.
+    //The bottom of a side fades toward the top tile too, more weakly: there the side meets the ground below it.
+    float along = fract(pos.y - 0.2);
+    float fadeTop = smoothstep(0.3, 1.0, along);
+    float fadeBottom = 0.7 * (1.0 - smoothstep(0.0, 0.3, along));
+    float fade = max(fadeTop, fadeBottom) * side;
+    vec4 c = vec4(0.0);
+    if(up + fade > 0.0) c += (up + fade) * triplanarTile(pos, n, floor(tiles.x + 0.5));
+    if(side - fade > 0.0) c += (side - fade) * triplanarTile(pos, n, floor(tiles.y + 0.5));
+    if(down > 0.0) c += down * triplanarTile(pos, n, floor(tiles.z + 0.5));
+    return c;
+}
 
 vec4 triplanarSample(sampler2D tex, vec3 pos, vec3 n){
     vec3 weights = pow(abs(n), vec3(4.0));
@@ -221,7 +258,20 @@ void main() {
 
     //Material Diffuse - Calculated without lighting
     vec4 diffuseColor = vec4(materials[mtl].diffuseColor.rgb,1);                               //0-1, as given by the material
-    if(materials[mtl].useDiffuseTexture != 0){                                                       //Surface color is derived from diffuse texture color * material diffuse color, if set
+    //A voxel surface of one block (the water, the wood and the leaves) takes that block's tiles; the terrain's smooth skin blends
+    //the splat blocks' tiles by its splat weights, which change smoothly across each triangle.
+    float splatSum = dot(vertexSplatA, vec4(1.0)) + dot(vertexSplatB, vec4(1.0));
+    if(tiled != 0 && triplanar != 0 && vertexTiles.x < 254.5){
+        surfColor = tileColour(vertexTiles, normalize(normal), surfPos);
+    } else if(tiled != 0 && triplanar != 0 && splatSum > 0.5){
+        vec3 n = normalize(normal);
+        vec4 blended = vec4(0.0);
+        for(int k = 0; k < 8; k++){
+            float w = k < 4 ? vertexSplatA[k] : vertexSplatB[k - 4];
+            if(w > 0.01) blended += w * tileColour(splatTiles[k], n, surfPos);
+        }
+        surfColor = blended / splatSum;
+    } else if(materials[mtl].useDiffuseTexture != 0){                                                 //Surface color is derived from diffuse texture color * material diffuse color, if set
         vec2 diffuseUV = (uv * materials[mtl].diffuseTextureUVScale);
         diffuseUV += (materials[mtl].diffuseTextureScrollSpeed*timeSec);
         diffuseUV += materials[mtl].diffuseTextureOffset;
