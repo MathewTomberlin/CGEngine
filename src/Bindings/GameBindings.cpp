@@ -346,7 +346,8 @@ void bindGame(py::module_& m) {
     m.def("set_environment", [](std::optional<sf::Vector3f> sky, std::optional<sf::Vector3f> fog, std::optional<float> fogStart,
         std::optional<float> fogEnd, std::optional<sf::Vector3f> zenith, std::optional<sf::Vector3f> sunDirection,
         std::optional<sf::Vector3f> sunColour, std::optional<float> sunSize, std::optional<bool> shadows,
-        std::optional<float> shadowRadius) {
+        std::optional<float> shadowRadius, std::optional<sf::Vector3f> moonDirection, std::optional<sf::Vector3f> moonColour,
+        std::optional<float> moonSize, std::optional<float> moonLit, std::optional<sf::Vector3f> moonLitAxis) {
         if (!renderer) throw std::runtime_error("the renderer is not running yet");
         Environment& environment = renderer->environment;
         if (sky) environment.skyColour = *sky;
@@ -359,9 +360,16 @@ void bindGame(py::module_& m) {
         if (sunSize) environment.sunSize = *sunSize;
         if (shadows) environment.shadows = *shadows;
         if (shadowRadius) environment.shadowRadius = *shadowRadius;
+        if (moonDirection) environment.moonDirection = *moonDirection;
+        if (moonColour) environment.moonColour = *moonColour;
+        if (moonSize) environment.moonSize = *moonSize;
+        if (moonLit) environment.moonLit = *moonLit;
+        if (moonLitAxis) environment.moonLitAxis = *moonLitAxis;
     }, py::arg("sky") = py::none(), py::arg("fog") = py::none(), py::arg("fog_start") = py::none(), py::arg("fog_end") = py::none(),
     py::arg("zenith") = py::none(), py::arg("sun_direction") = py::none(), py::arg("sun_colour") = py::none(),
     py::arg("sun_size") = py::none(), py::arg("shadows") = py::none(), py::arg("shadow_radius") = py::none(),
+    py::arg("moon_direction") = py::none(), py::arg("moon_colour") = py::none(), py::arg("moon_size") = py::none(),
+    py::arg("moon_lit") = py::none(), py::arg("moon_lit_axis") = py::none(),
     "The sky and fog. sky is the colour at the horizon, zenith the colour straight up (left out, the sky is one colour). fog fades from fog_start to fog_end blocks away; the fog is off while fog_end is not past fog_start. sun_direction points towards the sun, sun_colour draws its disc (black hides it) and sun_size is its angular radius in degrees. shadows turns on the sun's shadows, from a map that covers shadow_radius blocks around the camera. Arguments left out keep their value.");
 
     m.def("set_light", [](const std::string& name, std::optional<sf::Vector3f> direction, std::optional<sf::Vector3f> colour,

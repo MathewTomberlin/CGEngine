@@ -1144,6 +1144,11 @@ namespace CGEngine {
 		skyProgram->setUniform("sunDirection", glm::normalize(toGlm(environment.sunDirection)));
 		skyProgram->setUniform("sunColour", toGlm(environment.sunColour));
 		skyProgram->setUniform("sunCos", cosf(glm::radians(environment.sunSize)));
+		skyProgram->setUniform("moonDirection", glm::normalize(toGlm(environment.moonDirection)));
+		skyProgram->setUniform("moonColour", toGlm(environment.moonColour));
+		skyProgram->setUniform("moonCos", cosf(glm::radians(environment.moonSize)));
+		skyProgram->setUniform("moonLit", environment.moonLit);
+		skyProgram->setUniform("moonLitAxis", glm::normalize(toGlm(environment.moonLitAxis)));
 		GL_CHECK(glBindVertexArray(skyVao));
 		GL_CHECK(glDrawArrays(GL_TRIANGLES, 0, 3));
 		GL_CHECK(glBindVertexArray(0));

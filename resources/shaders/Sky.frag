@@ -14,6 +14,11 @@ uniform vec3 zenithColour;
 uniform vec3 sunDirection;   // unit vector towards the sun
 uniform vec3 sunColour;      // black: no disc
 uniform float sunCos;        // cosine of the sun's angular radius
+uniform vec3 moonDirection;  // unit vector towards the moon
+uniform vec3 moonColour;     // black: no disc
+uniform float moonCos;       // cosine of the moon's angular radius
+uniform float moonLit;       // the share of the moon's disc that is lit: 0 at a new moon, 1 at full
+uniform vec3 moonLitAxis;    // the world direction the lit side faces
 
 out vec4 FragColor;
 
@@ -26,6 +31,24 @@ void main() {
     float disc = smoothstep(sunCos - 0.0015, sunCos + 0.0015, toSun);
     float glow = pow(max(toSun, 0.0), 128.0) * 0.6;
     sky += sunColour * (disc * 4.0 + glow);
+
+    // The moon: a disc with its lit part on the side moonLitAxis gives. The edge between the lit and dark parts (the terminator)
+    // is placed so that the lit share of the disc is moonLit. A little earthshine shows the dark part. Only above the horizon.
+    float toMoon = dot(ray, moonDirection);
+    float moonDisc = smoothstep(moonCos - 0.0015, moonCos + 0.0015, toMoon);
+    if (moonDisc > 0.0 && moonLit > 0.0) {
+        float radius = sqrt(max(1.0 - moonCos * moonCos, 1e-6));   // the disc's radius on the sky, in radians
+        vec3 axis = moonLitAxis - moonDirection * dot(moonLitAxis, moonDirection);
+        float lit = moonLit;
+        if (length(axis) > 1e-4) {
+            vec3 offset = (ray - moonDirection * toMoon) / radius;   // in disc radii, from the centre
+            float along = dot(offset, normalize(axis));                 // towards the lit side is positive
+            float edge = 1.0 - 2.0 * moonLit;                           // -1 full, 0 half, 1 new
+            lit = smoothstep(edge - 0.04, edge + 0.04, along);
+        }
+        float visible = smoothstep(-0.02, 0.02, ray.y);
+        sky += moonColour * moonDisc * visible * (lit + 0.03) * 1.5;
+    }
 
     FragColor = vec4(sky, 1.0);
 }

@@ -968,7 +968,10 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
         cge.set_environment(sky=cge.Vector3f(*sky), zenith=cge.Vector3f(*zenith), fog=cge.Vector3f(*fog_colour),
                             fog_start=fog_start, fog_end=fog_end,
                             sun_direction=cge.Vector3f(*toward_sun), sun_colour=cge.Vector3f(*sun_disc),
-                            sun_size=1.6, shadows=SHADOWS and not (self.world is not None and self.eye_in_water()))
+                            sun_size=1.6, shadows=SHADOWS and not (self.world is not None and self.eye_in_water()),
+                            moon_direction=cge.Vector3f(*[-v for v in toward_sun]),
+                            moon_colour=cge.Vector3f(*MOON_DISC), moon_size=MOON_SIZE, moon_lit=moon,
+                            moon_lit_axis=cge.Vector3f(1.0 if moon_phase < 0.5 else -1.0, 0.0, 0.0))   # waxing: lit on one side, waning the other
         self.sun = travel
         self.fog = (fog_end * FOG_START_FRACTION, fog_end)
         self.set_clip_planes((self.view_radius + 1) * VoxelGen.CHUNK)
