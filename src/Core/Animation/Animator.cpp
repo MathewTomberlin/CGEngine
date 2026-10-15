@@ -86,6 +86,7 @@ namespace CGEngine {
 			nodeTransform = bone->getLocalTransform();
 		}
 		glm::mat4 globalTransform = parentTransform * nodeTransform;
+		nodeTransforms[nodeName] = globalTransform;
 
 		//Apply bone offset from skeleton to pose bone transform
 		if (skeleton && skeleton->hasBone(nodeName)) {
@@ -102,5 +103,12 @@ namespace CGEngine {
 
 	vector<glm::mat4> Animator::getBoneMatrices() {
 		return pose;
+	}
+
+	bool Animator::getNodeTransform(const string& nodeName, glm::mat4& out) const {
+		auto found = nodeTransforms.find(nodeName);
+		if (found == nodeTransforms.end()) return false;
+		out = found->second;
+		return true;
 	}
 }

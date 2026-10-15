@@ -13,7 +13,7 @@ namespace CGEngine {
 	}
 
 	sec_t GlobalTime::getDeltaSec() const {
-		return deltaSec;
+		return frozen ? 0.0f : deltaSec;
 	}
 
 	void GlobalTime::updateDeltaTime() {

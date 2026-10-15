@@ -311,9 +311,10 @@ def main():
         inv.slots = [None] * VoxelInventory.SLOTS
         inv.slots[0] = [VoxelGen.PICKAXE, 1, VoxelGen.TOOLS[VoxelGen.PICKAXE]["durability"]]
         game.update_hands(0.016)
-        checks["the arms are made, and the right hand holds the pickaxe"] = (
+        checks["the arms are made, and the right hand holds the pickaxe on its own body"] = (
             cge.find_body("hand_right") is not None and cge.find_body("hand_left") is not None
-            and game.right_model == VoxelHands.PICKAXE_ARM and cge.find_body("hand_held") is None)
+            and game.held_model == VoxelHands.ITEM_MODELS[VoxelGen.PICKAXE] and cge.find_body("hand_held") is not None)
+        checks["the pickaxe follows the right hand's bone"] = len(cge.bone_matrix("hand_right", VoxelHands.HAND_BONE)) == 16
         inv.slots[0] = None
         game.update_hands(0.016)
         checks["an empty hand holds no item model"] = game.held_model is None and cge.find_body("hand_held") is None

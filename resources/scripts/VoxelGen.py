@@ -48,10 +48,20 @@ TRANSPARENT = (WATER,) + tuple(range(FLOW_FIRST, FLOW_LAST + 1))   # drawn blend
 TILE_NAMES = ["grass_top", "grass_side", "dirt", "stone", "sand", "water", "snow_top", "snow_side", "bark", "wood_rings",
               "leaves", "gravel", "lamp", "brick", "coal_ore", "iron_ore", "lava"]
 TILE_SIZE = 32
-# The terrain's splat blocks, in channel order. The smooth skin carries eight weights per vertex, one for each of these, and
-# the fragment shader blends their tiles per pixel by them, so a boundary between two blocks has no triangle edges. Every
-# block of the smooth terrain must be one of these (or in OWN, with its own mesh).
-SPLAT = (GRASS, DIRT, STONE, SAND, SNOW, GRAVEL, COAL, IRON)
+# The splat blocks, in channel order (at most 16: Renderer::kSplatChannels). The smooth skin carries one weight per channel at each
+# vertex, and the fragment shader blends their tiles per pixel by them, so a boundary between two blocks that both have a channel
+# has no triangle edge: the ground blends with all of these. The water is a splat block too (its flowing levels take its channel),
+# so the water surface joins the ground beside it. A block with no channel (brick, wood) keeps an edge against them. Every block
+# of the smooth terrain must be one of these (or in OWN, with its own mesh).
+SPLAT = (GRASS, DIRT, STONE, SAND, SNOW, GRAVEL, COAL, IRON, WATER)
+
+def splat_channel(block, textured):
+    """The splat channel of a block (BlockType::splat): its own, the water's for every flowing level of the water, -1 for none
+    (a block that is not textured, or not a splat block)."""
+    if not textured:
+        return -1
+    key = WATER if block in WATER_BLOCKS else block
+    return SPLAT.index(key) if key in SPLAT else -1
 GRASS_TILES = (0, 1, 2)                 # grass top, grass side, dirt
 TILES = {
     GRASS: GRASS_TILES,
@@ -117,14 +127,73 @@ REACTIONS = [{"block": "lava", "touches": "water", "becomes": "obsidian", "secon
 HIDE = 40
 PICKAXE = 41                        # a tool: it does not stack, and when it is the selected slot its swings on PICKAXE_BLOCKS count double
 IRON_PICKAXE = 42                   # a tool that mines obsidian, and lasts four times as long as a pickaxe
-ITEM_COLOURS = {HIDE: (0.72, 0.56, 0.40), PICKAXE: (0.62, 0.62, 0.68), IRON_PICKAXE: (0.74, 0.72, 0.70)}
-ITEM_NAMES = {HIDE: "hide", PICKAXE: "pickaxe", IRON_PICKAXE: "iron pickaxe"}
+SWORD = 43                          # a weapon: it strikes creatures for its damage (WEAPONS); it mines like a hand, and does not wear
+SHIELD = 44                         # held in the left hand (VoxelGame.offhand): raised with Q, it takes the bites of creatures in front
+TOOTH = 45                          # a biter's tooth: a crafting item (the bone blade), left where a biter falls
+BONE_BLADE = 46                     # a weapon made from teeth and wood: it strikes like a sword, and wears out sooner
+SHOVEL = 47                         # a tool for the soft ground: it breaks dirt, sand and gravel faster (TOOLS)
+BUCKET = 48                         # empty: a strike on water or lava fills it; it is made from iron
+WATER_BUCKET = 49                   # filled with water: a right click places a water block and leaves the bucket empty
+LAVA_BUCKET = 50                    # filled with lava: a right click places a lava block and leaves the bucket empty
+ITEM_COLOURS = {HIDE: (0.72, 0.56, 0.40), PICKAXE: (0.62, 0.62, 0.68), IRON_PICKAXE: (0.74, 0.72, 0.70), SWORD: (0.80, 0.82, 0.86),
+                SHIELD: (0.55, 0.40, 0.25), TOOTH: (0.92, 0.88, 0.76), BONE_BLADE: (0.80, 0.76, 0.62), SHOVEL: (0.70, 0.66, 0.58),
+                BUCKET: (0.75, 0.77, 0.80), WATER_BUCKET: (0.30, 0.50, 0.90), LAVA_BUCKET: (0.95, 0.45, 0.10)}
+ITEM_NAMES = {HIDE: "hide", PICKAXE: "pickaxe", IRON_PICKAXE: "iron pickaxe", SWORD: "sword", SHIELD: "shield", TOOTH: "tooth",
+              BONE_BLADE: "bone blade", SHOVEL: "shovel", BUCKET: "bucket", WATER_BUCKET: "water bucket", LAVA_BUCKET: "lava bucket"}
 NAMES.update(ITEM_NAMES)
-PICKAXE_BLOCKS = (STONE, COAL, IRON, BRICK, OBSIDIAN)   # the blocks a pickaxe mines faster (VoxelWorld.hit_block takes two hits from it)
+PICKAXE_BLOCKS = (STONE, COAL, IRON, BRICK, OBSIDIAN)   # the blocks a pickaxe mines faster (its block_damage, below)
 # A tool's durability is the swings that hit a block it can use before it breaks (one use a swing), and its tier is the hardest
 # block it mines (BLOCK_TIER). A block that is not listed in BLOCK_TIER needs no tool: stone, coal and iron are mined by hand.
-TOOLS = {PICKAXE: {"durability": 40, "tier": 1}, IRON_PICKAXE: {"durability": 160, "tier": 2}}
+# block_damage: how much one strike breaks each block (a whole number of hits is made, and a part carries to the next strike);
+# a block it does not list takes harvest strikes' worth (1 for the hand, and the tool's harvest where it has one).
+# creature_damage: the health one strike takes from a creature (its health is VoxelCreatures' "health"); the hand does 1.
+TOOLS = {
+    PICKAXE: {"durability": 640, "tier": 1, "creature_damage": 1.5,
+              "block_damage": {STONE: 2, COAL: 2, IRON: 2, BRICK: 2, OBSIDIAN: 2}},
+    IRON_PICKAXE: {"durability": 2560, "tier": 2, "creature_damage": 1.75,
+                   "block_damage": {STONE: 3, COAL: 3, IRON: 3, BRICK: 3, OBSIDIAN: 3}},
+    SHOVEL: {"durability": 640, "tier": 0, "creature_damage": 1, "harvest": 1, "attack_speed": 3,
+             "block_damage": {DIRT: 8, SAND: 8, GRAVEL: 8}},
+}
 BLOCK_TIER = {OBSIDIAN: 2}
+# A weapon's durability is the strikes that hit a creature before it breaks (each strike takes one use, as a tool's swing does).
+WEAPONS = {SWORD: {"damage": 2.5, "durability": 1280}, BONE_BLADE: {"damage": 2, "durability": 30}}
+# The buckets: an empty one is filled by a strike on a liquid, and a filled one places its liquid (VoxelGame, placement_check).
+BUCKETS = (BUCKET, WATER_BUCKET, LAVA_BUCKET)
+FILLED_BUCKET = {WATER: WATER_BUCKET, LAVA: LAVA_BUCKET}   # the bucket a liquid fills, by the liquid's source block
+BUCKET_LIQUID = {WATER_BUCKET: WATER, LAVA_BUCKET: LAVA}   # the liquid a filled bucket places, by the bucket
+MAX_SWINGS = 8                      # the most hits one strike can make (a shovel's harvest on the blocks it lists as harvest)
+
+
+def damage_of(item):
+    """The health a strike with this item takes from a creature."""
+    if item in WEAPONS:
+        return WEAPONS[item]["damage"]
+    return TOOLS[item].get("creature_damage", 1) if item in TOOLS else 1
+
+
+def attack_speed_of(item):
+    """How many strikes an item makes in the time the empty hand makes one (a held break repeats this much faster). 1 for the hand."""
+    return TOOLS[item].get("attack_speed", 1) if item in TOOLS else 1
+
+
+def block_damage(item, block):
+    """How much one strike with this item breaks a block: the tool's block_damage for that block, else its harvest, else 1 (the
+    hand, and every item that is not a tool)."""
+    tool = TOOLS.get(item)
+    if tool is None:
+        return 1
+    return tool.get("block_damage", {}).get(block, tool.get("harvest", 1))
+
+
+def durability_of(item):
+    """The uses an item has when new, for a tool (it wears when it swings at a block) or a weapon (it wears when it strikes a
+    creature), or None for an item that does not wear."""
+    if item in TOOLS:
+        return TOOLS[item]["durability"]
+    if item in WEAPONS:
+        return WEAPONS[item]["durability"]
+    return None
 
 
 def mining_tier(item):

@@ -46,7 +46,7 @@ namespace {
             {"0", sf::Keyboard::Scan::Num0}, {"-", sf::Keyboard::Scan::Hyphen}, {"=", sf::Keyboard::Scan::Equal},
             {"F5", sf::Keyboard::Scan::F5}, {"F9", sf::Keyboard::Scan::F9}, {"F12", sf::Keyboard::Scan::F12},
             {"`", sf::Keyboard::Scan::Grave}, {"Backspace", sf::Keyboard::Scan::Backspace}, {"Tab", sf::Keyboard::Scan::Tab},
-            {"L", sf::Keyboard::Scan::L}, {"I", sf::Keyboard::Scan::I}, {"C", sf::Keyboard::Scan::C},
+            {"L", sf::Keyboard::Scan::L}, {"Q", sf::Keyboard::Scan::Q}, {"F", sf::Keyboard::Scan::F}, {"I", sf::Keyboard::Scan::I}, {"C", sf::Keyboard::Scan::C},
         };
         return keys;
     }
@@ -147,7 +147,7 @@ void bindGame(py::module_& m) {
     m.def("key_down", [](const std::string& name) {
         auto it = gameKeys().find(name);
         if (it == gameKeys().end()) throw std::invalid_argument("unknown key '" + name + "'");
-        if (unattended()) return false;
+        if (unattended() || !screen->hasFocus()) return false;   // a key pressed in another window is not the game's
         return sf::Keyboard::isKeyPressed(it->second);
     }, py::arg("name"), "True while the named key is held. Names: W A S D Up Down Left Right J K Space Enter Tab R Escape, 0 to 9, F5, F9, F12.");
 
@@ -262,6 +262,48 @@ void bindGame(py::module_& m) {
         body->viewmodel = on;
     }, py::arg("name"), py::arg("on"), "Draw a body last, after the depth buffer is cleared, so the world never clips it (a first-person hand).");
 
+    m.def("attach_to_bone", [](const std::string& name, const std::string& target, const std::string& bone, std::vector<float> offset) {
+        Body* body = findBodyByName(name);
+        if (!body) throw std::invalid_argument("no body named '" + name + "'");
+        Body* targetBody = findBodyByName(target);
+        if (!targetBody) throw std::invalid_argument("no body named '" + target + "'");
+        if (offset.size() != 16) throw std::invalid_argument("offset must be 16 numbers: a 4 by 4 matrix, row by row");
+        if (!bone.empty()) {
+            Animator* animator = targetBody->findInstanceAnimator();
+            if (!animator) throw std::invalid_argument("body '" + target + "' is not part of a model with a skeleton");
+            // The bone must be in the target's clip: the pose is computed once here, so the lookup can tell a missing bone.
+            animator->updateAnimation(0.0f);
+            glm::mat4 probe(1.0f);
+            if (!animator->getNodeTransform(bone, probe)) throw std::invalid_argument("no bone named '" + bone + "' in '" + target + "'");
+        }
+        glm::mat4 matrix(1.0f);
+        for (int row = 0; row < 4; ++row) {
+            for (int col = 0; col < 4; ++col) matrix[col][row] = offset[row * 4 + col];
+        }
+        body->boneAttachment = Body::BoneAttachment{ targetBody->getId().value(), bone, matrix };
+    }, py::arg("name"), py::arg("target"), py::arg("bone"), py::arg("offset"),
+        "Parent a body to another body, with an offset: it moves with the target (or with a bone of the target's model, when bone is not "
+        "empty) and is placed at the offset (a 4 by 4 matrix given row by row, in that frame). The body's own position is not used. Pass "
+        "bone=\"\" to follow the target body itself.");
+    m.def("detach_from_bone", [](const std::string& name) {
+        Body* body = findBodyByName(name);
+        if (!body) throw std::invalid_argument("no body named '" + name + "'");
+        body->boneAttachment.reset();
+    }, py::arg("name"), "Stop a body following a bone (see attach_to_bone); it goes back to its parents' transform.");
+    m.def("bone_matrix", [](const std::string& name, const std::string& bone) {
+        Body* body = findBodyByName(name);
+        if (!body) throw std::invalid_argument("no body named '" + name + "'");
+        Animator* animator = body->findInstanceAnimator();
+        if (!animator) throw std::invalid_argument("body '" + name + "' is not part of a model with a skeleton");
+        glm::mat4 matrix(1.0f);
+        if (!animator->getNodeTransform(bone, matrix)) throw std::invalid_argument("no bone named '" + bone + "' in '" + name + "'");
+        py::list rows;
+        for (int row = 0; row < 4; ++row) {
+            for (int col = 0; col < 4; ++col) rows.append(matrix[col][row]);
+        }
+        return rows;
+    }, py::arg("name"), py::arg("bone"),
+        "The bone's model-space matrix at the current pose, as 16 numbers row by row (for placing an object on a bone).");
     m.def("remove_mesh_body", [](const std::string& name) {
         return removeRuntimeMeshBody(name);
     }, py::arg("name"), "Remove a body made by create_mesh_body, and free its mesh. Returns False if there is no such body.");
@@ -279,11 +321,15 @@ void bindGame(py::module_& m) {
         if (name != "Left" && name != "Right" && name != "Middle") {
             throw std::invalid_argument("unknown mouse button '" + name + "' (use Left, Right or Middle)");
         }
-        if (unattended()) return false;
+        if (unattended() || !screen->hasFocus()) return false;
         if (name == "Left") return sf::Mouse::isButtonPressed(sf::Mouse::Button::Left);
         if (name == "Right") return sf::Mouse::isButtonPressed(sf::Mouse::Button::Right);
         return sf::Mouse::isButtonPressed(sf::Mouse::Button::Middle);
     }, py::arg("name"), "True while the named mouse button is held. Names: Left Right Middle.");
+
+    m.def("set_time_frozen", [](bool frozen) {
+        CGEngine::time.setFrozen(frozen);
+    }, py::arg("frozen"), "Freeze the frame time: animations (the clips of models, the held items), the walkers and the other things that move by it stand still until it is unfrozen. The water and the sky shader keep their own clock.");
 
     m.def("set_mouse_captured", [](bool captured) {
         if (unattended()) {
@@ -331,7 +377,7 @@ void bindGame(py::module_& m) {
     m.def("set_voxel_splat_tiles", [](const std::vector<std::array<float, 3>>& tiles) {
         if (!renderer) throw std::runtime_error("the renderer is not running yet");
         renderer->setVoxelSplatTiles(tiles);
-    }, py::arg("tiles"), "The top, side and bottom tile layers of the eight splat blocks, in channel order. The terrain blends them per pixel.");
+    }, py::arg("tiles"), "The top, side and bottom tile layers of the splat blocks (up to 16), in channel order. The terrain blends them per pixel.");
 
     m.def("set_camera", [](sf::Vector3f position, sf::Vector3f target) {
         if (!renderer) throw std::runtime_error("the renderer is not running yet");

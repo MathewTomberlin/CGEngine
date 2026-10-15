@@ -25,6 +25,7 @@ TERRAIN_SKIN = 1
 OWN_SKIN = 256
 CUBE_SKIN = 512
 STEP_UP = 1.0           # a blocked walk on the ground climbs this high (a block), then snaps back to the surface
+AUTO_JUMP_WALL = 4      # blocks: with Auto jump on, a wall this high or lower that stops a walk makes the player jump
 _SUBSTEP = 0.1          # largest move along one axis in one go
 _BISECT_STEPS = 12      # how exactly a blocked move is set flush against the skin
 
@@ -181,6 +182,24 @@ def blocks_move(before, after, other):
     d_before = math.hypot(before[0] - other[0], before[1] - other[1])
     d_after = math.hypot(after[0] - other[0], after[1] - other[1])
     return d_after < CONTACT and d_after < d_before
+
+
+def wall_ahead(solid, pos, direction):
+    """How many blocks of wall stand in front of a walker at the feet, in the direction it walks (a unit (x, z)): the solid blocks
+    from the feet row up, in the column just ahead of the body. 0 when the feet row is clear, so there is no wall to stop it."""
+    ahead = PLAYER_HALF_WIDTH + 0.05
+    x = math.floor(pos[0] + direction[0] * ahead)
+    z = math.floor(pos[2] + direction[1] * ahead)
+    feet = math.floor(pos[1] + 0.05)
+    height = 0
+    while height < AUTO_JUMP_WALL + 1 and solid(x, feet + height, z):
+        height += 1
+    return height
+
+
+def auto_jump_wanted(solid, pos, direction):
+    """Whether Auto jump should jump: the walk ahead is stopped by a wall of 1 to AUTO_JUMP_WALL blocks at the feet."""
+    return 0 < wall_ahead(solid, pos, direction) <= AUTO_JUMP_WALL
 
 
 def overlaps_vertically(feet_a, height_a, feet_b, height_b):

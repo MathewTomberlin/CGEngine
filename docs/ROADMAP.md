@@ -19,7 +19,7 @@ The engine's job is to let an AI and a person build a playable world together, f
 
 Status: `[ ]` not started, `[~]` in progress, `[x]` done.
 
-## Current priorities (lead developer, 2026-10-14)
+## Current priorities (lead developer, 2026-10-15)
 The order I am working in, and why:
 1. **Goal 1, a game with a reason to go on.** Tools that wear out, mining tiers and recipes are in (Phases 28 and 29), so iron
    matters and the first hour has a shape: stone, a pickaxe, iron, an iron pickaxe, obsidian. Next the crafting grid (30) and the
@@ -488,6 +488,8 @@ Goal: the game can be driven from inside, and its window and sun are under the p
   page's rows are re-laid out, and `test_pause_menu.ps1` clicks the new rows.
 - [x] **19.3** Engine support for the console: `typed_text` gives the characters typed since the last call, and the Grave and
   Backspace keys are polled by games. The engine's own console is hidden in the voxel game, so backtick opens the game's console.
+- [x] **19.4** `sheet` in the console: the player's health and mode, the held item with its damage and uses left, the shield (raised or
+  carried), and the recipes known. Checked by `tools/test_voxel_sheet.py`.
 
 ## Phase 20: construction (from playtesting round 2)
 Goal: the player makes items from items. A list of recipes, grouped by category from a dropdown. A known recipe is shown; a
@@ -658,6 +660,29 @@ Goal: holding a button does what a player expects, and the terrain reads by its 
   Cost: the blend is measured at 230 fps on a quiet machine before the splat change; re-measure with Unity idle, since a running
   Unity editor made the frame times vary from 9 to 40 fps during this work.
 
+## Lead developer's review (2026-10-15)
+How the game feels now, and what I want next:
+- The world reads well: the terrain blends across its ground types, the water joins the shore, and the water no longer shows its
+  back faces. The seams that were the worst of the last round (the LOD edge, the shore) are the places I trust least until someone
+  looks at them in play, so they stay open items rather than done.
+- The player finally has something to fight with: a sword, and a shield that takes a biter's bite from the front. Both are
+  placed by eye and not yet tried in a fight. The first real test is whether the biters are stopped by the shield at all, since the
+  bite lands at a windup and the shield is checked then.
+- The creatures are still the weakest part. The drake's look is unchecked, the walkers have no knock-back loop beyond a hit, and
+  the hurt and die clips for the drake are missing (only the horse has them).
+- The architecture is getting clumsy in one place: the player's state is spread across VoxelGame, VoxelHands and the inventory
+  (the offhand slot is a loose attribute). A small item-slot object (the hand, the offhand, the hotbar) would make the next items
+  (a bow, a spear, a second weapon) cheap.
+
+New ideas, ranked by what they change for a player:
+- **Blocks and a fight**: a block of the player's, a sword that hits for a few seconds' cooldown, and a shield that breaks after N
+  blocks (the same durability bar as a tool).
+- **Loot from fights**: a creature drops its hide (done), and a biter drops a tooth that is a crafting item (a bone blade recipe).
+- **Ranged**: the bow in the asset library (Bow.blend, `item_bow` already exists): arrows as items, a draw clip, a flying arrow that
+  hits the first creature in line.
+- **A character sheet in the console**: health, the held item and its damage, the shield's state, for a tester.
+- **Creatures that learn the shield**: a biter that circles a raised shield to bite from the side instead of walking into it.
+
 ## Ideas (not yet scheduled)
 (Items 28.2's slope blend and lava tuning are done; the list below is what is left.)
 Things worth doing, roughly by what they would change for a player. Each one needs a measurement or a check when it lands.
@@ -775,6 +800,85 @@ Goal: the player sees a right arm that holds the selected item and swings it on 
 - [x] **36.2** Arm and item models, made in Blender through BlenderMCP: the two arms from the HumanFootman mesh (its DEF arm groups, cut and turned), then the held items in `resources/models/viewmodel/`: `item_pickaxe`, `item_lantern` (both made here), `item_sword` and `item_bow` (scaled from Sword.blend and Bow.blend), and `item_spear` (no spear is in the asset library, so it is a simple shaft and head made here). The sword and bow are not in the game yet: no item uses them.
 - [~] **36.3** The right arm holds the selected item (`VoxelHands.py`: a pickaxe, the lantern for a torch). A left click starts a swing (a half-sine turn of the arm), and a pickaxe's hit throws sparks off a block or a creature. The arm angles, the swing's direction and the hold position are not yet checked by eye.
 - [~] **36.4** The left arm reaches toward the block on each placement and draws back. Not yet checked by eye.
+
+## Phase 37: combat, a sword and a shield (from the player: a sword to hit with, a shield to hold up)
+- [x] **37.1** The sword: an item (`VoxelGen.SWORD`, unstacked like a tool, no durability yet), made from two iron and a wood (a shaped
+  recipe in `resources/voxel_recipes.json`). Held in the right hand on `hand.R` (`BONE_OFFSETS`, the sword's model `item_sword.fbx`
+  with its own Metal, Wood and Cloth materials, named in the scene file), swings on a strike, and strikes a creature for 2 of its
+  health (`VoxelGen.WEAPONS`, `VoxelGame.edit_blocks`). Checked by eye in the first-person view; not yet tested in a fight.
+- [~] **37.2** The shield: `item_shield.fbx`, from `Documents/Assets/Blends/Shield.blend` (exported at unit scale, so the shield is
+  made 0.01 smaller in the pose, which is the FBX's own unit). F moves a shield between the selected slot and the left hand (saved
+  with the inventory as `offhand`). Q holds it up: it is then drawn in front of the view and a bite from a creature within 60
+  degrees of the way the player faces is taken by it (no damage, the creature turns away, a sound). The carried and raised poses
+  are placed by eye (`SHIELD_POSES`, from the left hand bone at run time, `VoxelHands.relative_to_bone`). Not yet checked in a fight.
+- [x] **37.3** A creature a shield stops is knocked back, as a hit knocks it (`VoxelWalkers.update`).
+- [x] **37.5** Held items are data (`resources/held_items.json`): `Held_Offset_R_Transform` and `Held_Offset_L_Transform` are the offsets
+  of an item held in each hand, from that hand's bone (the pickaxe's offset is the right hand's); each item names its hand, and may
+  have a `Held_Item_Offset_Transform` (further from the hand) and a `Raised_Held_Item_Offset_Transform`. An item with a `bone` is
+  attached to that bone instead (a shield on the forearm). `cge.attach_to_bone` takes an empty bone to follow the target body itself,
+  so any body can be parented with an offset. Checked by `tools/test_held_items.py`; the engine change needs a rebuild.
+- [x] **37.4** Blocking animation, wear, and loot. The shield moves from its carried pose to its raised one over 0.15 s, and back
+  (`VoxelHands.update_shield`, `blend_spec`: the angles turn the short way round, so the pose does not swing the long way). A sword
+  wears: each strike on a creature takes one of its uses and it breaks at zero (`VoxelGen.WEAPONS` durability, `VoxelGame.wear_weapon`).
+  Loot: a biter leaves a tooth beside its hide (`VoxelGen.TOOTH`), which is the crafting item for the bone blade. A creature leaving
+  a sword or a shield is not planned. Checked by `tools/test_voxel_hands.py`, `tools/test_voxel_inventory.py`, and by eye in
+  `voxel_view_shot.ps1 -Item sword -Shield raised`; not yet tested in a fight.
+- [x] **37.6** The bone blade: a weapon (`VoxelGen.BONE_BLADE`, damage 2, durability 30) made from two teeth and a wood (a shaped
+  recipe in `voxel_recipes.json`). It uses the sword's model and held offset (`held_items.json`). Checked by `tools/test_voxel_recipes.py`.
+- [x] **37.7** Creatures that learn the shield: a biter a raised shield turns is knocked back, then circles the player for
+  `FLANK_SECONDS` (4 s), heading 60 degrees off the way to the player to one side (`VoxelWalkers.update`). Once it is beside the
+  shield (out of its arc) its next bite lands. Lowering the shield ends the circling. Checked by `tools/test_voxel_walkers.py`; not
+  yet watched in play.
+
+## Phase 38: the surface between ground and other blocks (from playing: water and the ground, and more ground types)
+- [x] **38.1** Splat channels: the terrain blends its ground tiles per pixel across up to 16 channels (`Renderer::kSplatChannels`,
+  up from 8). The weights are packed one byte per channel in one integer attribute (the shader has 16 attribute slots).
+- [x] **38.2** Water joins the ground: the water is a splat channel too, so a water vertex blends with the ground beside it. A corner
+  of another block (brick, wood, leaves) is a barrier, so the water keeps an edge there (`VoxelMesher.cpp`, `smoothVertex`).
+- [x] **38.3** Water shows only its nearest surface: a transparent body is drawn as a depth pass and then a colour pass, so the backs
+  of its faces never show through it (`Renderer.cpp`, the transparent draw).
+- [ ] **38.4** Open: the shallow water reads paler where the ground shows through (the 0.55 opacity); whether that is the look wanted.
+  The brick and wood edge is not yet checked in play.
+
+## Phase 40: tools that do different jobs (from playtesting: the pickaxe, the sword, the shovel, the bucket)
+- [x] **40.1** Tool numbers are data (`VoxelGen.TOOLS`, `WEAPONS`): `block_damage` per block (a strike's whole hits, with a part
+  carried to the next strike), `harvest` for the blocks not listed, `creature_damage`, and `durability`. The pickaxe does 2 to
+  stone, iron and coal (and brick and obsidian) and 1.5 to creatures; the iron pickaxe does 3 and 1.75; the sword does 2.5 to
+  creatures. The pickaxe lasts 640 uses, the iron pickaxe 2560, the sword 1280. Checked by `tools/test_voxel_tools.py`.
+- [x] **40.2** Holding the break button repeats every 1.0 s for an attack or a block break (`BREAK_REPEAT_RATE`); placing is 0.25 s.
+- [~] **40.3** Shovel: one hit to stone, iron and coal, four to dirt, sand and gravel, eight on the other blocks (twice its first
+  numbers), and a shovel recipe (stone and wood). The model is `item_shovel.fbx`, exported from the Shovel in the open Blender scene.
+  Its hand offset (scale 0.003, the sword's rotation) is not yet right in hand.
+- [~] **40.4** Bucket: an iron recipe; a strike on water or lava takes the liquid (the block goes to air, `scoop` op) and makes a
+  water or lava bucket; a right click places the liquid and empties the bucket. The model is a cylinder
+  (`item_bucket.fbx`, made in Blender at 0.0025 scale); its hand offset is not yet right (it floats to the right of the hand).
+
+## Phase 41: phone play (from testing on a phone: one button at a time)
+- [x] **41.1** Auto jump: a Settings toggle (`auto_jump`, saved with the other settings). With it on, a walk stopped by a wall of 1 to 4
+  blocks at the feet makes the player jump (`VoxelPhysics.wall_ahead`, `auto_jump_wanted`). Checked by `tools/test_voxel_auto_jump.py`.
+  The jump is about 1.45 blocks high, so a 4-block wall is not cleared by the hop itself.
+- [x] **41.2** The shovel strikes three times as fast as the hand (`attack_speed` in `VoxelGen.TOOLS`, applied to the held-break
+  repeat). Checked by `tools/test_voxel_tools.py`.
+
+## Phase 39: investigations (from the lead developer's request: feasibility and cost not yet known)
+Goal: find out whether each idea can be done in this engine, and what it costs, before any of it is built. Each item ends with a
+written answer (what it would take, and a measured number) and a decision: build, shelve, or split into smaller items.
+- [ ] **39.1** Chunk physics: a piece of the world that is no longer connected to the ground falls, and every part still connected to
+  it falls with it. Questions: how a break is checked for connection (a flood fill from the break's neighbours, to the ground or to
+  the chunk's edge), its cost in Release on a worst-case chunk (16 by 64 by 16 blocks) and on a break at a chunk edge, and how a
+  falling piece moves (one mesh body, or the falling-block rule that sand and gravel already use). Open: a piece that spans two chunks.
+- [ ] **39.2** Terrain-aligned decorations: grass that sways, pebbles, foliage and vines that sit on a block's face and follow its
+  slope. Questions: whether they are one mesh per chunk (cheap to draw, rebuilt on each edit) or instanced bodies, how many fit a
+  chunk without a frame-time cost (measure with `tools/voxel_perf.ps1`), and whether the sway can be a vertex-shader wind so it costs
+  no CPU. Open: how they are placed (the same rule as torches, `setProp`, or a density-driven scatter).
+- [ ] **39.3** Player equipment: a screen with slots for the left and right hands, head, chest, legs, feet and gloves, and a side bar
+  naming each equipped item with its stats, bonuses and penalties. Questions: whether the existing inventory screen can host it
+  (`VoxelInventoryScreen.py`), how equipment is stored (a slot list in the save, or a separate file), and how much of it shows on the
+  player (the first-person arms show the hands only; a chest or helmet would need a view of the body, which the game does not draw).
+- [ ] **39.4** Equipment effects: an item changes movement speed and jump height (by its weight, or by a bonus), and gives bonuses to
+  attack speed, damage, and break speed against certain blocks. Questions: where the player's speed and jump are set (in one place
+  or many; `VoxelPhysics.py`, `VoxelGame.py`), whether the stats can be one base value plus a sum of modifiers, and the balance risk:
+  a heavy suit that makes the jump too low to climb a one-block step (`stepUp` 1.0) would stop the player from walking up the terrain.
 
 ## Tooling and quality
 - [x] CI build on Windows (`.github/workflows/build.yml`) with Mesa software OpenGL smoke run

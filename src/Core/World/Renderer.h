@@ -90,6 +90,8 @@ namespace CGEngine {
 	// is a float, since the driver reads byte attributes slowly. The shader sees the same attributes (see
 	// Renderer::createCompactMeshBuffers).
 	constexpr float NoTileLayer = 255.0f;
+	// The terrain's splat channels: one per block whose tiles the smooth skin blends (BlockType::splat), up to this many.
+	constexpr int kSplatChannels = 16;
 
 	struct VoxelVertex {
 		glm::vec3 position = { 0,0,0 };
@@ -113,11 +115,11 @@ namespace CGEngine {
 		// fragment shader blends them by the surface's normal. NoTileLayer for a surface with no tiles (props, flying blocks), which
 		// keeps its vertex colour and the material's texture.
 		glm::vec3 tiles = glm::vec3(NoTileLayer);
-		// The terrain's splat weights: how much of each of the 8 splat blocks lies at this vertex (channel 0 to 3 in splatA, 4 to 7 in
-		// splatB), summing to 1. They change smoothly across a triangle, and the fragment shader blends the splat blocks' tiles by them.
-		// All zero for a surface that takes its tiles from `tiles`.
-		glm::vec4 splatA = glm::vec4(0.0f);
-		glm::vec4 splatB = glm::vec4(0.0f);
+		// The splat weights: how much of each splat channel lies at this vertex, summing to 1, packed as one byte per channel (0 to 255)
+		// in four words: channel k is byte k % 4 of splat[k / 4]. The vertex shader unpacks them, and the fragment shader blends the
+		// splat blocks' tiles by the interpolated weights. All zero for a surface that takes its tiles from `tiles`. Packed, they are
+		// one attribute: a shader has only 16 attribute slots, and the skin needs a slot for each of its other fields.
+		uint32_t splat[kSplatChannels / 4] = { 0, 0, 0, 0 };
 	};
 
 	struct MeshData : public IResource {
@@ -220,7 +222,7 @@ namespace CGEngine {
 		void setVoxelTiles(const std::string& path);
 		/// Upload the tile array from a path (setVoxelTiles and the first voxel draw both use it).
 		void uploadVoxelTiles(const std::string& path);
-		/// The top, side and bottom tile layers of each splat block, in channel order (0 to 7). Set from VoxelGen.SPLAT.
+		/// The top, side and bottom tile layers of each splat block, in channel order (0 to 15). Set from VoxelGen.SPLAT.
 		void setVoxelSplatTiles(const std::vector<std::array<float, 3>>& tiles);
 		/// <summary>
 		/// Add the Body to the renderOrder and and it and its transform to the bodyTransform map for this frame
@@ -368,7 +370,7 @@ namespace CGEngine {
 		GLuint shadowFbo = 0;
 		GLuint shadowDepthTexture = 0;
 		GLuint voxelTiles = 0;   // the tile array of the voxel meshes (setVoxelTiles), 0 until one is loaded
-		std::array<glm::vec3, 8> splatTiles{};   // the splat blocks' tile layers (setVoxelSplatTiles)
+		std::array<glm::vec3, kSplatChannels> splatTiles{};   // the splat blocks' tile layers (setVoxelSplatTiles)
 		bool splatTilesDirty = true;             // the tile layers changed: each program must take them again
 		Program* splatTilesProgram = nullptr;    // the program that last took the tile layers
 		std::string voxelTilesPath;   // where the tile array comes from; a draw uploads it if it is not loaded on this renderer yet
@@ -431,6 +433,8 @@ namespace CGEngine {
 		void setBoneUBOData(BoneUBO boneUBOData, Animator* animator);
 		void setTransformUBOData(TransformUBO transformUBOData, glm::mat4 combinedTransform);
 		Animator* updateAnimator(Mesh* mesh);
+		/// Advance an animator by this frame's time, once per frame (updatedAnimators keeps it from advancing again for other meshes).
+		void advanceAnimator(Animator* animator);
 		Program* useRenderProgram(Material* renderMaterial);
 	};
 }

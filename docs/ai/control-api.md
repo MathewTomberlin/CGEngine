@@ -159,7 +159,7 @@ is the command's `error`. Built-in names win. Registered in the voxel sample:
 ### `voxel_edit`
 An edit made as a player's click makes it (`docs/games/voxels.md`), under the same rules.
 
-- params: `op` (required: `hit`, `place`, `prop` or `unprop`), `c` (the cell, required), `id` (for `place`), `s` (the
+- params: `op` (required: `hit`, `place`, `prop`, `unprop` or `scoop`), `c` (the cell, required), `id` (for `place`), `s` (the
   block a torch leans on, for `prop`), `dir` (for `prop`), `swings` (1 or 2, for `hit`)
 - result: `{ "sent", "block", "damage", "prop" }`: the cell now. `sent` is true in a client, where the host applies the
   edit and sends the cell back, so the result can differ from what the host ends with.

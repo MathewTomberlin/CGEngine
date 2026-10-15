@@ -30,6 +30,9 @@ FLASH_SECONDS = 0.15        # a hit tints the creature for this long
 HURT_SECONDS = 0.37               # a hit plays the hurt clip (resources/clips/horse_hurt.json) for this long
 DIE_SECONDS = 0.97                # a death plays the die clip (resources/clips/horse_die.json); the body goes when it has played
 CHASE_RANGE = VoxelNight.CHASE_RANGE   # a biter this close to the player comes after it by day; further at night (VoxelNight)
+SHIELD_COS = 0.5                   # a raised shield takes the bites of a creature within 60 degrees of the way the player faces
+FLANK_SECONDS = 4.0                # after a shield turns a bite, a biter circles the player for this long, to bite from the side
+FLANK_TURN = math.radians(60.0)    # while it circles, a biter heads this far off the way to the player, round to its flank side
 ATTACK_SECONDS = 0.8               # how long a bite's clip plays before the creature goes back to walking or running
 BITE_WINDUP = 0.3                  # seconds from the start of a bite's clip to its strike: the damage lands then, if the player is still in reach
 ROUTE_SECONDS = 1.0                # a biter works out a route round a wall at most this often
@@ -61,6 +64,8 @@ class Walker:
         self.last = None            # the feet last frame, to see how far the creature got
         self.knock_timer = 0.0      # seconds left of being pushed back by a hit
         self.knock_heading = 0.0
+        self.flank_timer = 0.0      # seconds left of circling the player to get round a raised shield
+        self.flank_side = 1.0       # the way it circles: +1 or -1
         self.bite_timer = 0.0       # seconds until a biter may bite again
         self.windup = 0.0           # seconds left before a bite that has started lands (BITE_WINDUP); a hit or a lost chase cancels it
         self.flash_timer = 0.0      # seconds left of the red flash after a hit (FLASH_MATERIAL)
@@ -78,7 +83,16 @@ class Walker:
         self.clip = None            # the clip the model is playing
         cge.add_voxel_walker(name, world, HALF_WIDTH, HEIGHT)
 
-    def update(self, dt, player=None, prey=None, player_feet=None, night=0.0):
+    def faces(self, pos, player, shield):
+        """Whether the creature at pos stands in front of the player, within the shield's arc: shield is the (x, z) the player faces.
+        A creature on the player's own spot counts as in front."""
+        dx, dz = pos[0] - player[0], pos[2] - player[1]
+        distance = math.hypot(dx, dz)
+        if distance < 1e-6:
+            return True
+        return (dx * shield[0] + dz * shield[1]) / distance > SHIELD_COS
+
+    def update(self, dt, player=None, prey=None, player_feet=None, night=0.0, shield=None):
         """Move the creature one frame. Returns the health a biter takes from the player this frame (0 for most frames). prey is
         the (x, z) of a timid creature a biter hunts when the player is not near. player_feet is the height of the player's feet: a
         creature whose body does not reach the player's body (above or below it) neither bites it nor pushes against it. None
@@ -118,6 +132,7 @@ class Walker:
         if not chasing:
             self.route = []
             self.windup = 0.0
+            self.flank_timer = 0.0
         biting = False              # a bite starts this frame: its clip plays now, and its damage lands BITE_WINDUP seconds later
         if chasing:
             # A biter heads for the player, and bites each time it is close and the last bite has had time to recover.
@@ -127,12 +142,31 @@ class Walker:
             heading = self.follow_route(pos) if self.route else None
             if heading is not None:
                 self.heading = heading
+            if self.flank_timer > 0.0:
+                # A creature a shield turned circles the player: it heads round to one side, until it is beside the shield
+                # (out of its arc, where its bite lands) or the shield is lowered.
+                self.flank_timer -= dt
+                if shield is None or not self.faces(pos, player, shield):
+                    self.flank_timer = 0.0
+                else:
+                    self.heading = math.atan2(player[1] - pos[2], player[0] - pos[0]) + self.flank_side * FLANK_TURN
             if self.windup > 0.0:
                 # The lunge: the damage lands at the clip's strike, and only if the player is still in reach then.
                 self.windup = max(0.0, self.windup - dt)
                 if self.windup <= 0.0 and distance < self.kind["bite_range"] and level:
-                    bite = self.kind["bite_damage"]
-            elif distance < self.kind["bite_range"] and self.bite_timer <= 0.0 and level:
+                    if shield is not None and self.faces(pos, player, shield):
+                        # A shield held up in front of the player takes the bite, and the creature turns away from it.
+                        self.blocked = True
+                        self.turn_away(player[0], player[1])
+                        # Pushed back from the shield, as a hit pushes a creature (hurt): the same knock, away from the player.
+                        self.knock_heading = math.atan2(pos[2] - player[1], pos[0] - player[0])
+                        self.knock_timer = KNOCK_SECONDS
+                        # And it does not walk back into the shield: it circles round to bite from the side.
+                        self.flank_side = self.rng.choice((-1.0, 1.0))
+                        self.flank_timer = FLANK_SECONDS
+                    else:
+                        bite = self.kind["bite_damage"]
+            elif distance < self.kind["bite_range"] and self.bite_timer <= 0.0 and level and self.flank_timer <= 0.0:
                 self.windup = BITE_WINDUP
                 self.bite_timer = self.kind["bite_interval"]
                 biting = True
@@ -241,6 +275,14 @@ class Walker:
         if self.flash_timer <= 0.0:
             cge.set_body_material(self.name, self.kind["material"])
 
+    def bite_now(self):
+        """A bite lands on a creature (prey), not on the player: the bite clip plays now, as it does for a bite on the player."""
+        self.attack_timer = ATTACK_SECONDS
+        clip = VoxelCreatures.clip_for(self.kind, "attack")
+        if clip is not None and clip != self.clip:
+            cge.play_clip(self.name, clip, False, 1.0)
+            self.clip = clip
+
     def animate(self, dt, pace, bit):
         """Play the creature's clips: a hit's flinch, then a bite plays the attack once, a chase or a flight the bound, and a walk
         otherwise (VoxelCreatures.clip_for names each). The model turns to face its heading (the model faces +Z, as the dungeon's
@@ -331,7 +373,7 @@ class Walkers:
                     break
         return None
 
-    def update(self, dt, player=None, player_feet=None, night=0.0):
+    def update(self, dt, player=None, player_feet=None, night=0.0, shield=None):
         """player is the (x, z) of the player, which the creatures run from or chase. A creature that is about to bump another
         turns away from it, so the herd does not stack up in one place. Returns the health the biters took from the player.
         A biter with no player near hunts the nearest timid creature and bites it; a creature a bite kills is in self.killed."""
@@ -343,9 +385,13 @@ class Walkers:
         spots = [w.state()[0] for w in self.walkers]
         bites = 0.0
         self.killed = []
+        self.blocks = 0
         for i, walker in enumerate(self.walkers):
             prey = self.prey_for(i, spots) if walker.biter else None
-            bites += walker.update(dt, player, None if prey is None else (spots[prey][0], spots[prey][2]), player_feet, night)
+            walker.blocked = False
+            bites += walker.update(dt, player, None if prey is None else (spots[prey][0], spots[prey][2]), player_feet, night, shield)
+            if walker.blocked:
+                self.blocks += 1
             for j, other in enumerate(spots):
                 if i != j and math.hypot(spots[i][0] - other[0], spots[i][2] - other[2]) < BUMP_RANGE:
                     walker.turn_away(other[0], other[2])
@@ -355,6 +401,7 @@ class Walkers:
             if victim is not None and walker.bite_timer <= 0.0 and not victim.removed and victim not in self.killed:
                 if math.hypot(spots[i][0] - spots[prey][0], spots[i][2] - spots[prey][2]) < walker.kind["bite_range"]:
                     walker.bite_timer = walker.kind["bite_interval"]
+                    walker.bite_now()
                     if victim.hurt((spots[i][0], spots[i][2])):
                         self.killed.append(victim)
         return bites
