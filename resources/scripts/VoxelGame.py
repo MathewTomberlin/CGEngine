@@ -35,6 +35,7 @@ import VoxelWalkers
 from VoxelConfig import *
 from VoxelHud import HudMixin
 from VoxelInventoryScreen import InventoryMixin
+from VoxelHands import HandsMixin
 from VoxelNetSync import NetMixin
 from VoxelSettingsMenu import SettingsMixin
 
@@ -50,7 +51,7 @@ TILES_FILE = "voxel_tiles.png"   # the block textures, relative to the game's fo
 RULES_FILE = os.environ.get("VOXEL_RULES")   # a rule file (VoxelRules.py): the reactions the world runs, in place of none
 
 
-class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
+class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, SettingsMixin):
     def __init__(self):
         super().__init__()
         self.seed = int(os.environ.get("VOXEL_SEED", str(int(time.time()))))
@@ -79,6 +80,13 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
         self.target = None              # (block, normal) under the crosshair, or None
         self.torch_target = None        # (distance, cell) of the torch under the crosshair, or None
         self.held_lit = False           # the torch the player carries is lit (L toggles it)
+        self.cam_origin = [0.0, 0.0, 0.0]   # the eye the camera sits at this frame (place_camera), where the hands are placed from
+        self.hands_ready = False        # the arm bodies are made (VoxelHands.hands_setup)
+        self.held_model = None          # the model of the held item, or None for an empty hand
+        self.swing_time = None          # seconds into the swing, or None when the hand is not swinging
+        self.swing_length = 0.0         # how long the swing lasts
+        self.swing_turn = 0.0           # how far the swing turns the arm, in degrees
+        self.reach_time = None          # seconds into the left arm's reach after a placement, or None
         self.hit_times = {}             # the damaged blocks, by cell: the time each was last hit
         self.keys_was = {}              # previous state of the one-shot keys and buttons
         self.last = None
@@ -226,6 +234,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
         self.drops.update(dt)
         self.frame_dt = dt
         self.place_camera()
+        self.update_hands(dt)
 
         self.state_timer -= raw_dt   # the state keeps being written while paused, so tests can read the menu
         if self.state_timer <= 0.0:
@@ -747,6 +756,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
                 self.creature_died(walker)
             else:
                 self.bursts.add(centre, (0.85, 0.25, 0.2), 4, 0.12, 0.4)
+            self.hands_hit("creature", centre)
             return
         if breaking and self.aims_at_torch():
             # A torch the crosshair is on, nearer than the block behind it, is the one broken, and it goes into the inventory.
@@ -804,6 +814,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
             if stage != -2:
                 self.flash_until = time.time() + HIT_FLASH_SECONDS
                 self.send_request({"op": "hit", "c": list(block), "swings": swings})
+                self.hands_hit("block", centre)
             if stage == -1:
                 self.hit_times.pop(tuple(block), None)
                 self.drop_torches_on(block)
@@ -830,6 +841,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
                 self.send_request({"op": "place", "c": list(cell), "id": item})
             cge.play_sound("place", 0.7, 0.95 + 0.1 * self.sound_rng.random())
             self.spend()
+            self.reach()
 
     def placement_check(self):
         """Whether the selected item can go where the crosshair is. Returns (placement, None), with placement (cell, item, dir) and
@@ -1050,6 +1062,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, NetMixin, SettingsMixin):
         origin = [eye[0], self.view_y, eye[2]]
         target = [origin[0] + look[0], origin[1] + look[1], origin[2] + look[2]]
         cge.set_camera(cge.Vector3f(*origin), cge.Vector3f(*target))
+        self.cam_origin = origin
 
     # ----- state for tests and agents -----------------------------------------------------
 

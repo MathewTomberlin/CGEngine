@@ -256,6 +256,12 @@ void bindGame(py::module_& m) {
         body->xray = on;
     }, py::arg("name"), py::arg("on"), "Draw a body with the depth test off, so it shows through what is in front of it.");
 
+    m.def("set_viewmodel", [](const std::string& name, bool on) {
+        Body* body = findBodyByName(name);
+        if (!body) throw std::invalid_argument("no body named '" + name + "'");
+        body->viewmodel = on;
+    }, py::arg("name"), py::arg("on"), "Draw a body last, after the depth buffer is cleared, so the world never clips it (a first-person hand).");
+
     m.def("remove_mesh_body", [](const std::string& name) {
         return removeRuntimeMeshBody(name);
     }, py::arg("name"), "Remove a body made by create_mesh_body, and free its mesh. Returns False if there is no such body.");

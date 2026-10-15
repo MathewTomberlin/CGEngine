@@ -67,6 +67,26 @@
       "diffuseTexture": "Dragon_Atlas_Color.png",
       "specular": 0,
       "tint": [1.0, 0.35, 0.25]
+    },
+    }
+      "name": "viewmodel_skin",
+      "diffuseTexture": "viewmodel_skin.png",
+      "specular": 0
+    },
+    {
+      "name": "viewmodel_steel",
+      "diffuseTexture": "viewmodel_steel.png",
+      "specular": 0
+    },
+    {
+      "name": "viewmodel_wood",
+      "diffuseTexture": "viewmodel_wood.png",
+      "specular": 0
+    },
+    {
+      "name": "viewmodel_brass",
+      "diffuseTexture": "viewmodel_brass.png",
+      "specular": 0
     }
   ],
   "environment": {
@@ -151,6 +171,9 @@
     "clips/horse_die.json",
     "clips/drake_walk.json",
     "clips/drake_attack.json",
-    "clips/drake_die.json"
+    "clips/drake_die.json",
+    "clips/arm_attack_L.json",
+    "clips/arm_attack_R.json",
+    "clips/arm_attack_pick.json"
   ]
 }

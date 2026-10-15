@@ -16,12 +16,13 @@ def write_json(path, data, attempts=20):
     if folder:
         os.makedirs(folder, exist_ok=True)
     tmp = path + ".tmp"
-    with open(tmp, "w") as f:
-        json.dump(data, f)
     for _ in range(attempts):
+        # The temporary file can be taken away by another writer (two games in one folder), so it is written again on each try.
         try:
+            with open(tmp, "w") as f:
+                json.dump(data, f)
             os.replace(tmp, path)
             return True
-        except PermissionError:
+        except (PermissionError, FileNotFoundError):
             time.sleep(0.005)
     return False

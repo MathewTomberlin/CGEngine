@@ -304,6 +304,41 @@ def main():
         crafting.known, crafting.category, crafting.pattern = saved_known, saved_category, None
         inv.slots = [None] * VoxelInventory.SLOTS
 
+        # The first-person hands: the arms are made, the held model follows the selected item, a strike swings it, a placement
+        # reaches with the left arm, and a pickaxe's hit throws sparks.
+        import VoxelHands
+        game.slot = 0
+        inv.slots = [None] * VoxelInventory.SLOTS
+        inv.slots[0] = [VoxelGen.PICKAXE, 1, VoxelGen.TOOLS[VoxelGen.PICKAXE]["durability"]]
+        game.update_hands(0.016)
+        checks["the arms are made, and the right hand holds the pickaxe"] = (
+            cge.find_body("hand_right") is not None and cge.find_body("hand_left") is not None
+            and game.right_model == VoxelHands.PICKAXE_ARM and cge.find_body("hand_held") is None)
+        inv.slots[0] = None
+        game.update_hands(0.016)
+        checks["an empty hand holds no item model"] = game.held_model is None and cge.find_body("hand_held") is None
+        game.start_swing(VoxelGen.PICKAXE)
+        game.update_hands(0.1)
+        checks["a strike starts the swing, and it runs on for its length"] = game.swing_time is not None and abs(game.swing_time - 0.1) < 1e-6
+        game.update_hands(1.0)
+        checks["the swing ends after its length"] = game.swing_time is None
+        game.reach()
+        game.update_hands(0.05)
+        checks["a placement starts the left arm's reach"] = game.reach_time is not None
+        game.update_hands(1.0)
+        checks["the reach ends after its length"] = game.reach_time is None
+        inv.slots[0] = [VoxelGen.PICKAXE, 1, VoxelGen.TOOLS[VoxelGen.PICKAXE]["durability"]]
+        game.update_hands(0.016)
+        made_before = game.bursts.made
+        game.hands_hit("block", [0.5, 0.5, 0.5])
+        checks["a pickaxe's hit on a block throws sparks"] = game.bursts.made > made_before
+        made_before = game.bursts.made
+        inv.slots[0] = [VoxelGen.TORCH, 1]
+        game.hands_hit("block", [0.5, 0.5, 0.5])
+        checks["a torch in hand throws no hit effect"] = game.bursts.made == made_before
+        inv.slots[0] = None
+        game.update_hands(0.016)
+
         # F5 saves the inventory with the edits, and F9 loads it back.
         inv.slots[0] = [DIRT, 7]
         game.slot = 2

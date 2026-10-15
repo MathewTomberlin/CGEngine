@@ -769,6 +769,13 @@ and the textures show their detail, not only their shape.
 - [ ] **35.3** Textures for the creatures' skin and the items, made in Blender with the same procedural materials, baked to PNG so the
   game does not depend on Blender at run time.
 
+## Phase 36: first-person hands (from the player: the arms hold what you hold, swing, and place)
+Goal: the player sees a right arm that holds the selected item and swings it on a strike, and a left arm that reaches out to place a block.
+- [x] **36.1** A viewmodel path: `cge.set_viewmodel` draws a body last, after the depth buffer is cleared, so the walls never clip a hand (commit 7ca9348). Not yet used by the game.
+- [x] **36.2** Arm and item models, made in Blender through BlenderMCP: the two arms from the HumanFootman mesh (its DEF arm groups, cut and turned), then the held items in `resources/models/viewmodel/`: `item_pickaxe`, `item_lantern` (both made here), `item_sword` and `item_bow` (scaled from Sword.blend and Bow.blend), and `item_spear` (no spear is in the asset library, so it is a simple shaft and head made here). The sword and bow are not in the game yet: no item uses them.
+- [~] **36.3** The right arm holds the selected item (`VoxelHands.py`: a pickaxe, the lantern for a torch). A left click starts a swing (a half-sine turn of the arm), and a pickaxe's hit throws sparks off a block or a creature. The arm angles, the swing's direction and the hold position are not yet checked by eye.
+- [~] **36.4** The left arm reaches toward the block on each placement and draws back. Not yet checked by eye.
+
 ## Tooling and quality
 - [x] CI build on Windows (`.github/workflows/build.yml`) with Mesa software OpenGL smoke run
 - [~] Unit tests for pure logic runnable without a GPU. Done for the dungeon generator (`python -I tools/test_dungeon_gen.py`) and for the scene format and command list (`python -I tools/test_scene_format.py`: example scenes, invalid fixtures, documented commands). The C++ parsers in `SceneLoader` and `ControlChannel` are still covered only by the GPU integration test.
