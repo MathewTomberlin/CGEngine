@@ -49,6 +49,7 @@ check("the pickaxe lasts 640 uses, the iron pickaxe four times that, and the swo
       VoxelGen.durability_of(PICK) == 640 and VoxelGen.durability_of(IRON_PICK) == 2560
       and VoxelGen.durability_of(SWORD) == 2 * 640)
 check("the shovel lasts as long as the pickaxe", VoxelGen.durability_of(SHOVEL) == 640)
+check("a shield lasts SHIELD_USES blocked bites", VoxelGen.durability_of(VoxelGen.SHIELD) == VoxelGen.SHIELD_USES)
 check("a block takes no durability", VoxelGen.durability_of(VoxelGen.STONE) is None)
 
 check("the shovel strikes three times as fast as the hand, and the others as fast as the hand",

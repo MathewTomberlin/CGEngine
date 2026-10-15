@@ -6,3 +6,4 @@ out
 .vscode
 build-*/
 __pycache__/
+build_sym/

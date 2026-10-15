@@ -13,7 +13,8 @@ $ErrorActionPreference = "Stop"
 # Unattended: no window is shown and no real keyboard, mouse or cursor input is read (see CGENGINE_UNATTENDED in src/Bindings/GameBindings.cpp).
 $env:CGENGINE_UNATTENDED = "1"
 . (Join-Path $PSScriptRoot "unattended.ps1")
-$exeDir = (Resolve-Path $ExeDir).Path
+# The game runs in its own copy of the folder, so its control folder and settings never touch the folder the player runs.
+$exeDir = New-TestCopy (Resolve-Path $ExeDir).Path "dungeon"
 $control = Join-Path $exeDir "cg_control"
 $inbox = Join-Path $control "inbox"
 $outbox = Join-Path $control "outbox"
@@ -93,6 +94,7 @@ try {
     }
     $start = Read-State
     Check "game starts on level 1 with full health" ($start.level -eq 1 -and $start.hp -eq 3)
+    if (-not ($start.level -eq 1 -and $start.hp -eq 3)) { Write-Host ("info  state at the start: level {0}, hp {1}, room {2}" -f $start.level, $start.hp, ($start.room -join ",")) }
     Check "player starts in the start room" ($start.room[0] -eq 0 -and $start.room[1] -eq 0)
     Check "the level has enemies outside the start room" ($start.enemies -ge 1)
 

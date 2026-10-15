@@ -5,7 +5,7 @@
 
 param(
     [ValidateSet("hands", "water")][string]$View = "hands",
-    [ValidateSet("pickaxe", "iron_pickaxe", "sword", "shovel", "bucket", "water_bucket", "lava_bucket", "torch", "none")][string]$Item = "pickaxe",
+    [ValidateSet("pickaxe", "iron_pickaxe", "sword", "shovel", "bucket", "water_bucket", "lava_bucket", "bow", "torch", "none")][string]$Item = "pickaxe",
     [int]$Seed = 1,
     [ValidateSet("", "carried", "raised")][string]$Shield = "",
     [string]$Out = "",

@@ -568,8 +568,11 @@ skin, and 0.7 s the terrain: the meshing was the cost, not the terrain.
   mesher's files did not change it, and `/O2` cannot go on the command line with the Debug build's `/RTC1`. The likely cost is
   MSVC's checked iterators (`_ITERATOR_DEBUG_LEVEL` 2), which only a Debug-wide change can remove, since the libraries must agree.
   Open question for the player: whether Debug keeps the checked iterators (they catch out-of-range bugs) or gets the speed.
-- [ ] **23.4** The `timespeed 0.5` crash in Debug (Phase 19's console): its root cause. It needs a stack from a Debug run, and a
-  visible-window capture needs the player's agreement.
+- [x] **23.4** The `time 0.5` / `timespeed 0.5` crash. Cause: the engine's own text console (`World.cpp`) also receives the
+  typed characters and Enter. On Enter it splits the text at the first period, so `time 0.5` names the body `time 0`, which does not
+  exist; `assets.get` returned null, and the command was run on it. Fixed by a null check (the engine logs "No body named ..." and
+  carries on). Found with a trace of the input dispatch (`input_trace.txt`, since removed). Verified: the keystroke test on the symbol
+  build runs `time 0.5` three times without a crash; `tools/run_tests.ps1` passes. Not yet verified: the warning in the engine log.
 - [ ] **23.5** The window-free start (18.1), which a headless server needs before 18.3 is a real server.
 
 ## Phase 24: placement feedback (from playtesting round 3: the aim and the placed block)
@@ -860,6 +863,20 @@ Goal: the player sees a right arm that holds the selected item and swings it on 
 - [x] **41.2** The shovel strikes three times as fast as the hand (`attack_speed` in `VoxelGen.TOOLS`, applied to the held-break
   repeat). Checked by `tools/test_voxel_tools.py`.
 
+## Phase 42: ranged combat (from the review: a bow, with arrows as items)
+- [x] **42.1** The bow: an item (`VoxelGen.BOW`, from `item_bow.fbx`), in the right hand. Hold the place button to draw (a full draw
+  takes 1 s of game time); let go to fire. The draw sets the speed (12 to 30 blocks a second) and the damage (1 to 3, so a full
+  draw kills a 3-health creature). Creative mode fires without arrows. Recipe: 3 wood and a tooth (shaped).
+- [x] **42.2** Arrows: an item that stacks (`VoxelGen.ARROW`, made 4 at a time from a wood and a tooth). An arrow falls under gravity
+  (`resources/scripts/VoxelArrows.py`, tested in `tools/test_voxel_arrows.py`), stops at the first solid block (it lies there, for
+  the player to take) or the first creature it reaches, and is spent after 6 s. Checked in the engine by `voxel_game_check.py`.
+- [~] **42.3** Not yet: the bow's draw is not drawn on the model (no draw clip), the arrow has no orientation (its body is a box),
+  and the bow's hand offset is a first guess from the sword's (it sits in the right hand, between the fingers).
+
+- [x] **42.4** Shield durability (from the review: a shield breaks after N blocks): a shield in the left hand takes one use for each
+  bite it blocks (`VoxelGen.SHIELD_USES`, 120; `VoxelGame.wear_shield`). Its uses go with it when it is moved to the hotbar, and its
+  bar shows in the inventory. Checked in the engine by `voxel_game_check.py`, and by `tools/test_voxel_tools.py` for the number.
+
 ## Phase 39: investigations (from the lead developer's request: feasibility and cost not yet known)
 Goal: find out whether each idea can be done in this engine, and what it costs, before any of it is built. Each item ends with a
 written answer (what it would take, and a measured number) and a decision: build, shelve, or split into smaller items.
@@ -867,18 +884,27 @@ written answer (what it would take, and a measured number) and a decision: build
   it falls with it. Questions: how a break is checked for connection (a flood fill from the break's neighbours, to the ground or to
   the chunk's edge), its cost in Release on a worst-case chunk (16 by 64 by 16 blocks) and on a break at a chunk edge, and how a
   falling piece moves (one mesh body, or the falling-block rule that sand and gravel already use). Open: a piece that spans two chunks.
+  Found (code): the engine already moves falling blocks (`BlockType` `falls`, `define_block`, and `settle_moves`), so a detached piece
+  could become falling blocks in place. The connection check is not written, and its cost is not measured.
 - [ ] **39.2** Terrain-aligned decorations: grass that sways, pebbles, foliage and vines that sit on a block's face and follow its
   slope. Questions: whether they are one mesh per chunk (cheap to draw, rebuilt on each edit) or instanced bodies, how many fit a
   chunk without a frame-time cost (measure with `tools/voxel_perf.ps1`), and whether the sway can be a vertex-shader wind so it costs
   no CPU. Open: how they are placed (the same rule as torches, `setProp`, or a density-driven scatter).
+  Found (code): torches are props (`VoxelWorld::setProp`, `buildPropMesh`), so a decoration can reuse that path. The per-chunk count and
+  its frame cost are not measured.
 - [ ] **39.3** Player equipment: a screen with slots for the left and right hands, head, chest, legs, feet and gloves, and a side bar
   naming each equipped item with its stats, bonuses and penalties. Questions: whether the existing inventory screen can host it
   (`VoxelInventoryScreen.py`), how equipment is stored (a slot list in the save, or a separate file), and how much of it shows on the
   player (the first-person arms show the hands only; a chest or helmet would need a view of the body, which the game does not draw).
+  Found (code): the inventory is a 12 by 3 grid (`VoxelInventory.SLOTS`). Equipment is 8 more slots (two hands, head, chest, legs,
+  feet, gloves): a second slot list saved with the inventory, and the hands already exist (the held item and the offhand shield).
 - [ ] **39.4** Equipment effects: an item changes movement speed and jump height (by its weight, or by a bonus), and gives bonuses to
   attack speed, damage, and break speed against certain blocks. Questions: where the player's speed and jump are set (in one place
   or many; `VoxelPhysics.py`, `VoxelGame.py`), whether the stats can be one base value plus a sum of modifiers, and the balance risk:
   a heavy suit that makes the jump too low to climb a one-block step (`stepUp` 1.0) would stop the player from walking up the terrain.
+  Found (code): walk speed is `WALK_SPEED` (5.0, `VoxelConfig.py`) times the console's `move_speed`, and the jump is `JUMP_SPEED` (9.0,
+  about 1.45 blocks high); the break and attack speeds are data (`block_damage`, `attack_speed_of`). Each equipment bonus would add
+  to these values, and the step-up is the limit on any jump change.
 
 ## Tooling and quality
 - [x] CI build on Windows (`.github/workflows/build.yml`) with Mesa software OpenGL smoke run

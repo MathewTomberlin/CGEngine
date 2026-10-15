@@ -13,7 +13,7 @@ ROWS = 3
 SLOTS = COLUMNS * ROWS
 HOTBAR_SLOTS = COLUMNS
 STACK_LIMIT = 64            # the most of one item in one slot
-UNSTACKED = tuple(VoxelGen.TOOLS) + tuple(VoxelGen.WEAPONS) + (VoxelGen.SHIELD,) + VoxelGen.BUCKETS   # tools, weapons, shields and buckets: one to a slot; a tool or weapon has its own durability
+UNSTACKED = tuple(VoxelGen.TOOLS) + tuple(VoxelGen.WEAPONS) + (VoxelGen.SHIELD, VoxelGen.BOW) + VoxelGen.BUCKETS   # tools, weapons, shields and buckets: one to a slot; a tool or weapon has its own durability
 
 
 def limit(item):

@@ -129,17 +129,22 @@ PICKAXE = 41                        # a tool: it does not stack, and when it is 
 IRON_PICKAXE = 42                   # a tool that mines obsidian, and lasts four times as long as a pickaxe
 SWORD = 43                          # a weapon: it strikes creatures for its damage (WEAPONS); it mines like a hand, and does not wear
 SHIELD = 44                         # held in the left hand (VoxelGame.offhand): raised with Q, it takes the bites of creatures in front
+SHIELD_USES = 120                   # the blocked bites a shield takes before it breaks (its uses, as a tool's are its swings)
 TOOTH = 45                          # a biter's tooth: a crafting item (the bone blade), left where a biter falls
 BONE_BLADE = 46                     # a weapon made from teeth and wood: it strikes like a sword, and wears out sooner
 SHOVEL = 47                         # a tool for the soft ground: it breaks dirt, sand and gravel faster (TOOLS)
 BUCKET = 48                         # empty: a strike on water or lava fills it; it is made from iron
 WATER_BUCKET = 49                   # filled with water: a right click places a water block and leaves the bucket empty
 LAVA_BUCKET = 50                    # filled with lava: a right click places a lava block and leaves the bucket empty
+BOW = 51                            # held in the right hand: hold the place button to draw, let go to fire an arrow (VoxelArrows)
+ARROW = 52                          # the bow's ammunition: it stacks; one that misses a block lies where it lands
 ITEM_COLOURS = {HIDE: (0.72, 0.56, 0.40), PICKAXE: (0.62, 0.62, 0.68), IRON_PICKAXE: (0.74, 0.72, 0.70), SWORD: (0.80, 0.82, 0.86),
                 SHIELD: (0.55, 0.40, 0.25), TOOTH: (0.92, 0.88, 0.76), BONE_BLADE: (0.80, 0.76, 0.62), SHOVEL: (0.70, 0.66, 0.58),
-                BUCKET: (0.75, 0.77, 0.80), WATER_BUCKET: (0.30, 0.50, 0.90), LAVA_BUCKET: (0.95, 0.45, 0.10)}
+                BUCKET: (0.75, 0.77, 0.80), WATER_BUCKET: (0.30, 0.50, 0.90), LAVA_BUCKET: (0.95, 0.45, 0.10),
+                BOW: (0.50, 0.34, 0.18), ARROW: (0.80, 0.78, 0.70)}
 ITEM_NAMES = {HIDE: "hide", PICKAXE: "pickaxe", IRON_PICKAXE: "iron pickaxe", SWORD: "sword", SHIELD: "shield", TOOTH: "tooth",
-              BONE_BLADE: "bone blade", SHOVEL: "shovel", BUCKET: "bucket", WATER_BUCKET: "water bucket", LAVA_BUCKET: "lava bucket"}
+              BONE_BLADE: "bone blade", SHOVEL: "shovel", BUCKET: "bucket", WATER_BUCKET: "water bucket", LAVA_BUCKET: "lava bucket",
+              BOW: "bow", ARROW: "arrow"}
 NAMES.update(ITEM_NAMES)
 PICKAXE_BLOCKS = (STONE, COAL, IRON, BRICK, OBSIDIAN)   # the blocks a pickaxe mines faster (its block_damage, below)
 # A tool's durability is the swings that hit a block it can use before it breaks (one use a swing), and its tier is the hardest
@@ -187,12 +192,14 @@ def block_damage(item, block):
 
 
 def durability_of(item):
-    """The uses an item has when new, for a tool (it wears when it swings at a block) or a weapon (it wears when it strikes a
-    creature), or None for an item that does not wear."""
+    """The uses an item has when new, for a tool (it wears when it swings at a block), a weapon (it wears when it strikes a
+    creature) or a shield (it wears when it blocks a bite), or None for an item that does not wear."""
     if item in TOOLS:
         return TOOLS[item]["durability"]
     if item in WEAPONS:
         return WEAPONS[item]["durability"]
+    if item == SHIELD:
+        return SHIELD_USES
     return None
 
 

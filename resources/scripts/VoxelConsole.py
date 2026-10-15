@@ -431,8 +431,11 @@ def cmd_sheet(console, args):
         if share is not None:
             text += ", %d of %d uses left" % (game.inventory.slots[game.slot][2], VoxelGen.durability_of(item))
         lines.append(text)
-    lines.append("Shield: %s" % ("in the left hand, raised" if game.shield_up() else
-                                 "in the left hand" if game.offhand == VoxelGen.SHIELD else "none"))
+    if game.offhand == VoxelGen.SHIELD:
+        lines.append("Shield: %s, %d of %d blocks left" % ("in the left hand, raised" if game.shield_up() else "in the left hand",
+                                                          game.offhand_uses, VoxelGen.SHIELD_USES))
+    else:
+        lines.append("Shield: none")
     lines.append("Recipes known: %d of %d" % (len(game.crafting.known), len(VoxelRecipes.RECIPES)))
     return lines
 
