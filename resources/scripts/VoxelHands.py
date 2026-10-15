@@ -33,6 +33,7 @@ ITEM_MODELS = {
     VoxelGen.BUCKET: "models/viewmodel/item_bucket.fbx",      # a cylinder for now
     VoxelGen.WATER_BUCKET: "models/viewmodel/item_bucket.fbx",
     VoxelGen.LAVA_BUCKET: "models/viewmodel/item_bucket.fbx",
+    VoxelGen.BOW: "models/viewmodel/item_bow.fbx",             # from Bow.blend; its offset is held_items.json's
 }
 # The held items' offsets are data (resources/held_items.json): the offset of an item in each hand, and each item's own offset from
 # that. Items with a hand are attached to its bone (cge.attach_to_bone), so they move with the arm's own clip.

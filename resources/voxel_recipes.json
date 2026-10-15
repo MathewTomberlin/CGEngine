@@ -1,13 +1,142 @@
 {
   "about": "The voxel sample's crafting recipes (the crafting panel on I). Each recipe has a name, a category, and the items it takes and makes as {item name: count}. Item names are the game's (VoxelGen.NAMES, e.g. wood, stone, iron, iron pickaxe). Edit this file to change recipes; no rebuild is needed.",
   "recipes": [
-    {"name": "Torch", "category": "Light", "takes": {"wood": 1}, "makes": {"torch": 1}},
-    {"name": "Pickaxe", "category": "Tools", "pattern": ["SSS", " W ", " W "], "key": {"S": "stone", "W": "wood"}, "makes": {"pickaxe": 1}},
-    {"name": "Iron pickaxe", "category": "Tools", "takes": {"iron": 3, "wood": 2}, "makes": {"iron pickaxe": 1}},
-    {"name": "Sword", "category": "Tools", "pattern": ["I", "I", "W"], "key": {"I": "iron", "W": "wood"}, "makes": {"sword": 1}},
-    {"name": "Shield", "category": "Tools", "takes": {"wood": 3, "iron": 1}, "makes": {"shield": 1}},
-    {"name": "Bone blade", "category": "Tools", "pattern": ["T", "T", "W"], "key": {"T": "tooth", "W": "wood"}, "makes": {"bone blade": 1}},
-    {"name": "Shovel", "category": "Tools", "pattern": [" S ", " W ", " W "], "key": {"S": "stone", "W": "wood"}, "makes": {"shovel": 1}},
-    {"name": "Bucket", "category": "Tools", "pattern": ["I I", " I "], "key": {"I": "iron"}, "makes": {"bucket": 1}}
+    {
+      "name": "Torch",
+      "category": "Light",
+      "takes": {
+        "wood": 1
+      },
+      "makes": {
+        "torch": 1
+      }
+    },
+    {
+      "name": "Pickaxe",
+      "category": "Tools",
+      "pattern": [
+        "SSS",
+        " W ",
+        " W "
+      ],
+      "key": {
+        "S": "stone",
+        "W": "wood"
+      },
+      "makes": {
+        "pickaxe": 1
+      }
+    },
+    {
+      "name": "Iron pickaxe",
+      "category": "Tools",
+      "takes": {
+        "iron": 3,
+        "wood": 2
+      },
+      "makes": {
+        "iron pickaxe": 1
+      }
+    },
+    {
+      "name": "Sword",
+      "category": "Tools",
+      "pattern": [
+        "I",
+        "I",
+        "W"
+      ],
+      "key": {
+        "I": "iron",
+        "W": "wood"
+      },
+      "makes": {
+        "sword": 1
+      }
+    },
+    {
+      "name": "Shield",
+      "category": "Tools",
+      "takes": {
+        "wood": 3,
+        "iron": 1
+      },
+      "makes": {
+        "shield": 1
+      }
+    },
+    {
+      "name": "Bone blade",
+      "category": "Tools",
+      "pattern": [
+        "T",
+        "T",
+        "W"
+      ],
+      "key": {
+        "T": "tooth",
+        "W": "wood"
+      },
+      "makes": {
+        "bone blade": 1
+      }
+    },
+    {
+      "name": "Shovel",
+      "category": "Tools",
+      "pattern": [
+        " S ",
+        " W ",
+        " W "
+      ],
+      "key": {
+        "S": "stone",
+        "W": "wood"
+      },
+      "makes": {
+        "shovel": 1
+      }
+    },
+    {
+      "name": "Bucket",
+      "category": "Tools",
+      "pattern": [
+        "I I",
+        " I "
+      ],
+      "key": {
+        "I": "iron"
+      },
+      "makes": {
+        "bucket": 1
+      }
+    },
+    {
+      "name": "Bow",
+      "category": "Tools",
+      "pattern": [
+        " W ",
+        "W T",
+        " W "
+      ],
+      "key": {
+        "W": "wood",
+        "T": "tooth"
+      },
+      "makes": {
+        "bow": 1
+      }
+    },
+    {
+      "name": "Arrow",
+      "category": "Tools",
+      "takes": {
+        "wood": 1,
+        "tooth": 1
+      },
+      "makes": {
+        "arrow": 4
+      }
+    }
   ]
 }

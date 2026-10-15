@@ -20,6 +20,7 @@ import traceback
 import cg_engine_bindings as cge
 from PyScript import PyScript
 import StateFile
+import VoxelArrows
 import VoxelConsole
 import VoxelDrops
 import VoxelGen
@@ -117,6 +118,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
         self.slot = 0                   # the hotbar slot placing uses
         self.inventory = VoxelInventory.Inventory()   # what the player holds, by slot (the hotbar is the first row)
         self.offhand = None             # the item in the left hand (a shield, or None): F moves it, Q raises a shield
+        self.offhand_uses = VoxelGen.SHIELD_USES   # the blocked bites the shield in the left hand has left (wear_shield)
         self.creative = os.environ.get("VOXEL_CREATIVE", "0") == "1"   # placing takes nothing, breaking gives nothing
         self.inventory_open = False     # the inventory screen is up: the world stands still and the mouse is free
         self.inventory_hover = None     # the slot under the mouse on the inventory screen
@@ -140,6 +142,9 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
         self.walker_target = None       # (distance, walker) of the creature under the crosshair, or None
         self.bursts = VoxelParticles.Bursts(random.Random(self.seed))   # the chips a hit or a break throws
         self.drops = VoxelDrops.Drops()  # the items lying on the ground, taken by walking up to them
+        self.bow_draw = None            # seconds the bow has been drawn, or None while it is not (see update_bow)
+        self.arrows = []                # the arrows in flight: dicts with the body's name, position, velocity, damage and age
+        self.arrow_count = 0            # counts every arrow fired, so each body has a name no other has
         self.net = None                 # the link to the other process (VOXEL_NET), or None for a single player
         self.net_pending = {}           # the host's cell states for chunks not loaded yet: cell -> (block, damage, prop)
         self.net_touched = set()        # cells a client asked for this frame, sent back to it even if the host refused them
@@ -238,6 +243,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
         self.update_health(dt)
         self.bursts.update(dt)
         self.drops.update(dt)
+        self.update_arrows(dt)
         self.frame_dt = dt
         self.place_camera()
         self.update_hands(dt)
@@ -325,6 +331,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
         bites = self.walkers.update(dt, (self.pos[0], self.pos[2]), self.pos[1], self.night, shield)
         if self.walkers.blocks:
             cge.play_sound("hurt", 0.3)
+            self.wear_shield(self.walkers.blocks)
         if bites > 0.0:
             cge.play_sound("bite", 0.8)
         self.hurt_player(bites)
@@ -365,6 +372,77 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
             cge.play_sound("tool_break", 0.8)
         elif share_before is not None and share_before > 0.1 and self.inventory.durability(self.slot) <= 0.1:
             self.notify("Your %s is nearly broken" % name)
+
+    def update_bow(self, dt, drawing):
+        """The bow in the selected slot: drawn while the place button is held (the draw grows with game time, so a paused game does
+        not draw), and fired when it is let go. Creative mode fires without arrows; otherwise an arrow is taken from the inventory."""
+        if drawing:
+            self.bow_draw = min(VoxelArrows.DRAW_SECONDS, (self.bow_draw or 0.0) + dt)
+            return
+        if self.bow_draw is None:
+            return
+        charge = VoxelArrows.charge_of(self.bow_draw)
+        self.bow_draw = None
+        if not self.creative:
+            if self.inventory.take_item(VoxelGen.ARROW, 1) == 0:
+                self.notify("You have no arrows")
+                return
+        self.fire_arrow(charge)
+
+    def fire_arrow(self, charge):
+        """Make an arrow at the eye, flying along the look direction at the draw's speed, and draw it as a small body."""
+        look = self.look_direction()
+        eye = self.eye()
+        origin = [eye[i] + look[i] * 0.6 for i in range(3)]
+        pos, velocity = VoxelArrows.launch(origin, look, charge)
+        self.arrow_count += 1
+        name = "arrow_%d" % self.arrow_count
+        lo = (-0.02, -0.02, -0.3)
+        hi = (0.02, 0.02, 0.3)
+        arrays = boxes_arrays([(lo, hi, VoxelGen.ITEM_COLOURS[VoxelGen.ARROW])])
+        cge.create_mesh_body(name, *arrays, materials=["voxel"], position=cge.Vector3f(*pos))
+        self.arrows.append({"name": name, "pos": pos, "vel": velocity, "damage": VoxelArrows.damage_of_charge(charge), "age": 0.0})
+        cge.play_sound("place", 0.5, 1.3)
+
+    def update_arrows(self, dt):
+        """Fly each arrow for this frame. It stops when it reaches a block (it lies where it landed, for the player to take) or a
+        creature (the creature takes its damage, and the arrow is spent), or when its life is up."""
+        if dt <= 0.0:
+            return
+        for arrow in list(self.arrows):
+            arrow["age"] += dt
+            pos, vel, landed = VoxelArrows.step(arrow["pos"], arrow["vel"], dt, self.world.is_solid)
+            hit = None
+            if landed is None and self.walkers is not None:
+                for walker in self.walkers.walkers:
+                    if walker.removed:
+                        continue
+                    lo, hi = walker.box()
+                    if VoxelArrows.hits_box(pos, lo, hi):
+                        hit = walker
+                        break
+            if hit is not None:
+                if hit.hurt((pos[0], pos[2]), arrow["damage"]):
+                    self.creature_died(hit)
+                self.bursts.add(pos, (0.85, 0.25, 0.2), 4, 0.12, 0.4)
+                self.end_arrow(arrow)
+                continue
+            if landed is not None:
+                if not self.creative:
+                    self.drops.add(VoxelGen.ARROW, VoxelGen.ITEM_COLOURS[VoxelGen.ARROW],
+                                   (landed[0], self.ground_under(landed[0], landed[1], landed[2]), landed[2]))
+                self.end_arrow(arrow)
+                continue
+            if arrow["age"] >= VoxelArrows.LIFE_SECONDS:
+                self.end_arrow(arrow)
+                continue
+            arrow["pos"], arrow["vel"] = pos, vel
+            cge.set_mesh_body_position(arrow["name"], cge.Vector3f(*pos))
+
+    def end_arrow(self, arrow):
+        """Take an arrow out of the world: its body goes, and it is no longer in flight."""
+        cge.remove_mesh_body(arrow["name"])
+        self.arrows.remove(arrow)
 
     def creature_died(self, walker):
         """A creature's death: a burst of its colour, it leaves the world, and (unless creative) a hide where it fell."""
@@ -746,6 +824,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
         self.crafting.return_grid(self.inventory)
         self.inventory.return_held()
         StateFile.write_json(INVENTORY_FILE, {"slots": self.inventory.to_list(), "slot": self.slot, "offhand": self.offhand,
+                                              "offhand_uses": self.offhand_uses,
                                               "drops": self.drops.to_list(), "recipes": self.crafting.to_list()})
         self.notify("Saved")
 
@@ -767,6 +846,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
             self.inventory.load_list(data.get("slots", []))
             self.slot = int(data.get("slot", self.slot)) % COLUMNS
             self.offhand = data.get("offhand") if data.get("offhand") == VoxelGen.SHIELD else None
+            self.offhand_uses = min(max(int(data.get("offhand_uses", VoxelGen.SHIELD_USES)), 1), VoxelGen.SHIELD_USES)
             self.drops.load_list(data.get("drops", []), lambda item: VoxelGen.ITEM_COLOURS.get(item, (0.8, 0.8, 0.8)))
             self.crafting.load_list(data.get("recipes", []))
         except (OSError, ValueError, TypeError, AttributeError):
@@ -778,15 +858,44 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
             return
         if self.offhand is not None:
             if self.creative or self.inventory.fits(self.offhand):
-                self.gain(self.offhand)
-                self.offhand = None
+                self.return_shield()
             else:
                 self.notify("Inventory full")
         elif self.selected() == VoxelGen.SHIELD:
+            stack = self.inventory.slots[self.slot]
+            self.offhand_uses = stack[2] if len(stack) > 2 else VoxelGen.SHIELD_USES
             self.inventory.take(self.slot, 1)
             self.offhand = VoxelGen.SHIELD
         else:
             self.notify("Select a shield to hold it in the left hand")
+
+    def return_shield(self):
+        """The shield in the left hand goes back into the inventory with the uses it has left. Creative mode keeps no stock."""
+        if self.creative:
+            self.offhand = None
+            return
+        self.inventory.add(VoxelGen.SHIELD)
+        for index, stack in enumerate(self.inventory.slots):
+            if stack is not None and stack[0] == VoxelGen.SHIELD and stack[1] == 1 and stack[2] == VoxelGen.SHIELD_USES:
+                self.inventory.slots[index] = [VoxelGen.SHIELD, 1, self.offhand_uses]
+                break
+        self.offhand = None
+        self.offhand_uses = VoxelGen.SHIELD_USES
+
+    def wear_shield(self, blocks):
+        """A shield in the left hand takes one use for each bite it blocks. It breaks when its uses are gone; creative mode never
+        wears it."""
+        if self.creative or self.offhand != VoxelGen.SHIELD:
+            return
+        share_before = self.offhand_uses / VoxelGen.SHIELD_USES
+        self.offhand_uses -= blocks
+        if self.offhand_uses <= 0:
+            self.offhand = None
+            self.offhand_uses = VoxelGen.SHIELD_USES
+            self.notify("Your shield broke")
+            cge.play_sound("tool_break", 0.8)
+        elif share_before > 0.1 and self.offhand_uses / VoxelGen.SHIELD_USES <= 0.1:
+            self.notify("Your shield is nearly broken")
 
     def shield_up(self):
         """Q holds a shield up while one is in the left hand (it takes the bites of creatures in front)."""
@@ -826,7 +935,13 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
         # A held break repeats at the empty hand's rate, times the held item's attack speed (the shovel strikes three times as fast).
         rate = BREAK_REPEAT_RATE / VoxelGen.attack_speed_of(self.selected())
         breaking = self.repeating("Break", break_down or self.hotkey_down("J"), dt, rate)
-        placing = self.repeating("Place", place_down or self.hotkey_down("K"), dt)
+        if self.selected() == VoxelGen.BOW:
+            # A bow is drawn with the place button, so placing waits: letting go fires.
+            self.update_bow(dt, place_down or self.hotkey_down("K"))
+            placing = False
+        else:
+            self.bow_draw = None
+            placing = self.repeating("Place", place_down or self.hotkey_down("K"), dt)
         if breaking and self.aims_at_walker():
             # A creature the crosshair is on, nearer than the block behind it, is hit: each hit takes one of its HEALTH. The
             # one that kills it leaves a hide for the inventory.
