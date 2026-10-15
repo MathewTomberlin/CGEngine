@@ -1,0 +1,126 @@
+"""
+Checks the biters' reaction to a raised shield (resources/scripts/VoxelWalkers.py) without the engine: a bite that the shield turns
+knocks the biter back, then starts a circling of the player (FLANK_SECONDS), heading round to one side of the way to the player; a
+biter that is beside the shield (out of its arc) bites there, and the bite lands; lowering the shield ends the circling. The
+engine's walker calls are stand-ins: a creature moves by its velocity each frame, and its pose (animation) is not drawn.
+Usage (from the repo root): python -I tools/test_voxel_walkers.py   Exits 0 on success, 1 on any failed check.
+"""
+import math
+import os
+import random
+import sys
+import types
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, "..", "resources", "scripts"))
+
+# A stand-in engine: a walker's feet are kept where the test puts them, and its velocity is the one the walker set.
+state = {"pos": (0.0, 0.0, 0.0), "vel": (0.0, 0.0)}
+
+
+def walker_state(name):
+    return list(state["pos"]), (0.0, 0.0, 0.0), True
+
+
+def set_position(name, x, y, z):
+    state["pos"] = (x, y, z)
+
+
+def set_velocity(name, vx, vz):
+    state["vel"] = (vx, vz)
+
+
+fake = types.ModuleType("cg_engine_bindings")
+fake.voxel_walker_state = walker_state
+fake.set_voxel_position = set_position
+fake.set_voxel_velocity = set_velocity
+fake.__getattr__ = lambda name: (lambda *args, **kwargs: None)
+sys.modules["cg_engine_bindings"] = fake
+
+import VoxelWalkers  # noqa: E402
+
+# The walker's pose (its model's clip and turn) is the engine's; the checks here are on the choices.
+VoxelWalkers.Walker.animate = lambda self, *args, **kwargs: None
+
+failures = []
+
+
+def check(name, ok):
+    print("PASS" if ok else "FAIL", name)
+    if not ok:
+        failures.append(name)
+
+
+class OpenGround:
+    """A world with no lava and no walls: every block is air."""
+    def get_block(self, x, y, z):
+        return 0
+
+
+DT = 1.0 / 60.0
+PLAYER = (0.0, 0.0)          # the player's (x, z)
+FEET = 0.0
+SHIELD = (1.0, 0.0)          # the way the player faces: +x
+FRONT = (1.0, 0.2)           # in front of the shield, and within reach of a bite
+
+
+def step(walker, seconds, shield):
+    """Run the walker for seconds, moving it by its velocity each frame. Returns the bite damage that landed and whether a bite
+    was blocked on the way."""
+    bite = 0.0
+    blocked = False
+    for _ in range(int(round(seconds / DT))):
+        walker.blocked = False      # Walkers.update clears this each frame before the walker moves
+        bite += walker.update(DT, PLAYER, None, FEET, 0.0, shield)
+        blocked = blocked or walker.blocked
+        x, y, z = state["pos"]
+        state["pos"] = (x + state["vel"][0] * DT, y, z + state["vel"][1] * DT)
+    return bite, blocked
+
+
+def angle_off_player(pos, heading):
+    """The turn, in radians, from the way to the player to heading (the short way round)."""
+    to_player = math.atan2(PLAYER[1] - pos[2], PLAYER[0] - pos[0])
+    return (heading - to_player + math.pi) % (2.0 * math.pi) - math.pi
+
+
+kind = VoxelWalkers.VoxelCreatures.by_name("biter")
+knock = VoxelWalkers.KNOCK_SECONDS
+
+walker = VoxelWalkers.Walker(OpenGround(), "biter_test", (FRONT[0], FEET, FRONT[1]), (0.4, 0.1, 0.1), random.Random(3), kind=kind)
+state["pos"] = (FRONT[0], FEET, FRONT[1])
+bite, blocked = step(walker, VoxelWalkers.BITE_WINDUP + 0.1, SHIELD)
+check("a biter in front of a raised shield has its bite turned", blocked and bite == 0.0)
+check("the turned bite sets the circling for FLANK_SECONDS, to one side",
+      walker.flank_timer > 0.0 and walker.flank_side in (1.0, -1.0))
+
+# The knock pushes it back (it stays in front of the shield), then it circles: one frame later it heads a turn off the way to the
+# player, round to its flank side.
+step(walker, knock + 0.05, SHIELD)
+check("the knock keeps it in front, and the circling goes on", walker.flank_timer > 0.0)
+walker.blocked = False
+walker.update(DT, PLAYER, None, FEET, 0.0, SHIELD)
+heading = math.atan2(state["vel"][1], state["vel"][0])
+turn = angle_off_player(state["pos"], heading)
+check("while in front, it heads FLANK_TURN off the way to the player, round to its flank side",
+      abs(abs(turn) - VoxelWalkers.FLANK_TURN) < 1e-6 and (turn > 0) == (walker.flank_side > 0))
+
+# Beside the shield (out of its arc): the circling ends, and its next bite lands.
+state["pos"] = (0.3, FEET, 1.0)
+step(walker, 0.02, SHIELD)
+check("beside the shield, the circling ends", walker.flank_timer == 0.0)
+bite, blocked = step(walker, kind["bite_interval"] + VoxelWalkers.BITE_WINDUP + 0.2, SHIELD)
+check("beside the shield, its next bite lands (it is not blocked)", bite > 0.0 and not blocked)
+
+# Lowering the shield while it circles ends the circling at once.
+other = VoxelWalkers.Walker(OpenGround(), "biter_test2", (FRONT[0], FEET, FRONT[1]), (0.4, 0.1, 0.1), random.Random(4), kind=kind)
+state["pos"] = (FRONT[0], FEET, FRONT[1])
+step(other, VoxelWalkers.BITE_WINDUP + knock + 0.1, SHIELD)
+check("a biter circling a raised shield keeps circling", other.flank_timer > 0.0)
+step(other, 0.02, None)
+check("with the shield lowered, the circling ends", other.flank_timer == 0.0)
+
+if failures:
+    print(f"\n{len(failures)} check(s) failed")
+    sys.exit(1)
+print("\nAll voxel walker checks passed.")

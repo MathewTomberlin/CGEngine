@@ -148,6 +148,29 @@ j.load_list([[STONE, 5], "bad", [DIRT, 999], [0, 3], None, [TORCH, 2]])
 check("a damaged save keeps the valid entries only",
       j.slots[0] == [STONE, 5] and j.slots[1] is None and j.slots[2] is None and j.slots[3] is None and j.slots[5] == [TORCH, 2])
 
+# A sword wears like a tool: each strike takes one use, and it breaks when they are gone.
+SWORD = VoxelGen.SWORD
+check("a sword has a durability, a pickaxe has one, and stone does not wear",
+      VoxelGen.durability_of(SWORD) == VoxelGen.WEAPONS[SWORD]["durability"] and VoxelGen.durability_of(VoxelGen.PICKAXE) == 640
+      and VoxelGen.durability_of(STONE) is None)
+w = inv.Inventory()
+w.add(SWORD, 1)
+w.add(SWORD, 1)
+check("a new sword has all its uses, and a second one takes its own slot", w.slots[0] == [SWORD, 1, VoxelGen.durability_of(SWORD)]
+      and w.slots[1] == [SWORD, 1, VoxelGen.durability_of(SWORD)])
+w.take(1)
+check("a strike uses one of the sword's uses", w.wear(0) is False and w.slots[0][2] == VoxelGen.durability_of(SWORD) - 1)
+check("the sword's share of uses left falls with each strike",
+      abs(w.durability(0) - (VoxelGen.durability_of(SWORD) - 1) / VoxelGen.durability_of(SWORD)) < 1e-9)
+w.slots[0][2] = 1
+check("the last use breaks the sword, which empties its slot", w.wear(0) is True and w.slots[0] is None)
+w.add(STONE, 3)
+check("wear does not change a block (stone is not worn)", w.wear(0) is False and w.slots[0] == [STONE, 3])
+b = inv.Inventory()
+b.load_list([[SWORD, 1, 12], [VoxelGen.BONE_BLADE, 1, 999]])
+check("a saved sword keeps its uses, and a bone blade's uses stay within its durability",
+      b.slots[0] == [SWORD, 1, 12] and b.slots[1] == [VoxelGen.BONE_BLADE, 1, VoxelGen.durability_of(VoxelGen.BONE_BLADE)])
+
 if failures:
     print(f"\n{len(failures)} check(s) failed")
     sys.exit(1)

@@ -30,7 +30,7 @@ WOOD, TORCH, STONE, IRON = VoxelGen.WOOD, VoxelGen.TORCH, VoxelGen.STONE, VoxelG
 PICKAXE, IRON_PICKAXE = VoxelGen.PICKAXE, VoxelGen.IRON_PICKAXE
 BY_NAME = {recipe["name"]: recipe for recipe in VoxelRecipes.RECIPES}
 torch, pickaxe, iron_pickaxe = BY_NAME["Torch"], BY_NAME["Pickaxe"], BY_NAME["Iron pickaxe"]
-ALL_NAMES = ["Torch", "Pickaxe", "Iron pickaxe"]
+ALL_NAMES = ["Torch", "Pickaxe", "Iron pickaxe", "Sword", "Shield", "Bone blade", "Shovel", "Bucket"]
 
 check("the recipes come from the data file, in file order", [r["name"] for r in VoxelRecipes.RECIPES] == ALL_NAMES)
 check("the pickaxe takes stone and wood and makes a pickaxe",
@@ -47,7 +47,8 @@ check("learning from an empty inventory teaches nothing", crafting.learn(inv) ==
 
 # Picking up wood teaches every recipe that takes wood, once.
 inv.add(WOOD, 3)
-check("holding wood teaches the recipes that take wood", crafting.learn(inv) == ALL_NAMES and crafting.known == set(ALL_NAMES))
+inv.add(IRON, 3)   # iron teaches the recipes that take iron (the bucket takes only iron)
+check("holding wood and iron teaches the recipes that take them", crafting.learn(inv) == ALL_NAMES and crafting.known == set(ALL_NAMES))
 check("a recipe is learned only once", crafting.learn(inv) == [])
 check("a known recipe is listed", [r["name"] for r in crafting.visible(creative=False)] == ALL_NAMES)
 
@@ -84,7 +85,7 @@ check("the dropdown lists All and the categories of the recipes", VoxelRecipes.C
 crafting.category = "Light"
 check("the Light category lists the torch", crafting.visible(creative=False) == [torch])
 crafting.category = "Tools"
-check("the Tools category lists the pickaxes", [r["name"] for r in crafting.visible(creative=False)] == ["Pickaxe", "Iron pickaxe"])
+check("the Tools category lists the pickaxes, the sword, the shield, the bone blade, the shovel and the bucket", [r["name"] for r in crafting.visible(creative=False)] == ["Pickaxe", "Iron pickaxe", "Sword", "Shield", "Bone blade", "Shovel", "Bucket"])
 crafting.category = VoxelRecipes.ALL
 fresh_tools = VoxelRecipes.Crafting()
 fresh_tools.category = "Tools"
