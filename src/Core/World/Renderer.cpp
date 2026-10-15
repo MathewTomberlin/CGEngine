@@ -1172,8 +1172,13 @@ namespace CGEngine {
 		//without writing depth, so what is behind them still shows. The shadow map skips them: they do not block the sun.
 		vector<Body*> transparentBodies;
 		vector<Body*> xrayBodies;
+		vector<Body*> viewmodelBodies;
 		for (auto iterator = renderOrder.begin(); iterator != renderOrder.end(); ++iterator) {
 			Body* body = assets.get<Body>(*iterator);
+			if (body->viewmodel) {
+				if (!shadowPass) viewmodelBodies.push_back(body);
+				continue;
+			}
 			if (body->xray) {
 				if (!shadowPass) xrayBodies.push_back(body);
 				continue;
@@ -1198,6 +1203,15 @@ namespace CGEngine {
 				body->onDraw(*window, body->getGlobalTransform());
 			}
 			GL_CHECK(glEnable(GL_DEPTH_TEST));
+		}
+		// The viewmodels (the first-person hands and held items) are drawn last, with the depth buffer cleared, so the walls and the
+		// ground never cut into them. They are drawn with the depth test on, so their own parts overlap correctly.
+		if (!viewmodelBodies.empty()) {
+			GL_CHECK(glDepthMask(GL_TRUE));
+			GL_CHECK(glClear(GL_DEPTH_BUFFER_BIT));
+			for (Body* body : viewmodelBodies) {
+				body->onDraw(*window, body->getGlobalTransform());
+			}
 		}
 	}
 

@@ -610,6 +610,8 @@ namespace CGEngine {
         bool transparent = false;
         // Drawn last, with the depth test off, so it shows through whatever is in front of it (the block outlines in the voxel sample).
         bool xray = false;
+        // Drawn after the scene with the depth buffer cleared, so it is never clipped by the world: a first-person hand or a held item.
+        bool viewmodel = false;
         /// Drawn over the scene in window pixels, like a text label (the HUD's rectangles are overlays).
         bool overlay = false;
         /// <summary>

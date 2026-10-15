@@ -51,6 +51,8 @@ rate, build and run the Release configuration.
   swatches, then left click cells to put in the items you hold (right click returns an item). When the grid holds a
   pattern, the output box names the recipe; click it to make it. A pickaxe is a row of three stone, with two wood
   going down from its middle stone. The grid's items return to the inventory when you close the screen or save.
+- First-person hands: the right arm holds the selected item (a pickaxe, or the lantern for a torch), swings it on each left click,
+  and a pickaxe's hit throws sparks. The left arm reaches out on each placement.
 - Creatures wander the terrain. A left click on one takes a hit (three hits kill it, and it leaves a hide). One in three is a
   dark red biter: it chases you inside 7 blocks and bites, 1 health a bite. A wall in its way does not stop it: it walks round by a gap
   (up to 14 blocks away), or wanders when there is none. The bar above the hotbar is your health (ten
