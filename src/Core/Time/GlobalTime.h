@@ -11,7 +11,10 @@ namespace CGEngine {
 	public:
 		sec_t getLastFrameSec();
 		sec_t getElapsedSec();
+		// The frame's time: 0 while the time is frozen, so animations, walkers and anything else that moves by it stand still.
 		sec_t getDeltaSec() const;
+		void setFrozen(bool on) { frozen = on; }
+		bool isFrozen() const { return frozen; }
 		void updateDeltaTime();
 		sec_t getSystemTimeMs();
 		tm getSystemTimeNow();
@@ -26,5 +29,6 @@ namespace CGEngine {
 		sec_t lastFrameSec = 0.0f;
 		size_t frame = 0;
 		bool logFPS = false;
+		bool frozen = false;
 	};
 }

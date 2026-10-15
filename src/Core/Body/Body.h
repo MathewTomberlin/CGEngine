@@ -1,6 +1,7 @@
 #pragma once
 
 #define _USE_MATH_DEFINES
+#include "glm.hpp"
 #include <math.h>
 #include <memory>
 #include "../Types/V2.h"
@@ -101,6 +102,14 @@ namespace CGEngine {
         void setInstanceAnimator(Animator* animator);
         /// The instance animator of this body, or of the nearest parent that has one. nullptr if the body is in no instance.
         Animator* findInstanceAnimator() const;
+        /// A body that follows a bone of another body's model instance. Its matrix is the target's, then the bone's pose, then offset,
+        /// then its own mesh (see Renderer::getCombinedModelMatrix), so it moves with the bone and not with its parents. Set by cge.attach_to_bone.
+        struct BoneAttachment {
+            id_t target;
+            string bone;
+            glm::mat4 offset;
+        };
+        std::optional<BoneAttachment> boneAttachment;
         /// <summary>
         /// Return the drawn Shape as an object of the indicated type
         /// </summary>

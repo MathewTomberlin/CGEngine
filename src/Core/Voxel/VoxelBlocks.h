@@ -25,7 +25,7 @@ namespace CGEngine {
 		// its sides and its bottom. Its vertex colour is white, so the tile is the colour.
 		bool textured = false;
 		uint8_t tiles[3] = { 0, 0, 0 };   // the tile layers of the top, the sides and the bottom (when textured)
-		// A terrain block's splat channel, 0 to 7: its weight is blended per pixel from the splat tiles of the smooth skin. -1 for a
+		// A terrain block's splat channel, 0 to 15: its weight is blended per pixel from the splat tiles of the smooth skin. -1 for a
 		// block that is not a splat block (it takes its own tiles per vertex).
 		int8_t splat = -1;
 	};

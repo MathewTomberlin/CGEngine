@@ -17,6 +17,8 @@ namespace CGEngine {
         // are kept, so the game's resources stay. Returns false if it is not supported.
         bool setFullscreen(bool on);
         bool isFullscreen() const { return fullscreen; }
+        // True while the game's window is the one the user is typing into (not in the background).
+        bool hasFocus() const { return window && window->hasFocus(); }
         string getWindowTitle();
         //Size
         V2f getSize() const;

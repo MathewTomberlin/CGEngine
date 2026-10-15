@@ -405,6 +405,13 @@ namespace CGEngine {
 			return chunk.terrain[chunk.index(x, y, z)] != 0;
 		}
 
+		// The block id at (x, y, z), 0 (air) outside the padded chunk.
+		int blockAt(const PaddedChunk& chunk, int x, int y, int z) {
+			const int b = chunk.border;
+			if (x < -b || y < -b || z < -b || x >= chunk.size + b || y >= chunk.height + b || z >= chunk.size + b) return 0;
+			return chunk.at(x, y, z);
+		}
+
 		// Whether the block at (x, y, z) is in the group. Outside the padded chunk it is air.
 		bool solidAt(const PaddedChunk& chunk, uint8_t group, int x, int y, int z) {
 			const int b = chunk.border;
@@ -498,8 +505,6 @@ namespace CGEngine {
 			int block = 0;
 			float blockDistance = 1e30f;
 			size_t dominant = 0;
-			float splat[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
-			float splatTotal = 0.0f;
 			for (int c = 0; c < 8; ++c) {
 				const int dx = c & 1, dy = (c >> 1) & 1, dz = (c >> 2) & 1;
 				const int x = static_cast<int>(base.x) + dx, y = static_cast<int>(base.y) + dy, z = static_cast<int>(base.z) + dz;
@@ -515,13 +520,50 @@ namespace CGEngine {
 					dominant = chunk.index(x, y, z);
 					block = id;
 				}
-				const int channel = chunk.rule[id].splat;
-				if (group == 0 && channel >= 0) {
-					splat[channel] += w;
-					splatTotal += w;
-				}
 			}
 			if (block == 0) block = 1;
+
+			// The splat weights. A terrain vertex takes them from its solid corners. A water vertex (the water's own mesh, whose
+			// group is a transparent block) takes its water corners and the ground beside them, so its surface joins the ground. A
+			// corner of another block (brick, wood) is a barrier the water does not blend across: only its water counts there.
+			float splat[kSplatChannels] = {};
+			float splatTotal = 0.0f;
+			const bool blended = group != 0 && chunk.rule[group].transparent && chunk.rule[group].splat >= 0;
+			float waterWeight = 0.0f;
+			bool barrier = false;
+			for (int c = 0; c < 8; ++c) {
+				const int dx = c & 1, dy = (c >> 1) & 1, dz = (c >> 2) & 1;
+				const int x = static_cast<int>(base.x) + dx, y = static_cast<int>(base.y) + dy, z = static_cast<int>(base.z) + dz;
+				const float w = (dx ? t.x : 1.0f - t.x) * (dy ? t.y : 1.0f - t.y) * (dz ? t.z : 1.0f - t.z);
+				if (group == 0) {
+					if (!solidAt(chunk, 0, x, y, z)) continue;
+					const int channel = chunk.rule[chunk.at(x, y, z)].splat;
+					if (channel >= 0) {
+						splat[channel] += w;
+						splatTotal += w;
+					}
+				} else if (blended) {
+					const int id = blockAt(chunk, x, y, z);
+					if (id == 0) continue;
+					const PaddedChunk::MeshRule& rule = chunk.rule[id];
+					if (rule.transparent) {
+						waterWeight += w;
+					} else if (rule.splat >= 0) {
+						splat[rule.splat] += w;
+						splatTotal += w;
+					} else if (rule.group != 0) {
+						barrier = true;
+					}
+				}
+			}
+			if (blended) {
+				if (barrier) {
+					for (float& value : splat) value = 0.0f;
+					splatTotal = 0.0f;
+				}
+				splat[chunk.rule[group].splat] += waterWeight;
+				splatTotal += waterWeight;
+			}
 
 			// Ambient occlusion: the density a little way out along the normal. Walls close by darken the corner.
 			float outside = densityAt(chunk, group,p + normal * 0.25f);
@@ -541,19 +583,20 @@ namespace CGEngine {
 
 			VoxelVertex vertex;
 			vertex.position = p;
-			if (group == 0) {
+			if (group == 0 || blended) {
 				if (splatTotal <= 0.0f) {
 					// No splat block among the corners: the density can come from the smoothed corners of blocks a step away, so a
 					// vertex just off a ledge can have only air beside it. It takes the nearest splat block around it. A terrain vertex
 					// must never fall back to the tile layers: the fragment shader's tiles are flat, so one such vertex would paint its
 					// whole triangle with them (the green triangles on the sand).
 					splatTotal = 1.0f;
-					splat[nearestSplatChannel(chunk, p)] = 1.0f;
+					if (blended) splat[chunk.rule[group].splat] = 1.0f;
+					else splat[nearestSplatChannel(chunk, p)] = 1.0f;
 				}
-				// Terrain: the splat weights carry the tiles (the tile layers are not used), normalised to sum to 1.
-				for (int k = 0; k < 4; ++k) {
-					vertex.splatA[k] = splat[k] / splatTotal;
-					vertex.splatB[k] = splat[k + 4] / splatTotal;
+				// The splat weights carry the tiles (the tile layers are not used), normalised to sum to 1.
+				for (int k = 0; k < kSplatChannels; ++k) {
+					const uint32_t byte = static_cast<uint32_t>(std::lround(std::clamp(splat[k] / splatTotal, 0.0f, 1.0f) * 255.0f));
+					vertex.splat[k / 4] |= byte << (8 * (k % 4));
 				}
 				vertex.tiles = glm::vec3(255.0f);
 			} else {

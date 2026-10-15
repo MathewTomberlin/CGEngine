@@ -132,7 +132,7 @@ void bindVoxel(py::module_& m) {
                     type.tiles[i] = static_cast<uint8_t>((*tiles)[i]);
                 }
                 type.textured = true;
-                if (splat < -1 || splat > 7) throw py::value_error("splat must be a channel 0 to 7, or -1");
+                if (splat < -1 || splat > 15) throw py::value_error("splat must be a channel 0 to 15, or -1");
                 type.splat = static_cast<int8_t>(splat);
             }
             if (join_below) {

@@ -37,8 +37,9 @@ namespace CGEngine {
 	}
 
 	void Renderer::setVoxelSplatTiles(const std::vector<std::array<float, 3>>& tiles) {
-		if (tiles.size() != splatTiles.size()) throw std::invalid_argument("the splat tiles are eight blocks, each with three layers");
-		for (size_t k = 0; k < splatTiles.size(); ++k) splatTiles[k] = glm::vec3(tiles[k][0], tiles[k][1], tiles[k][2]);
+		if (tiles.size() > splatTiles.size()) throw std::invalid_argument("the splat tiles are at most 16 blocks, each with three layers");
+		splatTiles.fill(glm::vec3(0.0f));
+		for (size_t k = 0; k < tiles.size(); ++k) splatTiles[k] = glm::vec3(tiles[k][0], tiles[k][1], tiles[k][2]);
 		splatTilesDirty = true;
 	}
 
@@ -288,8 +289,11 @@ namespace CGEngine {
 				bind("materialId", 1, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, materialId));
 		bind("vertColour", 4, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, colour));
 		bind("vertTiles", 3, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, tiles));
-		bind("vertSplatA", 4, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, splatA));
-		bind("vertSplatB", 4, GL_FLOAT, GL_FALSE, offsetof(VoxelVertex, splatB));
+		// The packed splat weights are integers: they are unpacked in the vertex shader, then interpolated as floats.
+		if (const GLint location = program->attrib("vertSplat"); location >= 0) {
+			GL_CHECK(glEnableVertexAttribArray(location));
+			GL_CHECK(glVertexAttribIPointer(location, 4, GL_UNSIGNED_INT, sizeof(VoxelVertex), (void*)offsetof(VoxelVertex, splat)));
+		}
 		GL_CHECK(glBindVertexArray(0));
 	}
 
@@ -613,9 +617,10 @@ namespace CGEngine {
 			}
 				// The splat blocks' tile layers: each program takes them once, and again when they change, not on every draw.
 				if (meshData->compact && (splatTilesDirty || splatTilesProgram != program)) {
-					static const char* const splatNames[8] = { "splatTiles[0]", "splatTiles[1]", "splatTiles[2]", "splatTiles[3]",
-						"splatTiles[4]", "splatTiles[5]", "splatTiles[6]", "splatTiles[7]" };
-					for (size_t k = 0; k < splatTiles.size(); ++k) program->setUniform(splatNames[k], splatTiles[k]);
+					for (size_t k = 0; k < splatTiles.size(); ++k) {
+						const std::string name = "splatTiles[" + std::to_string(k) + "]";
+						program->setUniform(name.c_str(), splatTiles[k]);
+					}
 					splatTilesProgram = program;
 					splatTilesDirty = false;
 				}
@@ -671,6 +676,23 @@ namespace CGEngine {
 			localTransform = mesh->getModelMatrix();
 		}
 
+		// A body that follows a bone: the target's matrix, then the bone's place in this frame, then the offset, instead of its parents.
+		if (body->boneAttachment.has_value()) {
+			const Body::BoneAttachment& attachment = body->boneAttachment.value();
+			Body* target = assets.get<Body>(attachment.target);
+			if (!target) return localTransform;
+			glm::mat4 bone(1.0f);
+			if (!attachment.bone.empty()) {
+				if (Animator* animator = target->findInstanceAnimator()) {
+					advanceAnimator(animator);
+					animator->getNodeTransform(attachment.bone, bone);
+				}
+			}
+			glm::mat4 modelMatrix = getCombinedModelMatrix(target) * bone * attachment.offset * localTransform;
+			body->globalTransform = glmToTransform(modelMatrix);
+			return modelMatrix;
+		}
+
 		// Combine with parent transform
 		if (body->parentId.has_value() && body->parentId != world->getRoot()->getId()) {
 			Body* parent = assets.get<Body>(body->parentId.value());
@@ -696,10 +718,14 @@ namespace CGEngine {
 			if (Body* body = assets.get<Body>(bodyId.value())) animator = body->findInstanceAnimator();
 		}
 		if (!animator) animator = meshModel->getAnimator();
+		advanceAnimator(animator);
+		return animator;
+	}
+
+	void Renderer::advanceAnimator(Animator* animator) {
 		if (animator && updatedAnimators.insert(animator).second) {
 			animator->updateAnimation(time.getDeltaSec());
 		}
-		return animator;
 	}
 
 	Program* Renderer::useRenderProgram(Material* renderMaterial) {
@@ -1189,12 +1215,21 @@ namespace CGEngine {
 			}
 			body->onDraw(*window, body->getGlobalTransform());
 		}
+		// A transparent body is drawn in two passes, so only its nearest surface shows: first its depth alone (no colour), then its
+		// colour where that depth is the nearest, so the backs of its faces (seen through the front) never blend in. The depth test
+		// is LEQUAL for the second pass, so the same surface passes it again.
 		if (!transparentBodies.empty()) {
-			GL_CHECK(glDepthMask(GL_FALSE));
 			for (Body* body : transparentBodies) {
+				GL_CHECK(glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE));
+				GL_CHECK(glDepthMask(GL_TRUE));
 				body->onDraw(*window, body->getGlobalTransform());
+				GL_CHECK(glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE));
+				GL_CHECK(glDepthMask(GL_FALSE));
+				GL_CHECK(glDepthFunc(GL_LEQUAL));
+				body->onDraw(*window, body->getGlobalTransform());
+				GL_CHECK(glDepthFunc(GL_LESS));
+				GL_CHECK(glDepthMask(GL_TRUE));
 			}
-			GL_CHECK(glDepthMask(GL_TRUE));
 		}
 		// The x-ray bodies (the outlines of the block being aimed at) are drawn with the depth test off, so the skin does not hide them.
 		if (!xrayBodies.empty()) {

@@ -80,8 +80,10 @@ in vec3 vertexGlow;
 in float vertexSky;
 in float vertexFlicker;     //The phase of a wavering flame (a placed torch), 0 for every other surface
 flat in vec3 vertexTiles;
-in vec4 vertexSplatA;
-in vec4 vertexSplatB;
+in vec4 vertexSplat0;	//the splat weights, channels 0 to 3 (see VoxelVertex::splat)
+in vec4 vertexSplat1;	//channels 4 to 7
+in vec4 vertexSplat2;	//channels 8 to 11
+in vec4 vertexSplat3;	//channels 12 to 15
 in float vertexDamage;      //How much of the voxel's block has been hit, 0 to 1 (see crackMask)
 
 out vec4 FragColor;
@@ -96,7 +98,13 @@ uniform int triplanar;
 uniform int tiled;
 uniform sampler2DArray voxelTiles;
 //The splat blocks' tile layers (top, sides, bottom), by channel: Renderer::setVoxelSplatTiles.
-uniform vec3 splatTiles[8];
+uniform vec3 splatTiles[16];
+
+// The splat weight of channel k (0 to 15).
+float splatWeight(int k){
+    vec4 group = k < 4 ? vertexSplat0 : (k < 8 ? vertexSplat1 : (k < 12 ? vertexSplat2 : vertexSplat3));
+    return group[k % 4];
+}
 vec4 triplanarTile(vec3 pos, vec3 n, float layer){
     vec3 weights = pow(abs(n), vec3(4.0));
     weights /= weights.x + weights.y + weights.z + 1e-6;
@@ -260,14 +268,14 @@ void main() {
     vec4 diffuseColor = vec4(materials[mtl].diffuseColor.rgb,1);                               //0-1, as given by the material
     //A voxel surface of one block (the water, the wood and the leaves) takes that block's tiles; the terrain's smooth skin blends
     //the splat blocks' tiles by its splat weights, which change smoothly across each triangle.
-    float splatSum = dot(vertexSplatA, vec4(1.0)) + dot(vertexSplatB, vec4(1.0));
+    float splatSum = dot(vertexSplat0 + vertexSplat1 + vertexSplat2 + vertexSplat3, vec4(1.0));
     if(tiled != 0 && triplanar != 0 && vertexTiles.x < 254.5){
         surfColor = tileColour(vertexTiles, normalize(normal), surfPos);
     } else if(tiled != 0 && triplanar != 0 && splatSum > 0.5){
         vec3 n = normalize(normal);
         vec4 blended = vec4(0.0);
-        for(int k = 0; k < 8; k++){
-            float w = k < 4 ? vertexSplatA[k] : vertexSplatB[k - 4];
+        for(int k = 0; k < 16; k++){
+            float w = splatWeight(k);
             if(w > 0.01) blended += w * tileColour(splatTiles[k], n, surfPos);
         }
         surfColor = blended / splatSum;
