@@ -16,6 +16,11 @@ import os
 COMMON = {"name", "share", "bites", "model", "material", "clip_prefix", "colours", "health", "pace"}
 FLEE = {"flee_range", "flee_pace"}
 BITE = {"chase_pace", "bite_range", "bite_damage", "bite_interval", "prey_range"}
+# Optional fields: "clips" names the clip each role plays (a kind whose model's clips are not named <clip_prefix>_<role>; a role it
+# leaves out is not played, so a kind with no hurt clip only flashes when hit); "flash_material" is the material drawn while a hit
+# flashes the creature (default: its own material).
+OPTIONAL = {"clips", "flash_material"}
+CLIP_ROLES = {"walk", "bound", "attack", "hurt", "die"}
 POSITIVE = {"share", "pace", "flee_pace", "chase_pace", "bite_range", "bite_damage", "bite_interval", "prey_range"}
 NON_NEGATIVE = {"flee_range"}
 
@@ -48,11 +53,11 @@ def load(path):
         names.add(name)
         if not isinstance(entry.get("bites"), bool):
             raise ValueError("creature %r: 'bites' must be true or false" % name)
-        allowed = COMMON | (BITE if entry["bites"] else FLEE)
+        allowed = COMMON | OPTIONAL | (BITE if entry["bites"] else FLEE)
         unknown = set(entry) - allowed
         if unknown:
             raise ValueError("creature %r: unknown or not allowed for this kind: %s" % (name, ", ".join(sorted(unknown))))
-        missing = allowed - set(entry)
+        missing = (allowed - OPTIONAL) - set(entry)
         if missing:
             raise ValueError("creature %r: missing %s" % (name, ", ".join(sorted(missing))))
         for key in ("model", "material", "clip_prefix"):
@@ -70,15 +75,31 @@ def load(path):
         health = entry["health"]
         if isinstance(health, bool) or not isinstance(health, int) or health < 1:
             raise ValueError("creature %r: 'health' must be a whole number of 1 or more" % name)
+        clips = entry.get("clips")
+        if clips is not None and (not isinstance(clips, dict) or not clips or not set(clips) <= CLIP_ROLES
+                                  or not all(isinstance(c, str) and c for c in clips.values())):
+            raise ValueError("creature %r: 'clips' maps some of %s to clip names" % (name, ", ".join(sorted(CLIP_ROLES))))
+        flash_material = entry.get("flash_material", entry["material"])
+        if not isinstance(flash_material, str) or not flash_material:
+            raise ValueError("creature %r: 'flash_material' must be a non-empty string" % name)
         kind = {"name": name, "bites": entry["bites"], "model": entry["model"], "material": entry["material"],
-                "clip_prefix": entry["clip_prefix"], "colours": tuple(clean_colours), "health": health}
-        for key in allowed - {"name", "bites", "model", "material", "clip_prefix", "colours", "health"}:
+                "clip_prefix": entry["clip_prefix"], "colours": tuple(clean_colours), "health": health,
+                "clips": dict(clips) if clips is not None else None, "flash_material": flash_material}
+        for key in (allowed - OPTIONAL) - {"name", "bites", "model", "material", "clip_prefix", "colours", "health"}:
             kind[key] = _number(name, key, entry[key])
         kinds.append(kind)
     total = sum(kind["share"] for kind in kinds)
     if abs(total - 1.0) > 1e-6:
         raise ValueError("%s: the shares of the creatures add up to %g, not 1" % (path, total))
     return tuple(kinds)
+
+
+def clip_for(kind, role):
+    """The clip a kind plays for a role (walk, bound, attack, hurt, die): the kind's named clip, or <clip_prefix>_<role> when the kind
+    names none. None when the kind has no clip for the role, so nothing plays."""
+    if kind["clips"] is not None:
+        return kind["clips"].get(role)
+    return kind["clip_prefix"] + "_" + role
 
 
 def data_file():

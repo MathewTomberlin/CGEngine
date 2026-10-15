@@ -605,6 +605,11 @@ Goal: a skin takes the shape of its blocks: a one-block column is one block wide
 - [ ] **25.4** Open: the far skins (stride 2) read the same centres, so a one-block feature at an odd block is still missed there;
   check a far hill in play. Textures: the terrain is triplanar in world space (`StdFragShader.frag`), so the texture does not
   stretch on a slope; the black patches it was blamed for are the vertices above, but a close look in play is still to do.
+  Found (the hard line where two LOD bands meet): `smoothVertex`'s `stride` argument, which averages the occlusion over a far
+  vertex's patch, was never passed, so far vertices and skirts took one air cell. It is passed now (`VoxelMesher.cpp`), so
+  the far skins (on by default, 12 chunks) are shaded as 15.8 intended. Not yet checked by eye at the seam.
+  To compare a seam before and after: `pwsh tools/voxel_seam_shot.ps1 -Seed 1 -Seam 3` (or `-Seam 12`), with the same seed each
+  time (the default seed is the clock, so a run without `-Seed` is a different world).
 
 ## Phase 26: meshing cost (from Phase 22's measurements)
 Goal: a chunk's mesh costs a few milliseconds, so a view of 40 settles in a few seconds from launch.
@@ -697,8 +702,9 @@ Goal: a tool is a choice: it is needed for some blocks, it wears out, and a bett
   Stone, coal and iron are mined by hand, so the ore is reachable without a tool. A pickaxe that cannot mine a block refuses the
   swing with a reason. Creative mode has no tiers and no wear.
 - [x] **28.3** The hotbar shows a tool's uses left as a bar along its slot, green while new and red as it nears breaking.
-- [~] **28.4** Open: a durability for the pickaxe that the player sees before it breaks (a notice at a tenth left); the iron
-  pickaxe's recipe needs iron ore that is found, not only mined near the surface.
+- [~] **28.4** Done: a notice ("Your pickaxe is nearly broken") as a tool crosses a tenth of its uses left (`VoxelGame.edit_blocks`).
+  Open: the iron pickaxe's recipe needs iron ore that is found, not only mined near the surface (iron is 0.6% of stone and only
+  above depth 20 in `VoxelTerrain.cpp`, so it is seldom seen from the surface).
 
 ## Phase 29: recipes as data (from the vision: goal 2)
 Goal: a recipe is an edit to a file, and the game reads it, so an agent can add one and test it without rebuilding.
@@ -732,11 +738,17 @@ Goal: a creature looks and moves like an animal: a shaped body with a skin, a ri
 Boxes are not the target (the player's word: "highly realistic"); the look comes from a Blender model, as the dungeon's rigs do.
 - [~] **33.1** Models from the asset library (Documents/Assets/Blends, not the repository's own). The timid creature is the horse (Horse.blend: 77,000 vertices, a full skeleton, walk, idle, attack and bound actions). tools/blender/export_horse.py exports it to resources/models/voxel/horse.fbx at 0.67 scale (about 1.0 tall and 2.1 long, a horse rather than a roe deer). tools/clips/horse_clips.py writes horse_walk, horse_idle, horse_attack and horse_bound to resources/clips, keyed on the horse's own bones. The wolf in Wolf.blend has a messy shell and is not used. The library has no hurt or die clip. The notes below are superseded.
 - [ ] **33.1a** Remodel the creature (superseded by the library models above; kept for the record). The box-modelled roe deer was taken out (not good enough). The earlier ellipsoid model was removed too. The clips in `resources/clips` and their `tools/clips/creature_clips.py` script stay, since they key the eight bones of the rig the new model must have; until the remodel they name a model file that is not in the repository. The new model needs more edge loops on the head and neck, sculpted joints, and a proper surface, then the same rig and clips.
-- [ ] **33.2** The walker plays the model: each creature's body is a skinned model, placed at the walker's feet and yaw each frame,
-  its walk clip speed set from its pace, and its bite and hurt clips played by the walker's own events. The box body goes.
+- [~] **33.2** The walker plays the model: each creature's body is a skinned model (the horse, from its kind), yawed to its heading and
+  clipped to walk, bound or attack (`VoxelWalkers.animate`); the box body is gone. Open: the in-game check of the placement at
+  the walker's feet. The biter is the drake (`models/voxel/drake.fbx` from Drake.blend, at global scale 0.005, half the other models' 0.01 because it is too big at 0.01: walk, bite and die
+  clips `drake_*`, and no hurt clip, so a hit only flashes it: `clips` and `flash_material` in `voxel_creatures.json`). The
+  timid stays the horse. The drake's look in play is not checked yet.
 - [x] **33.3** The creature kinds in the data file (29.2) name their model and clips, so a new creature is a model and an edit.
-- [ ] **33.4** Feedback that reads: a hit plays the hurt clip and knocks the creature back; a death plays the die clip and fades; a
-  bite lunges (the bite clip) before the damage lands.
+- [~] **33.4** Feedback that reads: a bite lunges (the bite clip plays, and the damage lands `BITE_WINDUP` seconds later, only if the
+  player is still in reach; a hit cancels it); a hit plays the hurt clip (`horse_hurt`, a flinch), knocks the creature back, and
+  flashes it red for `FLASH_SECONDS` (`cge.set_body_material`, the scene's `tint` key); a death plays the die clip (`horse_die`,
+  the horse goes over onto its side) and the body is taken out when the clip ends (`Walkers.corpses`). Open: no fade (the body
+  lies still for the clip and then goes), and the colours and the clips are not checked by eye yet.
 
 ## Phase 34: realistic item models (from the player: real item models; goal 1)
 Goal: an item looks like the thing it is: a tool is shaped, textured and held, and its icon is a render of it.

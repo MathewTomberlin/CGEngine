@@ -702,7 +702,7 @@ namespace CGEngine {
 			const size_t index = cellIndex(i, j, k);
 			if (emitted[index] < 0) {
 				emitted[index] = static_cast<int>(out.vertices.size());
-				out.vertices.push_back(smoothVertex(chunk, palette, group,cellPosition[index]));
+				out.vertices.push_back(smoothVertex(chunk, palette, group, cellPosition[index], stride));
 			}
 			return static_cast<unsigned int>(emitted[index]);
 		};
@@ -770,7 +770,7 @@ namespace CGEngine {
 			const unsigned int first = static_cast<unsigned int>(out.vertices.size());
 			const glm::vec3 corners[4] = { a, b, b + down, a + down };
 			for (const glm::vec3& corner : corners) {
-				VoxelVertex vertex = smoothVertex(chunk, palette, group,corner);
+				VoxelVertex vertex = smoothVertex(chunk, palette, group, corner, stride);
 				vertex.normal = normal;
 				out.vertices.push_back(vertex);
 			}
