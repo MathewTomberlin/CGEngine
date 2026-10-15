@@ -39,6 +39,7 @@ class Game:
         self.inventory.slots = slots + [None] * (VoxelInventory.SLOTS - len(slots))
         self.slot = slot
         self.offhand = offhand
+        self.offhand_uses = VoxelGen.SHIELD_USES
         self._raised = raised
         self.crafting = Crafting(["Sword"])
 

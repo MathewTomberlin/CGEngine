@@ -104,12 +104,12 @@ cge.mouse_delta = lambda: (0.0, 0.0)
 
 # The menu of the 1000 x 500 window: the pause page has Resume (y 260), Settings (y 305) and Quit (y 351). The settings
 # page has the sensitivity arrows (the up arrow at x 665, y 169), the view arrows (y 209), the window and speed rows, the
-# time-of-day track (y 347, from x 350 to 650) and Back (y 391).
+# time-of-day track (y 383, from x 350 to 650) and Back (y 427). The Auto jump row sits between Window and Speed.
 $settingsScript = Click-Script 500 305
 $sensUpScript = Click-Script 665 169
 $viewUpScript = Click-Script 680 209
-$trackScript = Click-Script 500 347
-$backScript = Click-Script 500 391
+$trackScript = Click-Script 500 383
+$backScript = Click-Script 500 427
 $quitScript = Click-Script 500 351
 
 Remove-Item -Recurse -Force $control -ErrorAction SilentlyContinue

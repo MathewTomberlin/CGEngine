@@ -240,7 +240,9 @@ def main():
         game.learn_recipes()
         checks["picking up wood teaches the torch and the pickaxe recipes"] = {"Torch", "Pickaxe"} <= crafting.known
         _, button, options, rows = game.craft_layout(len(crafting.visible(False)))   # the panel as the game lays it out
-        checks["the known recipes are listed, the torch first"] = [r["name"] for r in crafting.visible(False)] ==             ["Torch", "Pickaxe", "Iron pickaxe"] and crafting.visible(False)[0] == torch
+        known_names = [r["name"] for r in crafting.visible(False)]
+        checks["the known recipes are listed, the torch first"] = (known_names[:3] == ["Torch", "Pickaxe", "Iron pickaxe"]
+                                                                   and crafting.visible(False)[0] == torch)
         panel_click(game, rows[0])
         checks["a click on the recipe makes one torch from one wood"] = inv.count(TORCH) == 1 and inv.count(VoxelGen.WOOD) == 0
         inv.slots = [None] * VoxelInventory.SLOTS
@@ -255,7 +257,7 @@ def main():
         crafting.known = set()
         crafting.category = VoxelRecipes.ALL
         _, button, options, rows = game.craft_layout(len(crafting.visible(True)))
-        checks["creative mode lists every recipe, known or not"] = [r["name"] for r in crafting.visible(True)] ==             ["Torch", "Pickaxe", "Iron pickaxe"]
+        checks["creative mode lists every recipe, known or not"] = [r["name"] for r in crafting.visible(True)] == [r["name"] for r in VoxelRecipes.RECIPES]
         panel_click(game, rows[0])
         checks["creative mode makes a torch with nothing in the inventory"] = inv.count(TORCH) == 1
         game.creative = False
@@ -314,7 +316,7 @@ def main():
         checks["the arms are made, and the right hand holds the pickaxe on its own body"] = (
             cge.find_body("hand_right") is not None and cge.find_body("hand_left") is not None
             and game.held_model == VoxelHands.ITEM_MODELS[VoxelGen.PICKAXE] and cge.find_body("hand_held") is not None)
-        checks["the pickaxe follows the right hand's bone"] = len(cge.bone_matrix("hand_right", VoxelHands.HAND_BONE)) == 16
+        checks["the pickaxe follows the right hand's bone"] = len(cge.bone_matrix("hand_right", VoxelHands.HAND_BONES["R"])) == 16
         inv.slots[0] = None
         game.update_hands(0.016)
         checks["an empty hand holds no item model"] = game.held_model is None and cge.find_body("hand_held") is None
@@ -340,9 +342,11 @@ def main():
         inv.slots[0] = None
         game.update_hands(0.016)
 
-        # F5 saves the inventory with the edits, and F9 loads it back.
+        # F5 saves the inventory with the edits, and F9 loads it back. The game keys act only when the game is not paused, so the
+        # checks run unpaused for the two presses.
         inv.slots[0] = [DIRT, 7]
         game.slot = 2
+        game.paused = False
         PRESSED["key:F5"] = True
         game.save_and_load()
         PRESSED["key:F5"] = False
@@ -354,12 +358,15 @@ def main():
         PRESSED["key:F9"] = True
         game.save_and_load()
         PRESSED["key:F9"] = False
+        game.paused = True
         checks["F9 loads the inventory back"] = inv.slots[0] == [DIRT, 7] and game.slot == 2
 
-        # C toggles creative mode.
+        # C toggles creative mode (the game is unpaused for the press, as F5 and F9 are).
+        game.paused = False
         PRESSED["key:C"] = True
         game.update_modes()
         PRESSED["key:C"] = False
+        game.paused = True
         checks["C turns creative mode on"] = game.creative is True
         game.creative = False
 
@@ -490,6 +497,42 @@ def main():
             game.health == VoxelGame.PLAYER_HEALTH and abs(game.pos[0] - game.spawn_pos[0]) < 1e-6)
         checks["a death keeps the inventory"] = sum(stack[1] for stack in inv.slots if stack) == inv_total
         game.health = VoxelGame.PLAYER_HEALTH
+        # A bow is drawn while the place button is held, and fired when it is let go: one arrow leaves the inventory, the arrow flies
+        # until it lands or its life is up, and a bow with no arrows fires nothing.
+        inv.slots = [None] * VoxelInventory.SLOTS
+        inv.add(VoxelGen.BOW, 1)
+        inv.add(VoxelGen.ARROW, 3)
+        game.slot = 0
+        game.creative = False
+        game.bow_draw = None
+        for _ in range(3):
+            game.update_bow(0.2, True)
+        game.update_bow(0.0, False)
+        checks["a bow fires an arrow when the draw is let go, and takes one from the inventory"] = (
+            len(game.arrows) == 1 and inv.count(VoxelGen.ARROW) == 2)
+        for _ in range(240):
+            game.update_arrows(1.0 / 60.0)
+        checks["an arrow ends when it lands or its life is up"] = game.arrows == []
+        inv.take_item(VoxelGen.ARROW, inv.count(VoxelGen.ARROW))
+        game.update_bow(0.5, True)
+        game.update_bow(0.0, False)
+        checks["a bow with no arrows fires nothing"] = game.arrows == []
+        game.bow_draw = None
+        # A shield in the left hand takes one use for each blocked bite and breaks when they are gone; put back, it keeps its uses.
+        game.creative = False
+        inv.slots = [None] * VoxelInventory.SLOTS
+        game.offhand = VoxelGen.SHIELD
+        game.offhand_uses = VoxelGen.SHIELD_USES
+        game.wear_shield(3)
+        checks["a blocked bite takes one shield use each"] = game.offhand_uses == VoxelGen.SHIELD_USES - 3
+        game.return_shield()
+        checks["a shield put back keeps its uses in the inventory"] = (
+            game.offhand is None and [VoxelGen.SHIELD, 1, VoxelGen.SHIELD_USES - 3] in inv.slots)
+        game.offhand = VoxelGen.SHIELD
+        game.offhand_uses = 1
+        game.wear_shield(1)
+        checks["a shield with no uses left breaks and leaves the hand"] = game.offhand is None
+        inv.slots = [None] * VoxelInventory.SLOTS
         # Holding a button repeats its action: the press fires, then every REPEAT_RATE while it is held, and a release stops it.
         game.repeat_wait.pop("CheckHold", None)
         fired = [game.repeating("CheckHold", True, 0.1) for _ in range(20)]

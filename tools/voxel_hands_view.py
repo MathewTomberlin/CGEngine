@@ -9,7 +9,7 @@ import os
 import VoxelGen
 import VoxelInventory
 
-ITEMS = {"pickaxe": VoxelGen.PICKAXE, "iron_pickaxe": VoxelGen.IRON_PICKAXE, "sword": VoxelGen.SWORD, "shovel": VoxelGen.SHOVEL, "bucket": VoxelGen.BUCKET, "water_bucket": VoxelGen.WATER_BUCKET, "lava_bucket": VoxelGen.LAVA_BUCKET, "torch": VoxelGen.TORCH, "none": None}
+ITEMS = {"pickaxe": VoxelGen.PICKAXE, "iron_pickaxe": VoxelGen.IRON_PICKAXE, "sword": VoxelGen.SWORD, "shovel": VoxelGen.SHOVEL, "bucket": VoxelGen.BUCKET, "water_bucket": VoxelGen.WATER_BUCKET, "lava_bucket": VoxelGen.LAVA_BUCKET, "bow": VoxelGen.BOW, "torch": VoxelGen.TORCH, "none": None}
 item = ITEMS[os.environ.get("HANDS_ITEM", "pickaxe")]
 game = [o for o in gc.get_objects() if type(o).__name__ == "VoxelGame"][0]
 game.time_speed = 0.0    # noon, held still, so the shots of one seed look the same
