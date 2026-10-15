@@ -91,9 +91,9 @@ class NetMixin:
                 self.set_remote(tuple(entry[:3]), tuple(entry[3:]))
 
     def apply_request(self, request):
-        """A client's edit, under the host's rules: a hit takes its swings (two for a pickaxe at the blocks it mines), a block
-        goes only into air, and a torch leans on a solid block. A request for a cell the host has not loaded is ignored. The cell
-        is sent back either way, so an edit the host refused is undone on the client."""
+        """A client's edit, under the host's rules: a hit takes its swings (the client's tool sets them, up to MAX_SWINGS), a block
+        goes only into air, a torch leans on a solid block, and a scoop takes a liquid (a bucket). A request for a cell the host has
+        not loaded is ignored. The cell is sent back either way, so an edit the host refused is undone on the client."""
         try:
             op = request["op"]
             cell = tuple(int(v) for v in request["c"])
@@ -111,7 +111,7 @@ class NetMixin:
             kind = self.world.get_block(*cell)
             if kind == VoxelGen.AIR:
                 return
-            swings = 2 if swings >= 2 and kind in VoxelGen.PICKAXE_BLOCKS else 1
+            swings = max(0, min(swings, VoxelGen.MAX_SWINGS))
             stage = -2
             for _ in range(swings):
                 stage = self.world.hit_block(*cell)
@@ -123,6 +123,9 @@ class NetMixin:
                     self.world.remove_prop(*torch)   # the torches leaning on it break with it, and the client gains them
             elif stage > 0:
                 self.hit_times[cell] = time.time()
+        elif op == "scoop":
+            if self.world.get_block(*cell) in VoxelGen.LIQUIDS:
+                self.world.set_block(cell[0], cell[1], cell[2], VoxelGen.AIR)
         elif op == "place":
             if (item in VoxelGen.COLOURS and item != VoxelGen.TORCH and self.world.get_block(*cell) == VoxelGen.AIR
                     and not physics.cell_in_player(cell, self.pos)):
@@ -138,8 +141,8 @@ class NetMixin:
         """The voxel_edit control command: an edit made as a player's click makes it, under the same rules (apply_request). A
         client sends it to the host, which answers with the cell, so the result is the cell as the client has it now; the host,
         or a game alone, applies it at once. An edit in a chunk that is not loaded is an error, since the cell is not known."""
-        if request.get("op") not in ("hit", "place", "prop", "unprop"):
-            raise ValueError("op must be hit, place, prop or unprop")
+        if request.get("op") not in ("hit", "place", "prop", "unprop", "scoop"):
+            raise ValueError("op must be hit, place, prop, unprop or scoop")
         cell = tuple(int(v) for v in request["c"])
         if not self.loaded_at(cell):
             raise ValueError("the cell's chunk is not loaded")

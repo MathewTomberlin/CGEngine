@@ -13,7 +13,7 @@ ROWS = 3
 SLOTS = COLUMNS * ROWS
 HOTBAR_SLOTS = COLUMNS
 STACK_LIMIT = 64            # the most of one item in one slot
-UNSTACKED = tuple(VoxelGen.TOOLS)   # tools: one to a slot, each with its own durability
+UNSTACKED = tuple(VoxelGen.TOOLS) + tuple(VoxelGen.WEAPONS) + (VoxelGen.SHIELD,) + VoxelGen.BUCKETS   # tools, weapons, shields and buckets: one to a slot; a tool or weapon has its own durability
 
 
 def limit(item):
@@ -22,9 +22,9 @@ def limit(item):
 
 
 def new_stack(item, count):
-    """A slot's contents for an item: [item, count], and for a tool [item, 1, uses left], a new tool having all its uses."""
-    if item in VoxelGen.TOOLS:
-        return [item, count, VoxelGen.TOOLS[item]["durability"]]
+    """A slot's contents for an item: [item, count], and for a tool or weapon [item, 1, uses left], a new one having all its uses."""
+    if VoxelGen.durability_of(item) is not None:
+        return [item, count, VoxelGen.durability_of(item)]
     return [item, count]
 
 
@@ -63,10 +63,10 @@ class Inventory:
         return left
 
     def wear(self, index, uses=1):
-        """Use up uses of the tool in a slot (one per swing that hits a block). Returns True when the tool breaks, which empties
-        its slot. An item that is not a tool is not worn."""
+        """Use up uses of the tool or weapon in a slot (one per swing that hits a block, or per strike on a creature). Returns True
+        when it breaks, which empties its slot. An item that does not wear is not changed."""
         s = self.slots[index]
-        if s is None or s[0] not in VoxelGen.TOOLS or len(s) < 3:
+        if s is None or VoxelGen.durability_of(s[0]) is None or len(s) < 3:
             return False
         s[2] -= uses
         if s[2] > 0:
@@ -75,11 +75,11 @@ class Inventory:
         return True
 
     def durability(self, index):
-        """The share of a tool's uses left (0 to 1) in a slot, or None when the slot holds no tool."""
+        """The share of a tool's or weapon's uses left (0 to 1) in a slot, or None when the slot holds nothing that wears."""
         s = self.slots[index]
-        if s is None or s[0] not in VoxelGen.TOOLS or len(s) < 3:
+        if s is None or VoxelGen.durability_of(s[0]) is None or len(s) < 3:
             return None
-        return s[2] / VoxelGen.TOOLS[s[0]]["durability"]
+        return s[2] / VoxelGen.durability_of(s[0])
 
     def take(self, index, amount=1):
         """Remove up to amount from a slot. Returns how many were removed; a slot that empties becomes None."""
@@ -166,9 +166,9 @@ class Inventory:
                 continue
             if not (0 < item < 256 and 0 < count <= limit(item)):
                 continue
-            if item in VoxelGen.TOOLS:
-                # A saved tool keeps its uses; a file without them gives a new tool, and the uses stay within the tool's durability.
-                best = VoxelGen.TOOLS[item]["durability"]
+            if VoxelGen.durability_of(item) is not None:
+                # A saved tool or weapon keeps its uses; a file without them gives a new one, and the uses stay within its durability.
+                best = VoxelGen.durability_of(item)
                 try:
                     uses = int(entry[2])
                 except (TypeError, ValueError, IndexError, KeyError):

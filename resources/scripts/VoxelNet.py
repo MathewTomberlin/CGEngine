@@ -5,7 +5,7 @@ One process listens (VOXEL_NET=listen:7790) and the other connects (VOXEL_NET=co
 world (the same VOXEL_SEED), because the terrain is generated in each process; only the edits and the player's position are
 sent. The messages are JSON lines:
   client -> host: {"t": "req", "op": "hit", "c": cell, "swings": n}, {"t": "req", "op": "place", "c": cell, "id": id},
-                  {"t": "req", "op": "prop", "c": cell, "s": support, "dir": dir}, {"t": "req", "op": "unprop", "c": cell}
+                  {"t": "req", "op": "prop", "c": cell, "s": support, "dir": dir}, {"t": "req", "op": "unprop", "c": cell}, {"t": "req", "op": "scoop", "c": cell}
   host -> client: {"t": "cells", "cells": [[x, y, z, block, damage, prop], ...]}, the state of each cell that changed
   both ways:      {"t": "pos", "p": [x, y, z], "yaw": yaw}
 

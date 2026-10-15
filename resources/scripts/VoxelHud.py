@@ -75,6 +75,8 @@ class HudMixin:
             return "View distance: %d chunks" % self.view_radius
         if item == "window_value":
             return "Window: %s" % ("full screen" if self.fullscreen else "windowed")
+        if item == "jump_value":
+            return "Auto jump: %s" % ("on" if self.auto_jump else "off")
         if item == "speed_value":
             return "Time speed: %s" % self.time_speed_name()
         if item == "time_value":
@@ -111,12 +113,13 @@ class HudMixin:
             "sens_value": (None, (cx - 120, cy - 92)),
             "view_value": (None, (cx - 120, cy - 52)),
             "window_value": (None, (cx - 120, cy - 12)),
-            "speed_value": (None, (cx - 120, cy + 28)),
-            "time_value": (None, (cx - 120, cy + 64)),
-            "time_track": ((cx - 150, cy + 84, cx + 150, cy + 110), (cx - 150, cy + 86)),
-            "back": ((cx - 100, cy + 124, cx + 100, cy + 158), (cx - 30, cy + 128)),
+            "speed_value": (None, (cx - 120, cy + 68)),
+            "jump_value": ((cx - 215, cy + 24, cx + 215, cy + 54), (cx - 120, cy + 28)),
+            "time_value": (None, (cx - 120, cy + 100)),
+            "time_track": ((cx - 150, cy + 120, cx + 150, cy + 146), (cx - 150, cy + 122)),
+            "back": ((cx - 100, cy + 160, cx + 100, cy + 194), (cx - 30, cy + 164)),
         }
-        for row, top in (("sens", cy - 96), ("view", cy - 56), ("window", cy - 16), ("speed", cy + 24)):
+        for row, top in (("sens", cy - 96), ("view", cy - 56), ("window", cy - 16), ("speed", cy + 64)):
             items[row + "_down"] = ((cx - 215, top, cx - 150, top + 30), (cx - 200, top + 4))
             items[row + "_up"] = ((cx + 150, top, cx + 215, top + 30), (cx + 165, top + 4))
         return {"items": items, "titles": {"pause": (cx - 80, cy - 60), "settings": (cx - 90, cy - 130)},

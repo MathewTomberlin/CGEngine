@@ -47,6 +47,7 @@ LAVA_FOG_END = 9.0
 LAVA_INTERVAL = 0.5          # seconds between a creature's losses of health in lava
 REPEAT_DELAY = 0.35         # seconds a held mouse button waits before it repeats its break or place
 REPEAT_RATE = 0.25          # seconds between the repeats while it is held
+BREAK_REPEAT_RATE = 1.0     # seconds between the breaks (attacks and block breaks) while the break button is held: half as fast as before
 TILES_FILE = "voxel_tiles.png"   # the block textures, relative to the game's folder (tools/make_voxel_tiles.py)
 RULES_FILE = os.environ.get("VOXEL_RULES")   # a rule file (VoxelRules.py): the reactions the world runs, in place of none
 
@@ -88,6 +89,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
         self.swing_turn = 0.0           # how far the swing turns the arm, in degrees
         self.reach_time = None          # seconds into the left arm's reach after a placement, or None
         self.hit_times = {}             # the damaged blocks, by cell: the time each was last hit
+        self.hit_carry = {}             # the damage a block has from strikes that did not make a whole hit yet, by cell (edit_blocks)
         self.keys_was = {}              # previous state of the one-shot keys and buttons
         self.last = None
         self.frames = 0
@@ -104,6 +106,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
         self.sensitivity = saved["mouse_sensitivity"]   # mouse sensitivity, a percent of MOUSE_SENSITIVITY
         self.view_radius = saved["view_radius"]         # the view distance in chunks each way (VIEW_STEPS)
         self.time_speed = saved["time_speed"]           # how fast the sun moves: 0 pauses it, 1 is a day every DAY_SECONDS
+        self.auto_jump = saved["auto_jump"]             # jump when a walk is stopped by a wall of up to 4 blocks (see physics.wall_ahead)
         self.fullscreen = saved["fullscreen"]           # full screen or windowed (applied once the window is up)
         self.console = VoxelConsole.Console(self)       # the developer console, opened with backtick
         self.title_page = None                          # the page whose title is placed (see show_menu)
@@ -113,6 +116,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
         self.outline_bodies = set()     # the outlines already made as runtime meshes
         self.slot = 0                   # the hotbar slot placing uses
         self.inventory = VoxelInventory.Inventory()   # what the player holds, by slot (the hotbar is the first row)
+        self.offhand = None             # the item in the left hand (a shield, or None): F moves it, Q raises a shield
         self.creative = os.environ.get("VOXEL_CREATIVE", "0") == "1"   # placing takes nothing, breaking gives nothing
         self.inventory_open = False     # the inventory screen is up: the world stands still and the mouse is free
         self.inventory_hover = None     # the slot under the mouse on the inventory screen
@@ -201,6 +205,8 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
         self.update_pause_key()
         self.update_inventory_key()
         self.console.update()
+        # The frame time stops while the world stands still (below): the clips of the creatures and the hands, and the walkers.
+        cge.set_time_frozen(self.paused or self.inventory_open or self.console.open)
         if self.paused:
             # The world stands still while the menu is open: no time passes, no block moves, the player does not move.
             self.update_pause_menu()
@@ -257,7 +263,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
             self.world.define_block(block, cge.Vector3f(*rgb), solid=block not in VoxelGen.LIQUIDS,
                                     falls=block in VoxelGen.FALLS, liquid=block in VoxelGen.LIQUIDS,
                                     emits=VoxelGen.EMITS.get(block, 0), tiles=VoxelGen.TILES.get(block) if textured else None,
-                                    splat=VoxelGen.SPLAT.index(block) if textured and block in VoxelGen.SPLAT else -1,
+                                    splat=VoxelGen.splat_channel(block, textured),
                                     shape="cube" if block in VoxelGen.CUBES else "smooth",
                                     group="own" if block in VoxelGen.OWN else "terrain",
                                     material=VoxelGen.MATERIALS.get(block),
@@ -311,7 +317,14 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
             if not self.world.is_loaded(0, 0):
                 return
             self.walkers = VoxelWalkers.Walkers(self.world, (8.5, 8.5), WALKERS, self.seed)
-        bites = self.walkers.update(dt, (self.pos[0], self.pos[2]), self.pos[1], self.night)
+        # The shield faces the way the player looks, flat on the ground (the same forward as the walk, see update_player).
+        shield = None
+        if self.shield_up():
+            yaw = math.radians(self.yaw)
+            shield = (math.sin(yaw), -math.cos(yaw))
+        bites = self.walkers.update(dt, (self.pos[0], self.pos[2]), self.pos[1], self.night, shield)
+        if self.walkers.blocks:
+            cge.play_sound("hurt", 0.3)
         if bites > 0.0:
             cge.play_sound("bite", 0.8)
         self.hurt_player(bites)
@@ -340,6 +353,19 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
                 if walker.hurt((x, z)):
                     self.creature_died(walker)
 
+    def wear_weapon(self):
+        """A strike on a creature uses one of the weapon's uses (an item that does not wear is left as it is). It breaks when they
+        are gone; creative mode never wears it."""
+        if self.creative or VoxelGen.durability_of(self.selected()) is None:
+            return
+        share_before = self.inventory.durability(self.slot)
+        name = VoxelGen.NAMES.get(self.selected(), "weapon")
+        if self.inventory.wear(self.slot):
+            self.notify("Your %s broke" % name)
+            cge.play_sound("tool_break", 0.8)
+        elif share_before is not None and share_before > 0.1 and self.inventory.durability(self.slot) <= 0.1:
+            self.notify("Your %s is nearly broken" % name)
+
     def creature_died(self, walker):
         """A creature's death: a burst of its colour, it leaves the world, and (unless creative) a hide where it fell."""
         lo, hi = walker.box()
@@ -349,9 +375,12 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
         if self.walker_target is not None and self.walker_target[1] is walker:
             self.walker_target = None
         if not self.creative:
-            # The hide lies where the creature fell, on the ground under its middle, for the player to walk up to.
+            # The hide lies where the creature fell, on the ground under its middle, for the player to walk up to. A biter also
+            # leaves a tooth beside it: the crafting item for the bone blade.
             rest = self.ground_under(centre[0], lo[1], centre[2])
             self.drops.add(VoxelGen.HIDE, VoxelGen.ITEM_COLOURS[VoxelGen.HIDE], (centre[0], rest, centre[2]))
+            if walker.biter:
+                self.drops.add(VoxelGen.TOOTH, VoxelGen.ITEM_COLOURS[VoxelGen.TOOTH], (centre[0] + 0.35, rest, centre[2]))
 
     def nearest_creature(self):
         """The horizontal distance from the player's centre to the nearest live creature, or None (for the state file)."""
@@ -396,8 +425,15 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
 
     # ----- input --------------------------------------------------------------------------
 
+    def hotkey_down(self, name):
+        """A key of the game itself (movement, the hotbar, placing, the lantern, save and load). It reads as released while the
+        pause menu, the inventory screen or the console is open, so their keys do not act behind them."""
+        if self.paused or self.inventory_open or self.console.open:
+            return False
+        return bool(cge.key_down(name))
+
     def key(self, name):
-        return int(cge.key_down(name))
+        return int(self.hotkey_down(name))
 
     def pressed(self, name, down):
         """True only on the frame the key or button goes down."""
@@ -421,7 +457,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
     # ----- player -------------------------------------------------------------------------
 
     def update_player(self, dt):
-        if self.pressed("Enter", bool(cge.key_down("Enter"))):
+        if self.pressed("Enter", self.hotkey_down("Enter")):
             self.flying = not self.flying
             self.vel[1] = 0.0
 
@@ -458,6 +494,10 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
                 target = WATER_RISE if self.key("Space") else -WATER_SINK
                 self.vel[1] += (target - self.vel[1]) * min(1.0, dt * WATER_DRAG)
         elif self.key("Space") and self.on_ground:
+            self.vel[1] = physics.JUMP_SPEED
+        elif (self.auto_jump and self.on_ground and length > 0.0
+              and physics.auto_jump_wanted(self.world.is_solid, self.pos, (dx / speed, dz / speed) if speed else (0.0, 0.0))):
+            # Auto jump: the walk is stopped by a wall the player can climb over (a phone cannot walk and jump at once).
             self.vel[1] = physics.JUMP_SPEED
 
         # Physics waits until the chunk under the player is in the world, so the player does not fall through air.
@@ -497,6 +537,10 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
     def solid(self, x, y, z):
         return self.world.skin_at(x, y, z)
 
+    def fluid(self, x, y, z):
+        """A block a bucket aims at: solid, or a liquid (the water and lava a bucket fills from or places against)."""
+        return self.solid(x, y, z) or self.world.get_block(x, y, z) in VoxelGen.LIQUIDS
+
     def eye(self):
         return [self.pos[0], self.pos[1] + physics.EYE_HEIGHT, self.pos[2]]
 
@@ -512,6 +556,10 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
         look = self.look_direction()
         self.torch_target = self.torch_under_aim(eye, look)
         self.walker_target = self.walker_under_aim(eye, look)
+        if self.selected() in VoxelGen.BUCKETS:
+            # A bucket aims at the liquids as well as the solid blocks: a strike fills it from a liquid, and it places against one.
+            self.target = physics.raycast(self.fluid, eye, look)
+            return
         surface = self.world.skin_surface(eye, look, physics.REACH)
         if surface is None:
             self.target = physics.raycast(self.solid, eye, look)
@@ -594,6 +642,16 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
         if blocked is not None:
             self.notify("Inventory full: no room for the %s" % VoxelGen.NAMES[blocked])
 
+    def fill_bucket(self, block, kind):
+        """A strike on a liquid with an empty bucket: the liquid goes into the bucket, and its block goes to air. The host takes the
+        block with the same rules (a "scoop" request)."""
+        liquid = VoxelGen.WATER if kind in VoxelGen.WATER_BLOCKS else VoxelGen.LAVA
+        self.inventory.slots[self.slot] = [VoxelGen.FILLED_BUCKET[liquid], 1]
+        self.world.set_block(block[0], block[1], block[2], VoxelGen.AIR)
+        self.send_request({"op": "scoop", "c": list(block)})
+        cge.play_sound("place", 0.6, 0.7)
+        self.hands_hit("block", [block[i] + 0.5 for i in range(3)])
+
     def spend(self):
         """Placing takes one from the selected slot. Creative mode takes nothing."""
         if not self.creative:
@@ -660,12 +718,12 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
 
     def choose_hotbar(self):
         for slot in range(COLUMNS):
-            if self.pressed("Slot%d" % slot, bool(cge.key_down(hotbar_key(slot)))):
+            if self.pressed("Slot%d" % slot, self.hotkey_down(hotbar_key(slot))):
                 self.slot = slot
 
     def snapshot_key(self):
         """F12 saves a screenshot and the game state at that moment, for a bug that is hard to reproduce."""
-        if self.pressed("Snapshot", bool(cge.key_down("F12"))):
+        if self.pressed("Snapshot", self.hotkey_down("F12")):
             folder = os.path.abspath("cg_control/snapshots")
             os.makedirs(folder, exist_ok=True)
             stamp = time.strftime("%Y%m%d_%H%M%S")
@@ -674,9 +732,9 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
 
     def save_and_load(self):
         """F5 saves the edits and the inventory, F9 loads them (see save_world and load_world)."""
-        if self.pressed("Save", bool(cge.key_down("F5"))):
+        if self.pressed("Save", self.hotkey_down("F5")):
             self.save_world()
-        if self.pressed("Load", bool(cge.key_down("F9"))):
+        if self.pressed("Load", self.hotkey_down("F9")):
             self.load_world()
 
     def save_world(self):
@@ -687,7 +745,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
         self.world.save_edits(EDITS_FILE)
         self.crafting.return_grid(self.inventory)
         self.inventory.return_held()
-        StateFile.write_json(INVENTORY_FILE, {"slots": self.inventory.to_list(), "slot": self.slot,
+        StateFile.write_json(INVENTORY_FILE, {"slots": self.inventory.to_list(), "slot": self.slot, "offhand": self.offhand,
                                               "drops": self.drops.to_list(), "recipes": self.crafting.to_list()})
         self.notify("Saved")
 
@@ -708,19 +766,40 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
                 data = json.load(f)
             self.inventory.load_list(data.get("slots", []))
             self.slot = int(data.get("slot", self.slot)) % COLUMNS
+            self.offhand = data.get("offhand") if data.get("offhand") == VoxelGen.SHIELD else None
             self.drops.load_list(data.get("drops", []), lambda item: VoxelGen.ITEM_COLOURS.get(item, (0.8, 0.8, 0.8)))
             self.crafting.load_list(data.get("recipes", []))
         except (OSError, ValueError, TypeError, AttributeError):
             pass
 
+    def update_offhand(self):
+        """F moves a shield between the selected slot and the left hand, and back."""
+        if not self.pressed("Offhand", self.hotkey_down("F")):
+            return
+        if self.offhand is not None:
+            if self.creative or self.inventory.fits(self.offhand):
+                self.gain(self.offhand)
+                self.offhand = None
+            else:
+                self.notify("Inventory full")
+        elif self.selected() == VoxelGen.SHIELD:
+            self.inventory.take(self.slot, 1)
+            self.offhand = VoxelGen.SHIELD
+        else:
+            self.notify("Select a shield to hold it in the left hand")
+
+    def shield_up(self):
+        """Q holds a shield up while one is in the left hand (it takes the bites of creatures in front)."""
+        return self.offhand == VoxelGen.SHIELD and self.hotkey_down("Q")
+
     def update_modes(self):
         """C toggles creative mode: placing takes nothing from the slots, and breaking adds nothing to them."""
-        if self.pressed("Creative", bool(cge.key_down("C"))):
+        if self.pressed("Creative", self.hotkey_down("C")):
             self.creative = not self.creative
             self.notify("Creative mode on" if self.creative else "Creative mode off")
 
-    def repeating(self, name, down, dt):
-        """True on the frame a button goes down, and again every REPEAT_RATE seconds while it stays down after REPEAT_DELAY, so
+    def repeating(self, name, down, dt, rate=REPEAT_RATE):
+        """True on the frame a button goes down, and again every rate seconds while it stays down after REPEAT_DELAY, so
         holding a mouse button keeps breaking or placing. The wait runs in game time (dt), so a paused game does not repeat."""
         if self.pressed(name, down):
             self.repeat_wait[name] = REPEAT_DELAY
@@ -732,19 +811,22 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
             return False
         self.repeat_wait[name] -= dt
         if self.repeat_wait[name] <= 0.0:
-            self.repeat_wait[name] += REPEAT_RATE
+            self.repeat_wait[name] += rate
             return True
         return False
 
     def edit_blocks(self, dt=0.0):
         self.choose_hotbar()
         self.update_modes()
+        self.update_offhand()
         self.save_and_load()
         self.snapshot_key()
         break_down = self.mouse_captured and bool(cge.mouse_down("Left"))
         place_down = self.mouse_captured and bool(cge.mouse_down("Right"))
-        breaking = self.repeating("Break", break_down or bool(cge.key_down("J")), dt)
-        placing = self.repeating("Place", place_down or bool(cge.key_down("K")), dt)
+        # A held break repeats at the empty hand's rate, times the held item's attack speed (the shovel strikes three times as fast).
+        rate = BREAK_REPEAT_RATE / VoxelGen.attack_speed_of(self.selected())
+        breaking = self.repeating("Break", break_down or self.hotkey_down("J"), dt, rate)
+        placing = self.repeating("Place", place_down or self.hotkey_down("K"), dt)
         if breaking and self.aims_at_walker():
             # A creature the crosshair is on, nearer than the block behind it, is hit: each hit takes one of its HEALTH. The
             # one that kills it leaves a hide for the inventory.
@@ -752,10 +834,11 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
             self.flash_until = time.time() + HIT_FLASH_SECONDS
             lo, hi = walker.box()
             centre = [(lo[i] + hi[i]) / 2 for i in range(3)]
-            if walker.hurt((self.pos[0], self.pos[2])):
+            if walker.hurt((self.pos[0], self.pos[2]), VoxelGen.damage_of(self.selected())):
                 self.creature_died(walker)
             else:
                 self.bursts.add(centre, (0.85, 0.25, 0.2), 4, 0.12, 0.4)
+            self.wear_weapon()
             self.hands_hit("creature", centre)
             return
         if breaking and self.aims_at_torch():
@@ -771,23 +854,33 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
             return
         block, normal = self.target
         if breaking:
-            # A block takes its hits (VoxelGen.HITS) to break. The hit that would break it needs room for it in the inventory;
-            # a hit that leaves it standing does not, so a full inventory can still damage a block.
+            # A block takes its hits (VoxelGen.HITS) to break. A strike makes the whole hits its tool's damage on the block gives
+            # (VoxelGen.block_damage: a shovel's half hit makes one hit every second strike). The hit that would break it needs room
+            # for it in the inventory; a hit that leaves it standing does not, so a full inventory can still damage a block.
             kind = self.world.get_block(*block)
+            tool = self.selected()
+            if tool in VoxelGen.BUCKETS and kind in VoxelGen.LIQUIDS:
+                if tool == VoxelGen.BUCKET:
+                    self.fill_bucket(block, kind)
+                else:
+                    self.notify("Your bucket is full")
+                return
             if kind in VoxelGen.LAVA_BLOCKS:
                 self.notify("Lava cannot be broken")
                 return
-            # A tool in the selected slot must be able to mine the block (VoxelGen.BLOCK_TIER), and takes two swings at the blocks it
-            # mines faster (VoxelGen.PICKAXE_BLOCKS). Creative mode has no tools to wear out and no tiers to meet.
-            tool = self.selected()
+            # A tool in the selected slot must be able to mine the block (VoxelGen.BLOCK_TIER). Creative mode has no tools to wear
+            # out and no tiers to meet.
             if not self.creative and not VoxelGen.can_mine(tool, kind):
                 self.notify("You need an iron pickaxe to mine %s" % VoxelGen.NAMES.get(kind, "that"))
                 return
-            swings = 2 if tool in VoxelGen.TOOLS and kind in VoxelGen.PICKAXE_BLOCKS else 1
-            breaks = self.world.damage_at(*block) + swings >= VoxelGen.HITS.get(kind, 1)
+            key = tuple(block)
+            carry = self.hit_carry.get(key, 0.0) + VoxelGen.block_damage(tool, kind)
+            swings = int(carry + 1e-9)
+            breaks = swings > 0 and self.world.damage_at(*block) + swings >= VoxelGen.HITS.get(kind, 1)
             if breaks and not self.creative and not self.inventory.fits(kind):
                 self.notify("Inventory full")
                 return
+            self.hit_carry[key] = carry - swings
             stage = -2
             hits = 0
             for _ in range(swings):
@@ -797,9 +890,10 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
                 hits += 1
                 if stage < 0:
                     break
-            if hits and tool in VoxelGen.TOOLS and not self.creative:
+            if tool in VoxelGen.TOOLS and not self.creative:
+                # A strike uses one of the tool's uses, or one for each hit it makes when it makes more than one.
                 share_before = self.inventory.durability(self.slot)
-                if self.inventory.wear(self.slot, hits):
+                if self.inventory.wear(self.slot, max(1, swings)):
                     self.notify("Your %s broke" % VoxelGen.NAMES.get(tool, "tool"))
                     cge.play_sound("tool_break", 0.8)
                 elif share_before is not None and share_before > 0.1 and self.inventory.durability(self.slot) <= 0.1:
@@ -815,8 +909,12 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
                 self.flash_until = time.time() + HIT_FLASH_SECONDS
                 self.send_request({"op": "hit", "c": list(block), "swings": swings})
                 self.hands_hit("block", centre)
+            elif swings == 0:
+                # The strike lands on the block, but its hit is still carried to the next strike.
+                self.hands_hit("block", centre)
             if stage == -1:
                 self.hit_times.pop(tuple(block), None)
+                self.hit_carry.pop(key, None)
                 self.drop_torches_on(block)
                 self.gain(kind)
                 self.bursts.add(centre, colour, 10, 0.16, 0.6)
@@ -840,7 +938,12 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
                 self.world.set_block(cell[0], cell[1], cell[2], item)
                 self.send_request({"op": "place", "c": list(cell), "id": item})
             cge.play_sound("place", 0.7, 0.95 + 0.1 * self.sound_rng.random())
-            self.spend()
+            if self.selected() in VoxelGen.BUCKET_LIQUID:
+                # A filled bucket places its liquid and is empty again (creative mode keeps it full).
+                if not self.creative:
+                    self.inventory.slots[self.slot] = [VoxelGen.BUCKET, 1]
+            else:
+                self.spend()
             self.reach()
 
     def placement_check(self):
@@ -857,10 +960,14 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
         item = self.selected()
         if item is None:
             return None, None if self.creative else "This slot is empty"
-        if item not in VoxelGen.COLOURS:
+        liquid = VoxelGen.BUCKET_LIQUID.get(item)
+        if liquid is None and item not in VoxelGen.COLOURS:
             return None, "A %s cannot be placed" % VoxelGen.NAMES[item]
         if self.world.get_block(*cell) != VoxelGen.AIR or self.world.prop_at(*cell) != -1:
             return None, "That space is taken"
+        if liquid is not None:
+            # A filled bucket places its liquid into the air cell in front of the face it is aimed at.
+            return (cell, liquid, -1), None
         if item == VoxelGen.TORCH:
             # A torch goes on a face: into the air cell in front of a solid block, leaning on it.
             if not self.world.is_solid(*block):
@@ -976,7 +1083,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
 
     def update_held_torch(self):
         """The carried torch: a point light at the eye, lit or out. It is a shader light, so it needs no re-mesh."""
-        if self.pressed("HeldTorch", bool(cge.key_down("L"))):
+        if self.pressed("HeldTorch", self.hotkey_down("L")):
             self.held_lit = not self.held_lit
         eye = self.eye()
         # A little flicker: two slow sines, so the light wavers without looking random.

@@ -165,6 +165,8 @@ class SettingsMixin:
             self.change_view(1)
         if clicked and self.menu_hover in ("window_down", "window_up"):
             self.toggle_fullscreen()
+        if clicked and self.menu_hover == "jump_value":
+            self.toggle_auto_jump()
         if clicked and self.menu_hover == "speed_down":
             self.step_time_speed(-1)
         if clicked and self.menu_hover == "speed_up":
@@ -193,7 +195,12 @@ class SettingsMixin:
         self.menu_hover = None
         self.show_menu(True)
 
+    def toggle_auto_jump(self):
+        """Auto jump on or off (the settings page). Saved with the other settings."""
+        self.auto_jump = not self.auto_jump
+        self.save_prefs()
+
     def save_prefs(self):
-        """The settings the game keeps between runs: the mouse sensitivity, the time of day and its speed, the view distance and
-        the window's mode."""
-        save_settings(self.sensitivity, self.clock, self.view_radius, self.time_speed, self.fullscreen)
+        """The settings the game keeps between runs: the mouse sensitivity, the time of day and its speed, the view distance, the
+        window's mode and Auto jump."""
+        save_settings(self.sensitivity, self.clock, self.view_radius, self.time_speed, self.fullscreen, self.auto_jump)

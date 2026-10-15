@@ -78,7 +78,7 @@ class InventoryMixin:
                 self.draw_rect("swatch_%d" % index, swatch, self.item_colour(stack[0]), (0, 0, 0, 170), 1, layer=992)
             else:
                 self.hide_rect("swatch_%d" % index, swatch)
-            # A tool shows its uses left as a bar along the foot of the swatch: green while it is new, red as it nears breaking.
+            # A tool or weapon shows its uses left as a bar along the foot of the swatch: green while it is new, red as it nears breaking.
             wear = self.inventory.durability(index) if stack else None
             bar_box = (left + inset, top + SLOT_SIZE - inset - 5, SLOT_SIZE - 2 * inset, 4)
             if wear is None:
@@ -108,6 +108,7 @@ class InventoryMixin:
             self.hide_rect("inv_panel", panel)
             self.draw_text("inv_title", "", (0, 0), 22)
             self.draw_text("inv_hint", "", (0, 0), 13)
+        self.update_tooltip()
         held = self.inventory.held if self.inventory_open else None
         if held is None:
             self.hide_rect("held", (0, 0, 1, 1))
@@ -119,6 +120,33 @@ class InventoryMixin:
                        (0, 0, 0, 200), 1, layer=995)
         count = str(held[1]) if held[1] > 1 else ""
         self.draw_text("held_count", count, (mouse_x - size / 2 + 4, mouse_y + size / 2 - 16), 14)
+
+    def tooltip_text(self):
+        """The name of the item in the slot under the mouse, with its count, or a tool's uses left; None when the slot is empty or
+        an item is held (the held stack covers the mouse)."""
+        if not self.inventory_open or self.inventory_hover is None or self.inventory.held is not None:
+            return None
+        stack = self.inventory.slots[self.inventory_hover]
+        if not stack:
+            return None
+        ident, count = stack[0], stack[1]
+        name = VoxelGen.NAMES.get(ident) or VoxelGen.ITEM_NAMES.get(ident) or "item"
+        text = name if count == 1 else "%s x%d" % (name, count)
+        if VoxelGen.durability_of(ident) is not None and len(stack) >= 3:
+            text += "   %d of %d uses left" % (stack[2], VoxelGen.durability_of(ident))
+        return text
+
+    def update_tooltip(self):
+        """A small label beside the mouse naming the item under it on the inventory screen."""
+        text = self.tooltip_text()
+        if text is None:
+            self.hide_rect("tooltip_box", (0, 0, 1, 1))
+            self.draw_text("tooltip", "", (0, 0), 14)
+            return
+        mouse_x, mouse_y = cge.mouse_position()
+        box = (mouse_x + 18, mouse_y + 16, 14 + 7.5 * len(text), 26)
+        self.draw_rect("tooltip_box", box, (12, 12, 16, 235), (150, 150, 160, 255), 1, layer=996)
+        self.draw_text("tooltip", text, (box[0] + 7, box[1] + 5), 14)
 
     # ----- the crafting panel: above the inventory screen, a category dropdown and the recipes ------------
 

@@ -9,7 +9,9 @@ import math
 import random
 
 import cg_engine_bindings as cge
+import VoxelConfig
 import VoxelGen
+import VoxelRecipes
 import VoxelWalkers
 
 LOG_LINES = 200         # lines kept in the log
@@ -414,6 +416,25 @@ def cmd_stats(console, args):
         "%.0f frames a second; %d creatures; %d items on the ground; %d block edits" % (
             fps, creatures, len(game.drops.live), world["edits"]),
     ]
+
+
+@command("sheet", "sheet", "print the player's character sheet: health, the held item and its damage and uses, the shield, the mode")
+def cmd_sheet(console, args):
+    game = console.game
+    item = game.selected()
+    lines = ["Health %.1f of %d; %s mode" % (game.health, VoxelConfig.PLAYER_HEALTH, "creative" if game.creative else "survival")]
+    if item is None:
+        lines.append("Holding: nothing (the hand strikes for 1)")
+    else:
+        text = "Holding: %s, striking for %g" % (game.selected_name(), VoxelGen.damage_of(item))
+        share = game.inventory.durability(game.slot)
+        if share is not None:
+            text += ", %d of %d uses left" % (game.inventory.slots[game.slot][2], VoxelGen.durability_of(item))
+        lines.append(text)
+    lines.append("Shield: %s" % ("in the left hand, raised" if game.shield_up() else
+                                 "in the left hand" if game.offhand == VoxelGen.SHIELD else "none"))
+    lines.append("Recipes known: %d of %d" % (len(game.crafting.known), len(VoxelRecipes.RECIPES)))
+    return lines
 
 
 @command("seed", "seed", "print the world's seed")

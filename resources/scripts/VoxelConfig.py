@@ -181,8 +181,8 @@ def moon_share(phase):
 MENU_PAGES = {
     "pause": ("PAUSED", ("resume", "settings", "quit")),
     "settings": ("SETTINGS", ("sens_down", "sens_value", "sens_up", "view_down", "view_value", "view_up",
-                              "window_down", "window_value", "window_up", "speed_down", "speed_value", "speed_up",
-                              "time_value", "time_track", "back")),
+                              "window_down", "window_value", "window_up", "jump_value", "speed_down", "speed_value",
+                              "speed_up", "time_value", "time_track", "back")),
 }
 MENU_TEXT = {"resume": "Resume", "settings": "Settings", "quit": "Quit", "back": "Back", "sens_down": "<", "sens_up": ">",
              "view_down": "<", "view_up": ">", "window_down": "<", "window_up": ">", "speed_down": "<", "speed_up": ">"}
@@ -192,7 +192,7 @@ def load_settings():
     """The saved settings: the mouse sensitivity (a percent, one of SENSITIVITY_STEPS) and the time of day (0 to 1, or None
     if none is saved). Missing or unreadable settings keep their defaults."""
     settings = {"mouse_sensitivity": 100, "time_of_day": None, "view_radius": DEFAULT_VIEW, "time_speed": 1.0,
-                "fullscreen": False}
+                "fullscreen": False, "auto_jump": False}
     try:
         with open(SETTINGS_FILE) as f:
             data = json.load(f)
@@ -202,6 +202,7 @@ def load_settings():
         settings["view_radius"] = int(data.get("view_radius", DEFAULT_VIEW))
         settings["time_speed"] = min(100.0, max(0.0, float(data.get("time_speed", 1.0))))
         settings["fullscreen"] = bool(data.get("fullscreen", False))
+        settings["auto_jump"] = bool(data.get("auto_jump", False))
     except (OSError, ValueError, TypeError, AttributeError):
         pass
     settings["mouse_sensitivity"] = min(SENSITIVITY_STEPS, key=lambda step: abs(step - settings["mouse_sensitivity"]))
@@ -209,6 +210,7 @@ def load_settings():
     return settings
 
 
-def save_settings(sensitivity, time_of_day, view_radius, time_speed, fullscreen):
+def save_settings(sensitivity, time_of_day, view_radius, time_speed, fullscreen, auto_jump):
     StateFile.write_json(SETTINGS_FILE, {"mouse_sensitivity": sensitivity, "time_of_day": round(time_of_day, 5),
-                                         "view_radius": view_radius, "time_speed": time_speed, "fullscreen": fullscreen})
+                                         "view_radius": view_radius, "time_speed": time_speed, "fullscreen": fullscreen,
+                                         "auto_jump": auto_jump})

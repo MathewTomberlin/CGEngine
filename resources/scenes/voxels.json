@@ -68,7 +68,34 @@
       "specular": 0,
       "tint": [1.0, 0.35, 0.25]
     },
-    }
+    {
+      "name": "Metal",
+      "diffuseTexture": "viewmodel_steel.png",
+      "specular": 0
+    },
+    {
+      "name": "Wood",
+      "diffuseTexture": "viewmodel_wood.png",
+      "specular": 0
+    },
+    {
+      "name": "bucket_water",
+      "diffuseTexture": "viewmodel_steel.png",
+      "specular": 0,
+      "tint": [0.35, 0.55, 1.0]
+    },
+    {
+      "name": "bucket_lava",
+      "diffuseTexture": "viewmodel_steel.png",
+      "specular": 0,
+      "tint": [1.0, 0.45, 0.15]
+    },
+    {
+      "name": "Cloth",
+      "diffuseTexture": "viewmodel_skin.png",
+      "specular": 0
+    },
+    {
       "name": "viewmodel_skin",
       "diffuseTexture": "viewmodel_skin.png",
       "specular": 0

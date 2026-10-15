@@ -14,22 +14,31 @@ Mixed into VoxelGame, which calls update_hands once a frame after the camera is 
 """
 import json
 import math
+import os
 
 import cg_engine_bindings as cge
 import VoxelGen
 
 RIGHT_ARM = "models/viewmodel/viewarm_right.fbx"    # the arm on the right of the view
 LEFT_ARM = "models/viewmodel/viewarm_left.fbx"      # the arm on the left of the view
-ARM_OFFSET = (0.42, 0.00, 0.50)                    # where each shoulder sits from the eye: right, up, forward (the left mirrors the right)
+ARM_OFFSET = (0.42, 0.00, 0.25)                    # where each shoulder sits from the eye: right, up, forward (the left mirrors the right)
 HOLD = (0.19, -0.15, 0.62)                          # in the arm's frame, where the held item's middle is (the wrist is near (0.19, -0.15, 0.45))
-# A pickaxe is in the right arm's own model (viewarm_right_pickaxe.fbx): its head and handle are skinned to the hand bone.
-PICKAXE_ARM = "models/viewmodel/viewarm_right_pickaxe.fbx"
-PICKAXES = (VoxelGen.PICKAXE, VoxelGen.IRON_PICKAXE)
 ITEM_MODELS = {
+    VoxelGen.PICKAXE: "models/viewmodel/item_pickaxe.fbx",
+    VoxelGen.IRON_PICKAXE: "models/viewmodel/item_pickaxe.fbx",
     VoxelGen.TORCH: "models/viewmodel/item_lantern.fbx",   # the carried torch is the lantern
+    VoxelGen.SWORD: "models/viewmodel/item_sword.fbx",     # its materials (Metal, Wood, Cloth) are named in the scene file
+    VoxelGen.BONE_BLADE: "models/viewmodel/item_sword.fbx",   # the sword's blade, in the bone blade's own offset (held_items.json)
+    VoxelGen.SHOVEL: "models/viewmodel/item_shovel.fbx",      # exported from the Shovel in Blender (its offset is held_items.json's)
+    VoxelGen.BUCKET: "models/viewmodel/item_bucket.fbx",      # a cylinder for now
+    VoxelGen.WATER_BUCKET: "models/viewmodel/item_bucket.fbx",
+    VoxelGen.LAVA_BUCKET: "models/viewmodel/item_bucket.fbx",
 }
+# The held items' offsets are data (resources/held_items.json): the offset of an item in each hand, and each item's own offset from
+# that. Items with a hand are attached to its bone (cge.attach_to_bone), so they move with the arm's own clip.
 # How far each item's swing turns the arm, in degrees, and how long the swing lasts. An empty hand swings like a fist.
-SWING = {VoxelGen.PICKAXE: (70.0, 0.45), VoxelGen.IRON_PICKAXE: (70.0, 0.45), VoxelGen.TORCH: (12.0, 0.25)}
+SWING = {VoxelGen.PICKAXE: (70.0, 0.45), VoxelGen.IRON_PICKAXE: (70.0, 0.45), VoxelGen.SWORD: (90.0, 0.45),
+         VoxelGen.BONE_BLADE: (90.0, 0.45), VoxelGen.SHOVEL: (70.0, 0.45), VoxelGen.TORCH: (12.0, 0.25)}
 EMPTY_SWING = (35.0, 0.35)
 SWING_SECONDS = 0.967       # the arm's swing clip is this long (arm_attack_R.json); a held button starts the next swing when it ends
 REACH_DISTANCE = 0.22       # how far the left arm reaches toward the block it places, in blocks
@@ -38,17 +47,104 @@ REACH_SECONDS = 0.28        # how long a placement's reach lasts
 HIT_EFFECTS = {
     VoxelGen.PICKAXE: {"block": ("sparks", (1.0, 0.85, 0.45)), "creature": ("sparks", (1.0, 0.5, 0.3))},
     VoxelGen.IRON_PICKAXE: {"block": ("sparks", (0.8, 0.9, 1.0)), "creature": ("sparks", (1.0, 0.5, 0.3))},
+    VoxelGen.SWORD: {"creature": ("sparks", (1.0, 0.85, 0.6))},
+    VoxelGen.BONE_BLADE: {"creature": ("sparks", (1.0, 0.92, 0.8))},
+    VoxelGen.SHOVEL: {"block": ("sparks", (0.75, 0.6, 0.4))},
 }
 # The materials (resources/scenes/voxels.json) the arms and held items are drawn with: a flat skin, and a colour per item.
 SKIN = "viewmodel_skin"
 ITEM_MATERIALS = {
+    VoxelGen.PICKAXE: "viewmodel_steel",
+    VoxelGen.IRON_PICKAXE: "viewmodel_steel",
     VoxelGen.TORCH: "viewmodel_brass",
+    VoxelGen.BUCKET: "viewmodel_steel",
+    VoxelGen.WATER_BUCKET: "bucket_water",    # the bucket's steel, tinted by the liquid in it (resources/scenes/voxels.json)
+    VoxelGen.LAVA_BUCKET: "bucket_lava",
 }
 ARM_CLIP = "arm_attack_R"           # the right arm's swing, played on each strike (resources/clips, tools/clips/arm_clips.py)
-PICKAXE_CLIP = "arm_attack_pick"    # the same swing, for the pickaxe arm model (its own clip, named for its model)
 HELD = "hand_held"
 LEFT = "hand_left"
 RIGHT = "hand_right"
+HAND_BONES = {"R": "hand.R", "L": "hand.L"}   # the bone each hand's held items attach to (held_items.json)
+HAND_BODIES = {"R": RIGHT, "L": LEFT}
+# The shield's model (its item offset and raised offset are in held_items.json).
+SHIELD_HELD = "hand_shield"
+SHIELD_MODEL = "models/viewmodel/item_shield.fbx"
+SHIELD_RAISE_SECONDS = 0.15     # how long the shield takes to go from its carried pose to its raised one, or back
+HELD_ITEMS_FILE = "held_items.json"
+IDENTITY = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+
+
+def held_items_path():
+    """held_items.json beside this script (the game folder), or in the resources folder above it (the repository)."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    for folder in (here, os.path.dirname(here)):
+        path = os.path.join(folder, HELD_ITEMS_FILE)
+        if os.path.exists(path):
+            return path
+    return HELD_ITEMS_FILE
+
+
+def transform_matrix(spec):
+    """A transform (position, rotation in degrees about X, Y and Z, and scale) as a 4 by 4 matrix, row by row: Rz * Ry * Rx, scaled,
+    then moved to position."""
+    px, py, pz = spec["position"]
+    rx, ry, rz = [math.radians(v) for v in spec["rotation"]]
+    k = spec["scale"]
+    cx, sx, cy, sy, cz, sz = math.cos(rx), math.sin(rx), math.cos(ry), math.sin(ry), math.cos(rz), math.sin(rz)
+    r = [[cz * cy, cz * sy * sx - sz * cx, cz * sy * cx + sz * sx],
+         [sz * cy, sz * sy * sx + cz * cx, sz * sy * cx - cz * sx],
+         [-sy, cy * sx, cy * cx]]
+    return [r[0][0] * k, r[0][1] * k, r[0][2] * k, px, r[1][0] * k, r[1][1] * k, r[1][2] * k, py, r[2][0] * k, r[2][1] * k, r[2][2] * k, pz,
+            0.0, 0.0, 0.0, 1.0]
+
+
+def mat_mul(a, b):
+    """The product of two 4 by 4 matrices, row by row: a then b, applied to a point as a * b * point."""
+    return [sum(a[r * 4 + k] * b[k * 4 + c] for k in range(4)) for r in range(4) for c in range(4)]
+
+
+IDENTITY_SPEC = {"position": [0.0, 0.0, 0.0], "rotation": [0.0, 0.0, 0.0], "scale": 1.0}
+
+
+def blend_spec(a, b, t):
+    """The transform spec between a (t = 0) and b (t = 1): positions and scales linearly, and each rotation angle the short way
+    round, so an angle near 180 degrees does not swing the long way."""
+    def turn(x, y):
+        return x + ((y - x + 180.0) % 360.0 - 180.0) * t
+    return {"position": [x + (y - x) * t for x, y in zip(a["position"], b["position"])],
+            "rotation": [turn(x, y) for x, y in zip(a["rotation"], b["rotation"])],
+            "scale": a["scale"] + (b["scale"] - a["scale"]) * t}
+
+
+def load_held_items():
+    """The hands' offsets and each item's offsets, from held_items.json, as matrices: (hands, items). An item has its hand ("R" or "L"),
+    or a bone of its own (which is used instead of the hand's), its offset, and its raised offset (None when it has none). The
+    offsets' specs are kept too, so a pose can be blended between the carried and the raised one."""
+    with open(held_items_path(), encoding="utf-8") as f:
+        data = json.load(f)
+    hands = {"R": transform_matrix(data["Held_Offset_R_Transform"]), "L": transform_matrix(data["Held_Offset_L_Transform"])}
+    items = {}
+    for name, entry in data["items"].items():
+        offset = entry.get("Held_Item_Offset_Transform", IDENTITY_SPEC)
+        raised = entry.get("Raised_Held_Item_Offset_Transform")
+        items[name] = {
+            "hand": entry.get("hand"),
+            "bone": entry.get("bone"),
+            "offset": transform_matrix(offset),
+            "raised": transform_matrix(raised) if raised is not None else None,
+            "offset_spec": offset,
+            "raised_spec": raised,
+        }
+    return hands, items
+
+
+HELD_HANDS, HELD_ITEMS = load_held_items()
+
+
+def held_def(item):
+    """The held-item entry for an item id (its name in held_items.json), or None when the item is not held in a hand."""
+    return HELD_ITEMS.get(VoxelGen.NAMES.get(item))
 
 
 def angles(forward):
@@ -92,37 +188,33 @@ class HandsMixin:
         for name in (RIGHT, LEFT):
             cge.set_viewmodel(name, True)
         self.hands_ready = True
-        self.right_model = RIGHT_ARM
         self.held_model = None
         self.swing_time = None
         self.swing_length = 0.0
         self.swing_turn = 0.0
         self.reach_time = None
+        self.shield_state = None
+        self.shield_raise = 0.0         # how far the shield is raised, 0 carried to 1 raised (update_shield)
+        self.shield_placed = None       # the raise the shield's pose was last placed at
 
-    def set_right_model(self, item):
-        """The right arm's model: the pickaxe arm while a pickaxe is selected (the head and handle are in the arm, so they follow the
-        hand), otherwise the plain skinned arm. The body is replaced when the model changes."""
-        model = PICKAXE_ARM if item in PICKAXES else RIGHT_ARM
-        if model == self.right_model:
-            return
-        cge.remove_body(RIGHT)
-        body = {"name": RIGHT, "model": model, "position": [0.0, 0.0, 0.0], "rotation": [0, 0, 0]}
-        if model == RIGHT_ARM:
-            body["material"] = SKIN   # the plain arm has no textures of its own; the pickaxe arm carries its wood and steel
-        cge.load_scene_json(json.dumps({"version": 1, "bodies": [body]}))
-        cge.set_viewmodel(RIGHT, True)
-        self.right_model = model
-
-    def set_held_model(self, model):
-        """Show the held item as model (a path, or None for an empty hand). Its body is replaced when the item changes."""
+    def set_held_model(self, model, item):
+        """Show the held item as model (a path, or None for an empty hand). Its body is replaced when the item changes. An item in
+        an item with a held-item entry (held_items.json) is attached to its hand's bone; the others are placed from the camera."""
         if self.held_model is not None:
             cge.remove_body(HELD)
         self.held_model = model
         if model is not None:
             cge.load_scene_json(json.dumps({"version": 1, "bodies": [
-                {"name": HELD, "model": model, "material": ITEM_MATERIALS[self.selected()], "position": [0.0, 0.0, 0.0],
-                 "rotation": [0, 0, 0]}]}))
+                dict({"name": HELD, "model": model, "position": [0.0, 0.0, 0.0], "rotation": [0, 0, 0]},
+                     **({"material": ITEM_MATERIALS[item]} if item in ITEM_MATERIALS else {}))]}))
             cge.set_viewmodel(HELD, True)
+            held = held_def(item)
+            if held is not None:
+                hand = held["hand"]
+                if held["bone"]:
+                    cge.attach_to_bone(HELD, HAND_BODIES[hand], held["bone"], held["offset"])
+                else:
+                    cge.attach_to_bone(HELD, HAND_BODIES[hand], HAND_BONES[hand], mat_mul(HELD_HANDS[hand], held["offset"]))
 
     def start_swing(self, item):
         """A strike: the held item swings, and the right arm plays its clip for the whole swing."""
@@ -130,7 +222,7 @@ class HandsMixin:
         self.swing_time = 0.0
         self.swing_length = SWING_SECONDS
         self.swing_turn = turn
-        cge.play_clip(RIGHT, PICKAXE_CLIP if self.right_model == PICKAXE_ARM else ARM_CLIP, False, 1.0)
+        cge.play_clip(RIGHT, ARM_CLIP, False, 1.0)
 
     def reach(self):
         """A block was placed: the left arm reaches out to it and draws back."""
@@ -145,14 +237,48 @@ class HandsMixin:
         if effect == "sparks":
             self.bursts.add(centre, hit_colour, 6, 0.05, 0.25)
 
+    def update_shield(self, dt=0.0):
+        """The shield in the left hand while the game holds one (VoxelGame.offhand): carried at the side, or raised while Q is held.
+        Raising and lowering take SHIELD_RAISE_SECONDS: the shield moves from its carried pose to its raised one over that time."""
+        held = getattr(self, "offhand", None) == VoxelGen.SHIELD
+        state = ("raised" if self.shield_up() else "carried") if held else None
+        if state is None:
+            if self.shield_state is not None:
+                cge.remove_body(SHIELD_HELD)
+            self.shield_state = None
+            return
+        if self.shield_state is None:
+            cge.load_scene_json(json.dumps({"version": 1, "bodies": [
+                {"name": SHIELD_HELD, "model": SHIELD_MODEL, "position": [0.0, 0.0, 0.0], "rotation": [0, 0, 0]}]}))
+            cge.set_viewmodel(SHIELD_HELD, True)
+            self.shield_raise = 0.0
+            self.shield_placed = None
+        self.shield_state = state
+        # The raise moves toward its target at a steady rate; the pose is placed only when it has moved.
+        target = 1.0 if state == "raised" else 0.0
+        step = dt / SHIELD_RAISE_SECONDS
+        self.shield_raise = min(target, self.shield_raise + step) if self.shield_raise < target else max(target, self.shield_raise - step)
+        if self.shield_raise == self.shield_placed:
+            return
+        self.shield_placed = self.shield_raise
+        held = held_def(VoxelGen.SHIELD)
+        spec = held["offset_spec"]
+        if held["raised_spec"] is not None:
+            spec = blend_spec(held["offset_spec"], held["raised_spec"], self.shield_raise)
+        offset = transform_matrix(spec)
+        if held["bone"]:
+            cge.attach_to_bone(SHIELD_HELD, HAND_BODIES[held["hand"]], held["bone"], offset)
+        else:
+            cge.attach_to_bone(SHIELD_HELD, HAND_BODIES[held["hand"]], HAND_BONES[held["hand"]], mat_mul(HELD_HANDS[held["hand"]], offset))
+
     def update_hands(self, dt):
         """Place the arms and the held item for this frame, and run the swing and the reach."""
         self.hands_setup()
+        self.update_shield(dt)
         item = self.selected()
-        self.set_right_model(item)
         model = ITEM_MODELS.get(item)
         if model != self.held_model:
-            self.set_held_model(model)
+            self.set_held_model(model, item)
         # Holding the left button swings again each time the last swing ends.
         if self.mouse_captured and cge.mouse_down("Left") and self.swing_time is None:
             self.start_swing(item)
@@ -181,7 +307,7 @@ class HandsMixin:
         left_rotation = (pitch - 15.0 * reached, yaw, 0.0)
         self.place_hand(RIGHT, right_shoulder, right_rotation)
         self.place_hand(LEFT, left_shoulder, left_rotation)
-        if self.held_model is not None:
+        if self.held_model is not None and held_def(item) is None:
             # The item swings with the hand: its place turns about the shoulder by the swing, as the arm does.
             held = to_world(right_shoulder, frame, turn_x(HOLD, swung))
             self.place_hand(HELD, held, right_rotation)
