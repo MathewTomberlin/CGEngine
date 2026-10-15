@@ -123,9 +123,12 @@ namespace CGEngine {
                             world->lastConsoleTarget = target;
                             world->lastConsoleCommand = command;
                             world->lastConsoleInput = inputString;
-                            if (target != "") {
-                                Body* targetBody = assets.get<Body>(target);
+                            // A target that is not a body (a dot in a decimal, such as "time 0.5", names "time 0") has no body to run the command.
+                            Body* targetBody = target != "" ? assets.get<Body>(target) : nullptr;
+                            if (targetBody != nullptr) {
                                 targetBody->callScriptsWithData(command, DataMap(map<string, any>({ { "args",inputStrings} })));
+                            } else if (target != "") {
+                                log(world, LogWarn, "No body named '" + target + "' for the console command '" + command + "'");
                             }
                         }
                         txt->setString("_");
