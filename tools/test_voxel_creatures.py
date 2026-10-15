@@ -110,6 +110,19 @@ check("an empty kinds list is an error", raises(lambda: loads([]), "kinds"))
 check("a missing name is an error", raises(lambda: loads([base(name=None), biter()]), "name"))
 check("a missing model is an error", raises(lambda: loads([base(model=None), biter()]), "model"))
 
+# The optional fields: a kind's clips by role, and its flash material.
+check("the shipped biter plays the drake's clips", VoxelCreatures.clip_for(bite, "attack") == "drake_attack"
+      and VoxelCreatures.clip_for(bite, "bound") == "drake_walk" and VoxelCreatures.clip_for(bite, "die") == "drake_die")
+check("a kind with no hurt clip has none, so a hit only flashes it", VoxelCreatures.clip_for(bite, "hurt") is None)
+check("the timid kind's clips are its prefix's", VoxelCreatures.clip_for(timid, "hurt") == "horse_hurt")
+check("the biter flashes its own red material", bite["flash_material"] == "dragon_hurt")
+check("a kind with no flash material flashes its own", loads([base(), biter()])[0]["flash_material"] == "horse")
+check("clips by role load", VoxelCreatures.clip_for(loads([base(clips={"walk": "w"}), biter()])[0], "walk") == "w")
+check("a clip for a role the kind does not play is an error",
+      raises(lambda: loads([base(clips={"jump": "j"}), biter()]), "clips"))
+check("an empty clip name is an error", raises(lambda: loads([base(clips={"walk": ""}), biter()]), "clips"))
+check("a flash material that is not a name is an error", raises(lambda: loads([base(flash_material=""), biter()]), "flash_material"))
+
 print()
 if failures:
     print("%d check(s) failed" % len(failures))

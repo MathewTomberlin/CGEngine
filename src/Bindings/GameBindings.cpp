@@ -168,6 +168,17 @@ void bindGame(py::module_& m) {
         return true;
     }, py::arg("name"), "Remove a body and its children. Returns False if there is no such body.");
 
+    m.def("set_body_material", [](const std::string& name, const std::string& material) {
+        Body* body = findBody(name);
+        if (!body) throw std::runtime_error("no body named '" + name + "'");
+        optional<id_t> materialId = assets.getId<Material>(material);
+        if (!materialId.has_value()) throw std::invalid_argument("no material named '" + material + "'");
+        // Every mesh in the body (a model is a hierarchy of them) is drawn with this one material.
+        body->apply([materialId](Body* b) {
+            if (Mesh* mesh = b->get<Mesh*>()) mesh->setMaterials({ materialId.value() });
+        });
+    }, py::arg("name"), py::arg("material"), "Draw every mesh of the named body with the named material (a flash, or back to its own).");
+
     m.def("play_clip", [](const std::string& name, const std::string& clip, bool looping, float speed) {
         Body* body = findBody(name);
         if (!body) throw std::runtime_error("no body named '" + name + "'");

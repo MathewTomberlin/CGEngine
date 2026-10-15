@@ -201,9 +201,13 @@ namespace CGEngine {
                         throw std::invalid_argument("material '" + name + "': opacity must be between 0 and 1");
                     }
                     bool repeat = m.value("repeat", false);
+                    // A tint multiplies the texture (red 1, green 0.35, blue 0.25 reddens a creature when it is hurt); white is none.
+                    Vector3f tintRgb = readVec3(m, "tint", Vector3f(1, 1, 1));
+                    auto tintByte = [](float v) { return static_cast<std::uint8_t>(std::lround(std::max(0.0f, std::min(1.0f, v)) * 255.0f)); };
+                    Color tint(tintByte(tintRgb.x), tintByte(tintRgb.y), tintByte(tintRgb.z));
                     // The texture scale is a Vector2f; a bare float would land in the colour intensity instead.
                     auto created = assets.create<Material>(name,
-                        SurfaceParameters(SurfaceDomain(texture, Vector2f(uvScale, uvScale)),
+                        SurfaceParameters(SurfaceDomain(texture, Vector2f(uvScale, uvScale), tint),
                             SurfaceDomain(32.0f, Color(specularByte, specularByte, specularByte)), SurfaceDomain(opacity)),
                         assets.get<Program>(assets.defaultProgramName));
                     if (!created.has_value()) {

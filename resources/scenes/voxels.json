@@ -50,6 +50,23 @@
       "name": "horse",
       "diffuseTexture": "Horse_Atlas_Color.png",
       "specular": 0
+    },
+    {
+      "name": "horse_hurt",
+      "diffuseTexture": "Horse_Atlas_Color.png",
+      "specular": 0,
+      "tint": [1.0, 0.35, 0.25]
+    },
+    {
+      "name": "dragon",
+      "diffuseTexture": "Dragon_Atlas_Color.png",
+      "specular": 0
+    },
+    {
+      "name": "dragon_hurt",
+      "diffuseTexture": "Dragon_Atlas_Color.png",
+      "specular": 0,
+      "tint": [1.0, 0.35, 0.25]
     }
   ],
   "environment": {
@@ -129,6 +146,11 @@
     "clips/horse_walk.json",
     "clips/horse_idle.json",
     "clips/horse_attack.json",
-    "clips/horse_bound.json"
+    "clips/horse_bound.json",
+    "clips/horse_hurt.json",
+    "clips/horse_die.json",
+    "clips/drake_walk.json",
+    "clips/drake_attack.json",
+    "clips/drake_die.json"
   ]
 }
