@@ -69,6 +69,18 @@ check("every bucket holds units: the empty one and the filled ones have a capaci
       all(VoxelGen.vessel_capacity(b) == 8 for b in VoxelGen.BUCKETS) and set(VoxelGen.FILLED_VESSELS) == {VoxelGen.WATER_BUCKET, VoxelGen.LAVA_BUCKET})
 check("the bucket names are in the item names", all(VoxelGen.NAMES[b] for b in VoxelGen.BUCKETS))
 
+# The tool data is checked when it loads: a name that is not a constant of VoxelGen.py is an error, not a silent gap.
+import json as _json
+import subprocess as _subprocess
+import tempfile as _tempfile
+_bad = _tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8")
+_json.dump({"tools": [{"key": "NO_SUCH_TOOL", "durability": 1, "tier": 0}], "block_tier": {}, "weapons": []}, _bad)
+_bad.close()
+_probe = _subprocess.run([sys.executable, "-I", "-c", "import sys; sys.path.insert(0, 'resources/scripts'); import VoxelGen"],
+                         env=dict(os.environ, VOXEL_TOOLS=_bad.name), capture_output=True, text=True)
+os.unlink(_bad.name)
+check("a tool named in the data that is not a constant is an error", _probe.returncode != 0 and "NO_SUCH_TOOL" in _probe.stderr)
+
 if failures:
     print(f"\n{len(failures)} check(s) failed")
     sys.exit(1)

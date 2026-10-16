@@ -85,6 +85,15 @@ def angle_off_player(pos, heading):
 
 
 kind = VoxelWalkers.VoxelCreatures.by_name("biter")
+# A biter's sight is how far it notices the player by day, scaled by the night; a kind with no sight keeps the default range.
+short = dict(kind, sight=3.0)
+seen = VoxelWalkers.Walker(OpenGround(), "biter_sight", (1.0, FEET, 0.0), (0.4, 0.1, 0.1), random.Random(5), kind=short)
+check("a biter with sight 3 chases from 3 blocks by day, not from 5", abs(seen.chase_distance(0.0) - 3.0) < 1e-9)
+check("a biter with no sight chases from the default 7 blocks by day",
+      abs(VoxelWalkers.Walker(OpenGround(), "biter_default", (1.0, FEET, 0.0), (0.4, 0.1, 0.1), random.Random(6),
+                              kind=kind).chase_distance(0.0) - VoxelWalkers.VoxelNight.CHASE_RANGE) < 1e-9)
+check("the night extends a biter's sight the same way as the default",
+      abs(seen.chase_distance(1.0) - 3.0 * (VoxelWalkers.VoxelNight.chase_range(1.0) / VoxelWalkers.VoxelNight.CHASE_RANGE)) < 1e-9)
 knock = VoxelWalkers.KNOCK_SECONDS
 
 walker = VoxelWalkers.Walker(OpenGround(), "biter_test", (FRONT[0], FEET, FRONT[1]), (0.4, 0.1, 0.1), random.Random(3), kind=kind)

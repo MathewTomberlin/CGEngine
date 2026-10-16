@@ -1,0 +1,59 @@
+{
+  "about": "The tools, the mining tiers and the weapons (roadmap 29.3, the tool table). A tool's durability is the swings that hit a block it can use before it breaks; its tier is the hardest block it mines (block_tier; a block not listed needs no tool). block_damage is how much one strike breaks each block (a whole number of hits is made, and a part carries to the next strike); a block it does not list takes its harvest (default 1). creature_damage is the health one strike takes from a creature. Names are the constants of VoxelGen.py (checked when the file loads), and the file is VOXEL_TOOLS or resources/voxel_tools.json.",
+  "tools": [
+    {
+      "key": "PICKAXE",
+      "durability": 640,
+      "tier": 1,
+      "creature_damage": 1.5,
+      "block_damage": {
+        "STONE": 2,
+        "COAL": 2,
+        "IRON": 2,
+        "BRICK": 2,
+        "OBSIDIAN": 2
+      }
+    },
+    {
+      "key": "IRON_PICKAXE",
+      "durability": 2560,
+      "tier": 2,
+      "creature_damage": 1.75,
+      "block_damage": {
+        "STONE": 3,
+        "COAL": 3,
+        "IRON": 3,
+        "BRICK": 3,
+        "OBSIDIAN": 3
+      }
+    },
+    {
+      "key": "SHOVEL",
+      "durability": 640,
+      "tier": 0,
+      "creature_damage": 1,
+      "harvest": 1,
+      "attack_speed": 3,
+      "block_damage": {
+        "DIRT": 8,
+        "SAND": 8,
+        "GRAVEL": 8
+      }
+    }
+  ],
+  "block_tier": {
+    "OBSIDIAN": 2
+  },
+  "weapons": [
+    {
+      "key": "SWORD",
+      "damage": 2.5,
+      "durability": 1280
+    },
+    {
+      "key": "BONE_BLADE",
+      "damage": 2,
+      "durability": 30
+    }
+  ]
+}

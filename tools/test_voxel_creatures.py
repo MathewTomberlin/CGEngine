@@ -123,6 +123,12 @@ check("a clip for a role the kind does not play is an error",
 check("an empty clip name is an error", raises(lambda: loads([base(clips={"walk": ""}), biter()]), "clips"))
 check("a flash material that is not a name is an error", raises(lambda: loads([base(flash_material=""), biter()]), "flash_material"))
 
+# The sight of a biter: an optional distance by day, positive, and only for a kind that bites.
+check("a biter's sight loads as a number", loads([base(), biter(sight=3.0)])[1]["sight"] == 3.0)
+check("a biter with no sight has none (the default chase range)", "sight" not in loads([base(), biter()])[1])
+check("a zero sight is an error", raises(lambda: loads([base(), biter(sight=0.0)]), "sight"))
+check("a timid kind's sight is an error (it runs at its flee range)", raises(lambda: loads([base(sight=3.0), biter()]), "sight"))
+
 print()
 if failures:
     print("%d check(s) failed" % len(failures))

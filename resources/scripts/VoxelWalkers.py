@@ -92,6 +92,13 @@ class Walker:
             return True
         return (dx * shield[0] + dz * shield[1]) / distance > SHIELD_COS
 
+    def chase_distance(self, night):
+        """How close the player must be for this biter to chase it, for a night share of 0 to 1: its kind's sight (a day distance, see
+        VoxelCreatures) scaled by the night, or the default chase range when the kind names no sight."""
+        base = VoxelNight.chase_range(night)
+        sight = self.kind.get("sight")
+        return base if sight is None else base * sight / VoxelNight.CHASE_RANGE
+
     def update(self, dt, player=None, prey=None, player_feet=None, night=0.0, shield=None):
         """Move the creature one frame. Returns the health a biter takes from the player this frame (0 for most frames). prey is
         the (x, z) of a timid creature a biter hunts when the player is not near. player_feet is the height of the player's feet: a
@@ -128,7 +135,7 @@ class Walker:
             cge.set_voxel_position(self.name, player[0] + dx / gap * physics.CONTACT, pos[1], player[1] + dz / gap * physics.CONTACT)
             pos = (player[0] + dx / gap * physics.CONTACT, pos[1], player[1] + dz / gap * physics.CONTACT)
             distance = physics.CONTACT
-        chasing = self.biter and distance < VoxelNight.chase_range(night)
+        chasing = self.biter and distance < self.chase_distance(night)
         if not chasing:
             self.route = []
             self.windup = 0.0
