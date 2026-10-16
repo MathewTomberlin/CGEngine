@@ -18,7 +18,8 @@ namespace CGEngine {
 		uint8_t mesh = 0;       // the mesh of an own block: 0 is the block's own id, else this id, so blocks can share one mesh
 		uint8_t joinAbove = 0;  // a smooth block whose top is covered by a block of this mesh joins that mesh (its top only, see skinAt)
 		std::bitset<256> joinBelow;  // a smooth block standing on one of these terrain blocks joins the terrain (its bottom only)
-		bool transparent = false;    // its mesh is drawn blended, after the opaque ones (the water)
+		bool blend = false;          // its mesh is drawn blended, after the opaque ones (the water)
+		bool passesLight = false;    // sky and lamp light go through it (air, and the water)
 		uint8_t hits = 1;           // how many hits break it (VoxelWorld::hitBlock); a hit on a damaged block shows its stage
 		bool flows = true;          // a liquid spreads as water does; false keeps it where it is (lava)
 		// A textured block shows the voxel tile array (Renderer::setVoxelTiles) instead of its colour: one layer for its top,
@@ -73,6 +74,28 @@ namespace CGEngine {
 	inline const Liquid* liquidOf(uint8_t block) {
 		if (WaterFlow.level(block) > 0) return &WaterFlow;
 		if (LavaFlow.level(block) > 0) return &LavaFlow;
+		return nullptr;
+	}
+
+	// A volume: a placed amount of liquid, kept as block ids. Unit u (1 to 8) of a family is block first + u - 1, so a full volume
+	// is 8 units. Springs (above) make flows from a source that never runs out; a volume never makes or loses units, it only moves
+	// them (VoxelSimulation::tickVolume), so it spreads out and levels off. The ids are above the item ids (VoxelGen.py).
+	struct VolumeLiquid {
+		uint8_t first;   // the block of one unit
+		uint8_t spring;  // the spring block whose mesh the volume is drawn in (water 5, lava 22)
+		static constexpr int Full = 8;
+		// The units a block holds in this family, 0 for any other block.
+		int units(uint8_t block) const {
+			return (block >= first && block < first + Full) ? block - first + 1 : 0;
+		}
+		uint8_t block(int u) const { return static_cast<uint8_t>(first + u - 1); }
+	};
+	inline const VolumeLiquid WaterVolume{ 128, Water::Source };
+	inline const VolumeLiquid LavaVolume{ 136, 22 };
+	// The volume a block is part of, or nullptr for a block that is not in one.
+	inline const VolumeLiquid* volumeOf(uint8_t block) {
+		if (WaterVolume.units(block) > 0) return &WaterVolume;
+		if (LavaVolume.units(block) > 0) return &LavaVolume;
 		return nullptr;
 	}
 }

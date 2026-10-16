@@ -16,7 +16,7 @@ using namespace CGEngine;
 // VoxelWorld: blocks in chunks, generated and meshed on worker threads and uploaded by update() (docs/games/voxels.md).
 // Adds a reaction for a block: it becomes another block when it touches one of the neighbour kinds (see VoxelSimulation::Rule).
 // Block ids must be from 0 to 255, and the seconds must not be negative.
-static void addReaction(VoxelWorld& world, int block, const std::vector<int>& neighbours, int becomes, float chance, float seconds) {
+static void addReaction(VoxelWorld& world, int block, const std::vector<int>& neighbours, int becomes, float chance, float seconds, bool diagonal = false) {
     auto byteOf = [](int id) {
         if (id < 0 || id > 255) throw std::runtime_error("a block id must be from 0 to 255");
         return static_cast<uint8_t>(id);
@@ -24,7 +24,7 @@ static void addReaction(VoxelWorld& world, int block, const std::vector<int>& ne
     if (seconds < 0.0f) throw std::runtime_error("a reaction's seconds must not be negative");
     std::bitset<256> kinds;
     for (int neighbour : neighbours) kinds[byteOf(neighbour)] = true;
-    world.physics().addRule(VoxelSimulation::Rule{ byteOf(block), kinds, byteOf(becomes), chance, seconds });
+    world.physics().addRule(VoxelSimulation::Rule{ byteOf(block), kinds, byteOf(becomes), chance, seconds, diagonal });
 }
 
 void bindVoxel(py::module_& m) {
@@ -122,7 +122,8 @@ void bindVoxel(py::module_& m) {
             type.cube = shape == "cube";
             type.mesh = static_cast<uint8_t>(mesh);
             type.joinAbove = static_cast<uint8_t>(join_above);
-            type.transparent = transparent;
+            type.blend = transparent;
+            type.passesLight = transparent;
             type.hits = static_cast<uint8_t>(std::clamp(hits, 1, 255));
             type.flows = flows;
             if (tiles) {
@@ -199,6 +200,15 @@ void bindVoxel(py::module_& m) {
              "Far skins: the chunks more than far_chunks from the focus are meshed with every stride-th block sampled (a stride of 2 is a quarter of the quads). 0 turns them off.")
         .def("set_detail", &VoxelWorld::setDetail, py::arg("near_chunks"), py::arg("near_samples") = 2,
              "Finer smooth skin near the camera: the chunks within near_chunks of the focus use near_samples per block. 0 turns it off.")
+        .def("ground_mesh", [](const VoxelWorld& world, int cx, int cz, int group) {
+            py::list out;
+            for (const VoxelVertex& v : world.probeGroundMesh(cx, cz, static_cast<uint8_t>(group))) {
+                out.append(py::make_tuple(v.position.x, v.position.y, v.position.z, v.colour.r, v.colour.g, v.colour.b, v.colour.a,
+                    v.splat[0], v.splat[1], v.splat[2], v.splat[3]));
+            }
+            return out;
+        }, py::arg("cx"), py::arg("cz"), py::arg("group") = 0,
+           "The smooth mesh of a chunk's group as it is built now (0 is the ground; a liquid's group is its source block): per vertex (x, y, z, r, g, b, a, the four splat words).")
         .def("chunk_quads", &VoxelWorld::chunkQuads, py::arg("cx"), py::arg("cz"),
              "The quads in a loaded chunk's mesh (0 if it is not loaded or has none).")
         .def("set_move_seconds", &VoxelWorld::setMoveSeconds, py::arg("seconds"),
@@ -222,9 +232,10 @@ void bindVoxel(py::module_& m) {
             addReaction(world, block, { neighbour }, becomes, chance, 0.0f);
         }, py::arg("block"), py::arg("neighbour"), py::arg("becomes"), py::arg("chance") = 1.0f,
            "A reaction: a block that touches the neighbour kind becomes the other block, with this chance per tick.")
-        .def("add_reaction", [](VoxelWorld& world, int block, const std::vector<int>& neighbours, int becomes, float chance, float seconds) {
-            addReaction(world, block, neighbours, becomes, chance, seconds);
+        .def("add_reaction", [](VoxelWorld& world, int block, const std::vector<int>& neighbours, int becomes, float chance, float seconds, bool diagonal) {
+            addReaction(world, block, neighbours, becomes, chance, seconds, diagonal);
         }, py::arg("block"), py::arg("neighbours"), py::arg("becomes"), py::arg("chance") = 1.0f, py::arg("seconds") = 0.0f,
+           py::arg("diagonal") = false,
            "A reaction: a block that touches one of the neighbour kinds becomes the other block. With no seconds the change has this "
            "chance per tick. With seconds the block must keep touching for that long, and shows its progress as damage.")
         .def("clear_rules", [](VoxelWorld& world) { world.physics().clearRules(); }, "Remove every reaction rule.")

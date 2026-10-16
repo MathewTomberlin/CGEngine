@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cmath>
 #include "VoxelMesher.h"
+#include "VoxelBlocks.h"
 
 namespace CGEngine {
 	namespace {
@@ -135,7 +136,7 @@ namespace CGEngine {
 
 	// Whether light goes through a block: air, and the water (its mesh is blended, so the ground under it is lit as well).
 	bool lightPasses(const PaddedChunk& chunk, uint8_t block) {
-		return block == 0 || chunk.rule[block].transparent;
+		return block == 0 || chunk.rule[block].passesLight;
 	}
 
 	void computeLight(PaddedChunk& chunk) {
@@ -389,11 +390,13 @@ namespace CGEngine {
 		const int CubeEdges[12][2] = { { 0, 1 }, { 2, 3 }, { 4, 5 }, { 6, 7 }, { 0, 2 }, { 1, 3 }, { 4, 6 }, { 5, 7 },
 			{ 0, 4 }, { 1, 5 }, { 2, 6 }, { 3, 7 } };
 
-		// Whether the block at (x, y, z) has air beside it on one of its six faces: a surface block (see smoothVertex).
-		bool exposedBlock(const PaddedChunk& chunk, int x, int y, int z) {
+		// Whether the block at (x, y, z) is a surface block of the group: one of its six faces has a neighbour that is not in the group
+		// (see smoothVertex). Only the group's own membership counts, so the ground under water is exposed (the water is not ground)
+		// and keeps its skin, and light has no part in it.
+		bool exposedBlock(const PaddedChunk& chunk, int x, int y, int z, uint8_t group) {
 			static const int Faces[6][3] = { { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 }, { 0, 0, 1 }, { 0, 0, -1 } };
 			for (const auto& f : Faces) {
-				if (chunk.at(x + f[0], y + f[1], z + f[2]) == 0) return true;
+				if (!inGroup(chunk, x + f[0], y + f[1], z + f[2], group)) return true;
 			}
 			return false;
 		}
@@ -514,7 +517,7 @@ namespace CGEngine {
 				// The solid block whose centre is nearest the point: a vertex on the ground takes the colour of the ground it stands on,
 				// not of a neighbouring bump, whose centre can outweigh the ground's in the trilinear share.
 				const glm::vec3 centre(x + 0.5f, y + 0.5f, z + 0.5f);
-				const float distance = glm::dot(centre - p, centre - p) + (exposedBlock(chunk, x, y, z) ? 0.0f : 1000.0f);
+				const float distance = glm::dot(centre - p, centre - p) + (exposedBlock(chunk, x, y, z, group) ? 0.0f : 1000.0f);
 				if (distance < blockDistance) {
 					blockDistance = distance;
 					dominant = chunk.index(x, y, z);
@@ -528,7 +531,7 @@ namespace CGEngine {
 			// corner of another block (brick, wood) is a barrier the water does not blend across: only its water counts there.
 			float splat[kSplatChannels] = {};
 			float splatTotal = 0.0f;
-			const bool blended = group != 0 && chunk.rule[group].transparent && chunk.rule[group].splat >= 0;
+			const bool blended = group != 0 && chunk.rule[group].blend && chunk.rule[group].splat >= 0;
 			float waterWeight = 0.0f;
 			bool barrier = false;
 			for (int c = 0; c < 8; ++c) {
@@ -546,7 +549,7 @@ namespace CGEngine {
 					const int id = blockAt(chunk, x, y, z);
 					if (id == 0) continue;
 					const PaddedChunk::MeshRule& rule = chunk.rule[id];
-					if (rule.transparent) {
+					if (rule.blend) {
 						waterWeight += w;
 					} else if (rule.splat >= 0) {
 						splat[rule.splat] += w;

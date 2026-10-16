@@ -68,11 +68,30 @@ namespace CGEngine {
 		types.fill(BlockType());
 		types[0].solid = false;
 		types[VoxelTerrain::Sand].falls = true;
-		types[Water::Source] = BlockType{ false, false, true };
-		for (int id = Water::FlowFirst; id <= Water::FlowLast; ++id) types[static_cast<size_t>(id)] = BlockType{ false, false, true };
-		for (int id = LavaFlow.first; id <= LavaFlow.last; ++id) types[static_cast<size_t>(id)] = BlockType{ false, false, true };
-		types[LavaFlow.source] = BlockType{ false, false, true };
+		// Liquids are in their own mesh, drawn with their source's mesh, so the terrain's skin never counts them as ground (the game
+		// sets the same in defineBlock; this is the default for a world that defines no blocks).
+		const auto liquid = [](uint8_t source) {
+			BlockType type{ false, false, true };
+			type.own = true;
+			type.mesh = source;
+			type.blend = source == Water::Source;
+			type.passesLight = source == Water::Source;
+			return type;
+		};
+		types[Water::Source] = liquid(Water::Source);
+		for (int id = Water::FlowFirst; id <= Water::FlowLast; ++id) types[static_cast<size_t>(id)] = liquid(Water::Source);
+		for (int id = LavaFlow.first; id <= LavaFlow.last; ++id) types[static_cast<size_t>(id)] = liquid(LavaFlow.source);
+		types[LavaFlow.source] = liquid(LavaFlow.source);
 		startWorkers();
+	}
+
+	std::vector<VoxelVertex> VoxelWorld::probeGroundMesh(int cx, int cz, uint8_t group) const {
+		PaddedChunk padded = snapshot(cx, cz, VoxelLightReach);
+		computeLight(padded);
+		computeSkin(padded);
+		MeshArrays part;
+		buildSmoothMesh(padded, palette, std::max(1, resolutionFor(cx, cz)), 1, 0, group, part);
+		return part.vertices;
 	}
 
 	void VoxelWorld::defineBlock(int blockId, const BlockType& type) {
@@ -1065,7 +1084,8 @@ namespace CGEngine {
 			padded.rule[id].join = types[id].joinAbove;
 			padded.rule[id].joinBelow = types[id].joinBelow;
 			padded.rule[id].cube = types[id].cube;
-			padded.rule[id].transparent = types[id].transparent;
+			padded.rule[id].blend = types[id].blend;
+			padded.rule[id].passesLight = types[id].passesLight;
 			padded.rule[id].textured = types[id].textured;
 			padded.rule[id].splat = types[id].splat;
 			for (int k = 0; k < 3; ++k) padded.rule[id].tiles[k] = types[id].tiles[k];
@@ -1239,7 +1259,7 @@ namespace CGEngine {
 					std::move(part.mesh.indices), materials, position);
 				if (body) region.bodies[part.group] = body->getId().value_or(0);
 			}
-			if (body) body->transparent = types[part.group].transparent;
+			if (body) body->transparent = types[part.group].blend;
 		}
 		// A group that is drawn no more (its blocks were taken away) loses its body.
 		for (auto drawnBody = region.bodies.begin(); drawnBody != region.bodies.end();) {
@@ -1458,7 +1478,8 @@ namespace CGEngine {
 			padded.rule[id].join = types[id].joinAbove;
 			padded.rule[id].joinBelow = types[id].joinBelow;
 			padded.rule[id].cube = types[id].cube;
-			padded.rule[id].transparent = types[id].transparent;
+			padded.rule[id].blend = types[id].blend;
+			padded.rule[id].passesLight = types[id].passesLight;
 		}
 		const int cx = x - ox;
 		const int cy = y - oy;

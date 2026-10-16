@@ -4,6 +4,8 @@ Block ids and colours for the voxel sample (docs/games/voxels.md). The terrain i
 
 Air is 0 and is never stored. The colours are tints: the base texture is a light grey noise.
 """
+import json
+import os
 
 CHUNK = 16          # blocks along x and z in a chunk
 HEIGHT = 64         # blocks up in the world
@@ -20,40 +22,84 @@ TORCH = 19                          # a torch: a prop on a block's face (VoxelWo
 COAL, IRON = 20, 21                 # ore in the stone: coal at any depth, iron deep (the same ids as VoxelTerrain::Coal and Iron)
 LAVA = 22                           # a liquid: lakes in the deep caves (the same id as VoxelTerrain::Lava), a source that flows as water does
 LAVA_FLOW_FIRST, LAVA_FLOW_LAST = 23, 29   # flowing lava, levels 7 to 1 (the block id is 30 - level), as the water's are
-LAVA_BLOCKS = (LAVA,) + tuple(range(LAVA_FLOW_FIRST, LAVA_FLOW_LAST + 1))   # the lava family: one mesh, named after the source
+LAVA_BLOCKS = (LAVA,) + tuple(range(LAVA_FLOW_FIRST, LAVA_FLOW_LAST + 1)) + tuple(range(136, 144))   # the lava family: one mesh, named after the source; its volumes (136 to 143) too
 DIRECTIONS = ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1))   # a prop's dir, to the block it leans on (PropDirs)
 FLOW_FIRST, FLOW_LAST = 9, 15       # flowing water, levels 7 to 1 (the block id is 16 - level); WATER is the full source
-WATER_BLOCKS = (WATER,) + tuple(range(FLOW_FIRST, FLOW_LAST + 1))   # the water family: one mesh, drawn see-through
+WATER_BLOCKS = (WATER,) + tuple(range(FLOW_FIRST, FLOW_LAST + 1)) + tuple(range(128, 136))   # the water family: one mesh, drawn see-through; its volumes (128 to 135) too
+# Volumes: a placed amount of liquid, one block id per unit (1 to 8). A bucket places a full volume, which spreads and levels out;
+# a spring (WATER, LAVA) keeps making its flows as before. Ids 128 and up are not items (the item ids run to 52).
+WATER_VOLUME_FIRST, WATER_VOLUME_FULL = 128, 135
+LAVA_VOLUME_FIRST, LAVA_VOLUME_FULL = 136, 143
 LIQUIDS = WATER_BLOCKS + LAVA_BLOCKS    # every liquid: swimming and the fog under the surface
 STILL_LIQUIDS = ()                   # liquids that do not spread (define_block flows=False): none now, lava flows like water
-FALLS = (SAND, GRAVEL)              # blocks that fall into air or liquid
-HITS = {STONE: 3, WOOD: 4, BRICK: 3, COAL: 4, IRON: 5}   # hits to break a block (the others take one); see VoxelWorld.hit_block
-EMITS = {LAMP: 255, LAVA: 255}      # the light each block gives off at its own cell, 0 to 255; the light falls off through air
-# How each block is drawn (BlockType::own and cube). A block in OWN has its own mesh per chunk, drawn with MATERIALS[block]
-# (a material in scenes/voxels.json); the rest are the terrain's smooth skin. A cube block is always in OWN.
 OBSIDIAN = 30                       # a hard cube: a lava block that water touches for a while becomes it (REACTIONS)
-OWN = (WOOD, LEAVES, BRICK, LAMP, OBSIDIAN) + LIQUIDS   # liquids are in their own meshes too, so the ground under them has a skin to be seen by
-CUBES = (BRICK, OBSIDIAN)
-MATERIALS = {WOOD: "voxel_wood", LEAVES: "voxel_leaves", BRICK: "voxel_brick", WATER: "voxel_water", LAVA: "voxel_lava",
-             OBSIDIAN: "voxel_brick"}
-JOINS = {WOOD: LEAVES}              # a block whose top is covered by the mesh of this block joins that mesh (the trunk top joins the canopy)
 GROUND = (GRASS, DIRT, STONE, SAND, GRAVEL, SNOW)   # natural ground
 # A trunk base stays in the trunk's own skin (no join below): a base joined to the terrain pinched the drawn trunk to 0.8 of a
 # block where it left the ground (roadmap 27.1). The own skin runs down into the ground, so the trunk flares out of it.
 JOINS_BELOW = {}
-TRANSPARENT = (WATER,) + tuple(range(FLOW_FIRST, FLOW_LAST + 1))   # drawn blended: the water's mesh is named after the source
 
 # The block textures (resources/voxel_tiles.png, written by tools/make_voxel_tiles.py): one layer per tile, in this order. A
 # textured block shows its tile instead of its colour: the top, the sides and the bottom each have a layer (TILES).
 TILE_NAMES = ["grass_top", "grass_side", "dirt", "stone", "sand", "water", "snow_top", "snow_side", "bark", "wood_rings",
               "leaves", "gravel", "lamp", "brick", "coal_ore", "iron_ore", "lava"]
 TILE_SIZE = 32
+
+def _block_table():
+    """The block table from resources/voxel_blocks.json (VOXEL_BLOCKS picks another file), one dict per block id. An entry's
+    'key' must be the constant of its id in this file, so the two cannot drift apart."""
+    if os.environ.get("VOXEL_BLOCKS"):
+        path = os.environ["VOXEL_BLOCKS"]
+    else:
+        here = os.path.dirname(os.path.abspath(__file__))
+        candidates = [os.path.join(here, "voxel_blocks.json"), os.path.join(here, os.pardir, "voxel_blocks.json")]
+        path = next((c for c in candidates if os.path.exists(c)), None)
+        if path is None:
+            raise FileNotFoundError("voxel_blocks.json was not found beside the scripts or in resources")
+    with open(path, encoding="utf-8") as f:
+        entries = json.load(f)["blocks"]
+    table = {}
+    for entry in entries:
+        ids = range(entry["ids"][0], entry["ids"][1] + 1) if "ids" in entry else [entry["id"]]
+        for block in ids:
+            if block in table:
+                raise ValueError("block %d is listed twice in %s" % (block, path))
+            if "key" in entry and globals()[entry["key"]] != block:
+                raise ValueError("%s is %d in VoxelGen.py, not %d as %s has it" % (entry["key"], globals()[entry["key"]], block, path))
+            table[block] = dict(entry, id=block)
+    return table
+
+
+BLOCK_TABLE = _block_table()
+COLOURS = {b: tuple(e["colour"]) for b, e in BLOCK_TABLE.items() if "colour" in e}
+NAMES = {b: e["name"] for b, e in BLOCK_TABLE.items()}
+TILES = {}
+for _b, _e in BLOCK_TABLE.items():
+    if "tiles" in _e:
+        _names = _e["tiles"] * 3 if len(_e["tiles"]) == 1 else _e["tiles"]
+        TILES[_b] = tuple(TILE_NAMES.index(_n) for _n in _names)
+HITS = {b: e["hits"] for b, e in BLOCK_TABLE.items() if "hits" in e}   # hits to break a block (the others take one); see VoxelWorld.hit_block
+EMITS = {b: e["emits"] for b, e in BLOCK_TABLE.items() if e.get("emits")}   # the light each block gives off at its own cell, 0 to 255
+FALLS = tuple(b for b in sorted(BLOCK_TABLE) if BLOCK_TABLE[b].get("falls"))   # blocks that fall into air or liquid
+_LIQUID_IDS = tuple(b for b in sorted(BLOCK_TABLE) if BLOCK_TABLE[b].get("liquid"))
+if _LIQUID_IDS != tuple(sorted(LIQUIDS)):
+    raise ValueError("the liquid blocks in voxel_blocks.json are %s, but the id ranges above are %s" % (_LIQUID_IDS, sorted(LIQUIDS)))
+# How each block is drawn (BlockType::own and cube). A block in OWN has its own mesh per chunk, drawn with MATERIALS[block]
+# (a material in scenes/voxels.json); the rest are the terrain's smooth skin. A cube block is always in OWN. Liquids are in their
+# own meshes too, so the ground under them has a skin to be seen by.
+OWN = tuple(sorted({b for b, e in BLOCK_TABLE.items() if e.get("own") or e.get("cube")} | set(LIQUIDS)))
+CUBES = tuple(b for b in sorted(BLOCK_TABLE) if BLOCK_TABLE[b].get("cube"))
+MATERIALS = {b: e["material"] for b, e in BLOCK_TABLE.items() if "material" in e}
+JOINS = {b: e["join_above"] for b, e in BLOCK_TABLE.items() if "join_above" in e}   # a block whose top is covered by the mesh of this block joins that mesh (the trunk top joins the canopy)
+TRANSPARENT = tuple(b for b in sorted(BLOCK_TABLE) if BLOCK_TABLE[b].get("transparent"))   # drawn blended: the water's mesh is named after the source
+_SPLAT_CHANNELS = {e["splat"]: b for b, e in BLOCK_TABLE.items() if "splat" in e}
+if sorted(_SPLAT_CHANNELS) != list(range(len(_SPLAT_CHANNELS))):
+    raise ValueError("the splat channels in voxel_blocks.json must be 0 to n-1")
+SPLAT = tuple(_SPLAT_CHANNELS[c] for c in range(len(_SPLAT_CHANNELS)))
 # The splat blocks, in channel order (at most 16: Renderer::kSplatChannels). The smooth skin carries one weight per channel at each
 # vertex, and the fragment shader blends their tiles per pixel by them, so a boundary between two blocks that both have a channel
 # has no triangle edge: the ground blends with all of these. The water is a splat block too (its flowing levels take its channel),
 # so the water surface joins the ground beside it. A block with no channel (brick, wood) keeps an edge against them. Every block
 # of the smooth terrain must be one of these (or in OWN, with its own mesh).
-SPLAT = (GRASS, DIRT, STONE, SAND, SNOW, GRAVEL, COAL, IRON, WATER)
 
 def splat_channel(block, textured):
     """The splat channel of a block (BlockType::splat): its own, the water's for every flowing level of the water, -1 for none
@@ -62,64 +108,9 @@ def splat_channel(block, textured):
         return -1
     key = WATER if block in WATER_BLOCKS else block
     return SPLAT.index(key) if key in SPLAT else -1
-GRASS_TILES = (0, 1, 2)                 # grass top, grass side, dirt
-TILES = {
-    GRASS: GRASS_TILES,
-    DIRT: (2, 2, 2),
-    STONE: (3, 3, 3),
-    SAND: (4, 4, 4),
-    WATER: (5, 5, 5),
-    SNOW: (6, 7, 2),
-    WOOD: (9, 8, 9),                    # the cut top shows its rings, the sides the bark
-    LEAVES: (10, 10, 10),
-    GRAVEL: (11, 11, 11),
-    LAMP: (12, 12, 12),
-    BRICK: (13, 13, 13),
-    COAL: (14, 14, 14),
-    IRON: (15, 15, 15),
-    LAVA: (16, 16, 16),
-}
-for _block in range(FLOW_FIRST, FLOW_LAST + 1):
-    TILES[_block] = TILES[WATER]
-
-COLOURS = {
-    GRASS: (0.36, 0.72, 0.26),
-    DIRT: (0.52, 0.36, 0.22),
-    STONE: (0.50, 0.50, 0.53),
-    SAND: (0.92, 0.86, 0.58),
-    WATER: (0.22, 0.45, 0.92),
-    SNOW: (0.96, 0.98, 1.00),
-    WOOD: (0.44, 0.29, 0.15),
-    LEAVES: (0.20, 0.50, 0.16),
-    GRAVEL: (0.52, 0.50, 0.47),
-    LAMP: (0.30, 0.22, 0.12),       # the block's own colour is dark: its glow (the light colour) is what shows, warm, not white
-    TORCH: (1.00, 0.62, 0.25),
-    COAL: (0.16, 0.16, 0.18),
-    IRON: (0.66, 0.46, 0.36),
-    LAVA: (1.00, 0.30, 0.05),
-    BRICK: (0.66, 0.30, 0.22),
-}
-for _block in range(FLOW_FIRST, FLOW_LAST + 1):
-    COLOURS[_block] = COLOURS[WATER]
-
-NAMES = {AIR: "air", GRASS: "grass", DIRT: "dirt", STONE: "stone", SAND: "sand", WATER: "water", SNOW: "snow",
-         WOOD: "wood", LEAVES: "leaves", GRAVEL: "gravel", LAMP: "lamp", BRICK: "brick", TORCH: "torch", COAL: "coal", IRON: "iron",
-         LAVA: "lava"}
-for _block in range(FLOW_FIRST, FLOW_LAST + 1):
-    NAMES[_block] = "flowing water"
-for _block in range(LAVA_FLOW_FIRST, LAVA_FLOW_LAST + 1):
-    TILES[_block] = TILES[LAVA]
-    COLOURS[_block] = COLOURS[LAVA]
-    EMITS[_block] = EMITS[LAVA]
-    NAMES[_block] = "flowing lava"
-COLOURS[OBSIDIAN] = (0.10, 0.07, 0.15)
-NAMES[OBSIDIAN] = "obsidian"
-HITS[OBSIDIAN] = 5
-for _block in LAVA_BLOCKS:
-    HITS[_block] = 4                    # lava takes four stages of damage when a reaction works on it (see REACTIONS)
 # The reactions every world has (VoxelRules): a lava block that water touches takes four seconds to become obsidian, showing its
 # damage as it goes. Other reactions are data too: a rule file (VOXEL_RULES) adds to them.
-REACTIONS = [{"block": "lava", "touches": "water", "becomes": "obsidian", "seconds": 4}]
+REACTIONS = [{"block": "lava", "touches": "water", "becomes": "obsidian", "seconds": 4, "diagonal": True}]
 
 
 # Items that are not blocks: a creature leaves a hide when it dies. They are held in the inventory like blocks, but a slot
@@ -166,7 +157,7 @@ WEAPONS = {SWORD: {"damage": 2.5, "durability": 1280}, BONE_BLADE: {"damage": 2,
 # The buckets: an empty one is filled by a strike on a liquid, and a filled one places its liquid (VoxelGame, placement_check).
 BUCKETS = (BUCKET, WATER_BUCKET, LAVA_BUCKET)
 FILLED_BUCKET = {WATER: WATER_BUCKET, LAVA: LAVA_BUCKET}   # the bucket a liquid fills, by the liquid's source block
-BUCKET_LIQUID = {WATER_BUCKET: WATER, LAVA_BUCKET: LAVA}   # the liquid a filled bucket places, by the bucket
+BUCKET_LIQUID = {WATER_BUCKET: WATER_VOLUME_FULL, LAVA_BUCKET: LAVA_VOLUME_FULL}   # the liquid a filled bucket places (a full volume), by the bucket
 MAX_SWINGS = 8                      # the most hits one strike can make (a shovel's harvest on the blocks it lists as harvest)
 
 

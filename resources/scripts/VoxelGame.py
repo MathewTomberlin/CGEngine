@@ -61,6 +61,8 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
         self.requested = set()          # (cx, cz) of the chunks asked for, loaded or not
         self.wanted_centre = None       # chunk the wanted set was last built for
         self.pos = [8.5, SPAWN_HEIGHT, 8.5]   # the player's feet, y up
+        # A headless host (CGENGINE_HEADLESS=1) has no window: it runs the world, the physics and the network, and draws nothing.
+        self.headless = cge.is_headless()
         if os.environ.get("VOXEL_SPAWN"):
             # VOXEL_SPAWN="x,z" starts the player over that column (for checks and for looking at a place)
             spawn_x, spawn_z = (float(v) for v in os.environ["VOXEL_SPAWN"].split(","))
@@ -201,12 +203,13 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
 
         if not self.hud_ready and self.frames >= 2:
             # Made a frame after the world, not during the scene's start: the outlines first, then the labels, so the
-            # labels are drawn over the bars.
-            self.show_outline("target_break", None, None)
-            self.hide_placement_outlines()
-            self.setup_hud()
+            # labels are drawn over the bars. A headless host has no window to lay them out in, so it makes none.
+            if not self.headless:
+                self.show_outline("target_break", None, None)
+                self.hide_placement_outlines()
+                self.setup_hud()
+                self.apply_window_settings()
             self.hud_ready = True
-            self.apply_window_settings()
         self.update_pause_key()
         self.update_inventory_key()
         self.console.update()
@@ -234,9 +237,10 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
             self.update_target()
             self.edit_blocks(dt)
             self.learn_recipes()
-        self.update_outlines()
-        self.update_preview()
-        self.update_hud()
+        if not self.headless:
+            self.update_outlines()
+            self.update_preview()
+            self.update_hud()
         self.update_sky(dt)
         self.update_held_torch()
         self.update_healing()
@@ -246,7 +250,8 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
         self.update_arrows(dt)
         self.frame_dt = dt
         self.place_camera()
-        self.update_hands(dt)
+        if not self.headless:
+            self.update_hands(dt)
 
         self.state_timer -= raw_dt   # the state keeps being written while paused, so tests can read the menu
         if self.state_timer <= 0.0:
@@ -686,7 +691,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
 
     def selected_name(self):
         item = self.selected()
-        return "empty slot" if item is None else VoxelGen.NAMES[item]
+        return "empty slot" if item is None else VoxelGen.NAMES.get(item, "unknown block %d" % item)
 
     def gain(self, item, amount=1):
         """Put broken blocks (or torches) into the inventory. Creative mode keeps no stock, so nothing is added."""
@@ -1077,7 +1082,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
             return None, None if self.creative else "This slot is empty"
         liquid = VoxelGen.BUCKET_LIQUID.get(item)
         if liquid is None and item not in VoxelGen.COLOURS:
-            return None, "A %s cannot be placed" % VoxelGen.NAMES[item]
+            return None, "A %s cannot be placed" % VoxelGen.NAMES.get(item, "unknown block %d" % item)
         if self.world.get_block(*cell) != VoxelGen.AIR or self.world.prop_at(*cell) != -1:
             return None, "That space is taken"
         if liquid is not None:
@@ -1304,7 +1309,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
                              "max_ms": round(self.preview_stats[2], 3)},
                  "dirty": stats["dirty"], "meshing": stats["meshing"], "quads": stats["quads"],
                  "upload_ms": round(stats["upload_ms"], 3), "uploads": stats["uploads"], "edits": stats["edits"], "slot": self.slot,
-                 "smoothing": self.world.smoothing(), "active": self.world.active_count(), "paused": self.paused,
+                 "smoothing": self.world.smoothing(), "active": self.world.active_count(), "paused": self.paused, "headless": self.headless,
                  "menu": self.menu_page if self.paused else None, "sensitivity": self.sensitivity, "view_radius": self.view_radius,
                  "seed": self.seed, "frames": self.frames, "inventory": self.inventory.to_list(), "drops": len(self.drops.live), "creative": self.creative,
                  "known_recipes": self.crafting.to_list(), "recipes_shown": len(self.crafting.visible(self.creative)),

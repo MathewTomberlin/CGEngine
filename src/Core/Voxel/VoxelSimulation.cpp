@@ -87,10 +87,16 @@ namespace CGEngine {
 	}
 
 	namespace {
-		// Whether a neighbour of the cell holds one of the kinds.
-		bool touching(VoxelWorld& world, int x, int y, int z, const std::bitset<256>& kinds) {
-			for (const auto& d : Neighbours) {
-				if (kinds[static_cast<uint8_t>(world.getBlock(x + d[0], y + d[1], z + d[2]))]) return true;
+		// Whether a neighbour of the cell holds one of the kinds: one of the six faces, or with diagonal, any of the 26 around it.
+		bool touching(VoxelWorld& world, int x, int y, int z, const std::bitset<256>& kinds, bool diagonal) {
+			for (int dx = -1; dx <= 1; ++dx) {
+				for (int dy = -1; dy <= 1; ++dy) {
+					for (int dz = -1; dz <= 1; ++dz) {
+						const int faces = (dx != 0) + (dy != 0) + (dz != 0);
+						if (faces == 0 || (!diagonal && faces > 1)) continue;
+						if (kinds[static_cast<uint8_t>(world.getBlock(x + dx, y + dy, z + dz))]) return true;
+					}
+				}
 			}
 			return false;
 		}
@@ -104,7 +110,7 @@ namespace CGEngine {
 		bool reacting = false;
 		for (size_t r = 0; r < rules.size() && !reacting; ++r) {
 			const Rule& rule = rules[r];
-			if (rule.block != block || !touching(world, x, y, z, rule.neighbours)) continue;
+			if (rule.block != block || !touching(world, x, y, z, rule.neighbours, rule.diagonal)) continue;
 			if (rule.seconds <= 0.0f) {
 				if (nextRandom() < rule.chance) {
 					set(world, x, y, z, rule.becomes);
@@ -180,6 +186,11 @@ namespace CGEngine {
 			}
 		}
 
+		if (const VolumeLiquid* volume = volumeOf(block)) {
+			tickVolume(world, x, y, z, *volume);
+			return;
+		}
+
 		if (type.liquid && type.flows) {
 			// A liquid (water or lava) falls into air below, and otherwise spreads sideways one level at a time, so a flow is finite.
 			const Liquid* liquid = liquidOf(block);
@@ -202,6 +213,50 @@ namespace CGEngine {
 				}
 				if (feed < level) set(world, x, y, z, 0);
 			}
+		}
+	}
+
+	void VoxelSimulation::tickVolume(VoxelWorld& world, int x, int y, int z, const VolumeLiquid& volume) {
+		// A volume's units, and the units of the spring's flows of the same liquid (a flow holds its level). Other blocks hold none.
+		const auto unitsOf = [&volume](uint8_t block) {
+			if (const int units = volume.units(block)) return units;
+			const Liquid* flow = liquidOf(block);
+			return (flow && flow->source == volume.spring) ? flow->level(block) : 0;
+		};
+		const int units = unitsOf(static_cast<uint8_t>(world.getBlock(x, y, z)));
+		if (units == 0) return;
+		if (y > 0) {
+			// Falling: the whole volume drops into air, or fills the liquid below up to a full cell.
+			const uint8_t below = static_cast<uint8_t>(world.getBlock(x, y - 1, z));
+			if (below == 0 && !reserved.count(keyOf(x, y - 1, z))) {
+				set(world, x, y - 1, z, volume.block(units));
+				set(world, x, y, z, 0);
+				return;
+			}
+			const int belowUnits = unitsOf(below);
+			if (belowUnits > 0 && belowUnits < VolumeLiquid::Full) {
+				const int moved = std::min(units, VolumeLiquid::Full - belowUnits);
+				set(world, x, y - 1, z, volume.block(belowUnits + moved));
+				set(world, x, y, z, moved == units ? 0 : volume.block(units - moved));
+				return;
+			}
+		}
+		// Evening out: a unit moves to a side that is air, or the same liquid with at least two units less. Air with open air
+		// below it is a drop: a unit moves over it at once, and falls there, so a volume runs off an edge and downhill.
+		for (const auto& side : Sides) {
+			const int nx = x + side[0];
+			const int nz = z + side[1];
+			if (!world.loadedAt(nx, nz)) continue;
+			const uint8_t neighbour = static_cast<uint8_t>(world.getBlock(nx, y, nz));
+			const int sideUnits = unitsOf(neighbour);
+			if (neighbour != 0 && sideUnits == 0) continue;   // another kind of block holds its own liquid
+			const int mine = unitsOf(static_cast<uint8_t>(world.getBlock(x, y, z)));
+			if (mine == 0) return;
+			const bool drop = neighbour == 0 && y > 0 && world.getBlock(nx, y - 1, nz) == 0;
+			if (!drop && mine - sideUnits < 2) continue;
+			set(world, nx, y, nz, volume.block(sideUnits + 1));
+			// The last unit leaves the cell as air: volume.block(0) is the id below the family (127 for water).
+			set(world, x, y, z, mine - 1 == 0 ? 0 : volume.block(mine - 1));
 		}
 	}
 
