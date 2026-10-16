@@ -629,9 +629,9 @@ Goal: a chunk's mesh costs a few milliseconds, so a view of 40 settles in a few 
   cell reads its corners only where the surface crosses it. Left: the gradient calls the density six times a vertex (deriving the
   normal from the grid would change the shading, so it is a look decision), and the terrain's density is a trilinear per sample (about
   0.6 s). Measure with `tools/voxel_mesh_timing.ps1`.
-- [ ] **26.3** Allocation, partly: the smooth mesh's grids (samples, cell positions, emitted) are per thread and reused, which was most
-  of its allocation. Reusing the light and skin scratch measured within noise (about 5%), so it was not kept. Left: the copy of each
-  chunk's padded area (`snapshot`) and the mesh vectors the job hands back to the region.
+- [x] **26.3** Allocation, closed. The smooth mesh's grids (samples, cell positions, emitted) are per thread and reused, which was most
+  of its allocation. Reusing the light and skin scratch measured within noise (about 5%), so it was not kept. The chunk snapshot takes a
+  median 0.25 ms (6% of the mesh time, one 10.7 ms spike on the world's thread), so it is not changed.
 
 ## Phase 27: tree bases (from playing the voxel sample)
 Goal: a tree stands on the ground as one object, with its trunk and its base joined.
@@ -863,7 +863,7 @@ Goal: the player sees a right arm that holds the selected item and swings it on 
   Its hand offset (scale 0.003, the sword's rotation) is not yet right in hand.
 - [~] **40.4** Bucket: an iron recipe; a strike on water or lava takes the liquid (the block goes to air, `scoop` op) and makes a
   water or lava bucket; a right click places the liquid and empties the bucket. The model is a cylinder
-  (`item_bucket.fbx`, made in Blender at 0.0025 scale); its hand offset is not yet right: `voxel_view_shot.ps1 -Item bucket` shows it at the fingers, not in the palm, and it is not yet checked in play.
+  (`item_bucket.fbx`, made in Blender at 0.0025 scale); its hand offset is now set to the palm (`held_items.json`: position -0.06, 0.035, -0.06, scale 0.004; `voxel_view_shot.ps1 -Item bucket`). It sits partly behind the hand, and it is not yet checked in play.
 
 ## Phase 41: phone play (from testing on a phone: one button at a time)
 - [x] **41.1** Auto jump: a Settings toggle (`auto_jump`, saved with the other settings). With it on, a walk stopped by a wall of 1 to 4
@@ -880,9 +880,9 @@ Goal: the player sees a right arm that holds the selected item and swings it on 
   (`resources/scripts/VoxelArrows.py`, tested in `tools/test_voxel_arrows.py`), stops at the first solid block (it lies there, for
   the player to take) or the first creature it reaches, and is spent after 6 s. Checked in the engine by `voxel_game_check.py`.
 - [~] **42.3** Not yet: the bow's draw is not drawn on the model (no draw clip), the arrow has no orientation (its body is a box),
-  and the bow's hand offset is not right yet: it now uses the sword's x and y (-0.15, -0.02, -0.06, from `held_items.json`), which
-  shows the bow whole in `voxel_view_shot.ps1 -Item bow`, but the grip still sits above the palm, not in it. Blind shifts of the
-  offset moved it little, so the next step is a look by eye, then a few measured moves.
+  and the bow's hand offset: the grip now sits in the palm (`held_items.json`: position -0.10, -0.02, -0.12; `voxel_view_shot.ps1 -Item bow`),
+  with the limb reaching off the right edge of the view. Found by moving the offset and looking at each shot: x moves the item up and down
+  on the screen, z moves it sideways. Not yet checked in play.
 
 - [x] **42.4** Shield durability (from the review: a shield breaks after N blocks): a shield in the left hand takes one use for each
   bite it blocks (`VoxelGen.SHIELD_USES`, 120; `VoxelGame.wear_shield`). Its uses go with it when it is moved to the hotbar, and its

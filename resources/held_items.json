@@ -69,8 +69,8 @@
       "hand": "R",
       "Held_Item_Offset_Transform": {
         "position": [
-          -0.01,
-          0.125,
+          -0.06,
+          0.035,
           -0.06
         ],
         "rotation": [
@@ -78,15 +78,15 @@
           -30.0,
           90.0
         ],
-        "scale": 0.01
+        "scale": 0.004
       }
     },
     "water bucket": {
       "hand": "R",
       "Held_Item_Offset_Transform": {
         "position": [
-          -0.01,
-          0.125,
+          -0.06,
+          0.035,
           -0.06
         ],
         "rotation": [
@@ -94,15 +94,15 @@
           -30.0,
           90.0
         ],
-        "scale": 0.01
+        "scale": 0.004
       }
     },
     "lava bucket": {
       "hand": "R",
       "Held_Item_Offset_Transform": {
         "position": [
-          -0.01,
-          0.125,
+          -0.06,
+          0.035,
           -0.06
         ],
         "rotation": [
@@ -110,7 +110,7 @@
           -30.0,
           90.0
         ],
-        "scale": 0.01
+        "scale": 0.004
       }
     },
     "bone blade": {
@@ -163,9 +163,9 @@
       "hand": "R",
       "Held_Item_Offset_Transform": {
         "position": [
-          -0.15,
+          -0.1,
           -0.02,
-          -0.06
+          -0.12
         ],
         "rotation": [
           110.0,
