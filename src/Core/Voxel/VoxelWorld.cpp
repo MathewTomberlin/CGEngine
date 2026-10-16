@@ -90,12 +90,12 @@ namespace CGEngine {
 		startWorkers();
 	}
 
-	std::vector<VoxelVertex> VoxelWorld::probeGroundMesh(int cx, int cz, uint8_t group) const {
+	std::vector<VoxelVertex> VoxelWorld::probeGroundMesh(int cx, int cz, uint8_t group, int stride) const {
 		PaddedChunk padded = snapshot(cx, cz, VoxelLightReach);
 		computeLight(padded);
 		computeSkin(padded);
 		MeshArrays part;
-		buildSmoothMesh(padded, palette, std::max(1, resolutionFor(cx, cz)), 1, 0, group, groupBounds(padded)[group], part);
+		buildSmoothMesh(padded, palette, std::max(1, resolutionFor(cx, cz)), std::max(1, stride), 0, group, groupBounds(padded)[group], part);
 		return part.vertices;
 	}
 

@@ -214,14 +214,14 @@ void bindVoxel(py::module_& m) {
              "Far skins: the chunks more than far_chunks from the focus are meshed with every stride-th block sampled (a stride of 2 is a quarter of the quads). 0 turns them off.")
         .def("set_detail", &VoxelWorld::setDetail, py::arg("near_chunks"), py::arg("near_samples") = 2,
              "Finer smooth skin near the camera: the chunks within near_chunks of the focus use near_samples per block. 0 turns it off.")
-        .def("ground_mesh", [](const VoxelWorld& world, int cx, int cz, int group) {
+        .def("ground_mesh", [](const VoxelWorld& world, int cx, int cz, int group, int stride) {
             py::list out;
-            for (const VoxelVertex& v : world.probeGroundMesh(cx, cz, static_cast<uint8_t>(group))) {
+            for (const VoxelVertex& v : world.probeGroundMesh(cx, cz, static_cast<uint8_t>(group), stride)) {
                 out.append(py::make_tuple(v.position.x, v.position.y, v.position.z, v.colour.r, v.colour.g, v.colour.b, v.colour.a,
                     v.splat[0], v.splat[1], v.splat[2], v.splat[3]));
             }
             return out;
-        }, py::arg("cx"), py::arg("cz"), py::arg("group") = 0,
+        }, py::arg("cx"), py::arg("cz"), py::arg("group") = 0, py::arg("stride") = 1,
            "The smooth mesh of a chunk's group as it is built now (0 is the ground; a liquid's group is its source block): per vertex (x, y, z, r, g, b, a, the four splat words).")
         .def("chunk_quads", &VoxelWorld::chunkQuads, py::arg("cx"), py::arg("cz"),
              "The quads in a loaded chunk's mesh (0 if it is not loaded or has none).")
