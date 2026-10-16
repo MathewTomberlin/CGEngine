@@ -897,12 +897,18 @@ Goal: the player sees a right arm that holds the selected item and swings it on 
 ## Phase 39: investigations (from the lead developer's request: feasibility and cost not yet known)
 Goal: find out whether each idea can be done in this engine, and what it costs, before any of it is built. Each item ends with a
 written answer (what it would take, and a measured number) and a decision: build, shelve, or split into smaller items.
-- [ ] **39.1** Chunk physics: a piece of the world that is no longer connected to the ground falls, and every part still connected to
+- [~] **39.1** Chunk physics: a piece of the world that is no longer connected to the ground falls, and every part still connected to
   it falls with it. Questions: how a break is checked for connection (a flood fill from the break's neighbours, to the ground or to
   the chunk's edge), its cost in Release on a worst-case chunk (16 by 64 by 16 blocks) and on a break at a chunk edge, and how a
   falling piece moves (one mesh body, or the falling-block rule that sand and gravel already use). Open: a piece that spans two chunks.
   Found (code): the engine already moves falling blocks (`BlockType` `falls`, `define_block`, and `settle_moves`), so a detached piece
   could become falling blocks in place. The connection check is not written, and its cost is not measured.
+  Measured (headless Release, `tools/voxel_support_probe.ps1`): `VoxelWorld.checkSupport` (the binding `check_support`) takes a
+  flood fill over the solid face neighbours of a broken block. A block on the ground returns after about 250 blocks, 0.10 ms. A
+  detached piece of 2048 blocks is found detached in 0.47 ms (about 0.23 microseconds a block), so the 16 by 64 by 16 chunk (16,384
+  blocks) costs about 4 ms at worst, once per break, not per frame. A cap (500 blocks) stops it at 0.12 ms. Not yet built: the
+  falling of the detached piece (its blocks become falling blocks, which the engine already moves), and a break at a chunk edge
+  with an unloaded neighbour, which the check counts as held (not measured).
 - [ ] **39.2** Terrain-aligned decorations: grass that sways, pebbles, foliage and vines that sit on a block's face and follow its
   slope. Questions: whether they are one mesh per chunk (cheap to draw, rebuilt on each edit) or instanced bodies, how many fit a
   chunk without a frame-time cost (measure with `tools/voxel_perf.ps1`), and whether the sway can be a vertex-shader wind so it costs

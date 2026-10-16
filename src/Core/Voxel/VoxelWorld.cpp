@@ -2,6 +2,7 @@
 #include <cstddef>
 #include <cstdlib>
 #include <cstring>
+#include <unordered_set>
 #include <chrono>
 #include "VoxelWorld.h"
 #include "../Engine/Engine.h"
@@ -111,6 +112,46 @@ namespace CGEngine {
 	bool VoxelWorld::isSolid(int x, int y, int z) const {
 		const int block = getBlock(x, y, z);
 		return block != 0 && types[static_cast<size_t>(block)].solid;
+	}
+
+	VoxelWorld::SupportResult VoxelWorld::checkSupport(int x, int y, int z, int maxBlocks) const {
+		static const int Dirs[6][3] = { { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 }, { 0, 0, 1 }, { 0, 0, -1 } };
+		// A block is keyed by its coordinates, offset so each fits in its bits (the world is under 1024 blocks high).
+		auto key = [](int bx, int by, int bz) {
+			return (static_cast<uint64_t>(bx + (1 << 20)) << 42) | (static_cast<uint64_t>(by + (1 << 10)) << 21) | static_cast<uint64_t>(bz + (1 << 20));
+		};
+		std::unordered_set<uint64_t> seen;
+		std::vector<std::array<int, 3>> open;
+		for (const auto& d : Dirs) {
+			const int bx = x + d[0], by = y + d[1], bz = z + d[2];
+			if (!isSolid(bx, by, bz)) continue;
+			if (seen.insert(key(bx, by, bz)).second) open.push_back({ bx, by, bz });
+		}
+		SupportResult result;
+		while (!open.empty()) {
+			const std::array<int, 3> block = open.back();
+			open.pop_back();
+			++result.visited;
+			if (block[1] == 0) {
+				result.status = 0;
+				return result;
+			}
+			if (result.visited >= maxBlocks) {
+				result.status = 2;
+				return result;
+			}
+			for (const auto& d : Dirs) {
+				const int bx = block[0] + d[0], by = block[1] + d[1], bz = block[2] + d[2];
+				if (!loadedAt(bx, bz)) {
+					result.status = 0;   // the edge of the loaded world: the piece is held by what is not loaded, so it is not checked further
+					return result;
+				}
+				if (!isSolid(bx, by, bz)) continue;
+				if (seen.insert(key(bx, by, bz)).second) open.push_back({ bx, by, bz });
+			}
+		}
+		result.status = 1;
+		return result;
 	}
 
 	int VoxelWorld::skinFast(int x, int y, int z) const {
