@@ -807,10 +807,13 @@ Goal: an item looks like the thing it is: a tool is shaped, textured and held, a
   are now held in hand (`voxel_view_shot.ps1 -View hands -Item pickaxe`): the models were 100 times too big until they were exported at the
   viewmodel scale (0.01), and the held offset is the sword's, placed by eye, so the grip is close but not tuned. Not yet: a dropped tool
   still lies on the ground as a cube (a model drop is not done).
-- [ ] **34.2** A held tool in the first-person view: the selected tool's model is drawn in the hand, and each swing that hits a block
-  plays its swing clip (the hand moves; a sound alone is not enough).
-- [ ] **34.3** Icons: each tool's icon is a render of its model (the viewport screenshot through BlenderMCP, saved as a PNG), shown on
-  the hotbar in place of the colour swatch.
+- [x] **34.2** A held tool in the first-person view: the selected tool's model is drawn in the hand (the pickaxes since 8cb02e1), and each
+  strike plays the arm's swing clip (`VoxelHands.start_swing`). The clip plays on each strike, hit or miss, which is how a swing reads.
+- [~] **34.3** Icons: each tool's icon is a render of its model, shown on the hotbar in place of the colour swatch. Done for the two
+  pickaxes: `tools/blender/tool_icons.py` renders `resources/icons/pickaxe.png` and `iron_pickaxe.png` (Blender's own renderer, not the
+  viewport screenshot: the same picture, framed by a temporary camera), and `create_image_body` draws a PNG over the scene, so the hotbar
+  shows it (checked in `voxel_view_shot.ps1 -View hands -Item pickaxe`). Not yet: the other tools (they keep the swatch), and the
+  icons are small and dark against the slot (seen once, not tuned).
 
 ## Phase 35: a shader that can make the models look real (from the review: the engine's look is the limit)
 Goal: the engine can light a surface the way a surface looks: normal maps and a physically based material, so the Blender models

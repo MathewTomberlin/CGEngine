@@ -5,6 +5,10 @@
 #include <SFML/Window/Mouse.hpp>
 #include <SFML/Graphics/RenderWindow.hpp>
 #include <SFML/Graphics/RectangleShape.hpp>
+#include <SFML/Graphics/Sprite.hpp>
+#include <SFML/Graphics/Texture.hpp>
+#include <map>
+#include <memory>
 #include <SFML/System/Vector3.hpp>
 #include <cstdlib>
 #include <array>
@@ -550,6 +554,32 @@ void bindGame(py::module_& m) {
        py::arg("outline_colour") = sf::Color::Black, py::arg("outline_thickness") = 0.0f, py::arg("z_order") = 999,
        "Make a rectangle at position with size (window pixels, from the top-left corner), filled with fill (RGBA) and outlined "
        "in outline_colour. A rectangle with alpha 0 fill and no outline is not seen.");
+
+    // A picture over the scene (roadmap 34.3): a PNG drawn at position with size, in window pixels, like a rectangle. Its texture is
+    // loaded once per path and kept for the run, since the picture is drawn from it every frame.
+    m.def("create_image_body", [](const std::string& name, const std::string& path, sf::Vector2f position, sf::Vector2f size, int zOrder) {
+        static std::map<std::string, std::unique_ptr<sf::Texture>> imageTextures;
+        std::unique_ptr<sf::Texture>& texture = imageTextures[path];
+        if (!texture) {
+            texture = std::make_unique<sf::Texture>();
+            if (!texture->loadFromFile(path)) {
+                imageTextures.erase(path);
+                throw std::runtime_error("could not load the image '" + path + "'");
+            }
+        }
+        sf::Sprite sprite(*texture);
+        sprite.setPosition(position);
+        const sf::Vector2u pixels = texture->getSize();
+        sprite.setScale(sf::Vector2f(size.x / static_cast<float>(pixels.x), size.y / static_cast<float>(pixels.y)));
+        auto body = assets.create<Body>("image:" + name, std::move(sprite));
+        if (!body.has_value()) throw std::runtime_error("could not create the image body '" + name + "'");
+        body.value().second->setName(name);
+        body.value().second->zOrder = zOrder;
+        body.value().second->overlay = true;
+        return body.value().second;
+    }, py::arg("name"), py::arg("path"), py::arg("position"), py::arg("size"), py::arg("z_order") = 999,
+       "Make a picture from a PNG file (relative to the game folder) at position with size, in window pixels, drawn over the scene. "
+       "A picture is made again to change it: its texture is fixed when it is made.");
 
     m.def("set_rect_body", [](const std::string& name, sf::Vector2f position, sf::Vector2f size, sf::Color fill,
         sf::Color outlineColour, float outlineThickness) {
