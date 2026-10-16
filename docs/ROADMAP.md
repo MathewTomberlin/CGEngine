@@ -278,7 +278,7 @@ full block, and light blocks (full cells that give light) are wanted too.
 - [x] **14.1** Light blocks: a block gives off light (`BlockType::emits`; the lamp, id 17, gives 255). Its light is full at its
   cell and falls 0.8 a block through air, for 8 blocks, the same walk as sky light; each cell takes the brighter of the two.
   The lamp is a solid block drawn as a cube, so it is placed like any block. `check_lamp` in `voxel_world_check.py` checks
-  a sealed pocket: the sky floor before the lamp, 0.8 one block away, 0.8 cubed three blocks away. Not on the hotbar yet.
+  a sealed pocket: the sky floor before the lamp, 0.8 one block away, 0.8 cubed three blocks away. Not on the hotbar yet. It is craftable now (stone and a torch, the Light category), so a player can get one without the console.
 - [x] **14.2** Small torch as an item, not a block: a torch is a prop on one face of a block (`VoxelWorld::setProp`), drawn as
   a thin stick with a flame (`buildPropMesh`), so it takes a fraction of a block and the grid does not change. Its cell stays
   air for collision, meshing and the walk. It enters the light pass as an emitter at that cell (0.8 of full light, `VoxelTorchLight`),
@@ -390,8 +390,8 @@ Goal: blocks and creatures take several hits, and what the player has hit looks 
   mesh) and leaves a hide on the ground where it fell (16.7). The hide is `VoxelGen.HIDE`, an item that cannot be placed. One in three is a biter: it chases
   the player inside 7 blocks and bites at 1 health each 1.2 s when within 1.3 blocks. The others still run from the player.
   With no player near, a biter hunts the nearest timid creature within 6 blocks and bites it (`VoxelWalkers.PREY_RANGE`, one
-  health a 1.2 s); a creature a biter kills leaves a hide, as a hit does. Checked by `voxel_console_check.py`. Not yet: timid
-  creatures do not fight back, and biters do not hunt each other.
+  health a 1.2 s); a creature a biter kills leaves a hide, as a hit does. Checked by `voxel_console_check.py`. Timid creatures fight back now: a hit that leaves one alive makes it chase and bite for
+  5 s (`fight_back_seconds` in `voxel_creatures.json`, checked by `tools/test_voxel_walkers.py`). Not yet: biters do not hunt each other.
 - [x] **16.6** The player has health: ten points on a bar above the hotbar. Bites and falls lower it (a fall past 4 blocks costs
   1 point a block beyond that; the spawn drop does not count). It heals 0.25 a second after 6 s without a hit, and does not heal
   while the game is paused. At zero the player is back at the spawn with the inventory kept.

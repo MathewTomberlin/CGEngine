@@ -129,6 +129,14 @@ check("a biter with no sight has none (the default chase range)", "sight" not in
 check("a zero sight is an error", raises(lambda: loads([base(), biter(sight=0.0)]), "sight"))
 check("a timid kind's sight is an error (it runs at its flee range)", raises(lambda: loads([base(sight=3.0), biter()]), "sight"))
 
+# A kind that does not bite may fight back: fight_back_seconds, with the bite fields a biter has.
+FIGHT = {"fight_back_seconds": 5.0, "chase_pace": 2.0, "bite_range": 1.3, "bite_damage": 1.0, "bite_interval": 1.2}
+check("a timid kind fights back when it names the seconds and its bite", loads([base(**FIGHT), biter()])[0]["fight_back_seconds"] == 5.0)
+check("a timid kind with no fight_back_seconds has none", "fight_back_seconds" not in loads([base(), biter()])[0])
+check("a fight back with no bite fields is an error", raises(lambda: loads([base(fight_back_seconds=5.0), biter()]), "bite_range"))
+check("a biter cannot name fight_back_seconds", raises(lambda: loads([base(), biter(fight_back_seconds=5.0)]), "fight_back_seconds"))
+check("a zero fight_back_seconds is an error", raises(lambda: loads([base(**dict(FIGHT, fight_back_seconds=0.0)), biter()]), "fight_back_seconds"))
+
 print()
 if failures:
     print("%d check(s) failed" % len(failures))

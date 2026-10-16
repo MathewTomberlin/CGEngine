@@ -67,6 +67,7 @@ class Walker:
         self.flank_timer = 0.0      # seconds left of circling the player to get round a raised shield
         self.flank_side = 1.0       # the way it circles: +1 or -1
         self.bite_timer = 0.0       # seconds until a biter may bite again
+        self.fight_timer = 0.0      # seconds left of fighting back: a creature that was hit and lives chases and bites (hurt)
         self.windup = 0.0           # seconds left before a bite that has started lands (BITE_WINDUP); a hit or a lost chase cancels it
         self.flash_timer = 0.0      # seconds left of the red flash after a hit (FLASH_MATERIAL)
         self.hurt_timer = 0.0       # seconds left of the hurt clip (a flinch), played when the creature is hit
@@ -108,6 +109,8 @@ class Walker:
             return 0.0
         self.flash(dt)
         self.hurt_timer = max(0.0, self.hurt_timer - dt)
+        self.fight_timer = max(0.0, self.fight_timer - dt)
+        fighting = self.fight_timer > 0.0
         pos, _vel, on_ground = cge.voxel_walker_state(self.name)
         if pos[1] < RESPAWN_DEPTH:
             cge.set_voxel_position(self.name, *self.spawn)
@@ -135,7 +138,7 @@ class Walker:
             cge.set_voxel_position(self.name, player[0] + dx / gap * physics.CONTACT, pos[1], player[1] + dz / gap * physics.CONTACT)
             pos = (player[0] + dx / gap * physics.CONTACT, pos[1], player[1] + dz / gap * physics.CONTACT)
             distance = physics.CONTACT
-        chasing = self.biter and distance < self.chase_distance(night)
+        chasing = (self.biter or fighting) and distance < self.chase_distance(night)
         if not chasing:
             self.route = []
             self.windup = 0.0
@@ -241,12 +244,16 @@ class Walker:
             self.route.pop(0)
         return None
 
-    def hurt(self, from_xz, damage=1):
-        """A hit from the point from_xz (x, z): the creature loses health, is pushed away from the hit.
-        Returns True when the hit kills it. A creature that is already removed takes no more hits."""
+    def hurt(self, from_xz, damage=1, provoked=True):
+        """A hit from the point from_xz (x, z): the creature loses health, is pushed away from the hit. A kind that fights back
+        (fight_back_seconds) and is still alive when a player's hit lands fights for that long; provoked is False for a hit from a
+        biter, which does not turn the prey on the player. Returns True when the hit kills it. A creature that is already removed
+        takes no more hits."""
         if self.removed:
             return False
         self.health -= damage
+        if provoked and not self.biter and self.health > 0 and "fight_back_seconds" in self.kind:
+            self.fight_timer = self.kind["fight_back_seconds"]
         self.windup = 0.0
         self.flash_timer = FLASH_SECONDS
         cge.set_body_material(self.name, self.kind["flash_material"])   # the kind's red-tinted material (voxels.json)
@@ -409,7 +416,7 @@ class Walkers:
                 if math.hypot(spots[i][0] - spots[prey][0], spots[i][2] - spots[prey][2]) < walker.kind["bite_range"]:
                     walker.bite_timer = walker.kind["bite_interval"]
                     walker.bite_now()
-                    if victim.hurt((spots[i][0], spots[i][2])):
+                    if victim.hurt((spots[i][0], spots[i][2]), provoked=False):
                         self.killed.append(victim)
         return bites
 
