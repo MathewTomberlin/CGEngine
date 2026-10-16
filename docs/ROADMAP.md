@@ -460,7 +460,8 @@ Goal: several people (or an AI and a person) work in one CG Engine world at the 
   Not yet: the host's headless run (31.2) is tested as a host, but the host does not arbitrate cells in chunks it has not
   loaded, so the two players must stay within each other's view; a client's own edits from before it connected stay on that
   client; F9 on the host removes no cell the file lacks; a falling block pops on the client (no moving-block draw); the inventory
-  is local, so a placement the host refuses still spends the item, and a break the host had already made still gives one.
+  is settled by the host's answer (an ack, `settle_request`, checked by `test_voxel_net.ps1`): a placement or torch the host
+  refuses gives its item back, and a hit is counted once, as the host broke it. Buckets (pour, scoop) still count on the client alone.
 - [~] **18.4** Stretch goal, the multiplayer voxel game, in its first form: the two processes see each other (a box where the other
   player's feet are, with no name yet), share the edits (blocks, torches, damage), and one breaks what the other placed. Each has
   its own inventory and health, so the inventory per player is in place by construction. Not yet: a name, the creatures (each
@@ -946,8 +947,9 @@ written answer (what it would take, and a measured number) and a decision: build
   `SPEED_LIMITS` and `JUMP_LIMITS`, so a heavy suit's jump stays above the one-block step; the walk and the jump are read in
   `VoxelGame`). The gloves add a strike bonus: `damage` to the health a strike takes from a creature, and `break` to the blocks a
   strike breaks (`VoxelEquipment.damage_factor` and `break_factor`, clamped; the bar's second line shows them, and they are checked in
-  `tools/test_voxel_equipment.py` and by the gear view, which also checks the strike). Not yet: bonuses on the bow and the arrows, and
-  the pieces beyond the gloves. The original question:
+  `tools/test_voxel_equipment.py` and by the gear view, which also checks the strike). Done: the leather cap adds `shot` to the arrows' damage (`VoxelEquipment.shot_factor`, `VoxelGame.fire_arrow`;
+  `tools/test_voxel_equipment.py`). Not yet: the tunic, leggings and boots give speed or jump only, so a strike or shot bonus
+  on them is a balance choice still open. Fixed: a piece with no strike bonus raised a KeyError in the strike line. The original question:
 - [ ] **39.4** Equipment effects (question): an item changes movement speed and jump height (by its weight, or by a bonus), and gives bonuses to
   attack speed, damage, and break speed against certain blocks. Questions: where the player's speed and jump are set (in one place
   or many; `VoxelPhysics.py`, `VoxelGame.py`), whether the stats can be one base value plus a sum of modifiers, and the balance risk:

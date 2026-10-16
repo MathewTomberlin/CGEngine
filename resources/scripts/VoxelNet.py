@@ -7,6 +7,8 @@ sent. The messages are JSON lines:
   client -> host: {"t": "req", "op": "hit", "c": cell, "swings": n}, {"t": "req", "op": "place", "c": cell, "id": id},
                   {"t": "req", "op": "prop", "c": cell, "s": support, "dir": dir}, {"t": "req", "op": "unprop", "c": cell}, {"t": "req", "op": "scoop", "c": cell}
   host -> client: {"t": "cells", "cells": [[x, y, z, block, damage, prop], ...]}, the state of each cell that changed
+                  {"t": "ack", "rid": id, "ok": bool, "broke": bool}, the answer to a request that has an id (rid): whether the host made
+                  the change, and whether a hit broke the block (the client counts its items from it, VoxelNetSync.settle_request)
   both ways:      {"t": "pos", "p": [x, y, z], "yaw": yaw}
 
 The host applies a request with its own rules and then sends the state of the cell, so a request it refuses is undone on the

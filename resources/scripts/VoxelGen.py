@@ -147,7 +147,7 @@ LEATHER_CAP, LEATHER_TUNIC, LEATHER_LEGGINGS, LEATHER_BOOTS, LEATHER_GLOVES = ra
 
 
 def _equipment_table():
-    """The armour table from resources/voxel_equipment.json (VOXEL_EQUIPMENT picks another file): item id -> {slot, speed, jump, name}.
+    """The armour table from resources/voxel_equipment.json (VOXEL_EQUIPMENT picks another file): item id -> {slot, speed, jump, damage, break, shot, name}.
     Also sets the pieces' names and colours, so the inventory shows them."""
     if os.environ.get("VOXEL_EQUIPMENT"):
         path = os.environ["VOXEL_EQUIPMENT"]
@@ -165,7 +165,8 @@ def _equipment_table():
             raise ValueError("voxel_equipment.json names %r, which VoxelGen does not define" % constant)
         item = globals()[constant]
         table[item] = {"slot": entry["slot"], "speed": float(entry.get("speed", 0.0)), "jump": float(entry.get("jump", 0.0)),
-                       "damage": float(entry.get("damage", 0.0)), "break": float(entry.get("break", 0.0)), "name": entry["name"]}
+                       "damage": float(entry.get("damage", 0.0)), "break": float(entry.get("break", 0.0)),
+                       "shot": float(entry.get("shot", 0.0)), "name": entry["name"]}
         ITEM_NAMES[item] = entry["name"]
         NAMES[item] = entry["name"]
         ITEM_COLOURS[item] = tuple(entry["colour"])

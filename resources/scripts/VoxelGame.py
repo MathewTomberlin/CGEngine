@@ -153,6 +153,8 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
         self.net_pending = {}           # the host's cell states for chunks not loaded yet: cell -> (block, damage, prop)
         self.net_touched = set()        # cells a client asked for this frame, sent back to it even if the host refused them
         self.net_snapshot = False       # send every edited cell next frame (a new client, or a load on the host)
+        self.net_requests = {}          # the client's requests the host has not answered: id -> what this client did at once (settle_request)
+        self.net_request_id = 0         # the id of the last request this client sent
         self.net_pos_timer = 0.0
         self.net_applied = 0            # cell states applied to this world (a client)
         self.remote_pos = None          # the other player's feet and yaw, from their last position message
@@ -409,7 +411,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
         arrays = boxes_arrays([(lo, hi, VoxelGen.ITEM_COLOURS[VoxelGen.ARROW])])
         cge.create_mesh_body(name, *arrays, materials=["voxel"], position=cge.Vector3f(*pos))
         cge.set_mesh_body_rotation(name, cge.Vector3f(*VoxelArrows.facing(velocity)))
-        self.arrows.append({"name": name, "pos": pos, "vel": velocity, "damage": VoxelArrows.damage_of_charge(charge), "age": 0.0})
+        self.arrows.append({"name": name, "pos": pos, "vel": velocity, "damage": VoxelArrows.damage_of_charge(charge) * self.equipment.shot_factor(), "age": 0.0})
         cge.play_sound("place", 0.5, 1.3)
 
     def update_arrows(self, dt):
@@ -1058,7 +1060,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
                 cge.play_sound("break", 0.35, 1.4)
             if stage != -2:
                 self.flash_until = time.time() + HIT_FLASH_SECONDS
-                self.send_request({"op": "hit", "c": list(block), "swings": swings})
+                self.send_request({"op": "hit", "c": list(block), "swings": swings}, {"kind": kind, "gained": stage == -1})
                 self.hands_hit("block", centre)
             elif swings == 0:
                 # The strike lands on the block, but its hit is still carried to the next strike.
@@ -1084,14 +1086,15 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
             if item == VoxelGen.TORCH:
                 # A torch leans on the block it is aimed at: the request names that block, so the host can check it.
                 self.world.set_prop(cell[0], cell[1], cell[2], direction)
-                self.send_request({"op": "prop", "c": list(cell), "s": list(block), "dir": direction})
+                self.send_request({"op": "prop", "c": list(cell), "s": list(block), "dir": direction},
+                                  {"item": item, "spent": not self.creative})
             elif item in VoxelGen.VOLUME_BLOCKS:
                 units = self.inventory.slots[self.slot][2]
                 self.world.pour_volume(cell[0], cell[1], cell[2], units, item, True)
                 self.send_request({"op": "pour", "c": list(cell), "id": item, "units": units})
             else:
                 self.world.set_block(cell[0], cell[1], cell[2], item)
-                self.send_request({"op": "place", "c": list(cell), "id": item})
+                self.send_request({"op": "place", "c": list(cell), "id": item}, {"item": item, "spent": not self.creative})
             cge.play_sound("place", 0.7, 0.95 + 0.1 * self.sound_rng.random())
             if item in VoxelGen.VOLUME_BLOCKS:
                 # A filled bucket pours its units and is empty again (creative mode keeps it full).

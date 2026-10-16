@@ -13,6 +13,7 @@ SPEED_LIMITS = (-0.3, 0.5)      # the most a suit slows or speeds the walk, as a
 JUMP_LIMITS = (-0.1, 0.2)       # the least and most it changes the jump; -0.1 keeps a jump above the one-block step
 DAMAGE_LIMITS = (-0.5, 1.0)     # the strikes on creatures: at most half as hard, or twice as hard
 BREAK_LIMITS = (-0.5, 1.0)      # the blocks a strike breaks: at most half as many, or twice as many
+SHOT_LIMITS = (-0.5, 1.0)       # the arrows' damage: at most half as hard, or twice as hard (39.4)
 
 
 def clamp(value, low, high):
@@ -49,8 +50,9 @@ class Equipment:
         return item
 
     def total(self, stat):
-        """The sum of a stat ('speed' or 'jump') over the worn pieces, before the limits."""
-        return sum(self.table[item][stat] for item in self.worn.values() if item is not None)
+        """The sum of a stat ('speed', 'jump', 'damage', 'break' or 'shot') over the worn pieces, before the limits. A piece that does
+        not name the stat adds nothing (a cap has no strike bonus, so the strike lines read it as 0)."""
+        return sum(self.table[item].get(stat, 0.0) for item in self.worn.values() if item is not None)
 
     def damage_factor(self):
         """The multiplier on a strike's health against a creature: 1 with nothing worn."""
@@ -59,6 +61,10 @@ class Equipment:
     def break_factor(self):
         """The multiplier on the blocks a strike breaks: 1 with nothing worn."""
         return 1.0 + clamp(self.total("break"), *BREAK_LIMITS)
+
+    def shot_factor(self):
+        """The multiplier on an arrow's health against a creature: 1 with nothing worn."""
+        return 1.0 + clamp(self.total("shot"), *SHOT_LIMITS)
 
     def speed_factor(self):
         """The walk speed's multiplier: 1 with nothing worn."""
@@ -79,12 +85,18 @@ class Equipment:
         return out
 
     def combat_summary(self):
-        """The bar's second line: the strike bonuses (against creatures, and on blocks), or "" when neither is worn."""
+        """The bar's second line: the strike bonuses (against creatures, on blocks, and for arrows), or "" when none is worn."""
         hit = round((self.damage_factor() - 1.0) * 100)
         dig = round((self.break_factor() - 1.0) * 100)
-        if hit == 0 and dig == 0:
-            return ""
-        return "hit %+d%%  dig %+d%%" % (hit, dig)
+        shot = round((self.shot_factor() - 1.0) * 100)
+        parts = []
+        if hit:
+            parts.append("hit %+d%%" % hit)
+        if dig:
+            parts.append("dig %+d%%" % dig)
+        if shot:
+            parts.append("shot %+d%%" % shot)
+        return "  ".join(parts)
 
     def summary(self):
         """The bar's last line: the total speed and jump bonuses of the worn pieces, after the limits."""
