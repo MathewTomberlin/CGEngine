@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.join(HERE, "..", "resources", "scripts"))
 sys.modules["cg_engine_bindings"] = types.ModuleType("cg_engine_bindings")
 
 import VoxelConsole  # noqa: E402
+import VoxelEquipment  # noqa: E402
 import VoxelGen  # noqa: E402
 import VoxelInventory  # noqa: E402
 import VoxelRecipes  # noqa: E402
@@ -42,6 +43,8 @@ class Game:
         self.offhand_uses = VoxelGen.SHIELD_USES
         self._raised = raised
         self.crafting = Crafting(["Sword"])
+        self.equipment = VoxelEquipment.Equipment(VoxelGen.EQUIPMENT)
+        self.equipment.wear(VoxelGen.LEATHER_CAP)
 
     def selected(self):
         return self.inventory.item(self.slot)
@@ -68,6 +71,7 @@ check("an empty offhand and a block in hand: no shield, the block does 1", "Shie
       and "striking for 1" in text and "uses left" not in text)
 text = sheet(Game([], 0, None, False))
 check("an empty hand says so", "Holding: nothing" in text)
+check("the sheet lists the armour worn, and the bonuses it adds", "Hd leather cap" in text and "speed +0%  jump +2%" in text)
 
 if failures:
     print(f"\n{len(failures)} check(s) failed")

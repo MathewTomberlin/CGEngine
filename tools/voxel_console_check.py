@@ -249,6 +249,11 @@ def main():
         checks["help lists the commands"] = any("time" in line and "tp" in line for line in lines)
         lines = console.run("stats")
         checks["stats reports the chunks"] = any("Chunks" in line for line in lines)
+        lines = console.run("sheet")
+        checks["sheet reports health, the held item, the shield and the armour"] = (
+            lines[0].startswith("Health") and any(line.startswith("Holding:") for line in lines)
+            and any(line.startswith("Shield:") for line in lines) and any(line.startswith("Hd ") for line in lines)
+            and any(line.startswith("speed ") for line in lines))
         lines = console.run("nosuchcommand")
         checks["an unknown command is reported"] = any("no command" in line for line in lines)
         lines = console.run("give nosuchitem")

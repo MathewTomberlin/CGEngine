@@ -419,7 +419,7 @@ def cmd_stats(console, args):
     ]
 
 
-@command("sheet", "sheet", "print the player's character sheet: health, the held item and its damage and uses, the shield, the mode")
+@command("sheet", "sheet", "print the player's character sheet: health, the held item and its damage and uses, the shield, the armour worn, the mode")
 def cmd_sheet(console, args):
     game = console.game
     item = game.selected()
@@ -438,6 +438,12 @@ def cmd_sheet(console, args):
     else:
         lines.append("Shield: none")
     lines.append("Recipes known: %d of %d" % (len(game.crafting.known), len(VoxelRecipes.RECIPES)))
+    # The armour worn, and the bonuses it adds (the same lines as the side bar in the inventory).
+    lines += game.equipment.lines()
+    lines.append(game.equipment.summary())
+    combat = game.equipment.combat_summary()
+    if combat:
+        lines.append(combat)
     return lines
 
 
