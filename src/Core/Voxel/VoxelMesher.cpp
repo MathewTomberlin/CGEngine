@@ -153,41 +153,57 @@ namespace CGEngine {
 		const int h = chunk.height;
 		const int lo = -b;
 		const int hi = chunk.size + b;
+		// Whether light goes through each block id (lightPasses), read once here rather than per cell.
+		std::array<bool, 256> passes{};
+		for (size_t id = 0; id < 256; ++id) passes[id] = lightPasses(chunk, static_cast<uint8_t>(id));
+		// The walk runs on a grid one cell larger than the padded chunk on each side, and that ring is never lit, so a neighbour is
+		// always a valid index and needs no bounds check. Layout: ((y + 1) * E + (z + b + 1)) * E + (x + b + 1), with E = size + 2b + 2.
+		const size_t E = static_cast<size_t>(chunk.size + 2 * b + 2);
+		auto ext = [E, b](int x, int y, int z) {
+			return (static_cast<size_t>(y + 1) * E + static_cast<size_t>(z + b + 1)) * E + static_cast<size_t>(x + b + 1);
+		};
+		// lit: the cells light goes through (the padded chunk's cells that passes; the ring around them is 0).
+		std::vector<uint8_t> lit(E * E * static_cast<size_t>(h + 2), 0);
+		for (int z = lo; z < hi; ++z) {
+			for (int x = lo; x < hi; ++x) {
+				for (int y = 0; y < h; ++y) lit[ext(x, y, z)] = passes[chunk.at(x, y, z)];
+			}
+		}
 		// steps: the walk from the open sky to each air cell, 0xFF while it is not reached (air under a block, or too far).
-		std::vector<uint8_t> steps(chunk.blocks.size(), 0xFF);
-		std::vector<Cell> frontier;
+		std::vector<uint8_t> steps(lit.size(), 0xFF);
+		std::vector<size_t> frontier;
 		for (int z = lo; z < hi; ++z) {
 			for (int x = lo; x < hi; ++x) {
 				// Walking down the column, the air above the first block is open to the sky; the air under a block is not.
 				bool open = true;
 				for (int y = h - 1; y >= 0; --y) {
-					if (!lightPasses(chunk, chunk.at(x, y, z))) {
+					if (!lit[ext(x, y, z)]) {
 						open = false;
 						continue;
 					}
 					if (open) {
-						steps[chunk.index(x, y, z)] = 0;
-						frontier.push_back({ x, y, z });
+						steps[ext(x, y, z)] = 0;
+						frontier.push_back(ext(x, y, z));
 					}
 				}
 			}
 		}
 
-		static const int Directions[6][3] = { { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 }, { 0, 0, 1 }, { 0, 0, -1 } };
-		std::vector<Cell> next;
+		// The six neighbours, as offsets in the grid.
+		const std::ptrdiff_t offsets[6] = { 1, -1, static_cast<std::ptrdiff_t>(E), -static_cast<std::ptrdiff_t>(E),
+			static_cast<std::ptrdiff_t>(E * E), -static_cast<std::ptrdiff_t>(E * E) };
+		std::vector<size_t> nextCells;
 		for (int step = 0; step < VoxelLightReach && !frontier.empty(); ++step) {
-			next.clear();
-			for (const Cell& cell : frontier) {
-				for (const auto& d : Directions) {
-					const int x = cell.x + d[0], y = cell.y + d[1], z = cell.z + d[2];
-					if (x < lo || x >= hi || z < lo || z >= hi || y < 0 || y >= h) continue;
-					const size_t i = chunk.index(x, y, z);
-					if (!lightPasses(chunk, chunk.blocks[i]) || steps[i] != 0xFF) continue;
-					steps[i] = static_cast<uint8_t>(step + 1);
-					next.push_back({ x, y, z });
+			nextCells.clear();
+			for (size_t cell : frontier) {
+				for (std::ptrdiff_t offset : offsets) {
+					const size_t n = static_cast<size_t>(static_cast<std::ptrdiff_t>(cell) + offset);
+					if (!lit[n] || steps[n] != 0xFF) continue;
+					steps[n] = static_cast<uint8_t>(step + 1);
+					nextCells.push_back(n);
 				}
 			}
-			frontier.swap(next);
+			frontier.swap(nextCells);
 		}
 
 		// Light from the light blocks: full at the block, and each block walked through air (or any block that is not opaque)
@@ -214,6 +230,8 @@ namespace CGEngine {
 			emitted[i] = VoxelTorchLight;
 			sources.push_back({ prop.x, prop.y, prop.z });
 		}
+		static const int Directions[6][3] = { { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 }, { 0, 0, 1 }, { 0, 0, -1 } };
+		std::vector<Cell> next;
 		for (int round = 0; round < VoxelLightReach && !sources.empty(); ++round) {
 			next.clear();
 			for (const Cell& cell : sources) {
@@ -248,8 +266,9 @@ namespace CGEngine {
 					const size_t i = chunk.index(x, y, z);
 					if (y >= h) {
 						chunk.light[i] = 255;
-					} else if (y >= 0 && lightPasses(chunk, chunk.blocks[i])) {
-						chunk.light[i] = steps[i] == 0xFF ? floorByte : stepByte[steps[i]];
+					} else if (y >= 0 && passes[chunk.blocks[i]]) {
+						const uint8_t step = steps[ext(x, y, z)];
+						chunk.light[i] = step == 0xFF ? floorByte : stepByte[step];
 					}
 					if (!emitted.empty() && emitted[i] > 0.0f) chunk.lamp[i] = static_cast<uint8_t>(std::lround(emitted[i] * 255.0f));
 				}
