@@ -13,6 +13,7 @@ game = [o for o in gc.get_objects() if type(o).__name__ == "VoxelGame"][0]
 results = {}
 game.equipment.wear(VoxelGen.LEATHER_CAP)
 game.equipment.wear(VoxelGen.LEATHER_TUNIC)
+game.equipment.wear(VoxelGen.LEATHER_GLOVES)
 
 game.inventory.held = [VoxelGen.LEATHER_CAP, 1]
 game.click_equipment("feet")
@@ -25,5 +26,7 @@ results["taken_off_into_cursor"] = game.equipment.worn["feet"] is None and game.
 game.inventory.held = None
 game.equipment.wear(VoxelGen.LEATHER_BOOTS)
 results["summary"] = game.equipment.summary()
+results["combat"] = game.equipment.combat_summary()
+results["damage_factor"] = round(game.equipment.damage_factor(), 3)
 with open("C:/Users/admin/AppData/Local/Temp/gear_test.json", "w") as f:
     json.dump(results, f)

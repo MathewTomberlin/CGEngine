@@ -165,7 +165,7 @@ def _equipment_table():
             raise ValueError("voxel_equipment.json names %r, which VoxelGen does not define" % constant)
         item = globals()[constant]
         table[item] = {"slot": entry["slot"], "speed": float(entry.get("speed", 0.0)), "jump": float(entry.get("jump", 0.0)),
-                       "name": entry["name"]}
+                       "damage": float(entry.get("damage", 0.0)), "break": float(entry.get("break", 0.0)), "name": entry["name"]}
         ITEM_NAMES[item] = entry["name"]
         NAMES[item] = entry["name"]
         ITEM_COLOURS[item] = tuple(entry["colour"])
