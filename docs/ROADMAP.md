@@ -811,8 +811,10 @@ Goal: an item looks like the thing it is: a tool is shaped, textured and held, a
 ## Phase 35: a shader that can make the models look real (from the review: the engine's look is the limit)
 Goal: the engine can light a surface the way a surface looks: normal maps and a physically based material, so the Blender models
 and the textures show their detail, not only their shape.
-- [ ] **35.1** Normal maps in the standard shader: a material takes a normal texture, and the lighting uses it. Checked on a test model
-  by a screenshot against its flat version.
+- [x] **35.1** Normal maps in the standard shader: a material takes a normal texture (`normalTexture`, `normalStrength` in a scene's
+  material), and the lighting uses it. The tangent frame comes from the screen derivatives, so meshes need no tangents. Checked by
+  `tools/test_normal_maps.ps1`: a wall with the map, at strength 0, and with no map (`tools/make_normal_test.py` makes the map). Not yet:
+  the voxel terrain has no normal maps; the normal samplers add 8 to the standard shader's sampler count (34 in all, linked on this GPU).
 - [ ] **35.2** A roughness and metallic term, so the iron pickaxe's head shines and the wood does not; the existing ambient and sun
   stay as they are.
 - [ ] **35.3** Textures for the creatures' skin and the items, made in Blender with the same procedural materials, baked to PNG so the

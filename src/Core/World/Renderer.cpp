@@ -766,6 +766,7 @@ namespace CGEngine {
 		entry.diffuseTexture = textureParameter("diffuseTexture");
 		entry.specularTexture = textureParameter("specularTexture");
 		entry.opacityTexture = textureParameter("opacityTexture");
+		entry.normalTexture = textureParameter("normalTexture");
 
 		optional<ParamData> paramData = nullopt;
 		paramData = material->getParameter("diffuseColor");
@@ -810,6 +811,12 @@ namespace CGEngine {
 		if (paramData.has_value()) entry.ubo.useOpacityTexture = any_cast<bool>(paramData.value().data);
 		paramData = material->getParameter("useLighting");
 		if (paramData.has_value()) entry.ubo.useLighting = any_cast<bool>(paramData.value().data);
+		paramData = material->getParameter("normalTextureUVScale");
+		if (paramData.has_value()) entry.ubo.normalTextureUVScale = toGlm(any_cast<Vector2f>(paramData.value().data));
+		paramData = material->getParameter("normalStrength");
+		if (paramData.has_value()) entry.ubo.normalStrength = any_cast<float>(paramData.value().data);
+		paramData = material->getParameter("useNormalTexture");
+		if (paramData.has_value()) entry.ubo.useNormalTexture = any_cast<bool>(paramData.value().data);
 		return entry;
 	}
 
@@ -829,6 +836,7 @@ namespace CGEngine {
 			bindTextureAndSetUniform(entry.diffuseTexture, "diffuseTexture", program, i, boundTextures);
 			bindTextureAndSetUniform(entry.specularTexture, "specularTexture", program, i, boundTextures);
 			bindTextureAndSetUniform(entry.opacityTexture, "opacityTexture", program, i, boundTextures);
+			bindTextureAndSetUniform(entry.normalTexture, "normalTexture", program, i, boundTextures);
 			materialUBOData.materials[i] = entry.ubo;
 		}
 		//TODO: Add support for dynamic materials

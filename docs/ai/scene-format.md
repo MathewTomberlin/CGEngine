@@ -37,6 +37,8 @@ Failures are reported with a message; a bad scene never silently produces a part
 | `specular`       | number  | no       | `1`     | Strength of the white highlight, 0 (matte) to 1. |
 | `tint`           | [r, g, b] | no     | `[1, 1, 1]` | Multiplies the texture's colour, each 0 to 1. White is no tint. |
 | `repeat`         | bool    | no       | `false` | The texture repeats past its edges, instead of stretching its edge pixels. Applies to the texture file, so every material that uses it repeats too. |
+| `normalTexture`  | string  | no       |         | A tangent-space normal map, a file in `resources/`. Its UVs use `uvScale`. Lit surfaces only. Blue points out of the surface, as in Blender's and most engines' normal maps. |
+| `normalStrength` | number  | no       | `1`     | How far the normal map tilts the surface: 1 as made, 0 for the flat surface (the same as no map). Not negative. |
 
 ## lights
 

@@ -75,6 +75,10 @@ namespace CGEngine {
 		bool useSpecularTexture = false;
 		bool useOpacityTexture = false;
 		bool useLighting = true;
+		// A tangent-space normal map (roadmap 35.1): its texture, its UV scale, and how far it tilts the surface (1 as made).
+		string normalTexturePath = "";
+		Vector2f normalTextureUVScale = { 1,1 };
+		float normalStrength = 1.0f;
 	};
 	class Material : public IResource {
 	public:
@@ -85,6 +89,8 @@ namespace CGEngine {
 		Material(SurfaceParameters params, ShaderProgramPath shaderPath);
 		Material(map<string, ParamData> materialParameters, ShaderProgramPath shaderPath);
 		Material(SurfaceParameters params, Program* program);
+		// Sets the normal map parameters from params (called by the constructors that take SurfaceParameters).
+		void applyNormalMap(const SurfaceParameters& params);
 		Material(map<string, ParamData> materialParameters, Program* program);
 
 		template<typename T>

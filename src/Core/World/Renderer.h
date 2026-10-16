@@ -403,6 +403,7 @@ namespace CGEngine {
 			Texture* diffuseTexture = nullptr;
 			Texture* specularTexture = nullptr;
 			Texture* opacityTexture = nullptr;
+			Texture* normalTexture = nullptr;
 		};
 		unordered_map<id_t, MaterialFrameEntry> materialFrameCache;
 		MaterialFrameEntry& getMaterialFrameEntry(id_t materialId, Material* material);
