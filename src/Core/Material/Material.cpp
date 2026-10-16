@@ -70,7 +70,7 @@ namespace CGEngine {
 		setParameter("useSpecularTexture", params.useSpecularTexture, ParamType::Bool);
 		setParameter("useOpacityTexture", params.useOpacityTexture, ParamType::Bool);
 		setParameter("useLighting", params.useLighting, ParamType::Bool);
-		applyNormalMap(params);
+		applyExtraParameters(params);
 	}
 
 	Material::Material(map<string, ParamData> materialParameters):Material() {
@@ -135,7 +135,7 @@ namespace CGEngine {
 		setParameter("useSpecularTexture", params.useSpecularTexture, ParamType::Bool);
 		setParameter("useOpacityTexture", params.useOpacityTexture, ParamType::Bool);
 		setParameter("useLighting", params.useLighting, ParamType::Bool);
-		applyNormalMap(params);
+		applyExtraParameters(params);
 	};
 
 	Material::Material(map<string, ParamData> materialParameters, ShaderProgramPath shaderPath) : Material(shaderPath) {
@@ -199,9 +199,10 @@ namespace CGEngine {
 		setParameter("useSpecularTexture", params.useSpecularTexture, ParamType::Bool);
 		setParameter("useOpacityTexture", params.useOpacityTexture, ParamType::Bool);
 		setParameter("useLighting", params.useLighting, ParamType::Bool);
-		applyNormalMap(params);
+		applyExtraParameters(params);
 	}
-	void Material::applyNormalMap(const SurfaceParameters& params) {
+	void Material::applyExtraParameters(const SurfaceParameters& params) {
+		setParameter("metallic", params.metallic, ParamType::Float);
 		setParameter("normalTextureUVScale", params.normalTextureUVScale, ParamType::V2);
 		setParameter("normalStrength", params.normalStrength, ParamType::Float);
 		setParameter("useNormalTexture", false, ParamType::Bool);

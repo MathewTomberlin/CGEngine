@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "replaceWorld": true,
+  "lights": [
+    {
+      "name": "sun",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "directional": true,
+      "direction": [
+        -0.5,
+        -0.3,
+        -1.0
+      ],
+      "brightness": 1.2,
+      "ambiance": 0.2
+    }
+  ],
+  "bodies": [
+    {
+      "name": "wall",
+      "primitive": "plane",
+      "size": 3,
+      "material": "wall",
+      "position": [
+        0,
+        0,
+        -5
+      ]
+    }
+  ],
+  "materials": [
+    {
+      "name": "wall",
+      "diffuseTexture": "brick_tile.png",
+      "uvScale": 1,
+      "tint": [
+        1.0,
+        0.3,
+        0.3
+      ],
+      "metallic": 0.0
+    }
+  ]
+}

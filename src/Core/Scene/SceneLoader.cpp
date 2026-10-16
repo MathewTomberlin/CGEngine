@@ -216,6 +216,12 @@ namespace CGEngine {
                     surface.normalTexturePath = m.value("normalTexture", std::string());
                     surface.normalTextureUVScale = Vector2f(uvScale, uvScale);
                     surface.normalStrength = normalStrength;
+                    // Metallic (roadmap 35.2): 0 for a dielectric, 1 for a metal whose highlight takes the surface's colour.
+                    float metallic = m.value("metallic", 0.0f);
+                    if (metallic < 0.0f || metallic > 1.0f) {
+                        throw std::invalid_argument("material '" + name + "': metallic must be between 0 and 1");
+                    }
+                    surface.metallic = metallic;
                     auto created = assets.create<Material>(name, surface, assets.get<Program>(assets.defaultProgramName));
                     if (!created.has_value()) {
                         throw std::runtime_error("failed to create material '" + name + "'");

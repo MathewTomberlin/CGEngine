@@ -1,6 +1,7 @@
-# Checks the normal maps of the standard shader (roadmap 35.1): a material with a normal map changes how a lit wall is shaded, and
-# the same material at strength 0 looks like the wall with no map. Three scenes (resources/scenes/normal_map_*.json) are each
-# launched once, and the game takes a screenshot through the control channel; tools/normal_map_check.py compares them.
+# Checks the standard shader's material terms: a normal map (roadmap 35.1) changes how a lit wall is shaded, and the same map at
+# strength 0 looks like the wall with no map; a metal's highlight takes the wall's colour (35.2). Each scene (resources/scenes/
+# normal_map_*.json, metal_*.json) is launched once, and the game takes a screenshot through the control channel;
+# tools/normal_map_check.py and tools/metal_check.py compare them.
 # Usage (from the repo root, after building the Release configuration):
 #   pwsh tools/test_normal_maps.ps1 [-ExeDir build/bin/Release]
 # Exits 0 on success, 1 on any failed check. Needs a GPU or software OpenGL, like the other engine tests.
@@ -20,14 +21,14 @@ function Check($name, [bool]$condition) {
 }
 
 # Launches the engine on one scene, takes a screenshot, and closes the engine. Returns the PNG's path, or $null.
-function Take-Shot($variant) {
+function Take-Shot($scene) {
     $control = Join-Path $base "cg_control"
     $inbox = Join-Path $control "inbox"
     $outbox = Join-Path $control "outbox"
     Remove-Item -Recurse -Force $control -ErrorAction SilentlyContinue
-    $png = Join-Path $base "normal_$variant.png"
+    $png = Join-Path $base "$scene.png"
     Remove-Item -Force $png -ErrorAction SilentlyContinue
-    $env:CGENGINE_SCENE = "scenes/normal_map_$variant.json"
+    $env:CGENGINE_SCENE = "scenes/$scene.json"
     $app = Start-Unattended (Join-Path $base "main.exe") $base
     Remove-Item Env:CGENGINE_SCENE
     try {
@@ -54,19 +55,21 @@ function Take-Shot($variant) {
 }
 
 $shots = @{}
-foreach ($variant in @("on", "zero", "off")) {
-    $shots[$variant] = Take-Shot $variant
-    Check "the $variant scene was screenshot" ($null -ne $shots[$variant])
+foreach ($scene in @("normal_map_on", "normal_map_zero", "normal_map_off", "metal_on", "metal_off")) {
+    $shots[$scene] = Take-Shot $scene
+    Check "the $scene scene was screenshot" ($null -ne $shots[$scene])
 }
 
+$python = (Get-Command python).Source
 if ($failures.Count -eq 0) {
-    $python = (Get-Command python).Source
-    & $python -I (Join-Path $PSScriptRoot "normal_map_check.py") $shots["on"] $shots["zero"] $shots["off"]
+    & $python -I (Join-Path $PSScriptRoot "normal_map_check.py") $shots["normal_map_on"] $shots["normal_map_zero"] $shots["normal_map_off"]
     Check "the normal map check passes (tools/normal_map_check.py)" ($LASTEXITCODE -eq 0)
+    & $python -I (Join-Path $PSScriptRoot "metal_check.py") $shots["metal_on"] $shots["metal_off"]
+    Check "the metal check passes (tools/metal_check.py)" ($LASTEXITCODE -eq 0)
 }
 
 if ($failures.Count -gt 0) {
     Write-Host "`n$($failures.Count) check(s) failed"
     exit 1
 }
-Write-Host "`nAll normal map checks passed."
+Write-Host "`nAll material checks passed."

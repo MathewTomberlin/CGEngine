@@ -817,6 +817,8 @@ namespace CGEngine {
 		if (paramData.has_value()) entry.ubo.normalStrength = any_cast<float>(paramData.value().data);
 		paramData = material->getParameter("useNormalTexture");
 		if (paramData.has_value()) entry.ubo.useNormalTexture = any_cast<bool>(paramData.value().data);
+		paramData = material->getParameter("metallic");
+		if (paramData.has_value()) entry.ubo.metallic = any_cast<float>(paramData.value().data);
 		return entry;
 	}
 

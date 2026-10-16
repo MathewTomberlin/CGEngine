@@ -28,6 +28,7 @@ struct Material {
     vec2 normalTextureUVScale;
     float normalStrength;
     int useNormalTexture;
+    float metallic;
 };
 layout(std140, binding = 3) uniform MaterialBlock {
     Material materials[8];

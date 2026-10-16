@@ -28,6 +28,7 @@ struct Material {
     vec2 normalTextureUVScale;
     float normalStrength;
     int useNormalTexture;
+    float metallic;
 };
 layout(std140, binding = 2) uniform TransformBlock {
     mat4 camera;
@@ -252,7 +253,8 @@ vec3 applyLight(Light light, vec3 surfColor, vec3 surfNormal, vec3 surfPos, vec3
     
     //Specular lighting
     float specularity = 0.0;
-    vec3 specularColor = materials[mtl].specularColor.rgb;
+    //A metal's highlight takes the surface's colour (metallic 1); a dielectric's stays the material's own (metallic 0).
+    vec3 specularColor = mix(materials[mtl].specularColor.rgb, surfColor.rgb, materials[mtl].metallic);
     float specularPower = max(1.0,materials[mtl].smoothnessFactor);
     float specularOpacity = clamp(materials[mtl].smoothnessFactor,0.0,1.0);
     vec3 specularMap = vec3(1,1,1);

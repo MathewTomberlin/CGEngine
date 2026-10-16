@@ -26,6 +26,8 @@ namespace CGEngine {
 			glm::vec2 normalTextureUVScale;			//152: a tangent-space normal map (roadmap 35.1)
 			float normalStrength;					//156
 			int useNormalTexture;					//160
+			float metallic;							//164: 0 for a dielectric (white highlights), 1 for a metal (the highlight takes the surface's colour)
+			float padding[3];						//176: the std140 array stride
 		} materials[MAX_MATERIALS];
 	};
 

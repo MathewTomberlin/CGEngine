@@ -815,8 +815,11 @@ and the textures show their detail, not only their shape.
   material), and the lighting uses it. The tangent frame comes from the screen derivatives, so meshes need no tangents. Checked by
   `tools/test_normal_maps.ps1`: a wall with the map, at strength 0, and with no map (`tools/make_normal_test.py` makes the map). Not yet:
   the voxel terrain has no normal maps; the normal samplers add 8 to the standard shader's sampler count (34 in all, linked on this GPU).
-- [ ] **35.2** A roughness and metallic term, so the iron pickaxe's head shines and the wood does not; the existing ambient and sun
-  stay as they are.
+- [x] **35.2** A metallic term (`metallic` in a scene's material, 0 to 1): a metal's highlight takes the surface's colour, a
+  dielectric's stays the material's specular colour. The roughness is the material's existing `smoothnessFactor` (the highlight's
+  power), so no new roughness field. Checked by `tools/test_normal_maps.ps1` (`tools/metal_check.py`: a red metal wall against a red
+  dielectric one, the metal's green-to-red ratio at most 90% of the dielectric's; measured 87%, a small margin). Not yet: the iron
+  pickaxe and the voxel materials do not set it, so the look in play is not checked.
 - [ ] **35.3** Textures for the creatures' skin and the items, made in Blender with the same procedural materials, baked to PNG so the
   game does not depend on Blender at run time.
 
