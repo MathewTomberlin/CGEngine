@@ -318,6 +318,15 @@ void bindGame(py::module_& m) {
     }, py::arg("name"), py::arg("position"),
         "Move a body made by create_mesh_body. Its mesh is not rebuilt, so a body that only moves costs no upload.");
 
+    m.def("set_mesh_body_rotation", [](const std::string& name, sf::Vector3f rotation) {
+        Body* body = findBodyByName(name);
+        if (!body) throw std::invalid_argument("no body named '" + name + "'");
+        Mesh* mesh = body->get<Mesh*>();
+        if (!mesh) throw std::invalid_argument("body '" + name + "' has no mesh to turn");
+        mesh->setRotation(rotation);
+    }, py::arg("name"), py::arg("rotation"),
+        "Turn a body made by create_mesh_body: x, y and z in degrees, applied as Z * Y * X. Like the position, it costs no upload.");
+
     m.def("mouse_down", [](const std::string& name) {
         if (name != "Left" && name != "Right" && name != "Middle") {
             throw std::invalid_argument("unknown mouse button '" + name + "' (use Left, Right or Middle)");
