@@ -885,11 +885,10 @@ Goal: the player sees a right arm that holds the selected item and swings it on 
 - [x] **42.2** Arrows: an item that stacks (`VoxelGen.ARROW`, made 4 at a time from a wood and a tooth). An arrow falls under gravity
   (`resources/scripts/VoxelArrows.py`, tested in `tools/test_voxel_arrows.py`), stops at the first solid block (it lies there, for
   the player to take) or the first creature it reaches, and is spent after 6 s. Checked in the engine by `voxel_game_check.py`.
-- [~] **42.3** Not yet: the bow's draw is not drawn on the model (no draw clip), the arrow has no orientation (its body is a box),
-  and the bow's hand offset: the grip now sits in the palm (`held_items.json`: position -0.10, -0.02, -0.12; `voxel_view_shot.ps1 -Item bow`),
-  with the limb reaching off the right edge of the view. Found by moving the offset and looking at each shot: x moves the item up and down
-  on the screen, z moves it sideways. Not yet checked in play.
-
+- [~] **42.3** Not yet: the bow's draw is not drawn on the model (no draw clip). The arrow points along its flight (`VoxelArrows.facing`,
+  `set_mesh_body_rotation`). The bow's hand offset is in `held_items.json` (position -0.10, -0.02, -0.05, scale 0.35): the whole bow is in
+  view, its grip near the palm and a little above it (`voxel_view_shot.ps1 -Item bow`). Moving it lower (x -0.06, z -0.08) pushed the bow off
+  the right edge, so this is the compromise found by eye. Not yet checked in play.
 - [x] **42.4** Shield durability (from the review: a shield breaks after N blocks): a shield in the left hand takes one use for each
   bite it blocks (`VoxelGen.SHIELD_USES`, 120; `VoxelGame.wear_shield`). Its uses go with it when it is moved to the hotbar, and its
   bar shows in the inventory. Checked in the engine by `voxel_game_check.py`, and by `tools/test_voxel_tools.py` for the number.
