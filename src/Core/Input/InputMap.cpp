@@ -141,6 +141,7 @@ namespace CGEngine {
     }
 
     void InputMap::gather() {
+        if (!window) return; // Headless: no window, so no events (the control channel still drives the game).
         //Poll window events
         while (const optional event = window->pollEvent()) {
             if (event->is<Event::Closed>()) {

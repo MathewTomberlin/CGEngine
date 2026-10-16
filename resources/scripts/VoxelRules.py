@@ -4,7 +4,8 @@ Reactions as data (roadmap 10.3). A rule file is JSON:
     {"rules": [{"block": "grass", "touches": "water", "becomes": "dirt", "chance": 0.5},
                {"block": "lava", "touches": "water", "becomes": "obsidian", "seconds": 4}]}
 
-A rule says that a block touching one of the kinds in "touches" becomes "becomes". Without "seconds" the change comes with
+A rule says that a block touching one of the kinds in "touches" becomes "becomes". "diagonal": true counts the blocks that touch
+only at an edge or a corner too (all 26 around the block), not just the six faces. Without "seconds" the change comes with
 "chance" per simulation tick (1 by default, above 0 and at most 1). With "seconds" the block must keep touching for that long:
 it shows its progress as damage stages, and then becomes the other block, as a block breaks when it is hit. Air is a block
 too, so "block": "air" grows a block into the air beside it (leaves growing into the air, say).
@@ -17,7 +18,7 @@ import json
 
 import VoxelGen
 
-KEYS = {"block", "touches", "becomes", "chance", "seconds"}
+KEYS = {"block", "touches", "becomes", "chance", "seconds", "diagonal"}
 
 
 def _name_ids():
@@ -77,8 +78,11 @@ def parse(data):
         seconds = entry.get("seconds", 0)
         if isinstance(seconds, bool) or not isinstance(seconds, (int, float)) or seconds < 0:
             raise ValueError("%s: seconds must not be negative, not %r" % (where, seconds))
+        diagonal = entry.get("diagonal", False)
+        if not isinstance(diagonal, bool):
+            raise ValueError("%s: diagonal must be true or false, not %r" % (where, diagonal))
         for block in blocks:
-            rules.append((block, sorted(kinds), becomes, float(chance), float(seconds)))
+            rules.append((block, sorted(kinds), becomes, float(chance), float(seconds), diagonal))
     return rules
 
 
@@ -108,6 +112,6 @@ def load(world, path):
 
 
 def _add(world, rules):
-    for block, kinds, becomes, chance, seconds in rules:
-        world.add_reaction(block, kinds, becomes, chance, seconds)
+    for block, kinds, becomes, chance, seconds, diagonal in rules:
+        world.add_reaction(block, kinds, becomes, chance, seconds, diagonal)
     return len(rules)

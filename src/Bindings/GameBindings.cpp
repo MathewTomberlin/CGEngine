@@ -69,6 +69,7 @@ namespace {
     }
 
     RenderWindow& gameWindow() {
+        if (headlessRun) throw std::runtime_error("there is no window in a headless run (CGENGINE_HEADLESS=1); check cge.is_headless() first");
         if (!renderer || !renderer->getWindow()) throw std::runtime_error("the window is not open yet");
         return *renderer->getWindow();
     }
@@ -347,7 +348,10 @@ void bindGame(py::module_& m) {
         return { position.x, position.y };
     }, "The mouse cursor's position in window pixels, from the top-left corner (it can be outside the window).");
 
-    m.def("quit", []() { gameWindow().close(); }, "Close the window. The game ends when the current frame is done.");
+    m.def("quit", []() {
+        if (headlessRun) { world->endWorld(); return; }   // no window: the world ends the same way a closed window does
+        gameWindow().close();
+    }, "Close the window. The game ends when the current frame is done.");
     m.def("add_command", [](const std::string& name, py::function handler) {
         if (!interpreter) throw std::runtime_error("Python is not running");
         interpreter->addCommand(name, handler);
@@ -355,7 +359,10 @@ void bindGame(py::module_& m) {
        "Register a control command (see docs/ai/control-api.md). handler(params_json) gets the command's params as JSON text and "
        "returns its result as JSON text; a raised exception is reported as the command's error.");
 
+    m.def("is_headless", []() { return headlessRun; }, "True when the game runs with no window (CGENGINE_HEADLESS=1): nothing is drawn, and the window calls raise.");
+
     m.def("screenshot", [](const std::string& path) {
+        if (headlessRun) throw std::runtime_error("a headless run draws nothing, so there is no frame to save");
         if (!renderer) throw std::runtime_error("the renderer is not running yet");
         renderer->requestScreenshot(path);
     }, py::arg("path"), "Save the next frame as a PNG at path (absolute, or relative to the exe folder).");

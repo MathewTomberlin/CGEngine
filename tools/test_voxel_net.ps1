@@ -4,12 +4,14 @@
 # refuses is undone on the client; a hit on the host shows on the client; a client that joins later is sent every edit.
 # The second game runs from a copy of the build folder, so each process has its own control folder.
 # Usage (from the repo root, after building the Release configuration):
-#   pwsh tools/test_voxel_net.ps1 [-ExeDir build/bin/Release] [-Port 7790]
+#   pwsh tools/test_voxel_net.ps1 [-ExeDir build/bin/Release] [-Port 7790] [-HeadlessHost]
+# -HeadlessHost starts the listening game with CGENGINE_HEADLESS=1 (roadmap 31.2): no window, no draws, the same checks.
 # Exits 0 on success, 1 on any failed check.
 
 param(
     [string]$ExeDir = "build/bin/Release",
-    [int]$Port = 7790
+    [int]$Port = 7790,
+    [switch]$HeadlessHost
 )
 
 $ErrorActionPreference = "Stop"
@@ -123,7 +125,9 @@ try {
     # No creatures and survival mode: a biter's bite sends the player back to the spawn, which moves the cells the checks use.
     $env:VOXEL_SEED = "1"; $env:VOXEL_TIME = "0.25"; $env:VOXEL_WALKERS = "0"; $env:VOXEL_CREATIVE = "0"
     $env:VOXEL_NET = "listen:$Port"
+    if ($HeadlessHost) { $env:CGENGINE_HEADLESS = "1" }
     $apps += Start-Unattended (Join-Path $base "voxel_game.exe") $base
+    Remove-Item Env:CGENGINE_HEADLESS -ErrorAction SilentlyContinue
     Start-Sleep -Milliseconds 1500
     $env:VOXEL_NET = "connect:127.0.0.1:$Port"
     $apps += Start-Unattended (Join-Path $second "voxel_game.exe") $second
@@ -132,6 +136,7 @@ try {
     $a = Wait-Until $base { param($s) $s.pending -eq 0 -and $s.meshing -eq 0 -and $s.on_ground -eq $true -and $s.loaded -ge 100 } 120
     $b = Wait-Until $second { param($s) $s.pending -eq 0 -and $s.meshing -eq 0 -and $s.on_ground -eq $true -and $s.loaded -ge 100 } 120
     Check "both games load the world" ($a -and $b)
+    Check "the listening game runs as asked (headless: $([bool]$HeadlessHost))" ($a -and ([bool]$a.headless -eq [bool]$HeadlessHost))
     $linked = Wait-Until $second { param($s) $s.net -and $s.net.connected } 60
     Check "the connecting game links to the listener" ($null -ne $linked)
     if (-not $linked) { throw "no link" }

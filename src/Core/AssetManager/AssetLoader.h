@@ -3,6 +3,7 @@
 #include <memory>
 #include "../Types/Types.h"
 #include "../Mesh/Model.h"
+#include "../Engine/GLContext.h"
 using std::string;
 
 namespace CGEngine {
@@ -25,7 +26,8 @@ namespace CGEngine {
 				auto resource = std::make_unique<TextureResource>();
 				auto texture = std::make_unique<Texture>();
 
-				if (texture->loadFromFile(resourcePath.string())) {
+				// Headless: there is no OpenGL context to upload to, so the texture stays empty (nothing draws it).
+				if (!openGLReady || texture->loadFromFile(resourcePath.string())) {
 					resource->setTexture(texture.release());
 					return resource; // Implicitly upcast to IResource*
 				}

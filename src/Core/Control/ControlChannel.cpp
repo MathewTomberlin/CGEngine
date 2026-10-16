@@ -145,6 +145,7 @@ namespace CGEngine {
                 return { {"name", name}, {"position", vec3(t.position)}, {"rotation", vec3(t.rotation)}, {"scale", vec3(t.scale)} };
             }
             if (command == "screenshot") {
+                if (headlessRun) throw std::runtime_error("a headless run draws nothing, so there is no frame to save");
                 std::string path = params.at("path").get<std::string>();
                 renderer->requestScreenshot(path);
                 return { {"queued", true}, {"path", path}, {"note", "written after the next rendered frame"} };

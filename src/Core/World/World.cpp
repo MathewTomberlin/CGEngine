@@ -13,6 +13,7 @@ bool* keepBindingsLinked = &cgEngineBindingsLinked;
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
+#include <thread>
 #ifdef _WIN32
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
@@ -191,7 +192,7 @@ namespace CGEngine {
         }
         root->apply([](Body* b) { b->callStaticScripts(DeleteDomain); });
         running = false;
-        window->close();
+        if (window) window->close();
     }
 
     Body* World::getRoot() {
@@ -343,15 +344,23 @@ namespace CGEngine {
         interpreter = new PyInterpreter();
         renderer = new Renderer();
 
-        //Create window (via Screen and using the static WindowParameters) and set InputMap's window
-        screen->setWindowParameters(windowParameters);
-        window = screen->createWindow();
-        if(!window->setActive(true)) {
-            log(LogLevel::LogError, "World", "Failed to set window as active OpenGL context");
+        // CGENGINE_HEADLESS=1 starts with no window and no OpenGL context: the game runs its update loop and a host can serve
+        // the world, but nothing is drawn. Scripts check cge.is_headless() before they touch the window.
+        const char* headlessSetting = std::getenv("CGENGINE_HEADLESS");
+        headlessRun = headlessSetting && std::string(headlessSetting) == "1";
+        if (headlessRun) {
+            log(LogLevel::LogInfo, "World", "Headless start: no window or OpenGL context, so nothing is drawn");
+        } else {
+            //Create window (via Screen and using the static WindowParameters) and set InputMap's window
+            screen->setWindowParameters(windowParameters);
+            window = screen->createWindow();
+            if(!window->setActive(true)) {
+                log(LogLevel::LogError, "World", "Failed to set window as active OpenGL context");
+            }
+            renderer->setWindow(window);
+            openGLReady = renderer->initGlew() == GLEW_OK;
+            input->setWindow(window);
         }
-        renderer->setWindow(window);
-        renderer->initGlew();
-        input->setWindow(window);
 
         assets.initialize();
 
@@ -435,7 +444,11 @@ namespace CGEngine {
                 }
             }
 
-            while (window->isOpen()) {
+            // A headless host runs at CGENGINE_HEADLESS_FPS (60 by default) and sleeps the rest of each frame, so it does not spin a core.
+            const double headlessFps = std::getenv("CGENGINE_HEADLESS_FPS") ? std::max(1.0, std::atof(std::getenv("CGENGINE_HEADLESS_FPS"))) : 60.0;
+            const std::chrono::duration<double> headlessFrame(1.0 / headlessFps);
+            while (headlessRun ? running : window->isOpen()) {
+                const auto frameStart = std::chrono::steady_clock::now();
                 if (smokeFrameLimit > 0 && ++smokeFramesRun >= smokeFrameLimit) {
                     // Average frame time over frames 2..N (frame 1 includes first-use setup).
                     double avgMs = 0;
@@ -453,7 +466,7 @@ namespace CGEngine {
 				}
                 callStaticScripts(UpdateDomain);
                 input->gather();
-                if (window->isOpen()) {
+                if (!headlessRun && window->isOpen()) {
                     if (renderer->setGLWindowState(true)) {
                         renderer->clearGL(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
                         if (!renderer->processRender()) return;
@@ -461,6 +474,7 @@ namespace CGEngine {
                     }
                 }
                 ControlChannel::poll();
+                if (headlessRun) std::this_thread::sleep_until(frameStart + std::chrono::duration_cast<std::chrono::steady_clock::duration>(headlessFrame));
             }
             // The window closed (the close button, Quit in the game, or endWorld): the game is over. Without this the outer
             // loop would start the scene again on a closed window.

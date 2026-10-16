@@ -24,6 +24,7 @@ namespace CGEngine {
 		const unsigned int size = image.getSize().x;
 		if (size == 0 || image.getSize().y % size != 0) throw std::invalid_argument("the voxel tiles must be square tiles in one strip");
 		const GLsizei layers = static_cast<GLsizei>(image.getSize().y / size);
+		if (!openGLReady) return; // Headless: the tiles are checked and kept, and uploaded if a window ever draws them.
 		// A strip is layer after layer in memory, so the whole image is the array's data.
 		if (voxelTiles == 0) GL_CHECK(glGenTextures(1, &voxelTiles));
 		GL_CHECK(glBindTexture(GL_TEXTURE_2D_ARRAY, voxelTiles));
@@ -107,6 +108,11 @@ namespace CGEngine {
 	}
 
 	void Renderer::initializeOpenGL() {
+		if (headlessRun) {
+			// Headless: there is no context to set up. The camera is still made, so scripts can place it.
+			if (!currentCamera) currentCamera = make_unique<Camera>(1.0f);
+			return;
+		}
 		if (!setGLWindowState(true)) return;
 
 		// Setup a camera with perspective projection
@@ -340,6 +346,7 @@ namespace CGEngine {
 	}
 
 	bool Renderer::setGLWindowState(bool state) {
+		if (!window) return false; // Headless: there is no window, so no context to make current.
 		// setActive switches the GL context (wglMakeCurrent) and costs ~0.7 ms, so skip redundant calls.
 		if (state == glWindowActive) return true;
 		bool success = window->setActive(state);
