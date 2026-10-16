@@ -118,12 +118,12 @@ namespace CGEngine {
 				fill(0, stoneTop, Stone);
 				fill(stoneTop, dirtTop, Dirt);
 				fill(dirtTop, top, surface);
-				if (top < seaLevel) fill(top, seaLevel, Water);
+				if (top < seaLevel) fill(top, seaLevel, EndlessWater);
 
 				// Caves are carved below the surface, which stays whole, so they open out only where the noise reaches it.
 				if (caveWidth > 0.0f) {
 					for (int y = 1; y < std::min(height, top - 2); ++y) {
-						if (isCave(cx * size + lx, y, cz * size + lz)) blocks[(static_cast<size_t>(y) * size + lz) * size + lx] = y <= LavaLevel ? Lava : Air;
+						if (isCave(cx * size + lx, y, cz * size + lz)) blocks[(static_cast<size_t>(y) * size + lz) * size + lx] = y <= LavaLevel ? EndlessLava : Air;
 					}
 				}
 			}

@@ -20,14 +20,17 @@ LAMP = 17                           # a full block that gives off light (the sam
 BRICK = 18                          # a cube block: it never merges with its neighbours, so it keeps sharp edges
 TORCH = 19                          # a torch: a prop on a block's face (VoxelWorld.set_prop), not a block; only the hotbar names it
 COAL, IRON = 20, 21                 # ore in the stone: coal at any depth, iron deep (the same ids as VoxelTerrain::Coal and Iron)
-LAVA = 22                           # a liquid: lakes in the deep caves (the same id as VoxelTerrain::Lava), a source that flows as water does
+LAVA = 22                           # a producing spring: it puts a unit of lava volume into the air beside it (the caves use ENDLESS_LAVA)
+ENDLESS_WATER = 31                  # an endless spring: it makes flowing water that never accumulates, and drains when nothing feeds it
+ENDLESS_LAVA = 32                   # an endless lava spring: the same as ENDLESS_WATER, for lava (its flows are LAVA_FLOW_FIRST to LAVA_FLOW_LAST)
 LAVA_FLOW_FIRST, LAVA_FLOW_LAST = 23, 29   # flowing lava, levels 7 to 1 (the block id is 30 - level), as the water's are
-LAVA_BLOCKS = (LAVA,) + tuple(range(LAVA_FLOW_FIRST, LAVA_FLOW_LAST + 1)) + tuple(range(136, 144))   # the lava family: one mesh, named after the source; its volumes (136 to 143) too
+LAVA_BLOCKS = (LAVA, ENDLESS_LAVA) + tuple(range(LAVA_FLOW_FIRST, LAVA_FLOW_LAST + 1)) + tuple(range(136, 144))   # the lava family: one mesh, named after the source; its volumes (136 to 143) too
 DIRECTIONS = ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1))   # a prop's dir, to the block it leans on (PropDirs)
 FLOW_FIRST, FLOW_LAST = 9, 15       # flowing water, levels 7 to 1 (the block id is 16 - level); WATER is the full source
-WATER_BLOCKS = (WATER,) + tuple(range(FLOW_FIRST, FLOW_LAST + 1)) + tuple(range(128, 136))   # the water family: one mesh, drawn see-through; its volumes (128 to 135) too
+WATER_BLOCKS = (WATER, ENDLESS_WATER) + tuple(range(FLOW_FIRST, FLOW_LAST + 1)) + tuple(range(128, 136))   # the water family: one mesh, drawn see-through; its volumes (128 to 135) too
 # Volumes: a placed amount of liquid, one block id per unit (1 to 8). A bucket places a full volume, which spreads and levels out;
-# a spring (WATER, LAVA) keeps making its flows as before. Ids 128 and up are not items (the item ids run to 52).
+# a producing spring (WATER, LAVA) makes volume units; an endless spring (ENDLESS_WATER, ENDLESS_LAVA) makes flows, as the springs did before.
+# Ids 128 and up are not items (the item ids run to 52).
 WATER_VOLUME_FIRST, WATER_VOLUME_FULL = 128, 135
 LAVA_VOLUME_FIRST, LAVA_VOLUME_FULL = 136, 143
 VOLUME_BLOCKS = tuple(range(WATER_VOLUME_FIRST, LAVA_VOLUME_FULL + 1))   # every volume's unit ids (water and lava)

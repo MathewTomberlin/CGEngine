@@ -7,7 +7,7 @@ param(
     [int]$Seed = 1,
     [string]$ExeDir = "build/bin/Debug",
     [int]$Wait = 20,
-    [ValidateSet("place", "place8", "bucket")][string]$Place = "place"
+    [ValidateSet("place", "place8", "bucket", "spring", "endless")][string]$Place = "place"
 )
 
 $ErrorActionPreference = "Stop"
@@ -41,6 +41,24 @@ function Invoke-Phase([string]$phase, [string]$id) {
 try {
     # The spawn area loads and meshes in the first seconds.
     Start-Sleep -Seconds 25
+    if ($Place -eq "spring" -or $Place -eq "endless") {
+        $make = if ($Place -eq "spring") { "spring_make" } else { "endless_make" }
+        Invoke-Phase $make "02_spring_make"
+        $m = Get-Content (Join-Path $control "flow_probe.json") -Raw | ConvertFrom-Json
+        if (-not $m.ok) { Write-Host "no slope near the spawn (seed $Seed)"; exit 1 }
+        Start-Sleep -Seconds $Wait
+        Invoke-Phase "spring_read" "03_spring_read_before"
+        $before = Get-Content (Join-Path $control "flow_probe_result.json") -Raw | ConvertFrom-Json
+        Invoke-Phase "spring_kill" "04_spring_kill"
+        Start-Sleep -Seconds $Wait
+        Invoke-Phase "spring_read" "05_spring_read_after"
+        $after = Get-Content (Join-Path $control "flow_probe_result.json") -Raw | ConvertFrom-Json
+        Write-Host "while the spring runs: $($before.flows) flow blocks, $($before.volume_units) volume units"
+        Write-Host "after it is destroyed:  $($after.flows) flow blocks, $($after.volume_units) volume units"
+        Write-Host "cells still queued for the simulation: $($after.active)"
+        foreach ($f in ($after.flow_cells | Select-Object -First 12)) { Write-Host ("   flow at {0},{1},{2}: id {3}, above {4}, below {5}" -f $f[0], $f[1], $f[2], $f[3], $f[4], $f[5]) }
+        exit 0
+    }
     if ($Place -eq "bucket") {
         Invoke-Phase "bucket" "02_bucket"
         $b = Get-Content (Join-Path $control "flow_probe.json") -Raw | ConvertFrom-Json

@@ -36,17 +36,19 @@ namespace CGEngine {
 		return type.own ? (type.mesh ? type.mesh : block) : 0;
 	}
 
-	// Water: block 5 is a full source. Flowing water has a level from 7 down to 1, kept as block ids 9 to 15 (id = 16 -
-	// level), so a flow is a block like any other and is saved with the edits. Level 0 is air.
+	// Water: block 5 is a producing spring: it puts a unit of water volume into the air beside it every so often (VoxelSimulation).
+	// Block 31 is an endless spring: it makes flowing water (ids 9 to 15, level from 7 down to 1, id = 16 - level), which never
+	// accumulates and drains when nothing feeds it. Level 0 is air.
 	namespace Water {
 		constexpr uint8_t Source = 5;
-		constexpr uint8_t FlowFirst = 9;     // level 7, the first level below a source
+		constexpr uint8_t Endless = 31;
+		constexpr uint8_t FlowFirst = 9;     // level 7, the first level below an endless spring
 		constexpr uint8_t FlowLast = 15;     // level 1, the last level a flow reaches
 		constexpr int SourceLevel = 8;
 
 		// The level of a liquid block: 8 for the source, 1 to 7 for flowing water, 0 for anything else.
 		inline int level(uint8_t block) {
-			if (block == Source) return SourceLevel;
+			if (block == Endless) return SourceLevel;
 			if (block >= FlowFirst && block <= FlowLast) return 16 - block;
 			return 0;
 		}
@@ -68,8 +70,13 @@ namespace CGEngine {
 		}
 		uint8_t flowing(int level) const { return static_cast<uint8_t>(top - level); }
 	};
-	inline const Liquid WaterFlow{ Water::Source, Water::FlowFirst, Water::FlowLast, 16 };
-	inline const Liquid LavaFlow{ 22, 23, 29, 30 };   // lava is block 22 (VoxelTerrain::Lava); its flows are 23 to 29 (VoxelGen.py)
+	// The flows are made only by an endless spring (Water::Endless, LavaEndless): they are fed by it and drain when nothing feeds
+	// them, and what drains becomes volume (VoxelSimulation). A producing spring (Water::Source, LavaSpring) makes volume instead.
+	// Lava: block 22 is a producing spring (VoxelTerrain::Lava), 32 an endless one; the flows of the endless one are 23 to 29.
+	constexpr uint8_t LavaSpring = 22;
+	constexpr uint8_t LavaEndless = 32;
+	inline const Liquid WaterFlow{ Water::Endless, Water::FlowFirst, Water::FlowLast, 16 };
+	inline const Liquid LavaFlow{ LavaEndless, 23, 29, 30 };   // its flows are 23 to 29 (VoxelGen.py)
 	// The liquid a block is, or nullptr for a block that is not a liquid.
 	inline const Liquid* liquidOf(uint8_t block) {
 		if (WaterFlow.level(block) > 0) return &WaterFlow;
@@ -91,7 +98,7 @@ namespace CGEngine {
 		uint8_t block(int u) const { return static_cast<uint8_t>(first + u - 1); }
 	};
 	inline const VolumeLiquid WaterVolume{ 128, Water::Source };
-	inline const VolumeLiquid LavaVolume{ 136, 22 };
+	inline const VolumeLiquid LavaVolume{ 136, LavaSpring };
 	// The volume a block is part of, or nullptr for a block that is not in one.
 	inline const VolumeLiquid* volumeOf(uint8_t block) {
 		if (WaterVolume.units(block) > 0) return &WaterVolume;

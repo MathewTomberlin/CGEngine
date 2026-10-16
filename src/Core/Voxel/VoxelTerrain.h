@@ -15,13 +15,15 @@ namespace CGEngine {
 		static constexpr uint8_t Stone = 3;
 		static constexpr uint8_t Sand = 4;
 		static constexpr uint8_t Water = 5;
+		static constexpr uint8_t EndlessWater = 31;   // the sea is endless water: it spills its flows as before, and makes no volume (see VoxelBlocks.h)
 		static constexpr uint8_t Snow = 6;
 		static constexpr uint8_t Wood = 7;
 		static constexpr uint8_t Leaves = 8;
 		static constexpr uint8_t Lamp = 17;     // a full block that gives off light (see BlockType::emits); defined in VoxelGen.py
 		static constexpr uint8_t Coal = 20;     // ore in the stone: common, at any depth
 		static constexpr uint8_t Iron = 21;     // ore in the stone: rare, deep only (see fillChunk)
-		static constexpr uint8_t Lava = 22;     // a liquid that does not flow: the caves at or below LavaLevel are full of it (defined in VoxelGen.py)
+		static constexpr uint8_t Lava = 22;     // a producing lava spring (defined in VoxelGen.py); the caves do not use it
+		static constexpr uint8_t EndlessLava = 32;   // the cave lava: an endless spring, so the caves at or below LavaLevel do not fill with it
 
 		uint32_t seed = 1;
 		int seaLevel = 14;      // columns below this are filled with water up to it

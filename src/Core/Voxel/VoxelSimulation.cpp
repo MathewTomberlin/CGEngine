@@ -15,6 +15,8 @@ namespace CGEngine {
 		const int64_t KeyMask21 = (int64_t(1) << 21) - 1;
 		// How far a volume's unit looks along a level for a drop (see downhillSide), in cells.
 		const int DownhillReach = 4;
+		// Seconds between the units a producing spring (Water::Source, LavaSpring) puts into the air beside it.
+		const double SpringSeconds = 1.0;
 	}
 
 	int64_t VoxelSimulation::keyOf(int x, int y, int z) {
@@ -188,6 +190,16 @@ namespace CGEngine {
 			}
 		}
 
+		// A producing spring makes a unit of its liquid's volume every SpringSeconds, into the air beside it (see tickSpring).
+		if (block == Water::Source) {
+			tickSpring(world, x, y, z, WaterVolume, tickSeconds);
+			return;
+		}
+		if (block == LavaSpring) {
+			tickSpring(world, x, y, z, LavaVolume, tickSeconds);
+			return;
+		}
+
 		if (const VolumeLiquid* volume = volumeOf(block)) {
 			tickVolume(world, x, y, z, *volume);
 			return;
@@ -197,6 +209,21 @@ namespace CGEngine {
 			// A liquid (water or lava) falls into air below, and otherwise spreads sideways one level at a time, so a flow is finite.
 			const Liquid* liquid = liquidOf(block);
 			const int level = liquid ? liquid->level(block) : 0;
+			// A flow that nothing feeds drains first, before it spreads: the same liquid above feeds level 7, a neighbour one level more
+			// feeds one less. Its liquid is not lost: it becomes a volume of its level, which stays and flows (a spring that is destroyed
+			// leaves the water it made, rather than taking it away). The volume is the one with the same spring.
+			if (liquid && block != liquid->source) {
+				int feed = liquid->level(static_cast<uint8_t>(world.getBlock(x, y + 1, z))) > 0 ? 7 : 0;
+				for (const auto& side : Sides) {
+					const int neighbour = liquid->level(static_cast<uint8_t>(world.getBlock(x + side[0], y, z + side[1])));
+					feed = std::max(feed, neighbour - 1);
+				}
+				if (feed < level) {
+					// An endless spring's flow does not accumulate: when nothing feeds it, it is gone (volume is made only by a producing spring).
+					set(world, x, y, z, 0);
+					return;
+				}
+			}
 			if (liquid && y > 0 && world.getBlock(x, y - 1, z) == 0) {
 				set(world, x, y - 1, z, liquid->flowing(7));
 			} else if (liquid && level > 1) {
@@ -206,15 +233,23 @@ namespace CGEngine {
 					if (world.getBlock(nx, y, nz) == 0) set(world, nx, y, nz, liquid->flowing(level - 1));
 				}
 			}
-			// A flow that nothing feeds drains: the same liquid above feeds level 7, a neighbour one level more feeds one less.
-			if (liquid && block != liquid->source) {
-				int feed = liquid->level(static_cast<uint8_t>(world.getBlock(x, y + 1, z))) > 0 ? 7 : 0;
-				for (const auto& side : Sides) {
-					const int neighbour = liquid->level(static_cast<uint8_t>(world.getBlock(x + side[0], y, z + side[1])));
-					feed = std::max(feed, neighbour - 1);
-				}
-				if (feed < level) set(world, x, y, z, 0);
-			}
+		}
+	}
+
+	void VoxelSimulation::tickSpring(VoxelWorld& world, int x, int y, int z, const VolumeLiquid& volume, double tickSeconds) {
+		// The spring keeps itself queued, so it keeps its clock. When the time is up it pours one unit into the first air cell
+		// beside it (above first, so it spills up and falls back as water does). A spring with no air beside it waits.
+		activate(x, y, z);
+		double& elapsed = springClock[keyOf(x, y, z)];
+		elapsed += tickSeconds;
+		if (elapsed < SpringSeconds) return;
+		const int Above[5][3] = { { 0, 1, 0 }, { 1, 0, 0 }, { -1, 0, 0 }, { 0, 0, 1 }, { 0, 0, -1 } };
+		for (const auto& d : Above) {
+			const int nx = x + d[0], ny = y + d[1], nz = z + d[2];
+			if (ny < 0 || !world.loadedAt(nx, nz) || world.getBlock(nx, ny, nz) != 0) continue;
+			world.pourVolume(nx, ny, nz, 1, volume.first, true);
+			elapsed = 0.0;
+			return;
 		}
 	}
 

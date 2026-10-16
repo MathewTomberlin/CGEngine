@@ -73,6 +73,8 @@ namespace CGEngine {
 			double elapsed;
 		};
 		std::unordered_map<int64_t, Progress> progress;
+		// The time each producing spring has run toward its next unit, by cell (see tickSpring).
+		std::unordered_map<int64_t, double> springClock;
 		Hook hook;
 		double accumulator = 0.0;
 		uint32_t randomState = 0x9E3779B9u;
@@ -88,6 +90,8 @@ namespace CGEngine {
 		// A volume's tick: it falls whole into air, or into the same volume below up to a full cell, then evens out with its
 		// sides (a side with at least two units less takes one). Units are moved, never made or lost.
 		void tickVolume(VoxelWorld& world, int x, int y, int z, const VolumeLiquid& volume);
+		// A producing spring's tick: after SpringSeconds it pours a unit of volume into the air beside it.
+		void tickSpring(VoxelWorld& world, int x, int y, int z, const VolumeLiquid& volume, double tickSeconds);
 		// The side (index into the cell's horizontal neighbours) of the nearest drop reachable over air at this level, or -1.
 		static int downhillSide(VoxelWorld& world, int x, int y, int z);
 		// Applies the reactions of a cell. Returns true when the cell became another block at once.

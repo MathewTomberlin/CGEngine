@@ -78,10 +78,14 @@ namespace CGEngine {
 			type.passesLight = source == Water::Source;
 			return type;
 		};
+		// Each spring is its own mesh group's source (the water's group is 5, the lava's is LavaSpring): endless springs and the flows
+		// share it with the producing spring, and the volumes are drawn in it too (see the game's define_block).
 		types[Water::Source] = liquid(Water::Source);
+		types[Water::Endless] = liquid(Water::Source);
 		for (int id = Water::FlowFirst; id <= Water::FlowLast; ++id) types[static_cast<size_t>(id)] = liquid(Water::Source);
-		for (int id = LavaFlow.first; id <= LavaFlow.last; ++id) types[static_cast<size_t>(id)] = liquid(LavaFlow.source);
-		types[LavaFlow.source] = liquid(LavaFlow.source);
+		types[LavaSpring] = liquid(LavaSpring);
+		types[LavaEndless] = liquid(LavaSpring);
+		for (int id = LavaFlow.first; id <= LavaFlow.last; ++id) types[static_cast<size_t>(id)] = liquid(LavaSpring);
 		startWorkers();
 	}
 

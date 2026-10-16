@@ -43,7 +43,39 @@ def find_slope():
     return None, None, None
 
 
-if phase == "bucket":
+if phase in ("spring_make", "endless_make", "spring_kill", "spring_read"):
+    # A water spring on a slope: make it, let it run, destroy it, and count what is left (flows and volume units) around it.
+    if phase in ("spring_make", "endless_make"):
+        spot, direction, tops = find_slope()
+        if spot is not None:
+            spring = VoxelGen.WATER if phase == "spring_make" else VoxelGen.ENDLESS_WATER
+            world.set_block(spot[0], spot[1] + 1, spot[2], spring)
+        with open("cg_control/flow_probe.json", "w") as f:
+            json.dump({"ok": spot is not None, "spot": list(spot) if spot else None}, f, indent=1)
+    else:
+        with open("cg_control/flow_probe.json") as f:
+            spot = tuple(json.load(f)["spot"])
+        c = (spot[0], spot[1] + 1, spot[2])
+        if phase == "spring_kill":
+            world.set_block(c[0], c[1], c[2], VoxelGen.AIR)
+        else:
+            flows = 0
+            volume = 0
+            flow_cells = []
+            for cx in range(c[0] - 8, c[0] + 9):
+                for cz in range(c[2] - 8, c[2] + 9):
+                    for cy in range(c[1] - 30, c[1] + 3):
+                        b = world.get_block(cx, cy, cz)
+                        if VoxelGen.FLOW_FIRST <= b <= VoxelGen.FLOW_LAST:
+                            flows += 1
+                            if len(flow_cells) < 40:
+                                flow_cells.append([cx, cy, cz, b, world.get_block(cx, cy + 1, cz), world.get_block(cx, cy - 1, cz)])
+                        elif b in WATER_UNITS:
+                            volume += b - VoxelGen.WATER_VOLUME_FIRST + 1
+            with open("cg_control/flow_probe_result.json", "w") as f:
+                json.dump({"flows": flows, "volume_units": volume, "spring": world.get_block(c[0], c[1], c[2]), "flow_cells": flow_cells, "active": world.active_count()}, f, indent=1)
+            print("SPRING READ", flows, volume)
+elif phase == "bucket":
     # A bucket takes what a volume gives, up to its capacity, and knows its units; it tops up with more water; it pours back its
     # units and is refused when they do not fit.
     spot, direction, tops = find_slope()
