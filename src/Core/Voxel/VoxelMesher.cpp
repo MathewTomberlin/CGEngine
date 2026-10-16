@@ -57,21 +57,27 @@ namespace CGEngine {
 		const int cornerU[4] = { 0, 1, 1, 0 };
 		const int cornerV[4] = { 0, 0, 1, 1 };
 
-		// Whether the block at (x, y, z) is in a mesh group: a block whose group is this one (group 0 is the terrain, which holds
-		// every block drawn in no group of its own). Air is in no group. Blocks of other groups count as air to this mesh.
-		bool inGroup(const PaddedChunk& chunk, int x, int y, int z, uint8_t group) {
+		// The group of the block at (x, y, z), or -1 for air. Each block is in exactly one group: group 0 is the terrain, which holds
+		// every block drawn in no group of its own.
+		int memberOf(const PaddedChunk& chunk, int x, int y, int z) {
 			const uint8_t block = chunk.at(x, y, z);
-			if (block == 0) return false;
+			if (block == 0) return -1;
 			const PaddedChunk::MeshRule& rule = chunk.rule[block];
 			// A block whose top is covered by its join mesh belongs to that mesh instead (the cover is the block above it).
 			if (rule.join && y + 1 < chunk.height + chunk.border && chunk.rule[chunk.at(x, y + 1, z)].group == rule.join) {
-				return group == rule.join;
+				return rule.join;
 			}
 			// A block standing on natural ground joins the terrain (its base only).
 			if (rule.joinBelow.any() && y - 1 >= -chunk.border && rule.joinBelow[chunk.at(x, y - 1, z)]) {
-				return group == 0;
+				return 0;
 			}
-			return rule.group == group;
+			return rule.group;
+		}
+
+		// Whether the block at (x, y, z) is in a mesh group: a block whose group is this one (group 0 is the terrain, which holds
+		// every block drawn in no group of its own). Air is in no group. Blocks of other groups count as air to this mesh.
+		bool inGroup(const PaddedChunk& chunk, int x, int y, int z, uint8_t group) {
+			return memberOf(chunk, x, y, z) == group;
 		}
 
 		// Occlusion of each corner of a face, from the air cell in front of it. Each corner has two cells beside it and
@@ -259,10 +265,13 @@ namespace CGEngine {
 		const size_t n = static_cast<size_t>(P) * P * Y;
 		std::vector<int> solid(n, 0);
 		chunk.terrain.assign(n, 0);
+		chunk.member.assign(n, -1);
 		for (int y = -b; y < chunk.height + b; ++y) {
 			for (int z = -b; z < chunk.size + b; ++z) {
 				for (int x = -b; x < chunk.size + b; ++x) {
-					solid[chunk.index(x, y, z)] = inGroup(chunk, x, y, z, 0) ? 1 : 0;
+					const int group = memberOf(chunk, x, y, z);
+					chunk.member[chunk.index(x, y, z)] = static_cast<int16_t>(group);
+					solid[chunk.index(x, y, z)] = group == 0 ? 1 : 0;
 					chunk.terrain[chunk.index(x, y, z)] = static_cast<uint8_t>(solid[chunk.index(x, y, z)]);
 				}
 			}
@@ -419,7 +428,7 @@ namespace CGEngine {
 		bool solidAt(const PaddedChunk& chunk, uint8_t group, int x, int y, int z) {
 			const int b = chunk.border;
 			if (x < -b || y < -b || z < -b || x >= chunk.size + b || y >= chunk.height + b || z >= chunk.size + b) return false;
-			return inGroup(chunk, x, y, z, group);
+			return chunk.member[chunk.index(x, y, z)] == group;
 		}
 
 		// The density at p (block units). The terrain's is its smoothed occupancy, interpolated between block corners (VoxelTerrainShift),
@@ -674,8 +683,34 @@ namespace CGEngine {
 		return densityAt(chunk, group, p);
 	}
 
+	std::array<GroupBounds, 256> groupBounds(const PaddedChunk& chunk) {
+		std::array<GroupBounds, 256> bounds{};
+		const int b = chunk.border;
+		for (int y = -b; y < chunk.height + b; ++y) {
+			for (int z = -b; z < chunk.size + b; ++z) {
+				for (int x = -b; x < chunk.size + b; ++x) {
+					const int group = chunk.member[chunk.index(x, y, z)];
+					if (group < 0) continue;
+					GroupBounds& box = bounds[static_cast<size_t>(group)];
+					const int at[3] = { x, y, z };
+					for (int a = 0; a < 3; ++a) {
+						box.lo[a] = std::min(box.lo[a], at[a]);
+						box.hi[a] = std::max(box.hi[a], at[a]);
+					}
+				}
+			}
+		}
+		return bounds;
+	}
+
+	namespace {
+		// a / b rounded down and rounded up, for b > 0: the samples at or below and at or above a block's coordinate.
+		int floorDivide(int a, int b) { return a >= 0 ? a / b : -((-a + b - 1) / b); }
+		int ceilDivide(int a, int b) { return -floorDivide(-a, b); }
+	}
+
 	void buildSmoothMesh(const PaddedChunk& chunk, const std::array<glm::vec3, 256>& palette, int resolution, int stride,
-		unsigned skirtSides, uint8_t group, MeshArrays& out) {
+		unsigned skirtSides, uint8_t group, const GroupBounds& bounds, MeshArrays& out) {
 		out.vertices.clear();
 		out.indices.clear();
 		const int R = std::max(1, resolution);
@@ -697,12 +732,36 @@ namespace CGEngine {
 		};
 		const int sx = NX + 3;
 		const int sy = NY + 3;
-		std::vector<float> samples(static_cast<size_t>(sx) * sy * sx);
+		// The grids are per thread and reused from chunk to chunk: a fresh allocation of each, zeroed, costs more than the samples.
+		thread_local std::vector<float> samples;
+		samples.assign(static_cast<size_t>(sx) * sy * sx, 0.0f);
+		// A block group sampled at block centres (one sample a block) has the density 1 in its blocks and 0 elsewhere: densityAt's
+		// weights are 1 at the block's own corner and 0 at the rest, so one lookup gives the same value as its eight.
+		const bool occupancy = group != 0 && R == 1;
+		// The samples that can be non-zero, per axis (0 is x, 1 is y, 2 is z), inclusive. An occupancy group is 0 at every sample
+		// away from its blocks, and the grid starts at zero, so only the samples at its blocks, and the cells and edges that touch
+		// them, need work. Everything else stays zero: the same values as a full pass.
+		int lo[3] = { -1, -1, -1 };
+		int hi[3] = { NX + 1, NY + 1, NX + 1 };
+		if (occupancy) {
+			for (int a = 0; a < 3; ++a) {
+				lo[a] = std::max(lo[a], ceilDivide(bounds.lo[a], T));
+				hi[a] = std::min(hi[a], floorDivide(bounds.hi[a], T));
+			}
+		} else if (group != 0 && bounds.lo[0] <= bounds.hi[0]) {
+			// Half-block detail: a sample is the density of the two block centres either side of it, so it is 0 unless one of those
+			// is in the group. The margins are one sample wide, which covers the rounding of the sample positions.
+			for (int a = 0; a < 3; ++a) {
+				lo[a] = std::max(lo[a], static_cast<int>(std::floor(R * (bounds.lo[a] - 0.5f))) - 1);
+				hi[a] = std::min(hi[a], static_cast<int>(std::floor(R * (bounds.hi[a] + 1.5f))) + 1);
+			}
+		}
 		auto sampleIndex = [sx](int i, int j, int k) { return static_cast<size_t>(((j + 1) * sx + (k + 1)) * sx + (i + 1)); };
-		for (int j = -1; j <= NY + 1; ++j) {
-			for (int k = -1; k <= NX + 1; ++k) {
-				for (int i = -1; i <= NX + 1; ++i) {
-					samples[sampleIndex(i, j, k)] = densityAt(chunk, group,position(i, j, k));
+		for (int j = lo[1]; j <= hi[1]; ++j) {
+			for (int k = lo[2]; k <= hi[2]; ++k) {
+				for (int i = lo[0]; i <= hi[0]; ++i) {
+					samples[sampleIndex(i, j, k)] = occupancy ? (chunk.member[chunk.index(i * T, j * T, k * T)] == group ? 1.0f : 0.0f)
+						: densityAt(chunk, group, position(i, j, k));
 				}
 			}
 		}
@@ -713,20 +772,21 @@ namespace CGEngine {
 		const int cn = NX + 2;
 		const int cyn = NY + 2;
 		auto cellIndex = [cn](int i, int j, int k) { return static_cast<size_t>(((j + 1) * cn + (k + 1)) * cn + (i + 1)); };
-		std::vector<glm::vec3> cellPosition(static_cast<size_t>(cn) * cyn * cn);
-		for (int j = -1; j <= NY; ++j) {
-			for (int k = -1; k <= NX; ++k) {
-				for (int i = -1; i <= NX; ++i) {
+		thread_local std::vector<glm::vec3> cellPosition;
+		cellPosition.assign(static_cast<size_t>(cn) * cyn * cn, glm::vec3(0.0f));
+		for (int j = std::max(-1, lo[1] - 1); j <= std::min(NY, hi[1]); ++j) {
+			for (int k = std::max(-1, lo[2] - 1); k <= std::min(NX, hi[2]); ++k) {
+				for (int i = std::max(-1, lo[0] - 1); i <= std::min(NX, hi[0]); ++i) {
 					float value[8];
 					glm::vec3 corner[8];
 					int inside = 0;
 					for (int c = 0; c < 8; ++c) {
 						const int dx = c & 1, dy = (c >> 1) & 1, dz = (c >> 2) & 1;
 						value[c] = sample(i + dx, j + dy, k + dz);
-						corner[c] = position(i + dx, j + dy, k + dz);
 						if (value[c] > SmoothIso) ++inside;
 					}
 					if (inside == 0 || inside == 8) continue;
+					for (int c = 0; c < 8; ++c) corner[c] = position(i + (c & 1), j + ((c >> 1) & 1), k + ((c >> 2) & 1));
 					glm::vec3 sum(0.0f);
 					int crossings = 0;
 					for (const auto& edge : CubeEdges) {
@@ -743,7 +803,8 @@ namespace CGEngine {
 		}
 
 		// Each cell's vertex is emitted once, when a quad first uses it.
-		std::vector<int> emitted(cellPosition.size(), -1);
+		thread_local std::vector<int> emitted;
+		emitted.assign(cellPosition.size(), -1);
 		auto vertexOf = [&](int i, int j, int k) {
 			const size_t index = cellIndex(i, j, k);
 			if (emitted[index] < 0) {
@@ -769,9 +830,9 @@ namespace CGEngine {
 		// the shared plane, and the overlap covers the gap there (the skirts alone left a crack, roadmap 11.7).
 		const int iEnd = (skirtSides & 2u) ? NX + 1 : NX;
 		const int kEnd = (skirtSides & 8u) ? NX + 1 : NX;
-		for (int j = 0; j < NY; ++j) {
-			for (int k = 0; k < kEnd; ++k) {
-				for (int i = 0; i < iEnd; ++i) {
+		for (int j = std::max(0, lo[1] - 1); j <= std::min(NY - 1, hi[1]); ++j) {
+			for (int k = std::max(0, lo[2] - 1); k <= std::min(kEnd - 1, hi[2]); ++k) {
+				for (int i = std::max(0, lo[0] - 1); i <= std::min(iEnd - 1, hi[0]); ++i) {
 					const bool here = sample(i, j, k) > SmoothIso;
 					// x edge: the cells around it have lowest corners (i, j-1, k-1), (i, j, k-1), (i, j, k), (i, j-1, k).
 					if (here != (sample(i + 1, j, k) > SmoothIso)) {
