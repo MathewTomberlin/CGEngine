@@ -606,8 +606,10 @@ Goal: a skin takes the shape of its blocks: a one-block column is one block wide
   faces half way between block centres; a tower's top is its block face; a wall keeps its corner width; flat ground keeps its 0.1
   bulge. `test_voxel_physics.py` and the voxel suite (181 checks) pass.
 - [x] **25.3** A vertex inside solid blocks takes the brightest air within a block for its sky and lamp light, not zero.
-- [ ] **25.4** Open: the far skins (stride 2) read the same centres, so a one-block feature at an odd block is still missed there;
-  check a far hill in play. Textures: the terrain is triplanar in world space (`StdFragShader.frag`), so the texture does not
+- [~] **25.4** Far skins at odd blocks: a far sample (stride above 1) now takes the largest of the patch of blocks it stands for, so a
+  one-block feature at an odd block shows (`check_far_feature` in `tools/voxel_world_check.py`: the full-detail skin shows the pillar, the
+  stride-2 skin did not before the change and does now). Cost, measured headless Release seed 1: surface 2.0 s to 2.2 to 2.4 s, quads
+  1,109,384 to 1,115,546 (far skins now show the features they missed). Open: check a far hill in play. Textures: the terrain is triplanar in world space (`StdFragShader.frag`), so the texture does not
   stretch on a slope; the black patches it was blamed for are the vertices above, but a close look in play is still to do.
   Found (the hard line where two LOD bands meet): `smoothVertex`'s `stride` argument, which averages the occlusion over a far
   vertex's patch, was never passed, so far vertices and skirts took one air cell. It is passed now (`VoxelMesher.cpp`), so
@@ -866,7 +868,8 @@ Goal: the player sees a right arm that holds the selected item and swings it on 
 - [x] **40.2** Holding the break button repeats every 1.0 s for an attack or a block break (`BREAK_REPEAT_RATE`); placing is 0.25 s.
 - [~] **40.3** Shovel: one hit to stone, iron and coal, four to dirt, sand and gravel, eight on the other blocks (twice its first
   numbers), and a shovel recipe (stone and wood). The model is `item_shovel.fbx`, exported from the Shovel in the open Blender scene.
-  Its hand offset (scale 0.003, the sword's rotation) is not yet right in hand.
+  Its hand offset is set in `held_items.json` (position 0.08, 0.125, -0.09, scale 0.00075): the handle runs through the fingers of the
+  right hand, the head above it (`voxel_view_shot.ps1 -Item shovel`), as the sword sits. Not yet checked in play.
 - [~] **40.4** Bucket: an iron recipe; a strike on water or lava takes the liquid (the block goes to air, `scoop` op) and makes a
   water or lava bucket; a right click places the liquid and empties the bucket. The model is a cylinder
   (`item_bucket.fbx`, made in Blender at 0.0025 scale); its hand offset is now set to the palm (`held_items.json`: position -0.06, 0.035, -0.06, scale 0.004; `voxel_view_shot.ps1 -Item bucket`). It sits partly behind the hand, and it is not yet checked in play.
