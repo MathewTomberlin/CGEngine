@@ -766,6 +766,9 @@ Goal: crafting is a small puzzle: the items go in a grid, and the pattern makes 
 
 ## Phase 31: a headless host (from the vision: goal 3, and 18.1 and 23.5)
 Goal: the game runs as a server with no window, so a host owns the world while players connect (and an AI can play).
+  The recipe list is a scrollbox: eight rows at a time, the mouse wheel over the panel and a click on its scrollbar scroll it, and a
+  category change returns it to the top (`scroll_crafting`; `tools/voxel_view_shot.ps1 -View scroll` checks the clamping).
+
 - [x] **31.1** The OpenGL calls outside the renderer were in the texture loader, the shader and program code, and the tile upload (`Renderer::uploadVoxelTiles`); meshes and voxel chunks keep their buffers in the renderer and need no context to build. Done: `CGENGINE_HEADLESS=1` skips the window, the context and GLEW (`openGLReady`, `headlessRun` in `src/Core/Engine/GLContext.h`). Shaders and programs are made as empty objects and textures as empty textures, so nothing calls GL; the default program logs `Failed to create default program!` (the named warning). The loop runs at `CGENGINE_HEADLESS_FPS` (60 by default) and draws nothing. Scripts check `cge.is_headless()`; the HUD, hands, outlines and preview are skipped, and `quit`, `screenshot` and the window calls say why they cannot run.
 - [x] **31.1a** `World::startWorld` makes the window and the renderer. A headless start (`CGENGINE_HEADLESS=1`) makes neither, and runs the game's update loop at `CGENGINE_HEADLESS_FPS`. Checked by a 1,231-frame headless run (Debug: 841 chunks loaded, the player on the ground, `headless` in the state file).
 - [x] **31.2** The state file and the control channel work headless, and `tools/test_voxel_net.ps1 -HeadlessHost` runs with a headless host and a windowed client: all 16 link checks pass, and the same test passes with two windowed games.

@@ -377,6 +377,13 @@ void bindGame(py::module_& m) {
         renderer->requestScreenshot(path);
     }, py::arg("path"), "Save the next frame as a PNG at path (absolute, or relative to the exe folder).");
 
+    m.def("mouse_wheel", []() {
+        // The notches since the last call; read every frame, so a turn is counted once. Nothing while the game is unattended or not focused.
+        const float ticks = InputMap::takeMouseWheel();
+        if (unattended() || !screen->hasFocus()) return 0.0f;
+        return ticks;
+    }, "The mouse wheel notches turned since the last call: positive is up.");
+
     m.def("mouse_delta", []() -> std::pair<float, float> {
         if (!mouseCaptured) return { 0.0f, 0.0f };
         RenderWindow& window = gameWindow();
