@@ -622,7 +622,10 @@ Goal: a chunk's mesh costs a few milliseconds, so a view of 40 settles in a few 
   precomputes each cell's passability for the walks changed nothing (1.38 s before, 1.38 to 1.40 s after; quads identical), so it
   was not kept. Open: flat frontiers, and the light of a region's chunks computed once for the region rather than per chunk.
 - [ ] **26.2** The surface: the sample grid calls the density 24,000 times a chunk and each vertex calls it seven more. Cache the
-  gradient's samples on the grid, or derive the normal from the grid's own neighbours. Measured (headless Release, 841 chunks):
+  gradient's samples on the grid, or derive the normal from the grid's own neighbours. Partly done (PR #213): a block group's
+  sample is one lookup, not eight, with the same values; the surface pass goes from about 9.1 s to about 6.0 s (headless Release,
+  841 chunks, quads unchanged at 1,109,384; `tools/voxel_mesh_timing.ps1`). Tried and dropped: the exposed-block test reading the
+  terrain's membership array, which was within the run-to-run noise (about 0.6 s). Measured before (headless Release, 841 chunks):
   the surface pass is 8.6 to 8.8 s. Flattening the density's eight corner lookups into offsets from one index changed nothing
   (8.6 to 8.7 s, quads identical), so the cost is in how many calls there are, or in allocation (26.3), not in the indexing.
 - [ ] **26.3** Allocation: each chunk job copies its padded area and allocates its vectors. Reuse per-worker buffers. Measure first:
