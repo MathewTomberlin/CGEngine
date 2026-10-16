@@ -88,6 +88,8 @@ namespace CGEngine {
 		// A volume's tick: it falls whole into air, or into the same volume below up to a full cell, then evens out with its
 		// sides (a side with at least two units less takes one). Units are moved, never made or lost.
 		void tickVolume(VoxelWorld& world, int x, int y, int z, const VolumeLiquid& volume);
+		// The side (index into the cell's horizontal neighbours) of the nearest drop reachable over air at this level, or -1.
+		static int downhillSide(VoxelWorld& world, int x, int y, int z);
 		// Applies the reactions of a cell. Returns true when the cell became another block at once.
 		bool react(VoxelWorld& world, int x, int y, int z, uint8_t block, double tickSeconds);
 		void set(VoxelWorld& world, int x, int y, int z, uint8_t block);

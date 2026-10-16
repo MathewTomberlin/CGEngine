@@ -124,7 +124,15 @@ class NetMixin:
             elif stage > 0:
                 self.hit_times[cell] = time.time()
         elif op == "scoop":
-            if self.world.get_block(*cell) in VoxelGen.LIQUIDS:
+            kind = self.world.get_block(*cell)
+            if kind in VoxelGen.VOLUME_BLOCKS:
+                # A bucket's worth from the volume, as the client takes it: the host's own cells are sent back to the client.
+                taken, _ = self.world.drain_volume(cell[0], cell[1], cell[2], VoxelGen.BUCKET_UNITS, False)
+                if taken >= VoxelGen.BUCKET_UNITS:
+                    _, changed = self.world.drain_volume(cell[0], cell[1], cell[2], VoxelGen.BUCKET_UNITS, True)
+                    if self.net_host:
+                        self.net_touched.update(tuple(c) for c in changed)
+            elif kind in VoxelGen.LIQUIDS:
                 self.world.set_block(cell[0], cell[1], cell[2], VoxelGen.AIR)
         elif op == "place":
             if (item in VoxelGen.COLOURS and item != VoxelGen.TORCH and self.world.get_block(*cell) == VoxelGen.AIR

@@ -726,11 +726,19 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
             self.notify("Inventory full: no room for the %s" % VoxelGen.NAMES[blocked])
 
     def fill_bucket(self, block, kind):
-        """A strike on a liquid with an empty bucket: the liquid goes into the bucket, and its block goes to air. The host takes the
-        block with the same rules (a "scoop" request)."""
+        """A strike on a liquid with an empty bucket: the bucket takes a bucket's worth (VoxelGen.BUCKET_UNITS) from a volume, from the
+        cell hit and the volume around it, so the water goes down by that much. A spring's block goes to air. Less than a bucket's worth
+        is not enough to fill one. The host takes the same units with the same rules (a "scoop" request)."""
         liquid = VoxelGen.WATER if kind in VoxelGen.WATER_BLOCKS else VoxelGen.LAVA
+        x, y, z = block
+        if kind in VoxelGen.VOLUME_BLOCKS:
+            if self.world.drain_volume(x, y, z, VoxelGen.BUCKET_UNITS, False)[0] < VoxelGen.BUCKET_UNITS:
+                self.notify("There is not enough water here to fill a bucket")
+                return
+            self.world.drain_volume(x, y, z, VoxelGen.BUCKET_UNITS, True)
+        else:
+            self.world.set_block(x, y, z, VoxelGen.AIR)
         self.inventory.slots[self.slot] = [VoxelGen.FILLED_BUCKET[liquid], 1]
-        self.world.set_block(block[0], block[1], block[2], VoxelGen.AIR)
         self.send_request({"op": "scoop", "c": list(block)})
         cge.play_sound("place", 0.6, 0.7)
         self.hands_hit("block", [block[i] + 0.5 for i in range(3)])

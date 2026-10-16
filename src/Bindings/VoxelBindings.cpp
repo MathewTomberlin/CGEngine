@@ -56,6 +56,9 @@ void bindVoxel(py::module_& m) {
         .def("prop_at", &VoxelWorld::propAt, py::arg("x"), py::arg("y"), py::arg("z"),
              "The direction of the torch in a cell (see set_prop), or -1 for none.")
         .def("props", &VoxelWorld::props, "Every torch as a list of (x, y, z, dir).")
+        .def("drain_volume", &VoxelWorld::drainVolume, py::arg("x"), py::arg("y"), py::arg("z"), py::arg("want"), py::arg("commit"),
+             "Takes up to want units of a volume, from the cell and the volume cells around it, nearest first (as a bucket does). "
+             "Returns (units taken, the cells changed as (x, y, z)). With commit False nothing changes, so the caller can check first.")
         .def("hit_block", &VoxelWorld::hitBlock, py::arg("x"), py::arg("y"), py::arg("z"),
              "Hit the block at (x, y, z). Returns its damage stage (1 to hits - 1), -1 if this hit breaks it, or -2 if there is no block.")
         .def("damage_at", &VoxelWorld::damageAt, py::arg("x"), py::arg("y"), py::arg("z"),

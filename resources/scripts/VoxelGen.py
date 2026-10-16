@@ -30,6 +30,8 @@ WATER_BLOCKS = (WATER,) + tuple(range(FLOW_FIRST, FLOW_LAST + 1)) + tuple(range(
 # a spring (WATER, LAVA) keeps making its flows as before. Ids 128 and up are not items (the item ids run to 52).
 WATER_VOLUME_FIRST, WATER_VOLUME_FULL = 128, 135
 LAVA_VOLUME_FIRST, LAVA_VOLUME_FULL = 136, 143
+VOLUME_BLOCKS = tuple(range(WATER_VOLUME_FIRST, LAVA_VOLUME_FULL + 1))   # every volume's unit ids (water and lava)
+BUCKET_UNITS = 8   # the units a bucket holds: a full volume, which a bucket takes from water and gives back when it is placed
 LIQUIDS = WATER_BLOCKS + LAVA_BLOCKS    # every liquid: swimming and the fog under the surface
 STILL_LIQUIDS = ()                   # liquids that do not spread (define_block flows=False): none now, lava flows like water
 OBSIDIAN = 30                       # a hard cube: a lava block that water touches for a while becomes it (REACTIONS)

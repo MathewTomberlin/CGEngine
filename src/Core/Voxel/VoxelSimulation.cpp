@@ -13,6 +13,8 @@ namespace CGEngine {
 		// Cells in a key: x and z are offset by 2^20 so they are never negative, y is below 2^21.
 		const int64_t KeyBias = int64_t(1) << 20;
 		const int64_t KeyMask21 = (int64_t(1) << 21) - 1;
+		// How far a volume's unit looks along a level for a drop (see downhillSide), in cells.
+		const int DownhillReach = 4;
 	}
 
 	int64_t VoxelSimulation::keyOf(int x, int y, int z) {
@@ -258,6 +260,48 @@ namespace CGEngine {
 			// The last unit leaves the cell as air: volume.block(0) is the id below the family (127 for water).
 			set(world, x, y, z, mine - 1 == 0 ? 0 : volume.block(mine - 1));
 		}
+		// Downhill: a unit with no drop beside it still flows to a drop that is near, over level air (a flat step on a slope), so a
+		// trickle keeps going down a slope instead of stopping at its first step. A pool spreads by the pressure above, not by this.
+		const int mineNow = unitsOf(static_cast<uint8_t>(world.getBlock(x, y, z)));
+		if (mineNow > 0 && y > 0) {
+			const int side = downhillSide(world, x, y, z);
+			if (side >= 0) {
+				const int nx = x + Sides[side][0];
+				const int nz = z + Sides[side][1];
+				set(world, nx, y, nz, volume.block(1));
+				set(world, x, y, z, mineNow - 1 == 0 ? 0 : volume.block(mineNow - 1));
+			}
+		}
+	}
+
+	int VoxelSimulation::downhillSide(VoxelWorld& world, int x, int y, int z) {
+		// Breadth-first over the air at this level, DownhillReach steps at most. Returns the side (index into Sides) of the first step
+		// toward the nearest cell with air beneath it, or -1 when no drop is that near.
+		struct Step {
+			int x, z, first, depth;
+		};
+		auto air = [&](int cx, int cz) { return world.loadedAt(cx, cz) && world.getBlock(cx, y, cz) == 0; };
+		std::vector<Step> frontier;
+		std::unordered_set<int64_t> seen;
+		seen.insert(keyOf(x, y, z));
+		for (int i = 0; i < 4; ++i) {
+			const int nx = x + Sides[i][0];
+			const int nz = z + Sides[i][1];
+			if (!air(nx, nz) || !seen.insert(keyOf(nx, y, nz)).second) continue;
+			frontier.push_back({ nx, nz, i, 1 });
+		}
+		for (size_t head = 0; head < frontier.size(); ++head) {
+			const Step step = frontier[head];
+			if (y > 0 && world.getBlock(step.x, y - 1, step.z) == 0) return step.first;
+			if (step.depth >= DownhillReach) continue;
+			for (int i = 0; i < 4; ++i) {
+				const int nx = step.x + Sides[i][0];
+				const int nz = step.z + Sides[i][1];
+				if (!air(nx, nz) || !seen.insert(keyOf(nx, y, nz)).second) continue;
+				frontier.push_back({ nx, nz, step.first, step.depth + 1 });
+			}
+		}
+		return -1;
 	}
 
 	int VoxelSimulation::simulate(VoxelWorld& world, double dt, double budgetMs, double tickSeconds) {

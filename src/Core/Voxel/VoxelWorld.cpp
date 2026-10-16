@@ -584,6 +584,46 @@ namespace CGEngine {
 		return entry == chunk->second.end() ? -1 : entry->second;
 	}
 
+	std::pair<int, std::vector<std::array<int, 3>>> VoxelWorld::drainVolume(int x, int y, int z, int want, bool commit) {
+		// Breadth-first over the volume cells of the liquid, from the cell hit, so the nearest units go first. A cell holds up to 8 units.
+		struct Cell {
+			int x, y, z, units;
+		};
+		std::pair<int, std::vector<std::array<int, 3>>> result{ 0, {} };
+		const VolumeLiquid* family = volumeOf(static_cast<uint8_t>(getBlock(x, y, z)));
+		if (!family) return result;
+		const size_t MaxCells = 64;   // a bucket reaches this many cells of volume, which is more than any puddle a player makes
+		std::vector<Cell> cells;
+		std::vector<Cell> taken;
+		auto visited = [&cells](int cx, int cy, int cz) {
+			for (const Cell& c : cells) {
+				if (c.x == cx && c.y == cy && c.z == cz) return true;
+			}
+			return false;
+		};
+		cells.push_back({ x, y, z, family->units(static_cast<uint8_t>(getBlock(x, y, z))) });
+		const int Neighbours[6][3] = { { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 }, { 0, 0, 1 }, { 0, 0, -1 } };
+		for (size_t head = 0; head < cells.size() && result.first < want; ++head) {
+			const Cell cell = cells[head];
+			if (cell.units > 0) {
+				const int units = std::min(cell.units, want - result.first);
+				result.first += units;
+				taken.push_back({ cell.x, cell.y, cell.z, cell.units - units });
+			}
+			for (const auto& d : Neighbours) {
+				const int nx = cell.x + d[0], ny = cell.y + d[1], nz = cell.z + d[2];
+				if (cells.size() >= MaxCells || visited(nx, ny, nz)) continue;
+				const int units = family->units(static_cast<uint8_t>(getBlock(nx, ny, nz)));
+				if (units > 0) cells.push_back({ nx, ny, nz, units });
+			}
+		}
+		for (const Cell& cell : taken) {
+			result.second.push_back({ cell.x, cell.y, cell.z });
+			if (commit) setBlock(cell.x, cell.y, cell.z, cell.units == 0 ? 0 : family->block(cell.units));
+		}
+		return result;
+	}
+
 	int VoxelWorld::hitBlock(int x, int y, int z) {
 		const int block = getBlock(x, y, z);
 		if (block == 0) return -2;
