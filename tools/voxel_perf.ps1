@@ -80,6 +80,8 @@ try {
     while (-not (Test-Path $stateFile)) { Start-Sleep -Milliseconds 200 }
     do { Start-Sleep -Milliseconds 250; $s = Read-State } while (-not $s -or $s.pending -ne 0 -or $s.meshing -ne 0 -or $s.loaded -lt $s.chunks -or -not $s.on_ground)
     Write-Host ("loaded {0} chunks ({1} quads) in {2:N1} s from the start" -f $s.loaded, $s.quads, ((Get-Date) - $launched).TotalSeconds)
+    $memory = Get-Process -Id $app.Id
+    Write-Host ("memory after the load: {0:N0} MB working set, {1:N0} MB private" -f ($memory.WorkingSet64 / 1MB), ($memory.PrivateMemorySize64 / 1MB))
 
     $still = [double]$Seconds
     Set-Script "perf_still" @()
@@ -90,6 +92,8 @@ try {
 
     Set-Script "perf_walk" @(,@("W", 0.0, 1000.0))
     Sample-Frames "walking" $still
+    $memory = Get-Process -Id $app.Id
+    Write-Host ("memory after walking: {0:N0} MB working set, {1:N0} MB private" -f ($memory.WorkingSet64 / 1MB), ($memory.PrivateMemorySize64 / 1MB))
 } finally {
     if (-not $app.HasExited) { Stop-Process -Id $app.Id -Force }
 }
