@@ -879,7 +879,7 @@ Goal: the player sees a right arm that holds the selected item and swings it on 
 - [x] **42.2** Arrows: an item that stacks (`VoxelGen.ARROW`, made 4 at a time from a wood and a tooth). An arrow falls under gravity
   (`resources/scripts/VoxelArrows.py`, tested in `tools/test_voxel_arrows.py`), stops at the first solid block (it lies there, for
   the player to take) or the first creature it reaches, and is spent after 6 s. Checked in the engine by `voxel_game_check.py`.
-- [~] **42.3** Not yet: the bow's draw is not drawn on the model (no draw clip), the arrow has no orientation (its body is a box),
+- [~] **42.3** Not yet: the bow's draw is not drawn on the model (no draw clip), the arrow now points along its flight (`VoxelArrows.facing`, applied with the new `set_mesh_body_rotation`, checked in `tools/test_voxel_arrows.py`; its look in play is not yet checked),
   and the bow's hand offset is not right yet: it now uses the sword's x and y (-0.15, -0.02, -0.06, from `held_items.json`), which
   shows the bow whole in `voxel_view_shot.ps1 -Item bow`, but the grip still sits above the palm, not in it. Blind shifts of the
   offset moved it little, so the next step is a look by eye, then a few measured moves.
