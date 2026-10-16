@@ -75,6 +75,15 @@ function Read-Count($folder, $item) {
     return $r
 }
 
+# A number the game holds (an expression over `game`), read back through a file the game writes.
+function Read-Int($folder, $expr) {
+    $tag = "int_" + [guid]::NewGuid().ToString("N").Substring(0, 10)
+    Send-Code $folder $tag ("import json`nv = $expr`nwith open('cg_control/$tag.json', 'w') as f:`n    json.dump({'value': v}, f)`n")
+    $r = Wait-Result $folder $tag 10
+    Remove-Item -Force (Join-Path $folder "cg_control/$tag.json") -ErrorAction SilentlyContinue
+    if ($r) { return [int]$r.value } else { return -1 }
+}
+
 # The block, damage stage and torch of a cell in one game, as the game sees them now.
 function Read-Cell($folder, $cell) {
     $tag = "cell_" + [guid]::NewGuid().ToString("N").Substring(0, 10)
@@ -271,6 +280,18 @@ with open("cg_control/net_cells.json", "w") as f:
     # and a bad op is reported as an error with the game still running.
     $cmd = Send-Command $second "net_voxel_edit" "voxel_edit" @{ op = "hit"; c = $above; swings = 1 }
     $a8 = Wait-Cell $base $above { param($r) $r.damage -eq 1 }
+    # A falling block the host starts is shown moving on the client, then lands there (VoxelNetSync, moves). The cell at top+2
+    # is cleared, and sand is set at top+3: it falls onto the stone at top+1 through top+2.
+    $fall = @($x, ($top + 3), $z)
+    $landing = @($x, ($top + 2), $z)
+    $shownBefore = Read-Int $second "game.net_moves_shown"
+    Send-Code $base "net_a_fall" ("game.world.set_block($($landing[0]), $($landing[1]), $($landing[2]), 0)`n" +
+        "game.world.set_block($($fall[0]), $($fall[1]), $($fall[2]), 4)`n")
+    $fallA = Wait-Cell $base $landing { param($r) $r.block -eq 4 }
+    $fallB = Wait-Cell $second $landing { param($r) $r.block -eq 4 }
+    $shownAfter = Read-Int $second "game.net_moves_shown"
+    Check "a falling block the host starts is shown moving on the client, and lands on both" (($null -ne $fallA) -and ($null -ne $fallB) -and ($shownAfter -gt $shownBefore))
+
     Check "a voxel_edit control command from a client reaches the host" (($null -ne $cmd) -and ($cmd.ok -eq $true) -and ($null -ne $a8))
     $bad = Send-Command $second "net_voxel_bad" "voxel_edit" @{ op = "dig"; c = $above }
     Check "a bad voxel_edit is reported as an error" (($null -ne $bad) -and ($bad.ok -eq $false) -and ($bad.error -match "op must be"))

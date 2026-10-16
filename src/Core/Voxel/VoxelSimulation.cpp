@@ -66,8 +66,23 @@ namespace CGEngine {
 		move.duration = seconds >= 0.0 ? seconds : moveDuration;
 		reserved.insert(keyOf(toX, toY, toZ));
 		moves.push_back(move);
+		if (recordStarts) started.push_back(move);
 		// The source is cleared now, so the block is drawn leaving it rather than in two places.
 		set(world, fromX, fromY, fromZ, 0);
+	}
+
+	void VoxelSimulation::showMove(int fromX, int fromY, int fromZ, int toX, int toY, int toZ, uint8_t block, double seconds) {
+		Move move;
+		move.from[0] = fromX;
+		move.from[1] = fromY;
+		move.from[2] = fromZ;
+		move.to[0] = toX;
+		move.to[1] = toY;
+		move.to[2] = toZ;
+		move.block = block;
+		move.elapsed = 0.0;
+		move.duration = seconds >= 0.0 ? seconds : moveDuration;
+		moves.push_back(move);
 	}
 
 	void VoxelSimulation::advanceMoves(VoxelWorld& world, double dt) {

@@ -155,6 +155,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
         self.net_snapshot = False       # send every edited cell next frame (a new client, or a load on the host)
         self.net_requests = {}          # the client's requests the host has not answered: id -> what this client did at once (settle_request)
         self.net_request_id = 0         # the id of the last request this client sent
+        self.net_moves_shown = 0        # falling blocks the host started that this client has shown (VoxelNetSync)
         self.net_pos_timer = 0.0
         self.net_applied = 0            # cell states applied to this world (a client)
         self.remote_pos = None          # the other player's feet and yaw, from their last position message
@@ -234,6 +235,8 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
             # A client does not run the block physics: the host does, and its changes arrive as cells (VoxelNet).
             if not self.net_client:
                 self.world.simulate(dt, SIM_BUDGET_MS, SIM_TICK)
+            else:
+                self.world.advance_moves(dt)   # the host's falling blocks, shown as the host started them (VoxelNetSync)
             self.update_mouse()
             self.update_player(dt)
             self.collect_drops()

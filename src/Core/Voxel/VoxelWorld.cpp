@@ -824,6 +824,7 @@ namespace CGEngine {
 
 	void VoxelWorld::setRecordChanges(bool on) {
 		recordChanges = on;
+		simulation.setRecordStarts(on);
 		if (!on) changedCells.clear();
 	}
 

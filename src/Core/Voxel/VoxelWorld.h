@@ -229,6 +229,13 @@ namespace CGEngine {
 		void setRecordChanges(bool on);
 		// The cells changed since the last call, as (x, y, z), each once. Forgets them.
 		std::vector<std::array<int, 3>> takeChanges();
+		// The falling blocks that began since the last call, while recording is on (the host sends them to its client).
+		std::vector<VoxelSimulation::Move> takeMoveStarts() { return simulation.takeStarted(); }
+		// A falling block another process started (see VoxelSimulation::showMove), and the advance of the moves in flight.
+		void showMove(int fromX, int fromY, int fromZ, int toX, int toY, int toZ, uint8_t block, double seconds) {
+			simulation.showMove(fromX, fromY, fromZ, toX, toY, toZ, block, seconds);
+		}
+		void advanceMoves(double dt) { simulation.advance(*this, dt); }
 		// Every cell with an edit, a torch or damage, loaded or not, as (x, y, z).
 		std::vector<std::array<int, 3>> editedCells() const;
 		// Sets the damage stage of the block at (x, y, z); 0 clears it. A client takes the stage a host sends this way.

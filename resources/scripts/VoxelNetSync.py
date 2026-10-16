@@ -78,11 +78,15 @@ class NetMixin:
         if self.net_snapshot:
             changed |= {tuple(c) for c in self.world.edited_cells()}
             self.net_snapshot = False
+        starts = self.world.take_move_starts()   # the falling blocks that began this frame
         if not self.net.connected:
             return
         cells = [self.cell_state(cell) for cell in sorted(changed) if self.loaded_at(cell)]
         if cells:
             self.net.send({"t": "cells", "cells": cells})
+        # After the cells, so the source is already clear when the client starts drawing the block leaving it.
+        if starts:
+            self.net.send({"t": "moves", "moves": [[m[0], *m[1], *m[2], m[3]] for m in starts]})
 
     def apply_remote(self, message):
         kind = message.get("t")
@@ -96,6 +100,10 @@ class NetMixin:
         elif kind == "cells" and self.net_client:
             for entry in message["cells"]:
                 self.set_remote(tuple(entry[:3]), tuple(entry[3:]))
+        elif kind == "moves" and self.net_client:
+            for block, fx, fy, fz, tx, ty, tz, seconds in message["moves"]:
+                self.world.show_move(fx, fy, fz, tx, ty, tz, block, seconds)
+                self.net_moves_shown += 1
 
     def apply_request(self, request):
         """A client's edit, under the host's rules (decide_request). The host answers each request that has an id with an ack: whether

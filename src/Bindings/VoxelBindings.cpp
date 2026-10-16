@@ -274,6 +274,19 @@ void bindVoxel(py::module_& m) {
         .def("set_recording", &VoxelWorld::setRecordChanges, py::arg("on"),
              "Record the cells that change (blocks, torches, damage) for take_changes. The host turns it on.")
         .def("take_changes", &VoxelWorld::takeChanges, "The cells changed since the last call, as (x, y, z), each once.")
+        .def("take_move_starts", [](VoxelWorld& world) {
+            py::list result;
+            for (const VoxelSimulation::Move& move : world.takeMoveStarts()) {
+                result.append(py::make_tuple(static_cast<int>(move.block),
+                    py::make_tuple(move.from[0], move.from[1], move.from[2]),
+                    py::make_tuple(move.to[0], move.to[1], move.to[2]), move.duration));
+            }
+            return result;
+        }, "The falling blocks that began since the last call (recording on): a list of (block, from, to, seconds).")
+        .def("show_move", &VoxelWorld::showMove, py::arg("fx"), py::arg("fy"), py::arg("fz"), py::arg("tx"), py::arg("ty"),
+             py::arg("tz"), py::arg("block"), py::arg("seconds"),
+             "Show a falling block that another process started: it moves from (fx, fy, fz) to (tx, ty, tz) in seconds, then lands.")
+        .def("advance_moves", &VoxelWorld::advanceMoves, py::arg("dt"), "Advance the falling blocks in flight by dt seconds.")
         .def("edited_cells", &VoxelWorld::editedCells, "Every cell with an edit, a torch or damage, loaded or not, as (x, y, z).")
         .def("set_damage", &VoxelWorld::setDamage, py::arg("x"), py::arg("y"), py::arg("z"), py::arg("stage"),
              "Set the damage stage of a block; 0 clears it. A client takes the stage the host sends.")
