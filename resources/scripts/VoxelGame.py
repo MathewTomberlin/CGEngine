@@ -25,6 +25,7 @@ import VoxelConsole
 import VoxelDrops
 import VoxelGen
 import VoxelInventory
+import VoxelEquipment
 import VoxelNet
 import VoxelParticles
 import VoxelNight
@@ -120,6 +121,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
         self.slot = 0                   # the hotbar slot placing uses
         self.inventory = VoxelInventory.Inventory()   # what the player holds, by slot (the hotbar is the first row)
         self.offhand = None             # the item in the left hand (a shield, or None): F moves it, Q raises a shield
+        self.equipment = VoxelEquipment.Equipment(VoxelGen.EQUIPMENT)   # the armour worn (roadmap 39.3, 39.4)
         self.offhand_uses = VoxelGen.SHIELD_USES   # the blocked bites the shield in the left hand has left (wear_shield)
         self.creative = os.environ.get("VOXEL_CREATIVE", "0") == "1"   # placing takes nothing, breaking gives nothing
         self.inventory_open = False     # the inventory screen is up: the world stands still and the mouse is free
@@ -564,6 +566,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
         length = math.hypot(dx, dz)
         speed = FLY_SPEED if self.flying else (WALK_SPEED * WATER_SPEED if self.swimming else WALK_SPEED)
         speed *= self.move_speed
+        speed *= self.equipment.speed_factor()
         if length > 0.0:
             dx, dz = dx / length * speed, dz / length * speed
         self.vel[0], self.vel[2] = dx, dz
@@ -573,17 +576,17 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
         elif self.swimming:
             if self.key("Space") and self.at_surface():
                 # A jump from the surface lifts the player out onto a bank a block higher.
-                self.vel[1] = physics.JUMP_SPEED
+                self.vel[1] = physics.JUMP_SPEED * self.equipment.jump_factor()
             else:
                 # The vertical speed eases towards the swim speed: up while Space is held, down otherwise.
                 target = WATER_RISE if self.key("Space") else -WATER_SINK
                 self.vel[1] += (target - self.vel[1]) * min(1.0, dt * WATER_DRAG)
         elif self.key("Space") and self.on_ground:
-            self.vel[1] = physics.JUMP_SPEED
+            self.vel[1] = physics.JUMP_SPEED * self.equipment.jump_factor()
         elif (self.auto_jump and self.on_ground and length > 0.0
               and physics.auto_jump_wanted(self.world.is_solid, self.pos, (dx / speed, dz / speed) if speed else (0.0, 0.0))):
             # Auto jump: the walk is stopped by a wall the player can climb over (a phone cannot walk and jump at once).
-            self.vel[1] = physics.JUMP_SPEED
+            self.vel[1] = physics.JUMP_SPEED * self.equipment.jump_factor()
 
         # Physics waits until the chunk under the player is in the world, so the player does not fall through air.
         if self.world.is_loaded(*self.chunk_under_player()):
@@ -859,7 +862,8 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
         self.inventory.return_held()
         StateFile.write_json(INVENTORY_FILE, {"slots": self.inventory.to_list(), "slot": self.slot, "offhand": self.offhand,
                                               "offhand_uses": self.offhand_uses,
-                                              "drops": self.drops.to_list(), "recipes": self.crafting.to_list()})
+                                              "drops": self.drops.to_list(), "recipes": self.crafting.to_list(),
+                                              "equipment": self.equipment.to_list()})
         self.notify("Saved")
 
     def load_world(self):
@@ -883,6 +887,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
             self.offhand_uses = min(max(int(data.get("offhand_uses", VoxelGen.SHIELD_USES)), 1), VoxelGen.SHIELD_USES)
             self.drops.load_list(data.get("drops", []), lambda item: VoxelGen.ITEM_COLOURS.get(item, (0.8, 0.8, 0.8)))
             self.crafting.load_list(data.get("recipes", []))
+            self.equipment.load_list(data.get("equipment"))
         except (OSError, ValueError, TypeError, AttributeError):
             pass
 

@@ -41,6 +41,8 @@ namespace CGEngine {
         void setWindow(RenderWindow* w);
         /// The characters typed since the last call, in order, and empties the buffer. Games read it for text entry.
         static std::u32string takeTypedText();
+        /// The vertical mouse wheel notches turned since the last call (positive is up), and resets them to zero.
+        static float takeMouseWheel();
         optional<Vector2i> getCursorPosition();
         /// <summary>
         /// Clear the the domains map.

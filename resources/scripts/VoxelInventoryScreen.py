@@ -16,6 +16,7 @@ import VoxelGen
 import VoxelInventory
 import VoxelNet
 import VoxelParticles
+import VoxelEquipment
 import VoxelRecipes
 import VoxelPhysics as physics
 from VoxelShapes import boxes_arrays, mix, outline_arrays
@@ -24,7 +25,18 @@ import StateFile
 from VoxelConfig import *
 
 
+# The armour slots: a column on the left of the screen, beside the crafting panel. Each slot is a box with its name and the worn
+# piece's name beside it (window pixels).
+EQUIPMENT_LEFT = 8
+EQUIPMENT_TOP = 76
+EQUIPMENT_ROW = 44
+EQUIPMENT_BOX = 36
+EQUIPMENT_LABELS = {"head": "Head", "chest": "Chest", "legs": "Legs", "feet": "Feet", "gloves": "Gloves"}
+
+
 class InventoryMixin:
+    craft_scroll = 0           # the first recipe the scrollbox shows (its offset into the visible recipes)
+    craft_wheel = 0.0          # wheel notches not yet applied to the scroll (a trackpad turns in fractions)
     def item_colour(self, item):
         """An item's colour as (r, g, b, 255), for its swatch."""
         r, g, b = VoxelGen.COLOURS.get(item) or VoxelGen.ITEM_COLOURS.get(item, WHITE)
@@ -92,7 +104,95 @@ class InventoryMixin:
             key = hotbar_key(index) if row == 0 else ""
             self.draw_text("key_%d" % index, key, (left + 4, top + 1), 12, (200, 200, 200, 255))
 
+    def equipment_box_at(self, x, y):
+        """The armour slot whose box is under the window point, or None."""
+        for index, slot in enumerate(VoxelEquipment.SLOTS):
+            left, top = EQUIPMENT_LEFT, EQUIPMENT_TOP + EQUIPMENT_ROW * index
+            if left <= x < left + EQUIPMENT_BOX and top <= y < top + EQUIPMENT_BOX:
+                return slot
+        return None
+
+    def click_equipment(self, slot):
+        """A click on an armour box. With a piece of armour held (the cursor, which follows the mouse), the piece goes on, and the
+        piece it replaces is held in its place; with nothing held, the worn piece is taken off into the cursor."""
+        held = self.inventory.held
+        worn = self.equipment.worn[slot]
+        if held and self.equipment.is_armour(held[0]):
+            item = held[0]
+            if self.equipment.slot_of(item) != slot:
+                self.notify("The %s goes on the %s" % (VoxelGen.NAMES.get(item, "piece"), self.equipment.slot_of(item)))
+                return
+            if worn is not None and held[1] > 1 and not self.inventory.fits(worn):
+                self.notify("No room for the %s" % VoxelGen.NAMES.get(worn, "piece"))
+                return
+            if held[1] > 1:
+                held[1] -= 1
+            else:
+                self.inventory.held = None
+            self.equipment.wear(item)
+            if worn is not None:
+                if self.inventory.held is None:
+                    self.inventory.held = [worn, 1]
+                else:
+                    self.inventory.add(worn)
+            self.notify("Wearing the %s" % VoxelGen.NAMES.get(item, "piece"))
+        elif held:
+            self.notify("Only armour goes on the armour slots")
+        elif worn is not None:
+            self.inventory.held = [worn, 1]
+            self.equipment.take_off(slot)
+
+    def wear_from_slot(self, index):
+        """Puts on the armour in a slot (one piece). The piece it replaces goes back into the inventory; with no room for it, nothing
+        changes."""
+        stack = self.inventory.slots[index]
+        if not stack or self.inventory.held or not self.equipment.is_armour(stack[0]):
+            return
+        item = stack[0]
+        replaced = self.equipment.worn[self.equipment.slot_of(item)]
+        stack[1] -= 1
+        if stack[1] <= 0:
+            self.inventory.slots[index] = None
+        if replaced is not None and not self.inventory.fits(replaced):
+            # Undo: the piece goes back to its slot.
+            if self.inventory.slots[index] is None:
+                self.inventory.slots[index] = [item, 1]
+            else:
+                self.inventory.slots[index][1] += 1
+            self.notify("No room for the %s" % VoxelGen.NAMES.get(replaced, "piece"))
+            return
+        self.equipment.wear(item)
+        if replaced is not None:
+            self.inventory.add(replaced)
+        self.notify("Wearing the %s" % VoxelGen.NAMES.get(item, "piece"))
+
+    def update_equipment_bar(self):
+        """The armour slots, beside the crafting panel while the inventory is open: a box a slot with the worn piece's colour, its
+        name beside it and the piece's name under it. The bonuses are always shown at the top left, in a small font."""
+        hover = self.equipment_box_at(*cge.mouse_position()) if self.inventory_open else None
+        for index, slot in enumerate(VoxelEquipment.SLOTS):
+            left, top = EQUIPMENT_LEFT, EQUIPMENT_TOP + EQUIPMENT_ROW * index
+            if not self.inventory_open:
+                self.hide_rect("equip_box_%d" % index, (left, top, EQUIPMENT_BOX, EQUIPMENT_BOX))
+                self.draw_text("equip_name_%d" % index, "", (0, 0), 11)
+                self.draw_text("equip_piece_%d" % index, "", (0, 0), 11)
+                continue
+            item = self.equipment.worn[slot]
+            fill = tuple(int(c * 255) for c in VoxelGen.ITEM_COLOURS[item]) + (255,) if item is not None else (30, 30, 36, 225)
+            outline = (255, 255, 255, 255) if hover == slot else (130, 130, 140, 255)
+            self.draw_rect("equip_box_%d" % index, (left, top, EQUIPMENT_BOX, EQUIPMENT_BOX), fill, outline, 2, layer=985)
+            self.draw_text("equip_name_%d" % index, EQUIPMENT_LABELS[slot], (left + EQUIPMENT_BOX + 6, top + 2), 11, (230, 230, 220, 255))
+            piece = VoxelGen.NAMES.get(item, "") if item is not None else "empty"
+            self.draw_text("equip_piece_%d" % index, piece, (left + EQUIPMENT_BOX + 6, top + 16), 11,
+                           (200, 200, 190, 255) if item is not None else (130, 130, 130, 255))
+        self.draw_text("equip_bonus", self.equipment.summary(), (14, 54), 11, (220, 220, 200, 255))
+
     def update_inventory_screen(self):
+        """Hides the key help line while the inventory is open: the crafting panel's grid sits under it, and the two would overlap."""
+        help_shown = not self.inventory_open
+        if help_shown != getattr(self, "help_shown", True):
+            cge.set_text_body("hud_help", HELP_TEXT if help_shown else "")
+            self.help_shown = help_shown
         """The inventory screen: a panel over the two rows above the hotbar, its title and how to use it, and the held stack, which
         follows the mouse. All of it is hidden while the screen is closed."""
         width = COLUMNS * SLOT_SIZE + (COLUMNS - 1) * SLOT_GAP
@@ -109,6 +209,7 @@ class InventoryMixin:
             self.draw_text("inv_title", "", (0, 0), 22)
             self.draw_text("inv_hint", "", (0, 0), 13)
         self.update_tooltip()
+        self.update_equipment_bar()
         held = self.inventory.held if self.inventory_open else None
         if held is None:
             self.hide_rect("held", (0, 0, 1, 1))
@@ -166,6 +267,21 @@ class InventoryMixin:
         rows = [(left + 8, top + CRAFT_HEADER + CRAFT_GRID + i * CRAFT_ROW, inv_width + 12, CRAFT_ROW - 4) for i in range(shown)]
         return panel, button, options, rows
 
+    def craft_scroll_range(self, count):
+        """The most the recipe list can scroll: the recipes beyond the CRAFT_ROWS shown."""
+        return max(0, count - CRAFT_ROWS)
+
+    def craft_track(self, panel):
+        """The scrollbar's track at the right of the recipe rows, in window pixels: (x, y, width, height)."""
+        left, top, width, height = panel
+        rows_top = top + CRAFT_HEADER + CRAFT_GRID
+        return (left + width - 12, rows_top, 6, CRAFT_ROWS * CRAFT_ROW - 4)
+
+    def scroll_crafting(self, notches):
+        """Moves the recipe list by whole notches (positive is up), clamped to its range."""
+        visible = self.crafting.visible(self.creative)
+        self.craft_scroll = min(max(self.craft_scroll - notches, 0), self.craft_scroll_range(len(visible)))
+
     def craft_grid_boxes(self, panel):
         """The crafting grid's cells (row by row, GRID by GRID) and the output box, in window pixels, for a panel from craft_layout.
         The output sits to the right of the grid, with an arrow between them."""
@@ -215,6 +331,7 @@ class InventoryMixin:
         elif kind == "option":
             self.crafting.category = value
             self.crafting.dropdown_open = False
+            self.craft_scroll = 0
         elif kind == "cell":
             self.crafting.click_cell(value, self.inventory, secondary)
         elif kind == "output":
@@ -227,6 +344,7 @@ class InventoryMixin:
                 self.notify("Inventory full: no room for the %s" % VoxelRecipes.describe(recipe["makes"]))
         elif kind == "row":
             recipes = self.crafting.visible(self.creative)
+            value += self.craft_scroll   # a row is one of the rows shown, from the scroll
             if value >= len(recipes):
                 return
             recipe = recipes[value]
@@ -248,8 +366,20 @@ class InventoryMixin:
         the player knows in that category. A recipe with an item missing is drawn dim, and says what it needs. Hidden while the
         inventory screen is closed."""
         visible = self.crafting.visible(self.creative) if self.inventory_open else []
+        self.craft_scroll = min(self.craft_scroll, self.craft_scroll_range(len(visible)))
+        shown_recipes = visible[self.craft_scroll:self.craft_scroll + CRAFT_ROWS]
         panel, button, options, rows = self.craft_layout(len(visible))
         cells, output = self.craft_grid_boxes(panel)
+        track = self.craft_track(panel)
+        if self.inventory_open and self.craft_scroll_range(len(visible)) > 0:
+            span = self.craft_scroll_range(len(visible))
+            thumb_height = max(12, track[3] * CRAFT_ROWS // len(visible))
+            thumb_top = track[1] + round((track[3] - thumb_height) * self.craft_scroll / span)
+            self.draw_rect("craft_track", track, (40, 40, 48, 255), (0, 0, 0, 0), 0, layer=992)
+            self.draw_rect("craft_thumb", (track[0], thumb_top, track[2], thumb_height), (150, 150, 160, 255), (0, 0, 0, 0), 0, layer=993)
+        else:
+            self.hide_rect("craft_track", track)
+            self.hide_rect("craft_thumb", track)
         if not self.inventory_open:
             for index in range(VoxelRecipes.GRID * VoxelRecipes.GRID):
                 self.hide_rect("grid_cell_%d" % index, (0, 0, 1, 1))
@@ -295,12 +425,12 @@ class InventoryMixin:
         else:
             self.draw_text("craft_empty", "", (0, 0), 13)
         for index in range(CRAFT_ROWS):
-            if index >= len(visible):
+            if index >= len(shown_recipes):
                 self.hide_rect("craft_row_%d" % index, (0, 0, 1, 1))
                 self.draw_text("craft_name_%d" % index, "", (0, 0), 15)
                 self.draw_text("craft_detail_%d" % index, "", (0, 0), 13)
                 continue
-            recipe = visible[index]
+            recipe = shown_recipes[index]
             lacking = self.crafting.missing(recipe, self.inventory, self.creative)
             box = rows[index]
             edge = (255, 255, 255, 255) if index == self.craft_hover and not lacking else (70, 70, 80, 255)
@@ -375,6 +505,7 @@ class InventoryMixin:
 
     def close_inventory(self):
         self.crafting.dropdown_open = False
+        self.craft_scroll = 0
         self.craft_hover = None
         self.inventory_open = False
         self.inventory_hover = None
@@ -394,11 +525,34 @@ class InventoryMixin:
         self.craft_hover = target[1] if target is not None and target[0] == "row" else None
         left = self.pressed("InventoryLeft", bool(cge.mouse_down("Left")))
         right = self.pressed("InventoryRight", bool(cge.mouse_down("Right")))
+        # The recipe list scrolls with the wheel over the panel, and by a click on its scrollbar (the track, by where it is).
+        self.craft_wheel += cge.mouse_wheel()
+        notches = int(self.craft_wheel)
+        self.craft_wheel -= notches
+        visible = self.crafting.visible(self.creative)
+        panel, _, _, _ = self.craft_layout(len(visible))
+        if notches and inside(panel, mouse_x, mouse_y):
+            self.scroll_crafting(notches)
+        track = self.craft_track(panel)
+        if left and self.craft_scroll_range(len(visible)) > 0 and inside(track, mouse_x, mouse_y):
+            fraction = min(max((mouse_y - track[1]) / track[3], 0.0), 1.0)
+            self.craft_scroll = round(fraction * self.craft_scroll_range(len(visible)))
+            return
         if target is not None:
             if left:
                 self.click_crafting(target)
             elif right and target[0] == "cell":
                 self.click_crafting(target, secondary=True)
+            return
+        box = self.equipment_box_at(mouse_x, mouse_y) if self.inventory_open else None
+        if box is not None:
+            if left:
+                self.click_equipment(box)
+            return
+        shift = bool(cge.key_down("LShift") or cge.key_down("RShift"))
+        if shift and left and self.inventory_hover is not None:
+            # Shift and a left click on a piece of armour in the grid puts it on.
+            self.wear_from_slot(self.inventory_hover)
             return
         if self.inventory_hover is None:
             return

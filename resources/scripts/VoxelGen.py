@@ -141,6 +141,38 @@ ITEM_NAMES = {HIDE: "hide", PICKAXE: "pickaxe", IRON_PICKAXE: "iron pickaxe", SW
               BONE_BLADE: "bone blade", SHOVEL: "shovel", BUCKET: "bucket", WATER_BUCKET: "water bucket", LAVA_BUCKET: "lava bucket",
               BOW: "bow", ARROW: "arrow"}
 NAMES.update(ITEM_NAMES)
+# Armour: a piece is worn in its slot (VoxelEquipment). Its data is resources/voxel_equipment.json; each name in that file must be a
+# constant here, so a typo is an error at load and not a silent gap. Its name, colour and recipe come from the same file and the recipes.
+LEATHER_CAP, LEATHER_TUNIC, LEATHER_LEGGINGS, LEATHER_BOOTS, LEATHER_GLOVES = range(53, 58)
+
+
+def _equipment_table():
+    """The armour table from resources/voxel_equipment.json (VOXEL_EQUIPMENT picks another file): item id -> {slot, speed, jump, name}.
+    Also sets the pieces' names and colours, so the inventory shows them."""
+    if os.environ.get("VOXEL_EQUIPMENT"):
+        path = os.environ["VOXEL_EQUIPMENT"]
+    else:
+        here = os.path.dirname(os.path.abspath(__file__))
+        candidates = [os.path.join(here, "voxel_equipment.json"), os.path.join(here, os.pardir, "voxel_equipment.json")]
+        path = next((c for c in candidates if os.path.exists(c)), None)
+        if path is None:
+            raise FileNotFoundError("voxel_equipment.json was not found beside the scripts or in resources")
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+    table = {}
+    for constant, entry in data["items"].items():
+        if constant not in globals() or not isinstance(globals()[constant], int):
+            raise ValueError("voxel_equipment.json names %r, which VoxelGen does not define" % constant)
+        item = globals()[constant]
+        table[item] = {"slot": entry["slot"], "speed": float(entry.get("speed", 0.0)), "jump": float(entry.get("jump", 0.0)),
+                       "name": entry["name"]}
+        ITEM_NAMES[item] = entry["name"]
+        NAMES[item] = entry["name"]
+        ITEM_COLOURS[item] = tuple(entry["colour"])
+    return table
+
+
+EQUIPMENT = _equipment_table()
 PICKAXE_BLOCKS = (STONE, COAL, IRON, BRICK, OBSIDIAN)   # the blocks a pickaxe mines faster (its block_damage, below)
 # A tool's durability is the swings that hit a block it can use before it breaks (one use a swing), and its tier is the hardest
 # block it mines (BLOCK_TIER). A block that is not listed in BLOCK_TIER needs no tool: stone, coal and iron are mined by hand.

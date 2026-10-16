@@ -40,6 +40,7 @@ namespace {
             {"Up", sf::Keyboard::Scan::Up}, {"Down", sf::Keyboard::Scan::Down}, {"Left", sf::Keyboard::Scan::Left}, {"Right", sf::Keyboard::Scan::Right},
             {"J", sf::Keyboard::Scan::J}, {"K", sf::Keyboard::Scan::K}, {"Space", sf::Keyboard::Scan::Space}, {"Enter", sf::Keyboard::Scan::Enter},
             {"R", sf::Keyboard::Scan::R}, {"Escape", sf::Keyboard::Scan::Escape},
+            {"LShift", sf::Keyboard::Scan::LShift}, {"RShift", sf::Keyboard::Scan::RShift},
             {"1", sf::Keyboard::Scan::Num1}, {"2", sf::Keyboard::Scan::Num2}, {"3", sf::Keyboard::Scan::Num3},
             {"4", sf::Keyboard::Scan::Num4}, {"5", sf::Keyboard::Scan::Num5}, {"6", sf::Keyboard::Scan::Num6},
             {"7", sf::Keyboard::Scan::Num7}, {"8", sf::Keyboard::Scan::Num8}, {"9", sf::Keyboard::Scan::Num9},
@@ -150,7 +151,7 @@ void bindGame(py::module_& m) {
         if (it == gameKeys().end()) throw std::invalid_argument("unknown key '" + name + "'");
         if (unattended() || !screen->hasFocus()) return false;   // a key pressed in another window is not the game's
         return sf::Keyboard::isKeyPressed(it->second);
-    }, py::arg("name"), "True while the named key is held. Names: W A S D Up Down Left Right J K Space Enter Tab R Escape, 0 to 9, F5, F9, F12.");
+    }, py::arg("name"), "True while the named key is held. Names: W A S D Up Down Left Right J K Space Enter Tab R Escape LShift RShift, 0 to 9, F5, F9, F12.");
 
     m.def("find_body", [](const std::string& name) -> Body* {
         return findBody(name);
@@ -375,6 +376,13 @@ void bindGame(py::module_& m) {
         if (!renderer) throw std::runtime_error("the renderer is not running yet");
         renderer->requestScreenshot(path);
     }, py::arg("path"), "Save the next frame as a PNG at path (absolute, or relative to the exe folder).");
+
+    m.def("mouse_wheel", []() {
+        // The notches since the last call; read every frame, so a turn is counted once. Nothing while the game is unattended or not focused.
+        const float ticks = InputMap::takeMouseWheel();
+        if (unattended() || !screen->hasFocus()) return 0.0f;
+        return ticks;
+    }, "The mouse wheel notches turned since the last call: positive is up.");
 
     m.def("mouse_delta", []() -> std::pair<float, float> {
         if (!mouseCaptured) return { 0.0f, 0.0f };

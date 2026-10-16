@@ -5,9 +5,17 @@ namespace CGEngine {
     namespace {
         // Characters typed in the window, collected as events arrive and handed out by InputMap::takeTypedText.
         std::u32string typedText;
+        // The vertical mouse wheel turned since the last call to takeMouseWheel: positive is up, away from the user, in notches.
+        float wheelTicks = 0.0f;
     }
 
     InputMap::InputMap() : window(nullptr) { }
+
+    float InputMap::takeMouseWheel() {
+        const float ticks = wheelTicks;
+        wheelTicks = 0.0f;
+        return ticks;
+    }
 
     std::u32string InputMap::takeTypedText() {
         std::u32string text;
@@ -161,6 +169,9 @@ namespace CGEngine {
             else if (const auto* textEntered = event->getIf<Event::TextEntered>()) {
                 typedText.push_back(textEntered->unicode);
                 callDomain(InputCondition(0, InputType::Character, InputState::Atomic), map<string, any>({ {"evt", textEntered } }));
+            }
+            else if (const auto* wheel = event->getIf<Event::MouseWheelScrolled>()) {
+                if (wheel->wheel == sf::Mouse::Wheel::Vertical) wheelTicks += wheel->delta;
             }
             else if (const auto* mouseMoved = event->getIf<Event::MouseMoved>()) {
                 cursorPosition = mouseMoved->position;

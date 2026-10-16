@@ -768,6 +768,9 @@ Goal: crafting is a small puzzle: the items go in a grid, and the pattern makes 
 
 ## Phase 31: a headless host (from the vision: goal 3, and 18.1 and 23.5)
 Goal: the game runs as a server with no window, so a host owns the world while players connect (and an AI can play).
+  The recipe list is a scrollbox: four rows at a time, the mouse wheel over the panel and a click on its scrollbar scroll it, and a
+  category change returns it to the top (`scroll_crafting`; `tools/voxel_view_shot.ps1 -View scroll` checks the clamping).
+
 - [x] **31.1** The OpenGL calls outside the renderer were in the texture loader, the shader and program code, and the tile upload (`Renderer::uploadVoxelTiles`); meshes and voxel chunks keep their buffers in the renderer and need no context to build. Done: `CGENGINE_HEADLESS=1` skips the window, the context and GLEW (`openGLReady`, `headlessRun` in `src/Core/Engine/GLContext.h`). Shaders and programs are made as empty objects and textures as empty textures, so nothing calls GL; the default program logs `Failed to create default program!` (the named warning). The loop runs at `CGENGINE_HEADLESS_FPS` (60 by default) and draws nothing. Scripts check `cge.is_headless()`; the HUD, hands, outlines and preview are skipped, and `quit`, `screenshot` and the window calls say why they cannot run.
 - [x] **31.1a** `World::startWorld` makes the window and the renderer. A headless start (`CGENGINE_HEADLESS=1`) makes neither, and runs the game's update loop at `CGENGINE_HEADLESS_FPS`. Checked by a 1,231-frame headless run (Debug: 841 chunks loaded, the player on the ground, `headless` in the state file).
 - [x] **31.2** The state file and the control channel work headless, and `tools/test_voxel_net.ps1 -HeadlessHost` runs with a headless host and a windowed client: all 16 link checks pass, and the same test passes with two windowed games.
@@ -923,13 +926,26 @@ written answer (what it would take, and a measured number) and a decision: build
   no CPU. Open: how they are placed (the same rule as torches, `setProp`, or a density-driven scatter).
   Found (code): torches are props (`VoxelWorld::setProp`, `buildPropMesh`), so a decoration can reuse that path. The per-chunk count and
   its frame cost are not measured.
-- [ ] **39.3** Player equipment: a screen with slots for the left and right hands, head, chest, legs, feet and gloves, and a side bar
+- [~] **39.3** Player equipment (the first form is in: five pieces of leather armour, one to each of head, chest, legs, feet and gloves,
+  from hide (`resources/voxel_equipment.json`, `VoxelEquipment.py`); shift and left click on a piece in the inventory puts it on, and a
+  shift and left click on a line of the side bar takes it off; the bar names each worn piece and the total bonuses; the worn pieces save
+  with the inventory; `tools/test_voxel_equipment.py`). Not yet: the hands' slots, a body view, the slots as a panel of their own, and
+  the look in play. The armour slots are boxes in a column on the left, beside the crafting panel (1000 by 500, the game's own default):
+  each box with the slot's name and the worn piece's name beside it. A held piece of armour is clicked onto its box to put it on (the piece it
+  replaces is held in its place), and a click on a worn box with nothing held takes the piece off into the cursor (`click_equipment`;
+  `tools/voxel_view_shot.ps1 -View gear` runs those clicks and checks them). The total bonuses are at the top left, in small type, both with
+  the inventory open and in play.
+  The original question:
+- [ ] **39.3** Player equipment (question): a screen with slots for the left and right hands, head, chest, legs, feet and gloves, and a side bar
   naming each equipped item with its stats, bonuses and penalties. Questions: whether the existing inventory screen can host it
   (`VoxelInventoryScreen.py`), how equipment is stored (a slot list in the save, or a separate file), and how much of it shows on the
   player (the first-person arms show the hands only; a chest or helmet would need a view of the body, which the game does not draw).
   Found (code): the inventory is a 12 by 3 grid (`VoxelInventory.SLOTS`). Equipment is 8 more slots (two hands, head, chest, legs,
   feet, gloves): a second slot list saved with the inventory, and the hands already exist (the held item and the offhand shield).
-- [ ] **39.4** Equipment effects: an item changes movement speed and jump height (by its weight, or by a bonus), and gives bonuses to
+- [~] **39.4** Equipment effects (first form: a piece adds to the walk speed (`speed`) and the jump (`jump`), the sums clamped to
+  `SPEED_LIMITS` and `JUMP_LIMITS`, so a heavy suit's jump stays above the one-block step; the walk and the jump are read in
+  `VoxelGame`). Not yet: the attack, damage and break bonuses. The original question:
+- [ ] **39.4** Equipment effects (question): an item changes movement speed and jump height (by its weight, or by a bonus), and gives bonuses to
   attack speed, damage, and break speed against certain blocks. Questions: where the player's speed and jump are set (in one place
   or many; `VoxelPhysics.py`, `VoxelGame.py`), whether the stats can be one base value plus a sum of modifiers, and the balance risk:
   a heavy suit that makes the jump too low to climb a one-block step (`stepUp` 1.0) would stop the player from walking up the terrain.
