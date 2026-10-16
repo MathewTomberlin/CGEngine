@@ -624,6 +624,57 @@ namespace CGEngine {
 		return result;
 	}
 
+	std::pair<int, std::vector<std::array<int, 3>>> VoxelWorld::pourVolume(int x, int y, int z, int units, int unitOne, bool commit) {
+		// Breadth-first from the cell poured into, over air and the volume cells of the liquid that have room: the nearest cells fill first.
+		struct Cell {
+			int x, y, z, units;
+		};
+		std::pair<int, std::vector<std::array<int, 3>>> result{ 0, {} };
+		if (unitOne < 0 || unitOne > 255) return result;
+		const VolumeLiquid* family = volumeOf(static_cast<uint8_t>(unitOne));
+		if (!family || units <= 0) return result;
+		const size_t MaxCells = 64;
+		// The cells the liquid can go into: air, or the family's cells with room, as (x, y, z, units they hold now).
+		auto holds = [&](int cx, int cy, int cz) -> int {
+			const int block = getBlock(cx, cy, cz);
+			if (block == 0) return 0;
+			const int here = family->units(static_cast<uint8_t>(block));
+			return here > 0 ? here : -1;   // -1: another block, which takes no liquid
+		};
+		std::vector<Cell> cells;
+		std::vector<Cell> filled;
+		auto visited = [&cells](int cx, int cy, int cz) {
+			for (const Cell& c : cells) {
+				if (c.x == cx && c.y == cy && c.z == cz) return true;
+			}
+			return false;
+		};
+		const int start = holds(x, y, z);
+		if (start < 0) return result;
+		cells.push_back({ x, y, z, start });
+		const int Neighbours[6][3] = { { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 }, { 0, 0, 1 }, { 0, 0, -1 } };
+		for (size_t head = 0; head < cells.size() && result.first < units; ++head) {
+			const Cell cell = cells[head];
+			const int room = family->Full - cell.units;
+			if (room > 0) {
+				const int put = std::min(room, units - result.first);
+				result.first += put;
+				filled.push_back({ cell.x, cell.y, cell.z, cell.units + put });
+			}
+			for (const auto& d : Neighbours) {
+				const int nx = cell.x + d[0], ny = cell.y + d[1], nz = cell.z + d[2];
+				if (cells.size() >= MaxCells || visited(nx, ny, nz)) continue;
+				const int here = holds(nx, ny, nz);
+				if (here >= 0 && here < family->Full) cells.push_back({ nx, ny, nz, here });
+			}
+		}
+		for (const Cell& cell : filled) {
+			result.second.push_back({ cell.x, cell.y, cell.z });
+			if (commit) setBlock(cell.x, cell.y, cell.z, family->block(cell.units));
+		}
+		return result;
+	}
+
 	int VoxelWorld::hitBlock(int x, int y, int z) {
 		const int block = getBlock(x, y, z);
 		if (block == 0) return -2;

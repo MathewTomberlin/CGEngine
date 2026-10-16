@@ -101,6 +101,8 @@ class NetMixin:
             support = tuple(int(v) for v in request.get("s", (0, 0, 0)))
             direction = int(request.get("dir", -1))
             swings = int(request.get("swings", 1))
+            want = int(request.get("want", 0))     # a scoop: the units the bucket can take
+            units = int(request.get("units", 0))   # a pour: the units the bucket holds
         except (KeyError, TypeError, ValueError):
             return
         if not self.loaded_at(cell):
@@ -126,14 +128,19 @@ class NetMixin:
         elif op == "scoop":
             kind = self.world.get_block(*cell)
             if kind in VoxelGen.VOLUME_BLOCKS:
-                # A bucket's worth from the volume, as the client takes it: the host's own cells are sent back to the client.
-                taken, _ = self.world.drain_volume(cell[0], cell[1], cell[2], VoxelGen.BUCKET_UNITS, False)
-                if taken >= VoxelGen.BUCKET_UNITS:
-                    _, changed = self.world.drain_volume(cell[0], cell[1], cell[2], VoxelGen.BUCKET_UNITS, True)
-                    if self.net_host:
-                        self.net_touched.update(tuple(c) for c in changed)
+                # The units the client's bucket took from the volume. The host's changed cells are sent back to the client.
+                _, changed = self.world.drain_volume(cell[0], cell[1], cell[2], max(0, want), True)
+                if self.net_host:
+                    self.net_touched.update(tuple(c) for c in changed)
             elif kind in VoxelGen.LIQUIDS:
                 self.world.set_block(cell[0], cell[1], cell[2], VoxelGen.AIR)
+        elif op == "pour":
+            # All the units go in, or none: a bucket that would not empty is refused, and the client puts its water back.
+            if (self.world.get_block(*cell) == VoxelGen.AIR and not physics.cell_in_player(cell, self.pos)
+                    and units > 0 and self.world.pour_volume(cell[0], cell[1], cell[2], units, item, False)[0] == units):
+                _, changed = self.world.pour_volume(cell[0], cell[1], cell[2], units, item, True)
+                if self.net_host:
+                    self.net_touched.update(tuple(c) for c in changed)
         elif op == "place":
             if (item in VoxelGen.COLOURS and item != VoxelGen.TORCH and self.world.get_block(*cell) == VoxelGen.AIR
                     and not physics.cell_in_player(cell, self.pos)):

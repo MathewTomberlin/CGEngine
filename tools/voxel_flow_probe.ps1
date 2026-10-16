@@ -45,7 +45,7 @@ try {
         Invoke-Phase "bucket" "02_bucket"
         $b = Get-Content (Join-Path $control "flow_probe.json") -Raw | ConvertFrom-Json
         if (-not $b.ok) { Write-Host "no slope near the spawn (seed $Seed)"; exit 1 }
-        $b | ConvertTo-Json -Depth 4
+        $b | ConvertTo-Json -Depth 5
         exit 0
     }
     Invoke-Phase $Place "02_flow_place"

@@ -44,7 +44,8 @@ def find_slope():
 
 
 if phase == "bucket":
-    # A bucket on water: four units are not enough to fill it (nothing changes); eight units give a full bucket and the water goes.
+    # A bucket takes what a volume gives, up to its capacity, and knows its units; it tops up with more water; it pours back its
+    # units and is refused when they do not fit.
     spot, direction, tops = find_slope()
     result = {"ok": spot is not None}
     if spot is not None:
@@ -61,19 +62,31 @@ if phase == "bucket":
                             total += b - VoxelGen.WATER_VOLUME_FIRST + 1
             return total
 
-        slot_before4 = game.inventory.slots[game.slot]
+        def slot():
+            return game.inventory.slots[game.slot]
+
+        game.inventory.slots[game.slot] = [VoxelGen.BUCKET, 1]
         world.set_block(c[0], c[1], c[2], VoxelGen.WATER_VOLUME_FIRST + 3)   # 4 units
-        before4 = units_near()
         game.fill_bucket(c, VoxelGen.WATER_VOLUME_FIRST + 3)
-        slot_after4 = game.inventory.slots[game.slot]
-        units_after4 = units_near()
-        world.set_block(c[0], c[1], c[2], VoxelGen.WATER_VOLUME_FULL)        # 8 units
-        before8 = units_near()
+        result["four_taken"] = {"slot": slot(), "units_near_after": units_near()}
+        world.set_block(c[0], c[1], c[2], VoxelGen.WATER_VOLUME_FULL)        # 8 units: tops the bucket up to full
         game.fill_bucket(c, VoxelGen.WATER_VOLUME_FULL)
-        after8 = units_near()
-        result.update({"slot_before_4": slot_before4, "units_before_4": before4, "units_after_4": units_after4, "slot_after_4": slot_after4, "units_before_8": before8,
-                       "units_after_8": after8, "slot_after_8": game.inventory.slots[game.slot],
-                       "cell_after_8": world.get_block(c[0], c[1], c[2])})
+        result["top_up"] = {"slot": slot(), "units_near_after": units_near()}
+        game.fill_bucket(c, VoxelGen.WATER_VOLUME_FULL)   # full already: refused, nothing changes
+        result["full_refused"] = {"slot": slot(), "units_near_after": units_near()}
+        # The placement: aimed at the solid block under c, the bucket's 8 units go into c and the cells round it.
+        for cx in range(c[0] - 3, c[0] + 4):   # clear the water left near the cell, so the cell is free to place into
+            for cz in range(c[2] - 3, c[2] + 4):
+                for cy in range(c[1] - 2, c[1] + 3):
+                    if world.get_block(cx, cy, cz) in WATER_UNITS:
+                        world.set_block(cx, cy, cz, VoxelGen.AIR)
+        game.target = ((x, y, z), (0, 1, 0))
+        placement, reason = game.placement_check()
+        result["placement"] = {"ok": placement is not None, "reason": reason, "cell": placement[0] if placement else None}
+        # Pour the bucket's units into the air and check they all went in.
+        placed, changed = world.pour_volume(c[0], c[1], c[2], slot()[2], VoxelGen.WATER_VOLUME_FIRST, False)
+        result["pour_check"] = {"units": slot()[2], "would_place": placed, "cells_changed": len(changed)}
+        result["selected_name"] = game.selected_name()
     with open("cg_control/flow_probe.json", "w") as f:
         json.dump(result, f, indent=1)
     print("BUCKET PROBE", json.dumps(result)[:300])

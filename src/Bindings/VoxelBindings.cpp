@@ -59,6 +59,10 @@ void bindVoxel(py::module_& m) {
         .def("drain_volume", &VoxelWorld::drainVolume, py::arg("x"), py::arg("y"), py::arg("z"), py::arg("want"), py::arg("commit"),
              "Takes up to want units of a volume, from the cell and the volume cells around it, nearest first (as a bucket does). "
              "Returns (units taken, the cells changed as (x, y, z)). With commit False nothing changes, so the caller can check first.")
+        .def("pour_volume", &VoxelWorld::pourVolume, py::arg("x"), py::arg("y"), py::arg("z"), py::arg("units"), py::arg("unit_one"),
+             py::arg("commit"),
+             "Puts up to units of a liquid (unit_one is the id of one of its units) into the air at the cell and the volume around it, "
+             "nearest first. Returns (units placed, the cells changed as (x, y, z)). With commit False nothing changes.")
         .def("hit_block", &VoxelWorld::hitBlock, py::arg("x"), py::arg("y"), py::arg("z"),
              "Hit the block at (x, y, z). Returns its damage stage (1 to hits - 1), -1 if this hit breaks it, or -2 if there is no block.")
         .def("damage_at", &VoxelWorld::damageAt, py::arg("x"), py::arg("y"), py::arg("z"),

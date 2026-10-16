@@ -102,6 +102,10 @@ namespace CGEngine {
 		// as a bucket does. Returns the units it took and the cells it changed. With commit false it only counts (the cells are
 		// not changed), so a bucket can check there is enough before it takes any.
 		std::pair<int, std::vector<std::array<int, 3>>> drainVolume(int x, int y, int z, int want, bool commit);
+		// Puts up to units of the liquid whose one unit is unitOne into the air at (x, y, z) and the volume cells around it (nearest
+		// first, each cell up to a full volume), as a bucket pours. Returns the units it placed and the cells it changed. With commit
+		// false it only counts. A caller that needs all of them placed checks that the count is units first.
+		std::pair<int, std::vector<std::array<int, 3>>> pourVolume(int x, int y, int z, int units, int unitOne, bool commit);
 		// Every prop as (x, y, z, dir). Props are kept with the edits, so a chunk that unloads keeps them.
 		std::vector<std::array<int, 4>> props() const;
 		// True if the column at (x, z) is in a loaded chunk, so its blocks are real.

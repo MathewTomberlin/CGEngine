@@ -31,7 +31,6 @@ WATER_BLOCKS = (WATER,) + tuple(range(FLOW_FIRST, FLOW_LAST + 1)) + tuple(range(
 WATER_VOLUME_FIRST, WATER_VOLUME_FULL = 128, 135
 LAVA_VOLUME_FIRST, LAVA_VOLUME_FULL = 136, 143
 VOLUME_BLOCKS = tuple(range(WATER_VOLUME_FIRST, LAVA_VOLUME_FULL + 1))   # every volume's unit ids (water and lava)
-BUCKET_UNITS = 8   # the units a bucket holds: a full volume, which a bucket takes from water and gives back when it is placed
 LIQUIDS = WATER_BLOCKS + LAVA_BLOCKS    # every liquid: swimming and the fog under the surface
 STILL_LIQUIDS = ()                   # liquids that do not spread (define_block flows=False): none now, lava flows like water
 OBSIDIAN = 30                       # a hard cube: a lava block that water touches for a while becomes it (REACTIONS)
@@ -159,7 +158,17 @@ WEAPONS = {SWORD: {"damage": 2.5, "durability": 1280}, BONE_BLADE: {"damage": 2,
 # The buckets: an empty one is filled by a strike on a liquid, and a filled one places its liquid (VoxelGame, placement_check).
 BUCKETS = (BUCKET, WATER_BUCKET, LAVA_BUCKET)
 FILLED_BUCKET = {WATER: WATER_BUCKET, LAVA: LAVA_BUCKET}   # the bucket a liquid fills, by the liquid's source block
-BUCKET_LIQUID = {WATER_BUCKET: WATER_VOLUME_FULL, LAVA_BUCKET: LAVA_VOLUME_FULL}   # the liquid a filled bucket places (a full volume), by the bucket
+# How many units a vessel holds when full, by its item. A bucket holds 8 units, which is one full volume. Change the numbers to make
+# bigger or smaller vessels. A filled vessel's stack is [item, 1, units]: the units it holds now (VoxelInventory).
+VESSEL_CAPACITY = {BUCKET: 8, WATER_BUCKET: 8, LAVA_BUCKET: 8}
+FILLED_VESSELS = (WATER_BUCKET, LAVA_BUCKET)   # the vessels that hold a liquid
+# The volume a filled vessel pours, by its item: the id of one unit of the liquid (the units it holds are its own).
+BUCKET_VOLUME = {WATER_BUCKET: WATER_VOLUME_FIRST, LAVA_BUCKET: LAVA_VOLUME_FIRST}
+
+
+def vessel_capacity(item):
+    """The units a vessel holds when full, or None for an item that is not a vessel."""
+    return VESSEL_CAPACITY.get(item)
 MAX_SWINGS = 8                      # the most hits one strike can make (a shovel's harvest on the blocks it lists as harvest)
 
 
