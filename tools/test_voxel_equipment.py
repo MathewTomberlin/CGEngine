@@ -32,7 +32,7 @@ TABLE = {
 worn = eq.Equipment(TABLE)
 
 check("nothing worn: both factors are 1", worn.speed_factor() == 1.0 and worn.jump_factor() == 1.0)
-check("the side bar lists every slot, empty ones too", len(worn.lines()) == len(eq.SLOTS) and worn.lines()[0] == "head: empty")
+check("the side bar lists every slot, empty ones too", len(worn.lines()) == len(eq.SLOTS) and worn.lines()[0] == "Hd -")
 check("armour is what the table lists", worn.is_armour(50) and not worn.is_armour(999))
 check("a slot is the piece's own", worn.slot_of(52) == "feet" and worn.slot_of(999) is None)
 try:
@@ -60,7 +60,8 @@ check("a light suit's speed is clamped at the most it adds", abs(light.speed_fac
 check("a light suit's jump is clamped at the most it adds", abs(light.jump_factor() - (1.0 + eq.JUMP_LIMITS[1])) < 1e-9)
 
 line = worn.lines()[eq.SLOTS.index("head")]
-check("the side bar names the piece with its bonuses", line == "head: helm  speed +5%  jump +0%")
+check("the side bar names the piece in its slot", line == "Hd helm")
+check("the side bar's last line totals the bonuses", worn.summary() == "speed +5%  jump +0%")
 
 saved = worn.to_list()
 loaded = eq.Equipment(TABLE)

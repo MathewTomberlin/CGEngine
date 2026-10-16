@@ -8,6 +8,7 @@ clearing a block (the step-up, VoxelPhysics), so the jump never falls below JUMP
 """
 
 SLOTS = ("head", "chest", "legs", "feet", "gloves")
+SLOT_ABBREVIATIONS = {"head": "Hd", "chest": "Ch", "legs": "Lg", "feet": "Ft", "gloves": "Gl"}
 SPEED_LIMITS = (-0.3, 0.5)      # the most a suit slows or speeds the walk, as a fraction of the walk speed
 JUMP_LIMITS = (-0.1, 0.2)       # the least and most it changes the jump; -0.1 keeps a jump above the one-block step
 
@@ -58,16 +59,18 @@ class Equipment:
         return 1.0 + clamp(self.total("jump"), *JUMP_LIMITS)
 
     def lines(self):
-        """The side bar: one line a slot, naming the piece and its bonuses, or "empty"."""
+        """The side bar: one line a slot, short enough for the left of the screen at the default window (1000 by 500): the slot's
+        abbreviation (SLOT_ABBREVIATIONS) and the piece's name, or "-" when empty."""
         out = []
         for slot in SLOTS:
             item = self.worn[slot]
-            if item is None:
-                out.append("%s: empty" % slot)
-                continue
-            entry = self.table[item]
-            out.append("%s: %s  speed %+d%%  jump %+d%%" % (slot, entry["name"], round(entry["speed"] * 100), round(entry["jump"] * 100)))
+            name = "-" if item is None else self.table[item]["name"]
+            out.append("%s %s" % (SLOT_ABBREVIATIONS[slot], name))
         return out
+
+    def summary(self):
+        """The bar's last line: the total speed and jump bonuses of the worn pieces, after the limits."""
+        return "speed %+d%%  jump %+d%%" % (round((self.speed_factor() - 1.0) * 100), round((self.jump_factor() - 1.0) * 100))
 
     def to_list(self):
         """The slots as a list in SLOTS order, for the save file: the item id, or None."""

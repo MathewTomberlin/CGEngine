@@ -25,6 +25,11 @@ import StateFile
 from VoxelConfig import *
 
 
+EQUIPMENT_BAR_LEFT = 8          # the armour side bar: its left edge, its top, and the width of a line (window pixels)
+EQUIPMENT_BAR_TOP = 272
+EQUIPMENT_BAR_WIDTH = 132
+
+
 class InventoryMixin:
     def item_colour(self, item):
         """An item's colour as (r, g, b, 255), for its swatch."""
@@ -94,18 +99,14 @@ class InventoryMixin:
             self.draw_text("key_%d" % index, key, (left + 4, top + 1), 12, (200, 200, 200, 255))
 
     def equipment_line_at(self):
-        """The top left corner of each line of the armour side bar, in window pixels: to the right of the inventory panel, one line a
-        slot, from the panel's top."""
-        width = COLUMNS * SLOT_SIZE + (COLUMNS - 1) * SLOT_GAP
-        left, top = self.slot_origin(2 * COLUMNS)
-        panel_top = top - 46
-        bar_left = left - 14 + width + 28 + 12
-        return [(bar_left, panel_top + 26 + 22 * index) for index in range(len(VoxelEquipment.SLOTS))]
+        """The top left corner of each line of the armour side bar, in window pixels: on the left of the screen, under the crafting
+        panel and clear of the hotbar (the default window is 1000 by 500). One line a slot, then the totals."""
+        return [(EQUIPMENT_BAR_LEFT, EQUIPMENT_BAR_TOP + 16 * index) for index in range(len(VoxelEquipment.SLOTS) + 1)]
 
     def equipment_slot_at(self, x, y):
         """The armour slot whose side bar line is under the window point, or None."""
         for index, (left, top) in enumerate(self.equipment_line_at()):
-            if left <= x < left + 200 and top <= y < top + 20:
+            if index < len(VoxelEquipment.SLOTS) and left <= x < left + EQUIPMENT_BAR_WIDTH and top <= y < top + 16:
                 return VoxelEquipment.SLOTS[index]
         return None
 
@@ -147,12 +148,12 @@ class InventoryMixin:
 
     def update_equipment_bar(self):
         """The armour side bar: a line a slot, naming the worn piece and its speed and jump bonuses. Shown with the inventory open."""
-        lines = self.equipment.lines() if self.inventory_open else []
+        lines = self.equipment.lines() + [self.equipment.summary()] if self.inventory_open else []
         for index, (left, top) in enumerate(self.equipment_line_at()):
             if self.inventory_open:
-                self.draw_text("equip_%d" % index, lines[index], (left, top), 13, (220, 220, 200, 255))
+                self.draw_text("equip_%d" % index, lines[index], (left, top), 12, (220, 220, 200, 255))
             else:
-                self.draw_text("equip_%d" % index, "", (0, 0), 13)
+                self.draw_text("equip_%d" % index, "", (0, 0), 12)
 
     def update_inventory_screen(self):
         """The inventory screen: a panel over the two rows above the hotbar, its title and how to use it, and the held stack, which

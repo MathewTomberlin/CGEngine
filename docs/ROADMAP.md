@@ -923,9 +923,10 @@ written answer (what it would take, and a measured number) and a decision: build
   its frame cost are not measured.
 - [~] **39.3** Player equipment (the first form is in: five pieces of leather armour, one to each of head, chest, legs, feet and gloves,
   from hide (`resources/voxel_equipment.json`, `VoxelEquipment.py`); shift and left click on a piece in the inventory puts it on, and a
-  shift and left click on a line of the side bar takes it off; the bar names each worn piece with its bonuses; the worn pieces save
+  shift and left click on a line of the side bar takes it off; the bar names each worn piece and the total bonuses; the worn pieces save
   with the inventory; `tools/test_voxel_equipment.py`). Not yet: the hands' slots, a body view, the slots as a panel of their own, and
-  the bar's place at a narrow window (it sits right of the inventory panel and is cut off at 1000 pixels; check it at the game's size).
+  the bar's look in play. The bar is a column on the left of the screen, checked at the default window (1000 by 500, which is the game's
+  own default): each slot's abbreviation and piece, then the total speed and jump.
   The original question:
 - [ ] **39.3** Player equipment (question): a screen with slots for the left and right hands, head, chest, legs, feet and gloves, and a side bar
   naming each equipped item with its stats, bonuses and penalties. Questions: whether the existing inventory screen can host it
