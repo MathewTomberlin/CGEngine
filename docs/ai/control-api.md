@@ -42,7 +42,7 @@ Each command file:
 Loads a scene file (format: `docs/ai/scene-format.md`). Paths are relative to the exe folder.
 
 - params: `path` (string, required)
-- result: `{ "bodies": n, "lights": n, "materials": n }` (counts created)
+- result: `{ "bodies": n, "lights": n, "materials": n, "scripts": n, "loadMs": x }` (counts created; `loadMs` is the wall time of the load)
 - errors: missing file, invalid JSON, unknown material or model, duplicate names
 
 ### `describe_scene`
@@ -109,6 +109,20 @@ Starts a clip on the body's model.
 
 Note: animators belong to the model, so every body built from the same model shares its playback state.
 
+### `run_script`
+Runs a Python file once (format and examples: `docs/ai/script-hooks.md`).
+
+- params: `path` (required; relative to the exe folder or absolute)
+- result: `{ "ran": path }`
+- errors: the Python error text
+
+### `attach_script`
+Attaches a Python module from the `scripts` folder to a named body, for the `start`, `update` or `delete` domain.
+
+- params: `name` (body, required), `module` (required), `domain` (default `"update"`)
+- result: `{ "name", "domain", "scriptId" }`
+- errors: no body, bad domain, module that cannot be loaded
+
 ### `screenshot`
 Saves the next rendered frame as a PNG.
 
@@ -116,6 +130,9 @@ Saves the next rendered frame as a PNG.
 - result: `{ "queued": true, "path": "..." }` immediately. The file appears after the next frame
   is rendered, so poll for the file if you need the image.
 - The saved image is opaque (alpha 255).
+- Use a Windows path (for example `C:/work/shot.png`). Git Bash paths such as `/c/work/shot.png` are read
+  as `C:\c\work\shot.png`, the save fails, and the only trace is a "Failed to save image" line in the
+  engine's console output. The result file still reports `ok: true`.
 
 ### `get_stats`
 - params: none
@@ -132,6 +149,25 @@ Saves the next rendered frame as a PNG.
 
 `tools/test_control_channel.ps1` starts the engine with `scenes/example.json`, runs every command
 above, and checks the results. Run it from the repo root after a Debug build.
+
+## Commands from Python
+
+A script can add a command with `cge.add_command(name, handler)`. The channel runs it for a name that has no built-in
+command. The handler gets the command's `params` as JSON text and returns the result as JSON text; an exception it raises
+is the command's `error`. Built-in names win. Registered in the voxel sample:
+
+### `voxel_edit`
+An edit made as a player's click makes it (`docs/games/voxels.md`), under the same rules.
+
+- params: `op` (required: `hit`, `place`, `prop`, `unprop` or `scoop`), `c` (the cell, required), `id` (for `place`), `s` (the
+  block a torch leans on, for `prop`), `dir` (for `prop`), `swings` (1 or 2, for `hit`)
+- result: `{ "sent", "block", "damage", "prop" }`: the cell now. `sent` is true in a client, where the host applies the
+  edit and sends the cell back, so the result can differ from what the host ends with.
+- errors: a bad `op`, or a cell whose chunk is not loaded. A request the host refuses is not an error (the cell shows that).
+
+```json
+{ "command": "voxel_edit", "params": { "op": "hit", "c": [12, 30, -4], "swings": 1 } }
+```
 
 ## Security
 

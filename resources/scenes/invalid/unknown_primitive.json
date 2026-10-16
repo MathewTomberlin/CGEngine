@@ -1,1 +1,1 @@
-{ "version": 1, "bodies": [ { "name": "blob", "primitive": "sphere" } ] }
+{ "version": 1, "bodies": [ { "name": "blob", "primitive": "pyramid" } ] }

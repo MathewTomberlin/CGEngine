@@ -106,6 +106,7 @@ namespace CGEngine {
 			nodeTransform = bone->getLocalTransform();
 		}
 		glm::mat4 globalTransform = parentTransform * nodeTransform;
+		nodeTransforms[nodeName] = globalTransform;
 
 		//Skin relative to the rest pose: pose = animated global * inverse(rest global)
 		if (skeleton && skeleton->hasBone(nodeName)) {
@@ -123,5 +124,12 @@ namespace CGEngine {
 
 	vector<glm::mat4> Animator::getBoneMatrices() {
 		return pose;
+	}
+
+	bool Animator::getNodeTransform(const string& nodeName, glm::mat4& out) const {
+		auto found = nodeTransforms.find(nodeName);
+		if (found == nodeTransforms.end()) return false;
+		out = found->second;
+		return true;
 	}
 }

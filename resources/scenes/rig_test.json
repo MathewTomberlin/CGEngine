@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "replaceWorld": true,
+  "clips": [ "clips/rig_wave.json" ],
+  "materials": [ { "name": "wood", "diffuseTexture": "brick_tile.png" } ],
+  "lights": [ { "name": "sun", "directional": true, "direction": [0.3, -1, -0.6], "brightness": 0.9, "ambiance": 0.45 } ],
+  "bodies": [
+    { "name": "rig", "model": "models/dungeon/rig_test.fbx", "position": [0, 0, 0], "animation": "rig_wave", "animationLooping": true }
+  ]
+}

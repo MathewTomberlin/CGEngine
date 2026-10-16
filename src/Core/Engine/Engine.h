@@ -8,6 +8,7 @@
 #include "SFML/Graphics.hpp"
 #include "../AssetManager/AssetManager.h"
 #include "../Interpreter/PyInterpreter.h"
+#include "GLContext.h"
 
 namespace CGEngine {
 	extern WindowParameters windowParameters;
@@ -22,6 +23,8 @@ namespace CGEngine {
 	extern function<void()> beginWorld;
 	extern function<Camera*()> getCamera;
 	extern vector<Behavior*> sceneList;
+	// The scene file loaded at start when CGENGINE_SCENE is not set. Empty for none. A program that is one game sets it.
+	extern string defaultScene;
 	extern Logging log;
 	extern AssetManager assets;
 

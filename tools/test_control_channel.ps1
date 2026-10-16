@@ -9,6 +9,9 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+# Unattended: no window is shown and no real keyboard, mouse or cursor input is read (see CGENGINE_UNATTENDED in src/Bindings/GameBindings.cpp).
+$env:CGENGINE_UNATTENDED = "1"
+. (Join-Path $PSScriptRoot "unattended.ps1")
 $exeDir = (Resolve-Path $ExeDir).Path
 $control = Join-Path $exeDir "cg_control"
 $inbox = Join-Path $control "inbox"
@@ -41,7 +44,7 @@ function Wait-Result($id, $timeoutSec = 20) {
 Remove-Item -Recurse -Force $control -ErrorAction SilentlyContinue
 Remove-Item -Force $shot -ErrorAction SilentlyContinue
 $env:CGENGINE_SCENE = "scenes/example.json"
-$app = Start-Process -FilePath (Join-Path $exeDir "main.exe") -WorkingDirectory $exeDir -PassThru
+$app = Start-Unattended (Join-Path $exeDir "main.exe") $exeDir
 Remove-Item Env:CGENGINE_SCENE
 
 try {
@@ -68,6 +71,8 @@ try {
         "13_version"  = @{ file = "scenes/invalid/bad_version.json";       error = "version" }
         "14_vector"   = @{ file = "scenes/invalid/bad_vector.json";        error = "3 numbers" }
         "22_anim"     = @{ file = "scenes/invalid/unknown_animation.json";  error = "unknown animation" }
+        "42_instances"= @{ file = "scenes/invalid/instances_on_model.json";  error = "only applies to primitive" }
+    "23_specular" = @{ file = "scenes/invalid/bad_specular.json";       error = "specular must be between 0 and 1" }
     }
     foreach ($id in ($invalid.Keys | Sort-Object)) {
         Send-Command $id ('{"command":"load_scene","params":{"path":"' + $invalid[$id].file + '"}}')
@@ -92,6 +97,19 @@ try {
     Send-Command "33_clip_bad_bone" '{"command":"load_clip","params":{"path":"clips/invalid/unknown_bone.json"}}'
     Send-Command "34_clip_bad_order" '{"command":"load_clip","params":{"path":"clips/invalid/unordered_keys.json"}}'
     Send-Command "35_clip_duplicate" '{"command":"load_clip","params":{"path":"clips/invalid/duplicate_name.json"}}'
+
+    # Script hooks. The engine runs Python files given by path, and attaches scripts from the scripts folder.
+    $scriptOk = Join-Path $control "run_ok.txt"
+    $okPy = Join-Path $control "control_test_ok.py"
+    Set-Content -Path $okPy -Value ("open(r'" + ($scriptOk -replace '\\', '/') + "', 'w').write('ok')") -Encoding utf8
+    $badPy = Join-Path $control "control_test_bad.py"
+    Set-Content -Path $badPy -Value "this is not python (" -Encoding utf8
+    Send-Command "40_run_ok" ('{"command":"run_script","params":{"path":"' + ($okPy -replace '\\', '/') + '"}}')
+    Send-Command "41_run_bad" ('{"command":"run_script","params":{"path":"' + ($badPy -replace '\\', '/') + '"}}')
+    Send-Command "42_attach_missing_body" '{"command":"attach_script","params":{"name":"no_such_body","module":"ControlHitLogger"}}'
+    Send-Command "43_attach_bad_domain" '{"command":"attach_script","params":{"name":"caveman","module":"ControlHitLogger","domain":"frame"}}'
+    Send-Command "44_attach_missing_module" '{"command":"attach_script","params":{"name":"caveman","module":"no_such_module"}}'
+    Send-Command "45_attach" '{"command":"attach_script","params":{"name":"caveman","module":"ControlHitLogger","domain":"update"}}'
 
     $describe = Wait-Result "01_describe"
     Check "describe_scene returns ok" ($describe -and $describe.ok)
@@ -127,7 +145,7 @@ try {
     Check "load_scene reports a missing file" ((-not $missing.ok) -and ($missing.error -match "cannot open"))
 
     $prims = Wait-Result "07_primitives"
-    Check "primitive scene loads (2 bodies)" ($prims.ok -and $prims.result.bodies -eq 2)
+    Check "primitive scene loads (3 bodies: a cube, a bigger cube and a sphere)" ($prims.ok -and $prims.result.bodies -eq 3)
     $described = Wait-Result "08_describe_primitives"
     $pnames = @($described.result.bodies | ForEach-Object { $_.name })
     Check "primitives appear by name in describe_scene" (($pnames -contains "block") -and ($pnames -contains "block_big"))
@@ -183,6 +201,52 @@ try {
         $expect = $invalid[$id].error
         Check "invalid scene rejected: $($invalid[$id].file)" ((-not $r.ok) -and ($r.error -match [regex]::Escape($expect)))
     }
+
+    $runOk = Wait-Result "40_run_ok"
+    Check "run_script runs a Python file" ($runOk.ok -and (Test-Path $scriptOk))
+    $runBad = Wait-Result "41_run_bad"
+    Check "run_script reports a Python syntax error" ((-not $runBad.ok) -and ($runBad.error -match "SyntaxError|syntax"))
+    $attachMissing = Wait-Result "42_attach_missing_body"
+    Check "attach_script rejects an unknown body" ((-not $attachMissing.ok) -and ($attachMissing.error -match "no body"))
+    $attachDomain = Wait-Result "43_attach_bad_domain"
+    Check "attach_script rejects an unknown domain" ((-not $attachDomain.ok) -and ($attachDomain.error -match "domain"))
+    $attachModule = Wait-Result "44_attach_missing_module"
+    Check "attach_script reports a module it cannot load" ((-not $attachModule.ok) -and ($attachModule.error -match "could not create"))
+    $attach = Wait-Result "45_attach"
+    Check "attach_script returns a script id" ($attach.ok -and $attach.result.domain -eq "update")
+    $hitLog = Join-Path $control "script_hits.log"
+    $hitDeadline = (Get-Date).AddSeconds(10)
+    while (-not (Test-Path $hitLog) -and (Get-Date) -lt $hitDeadline) { Start-Sleep -Milliseconds 200 }
+    Check "attached script runs each update and sees its body" ((Test-Path $hitLog) -and ((Get-Content $hitLog -Raw) -match "caveman"))
+    # Frustum culling: a cube 100000 units away is outside the view, so the renderer skips it and counts it.
+    Send-Command "40_cull_load" '{"command":"load_scene","params":{"path":"scenes/culling_test.json"}}'
+    $cullLoad = Wait-Result "40_cull_load"
+    Check "culling scene loads" ($cullLoad.ok)
+    Send-Command "41_cull_stats" '{"command":"get_stats"}'
+    $cullStats = Wait-Result "41_cull_stats"
+    Check "a body outside the view is culled, not drawn" ($cullStats.ok -and $cullStats.result.culledDraws -ge 1 -and $cullStats.result.drawCalls -ge 1)
+
+    # Instancing: both instances of this body are far outside the view, so each is culled on its own.
+    Send-Command "43_inst_load" '{"command":"load_scene","params":{"path":"scenes/instancing_test.json"}}'
+    $instLoad = Wait-Result "43_inst_load"
+    Check "instanced scene loads" ($instLoad.ok)
+    Send-Command "44_inst_stats" '{"command":"get_stats"}'
+    $instStats = Wait-Result "44_inst_stats"
+    Check "instances outside the view are culled one by one" ($instStats.ok -and $instStats.result.culledInstances -ge 2)
+    # Runtime meshes: a body made from arrays in Python is created, updated and removed, and bad input is rejected.
+    $runtimeScript = Join-Path $PSScriptRoot "runtime_mesh_check.py"
+    Send-Command "50_runtime_mesh" ('{"command":"run_script","params":{"path":"' + ($runtimeScript -replace '\\', '/') + '"}}')
+    $runtimeRan = Wait-Result "50_runtime_mesh"
+    Check "runtime mesh script runs" ($runtimeRan.ok)
+    $runtimeFile = Join-Path $control "runtime_mesh_result.json"
+    $runtimeDeadline = (Get-Date).AddSeconds(10)
+    while (-not (Test-Path $runtimeFile) -and (Get-Date) -lt $runtimeDeadline) { Start-Sleep -Milliseconds 100 }
+    $rm = Get-Content $runtimeFile -Raw | ConvertFrom-Json
+    Check "a runtime mesh body is created, updated and removed" ($rm.created -and $rm.updated -and $rm.remove_existing -and $rm.gone -and -not $rm.remove_missing)
+    Check "runtime mesh rejects a position array that is not whole vertices" ($rm.bad_positions -match "3 numbers per vertex")
+    Check "runtime mesh rejects an index past the last vertex" ($rm.bad_index -match "is outside the")
+    Check "runtime mesh rejects an unknown material" ($rm.unknown_material -match "unknown material")
+    Check "updating a body that is not a runtime mesh fails" ($rm.update_scene_mesh -match "no body named")
 
     Check "engine still running after commands" (-not $app.HasExited)
 }

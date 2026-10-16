@@ -10,6 +10,8 @@
 #include "../Animation/ClipLoader.h"
 #include "../Skeleton/Skeleton.h"
 #include "../Scene/SceneLoader.h"
+#include "../Interpreter/PyInterpreter.h"
+#include "../Scripts/Script.h"
 #include <nlohmann/json.hpp>
 #include <algorithm>
 #include <filesystem>
@@ -59,7 +61,8 @@ namespace CGEngine {
             if (!body) throw std::runtime_error("no body named '" + name + "'");
             model = findModelFor(body);
             if (!model) throw std::runtime_error("body '" + name + "' is not part of an imported model");
-            Animator* animator = model->getAnimator();
+            Animator* animator = body->findInstanceAnimator();
+            if (!animator) animator = model->getAnimator();
             if (!animator) throw std::runtime_error("model of body '" + name + "' has no animation clips");
             return animator;
         }
@@ -124,7 +127,7 @@ namespace CGEngine {
             if (command == "load_scene") {
                 SceneLoadResult scene = SceneLoader::loadFile(params.at("path").get<std::string>());
                 if (!scene.ok) throw std::runtime_error(scene.error);
-                return { {"bodies", scene.bodies}, {"lights", scene.lights}, {"materials", scene.materials} };
+                return { {"bodies", scene.bodies}, {"lights", scene.lights}, {"materials", scene.materials}, {"scripts", scene.scripts}, {"loadMs", scene.loadMs} };
             }
             if (command == "describe_scene") {
                 return describeScene();
@@ -142,6 +145,7 @@ namespace CGEngine {
                 return { {"name", name}, {"position", vec3(t.position)}, {"rotation", vec3(t.rotation)}, {"scale", vec3(t.scale)} };
             }
             if (command == "screenshot") {
+                if (headlessRun) throw std::runtime_error("a headless run draws nothing, so there is no frame to save");
                 std::string path = params.at("path").get<std::string>();
                 renderer->requestScreenshot(path);
                 return { {"queued", true}, {"path", path}, {"note", "written after the next rendered frame"} };
@@ -178,6 +182,30 @@ namespace CGEngine {
                 else if (children != "terminate") throw std::runtime_error("children must be terminate, orphan or inherit");
                 body->deleteBody(termination);
                 return { {"removed", name}, {"children", children} };
+            }
+            if (command == "run_script") {
+                std::string path = params.at("path").get<std::string>();
+                if (!interpreter) throw std::runtime_error("Python is not running");
+                if (!interpreter->runScript(path)) {
+                    throw std::runtime_error(interpreter->lastError.empty() ? "script failed: " + path : interpreter->lastError);
+                }
+                return { {"ran", path} };
+            }
+            if (command == "attach_script") {
+                std::string name = params.at("name").get<std::string>();
+                std::string module = params.at("module").get<std::string>();
+                std::string domain = params.value("domain", std::string("update"));
+                if (domain != "start" && domain != "update" && domain != "delete") {
+                    throw std::runtime_error("domain must be \"start\", \"update\" or \"delete\"");
+                }
+                if (!interpreter) throw std::runtime_error("Python is not running");
+                Body* body = findBodyByName(name);
+                if (!body) throw std::runtime_error("no body named '" + name + "'");
+                // The module must sit in the scripts folder and define create_instance (see docs/ai/script-hooks.md).
+                Script* script = interpreter->createScript(module);
+                if (!script) throw std::runtime_error("could not create a script from module '" + module + "' (see the engine console)");
+                id_t scriptId = body->addScript(domain, script);
+                return { {"name", name}, {"domain", domain}, {"scriptId", scriptId} };
             }
             if (command == "load_clip") {
                 ClipLoadResult clip = ClipLoader::loadFile(params.at("path").get<std::string>());
@@ -226,10 +254,16 @@ namespace CGEngine {
                     {"frames", frames},
                     {"frameSeconds", time.getDeltaSec()},
                     {"drawCalls", renderer->getLastFrameDrawCalls()},
+                    {"culledDraws", renderer->getLastFrameCulledDraws()},
+                    {"culledInstances", renderer->getLastFrameCulledInstances()},
                     {"bodies", assets.getResourceCount<Body>()},
                     {"lights", assets.getResourceCount<Light>()},
                     {"materials", assets.getResourceCount<Material>()}
                 };
+            }
+            // A command a script registered (cge.add_command) runs here, after the built-in ones.
+            if (interpreter && interpreter->hasCommand(command)) {
+                return json::parse(interpreter->runCommand(command, params.dump()));
             }
             throw std::runtime_error("unknown command '" + command + "'");
         }

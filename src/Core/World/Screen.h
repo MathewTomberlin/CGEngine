@@ -13,6 +13,12 @@ namespace CGEngine {
         void setWindowParameters(WindowParameters windowParams);
         //Window
         RenderWindow* getWindow() const;
+        // Full screen as a borderless window the size of the desktop (Windows; false elsewhere). The window and its GL context
+        // are kept, so the game's resources stay. Returns false if it is not supported.
+        bool setFullscreen(bool on);
+        bool isFullscreen() const { return fullscreen; }
+        // True while the game's window is the one the user is typing into (not in the background).
+        bool hasFocus() const { return window && window->hasFocus(); }
         string getWindowTitle();
         //Size
         V2f getSize() const;
@@ -39,6 +45,10 @@ namespace CGEngine {
         unique_ptr<RenderWindow> window;
         RenderWindow* createWindow();
         string windowTitle;
+        // The window's place and size before it went full screen, so it returns there.
+        bool fullscreen = false;
+        Vector2i windowedPosition = { 0, 0 };
+        sf::Vector2u windowedSize = { 0u, 0u };
         //Size
         void setSize(V2f s);
         V2f size;

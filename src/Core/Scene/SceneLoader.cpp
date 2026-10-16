@@ -3,8 +3,13 @@
 #include "../Animation/Animator.h"
 #include "../Animation/Animation.h"
 #include "../Animation/ClipLoader.h"
+#include "../Body/Body.h"
+#include "../Interpreter/PyInterpreter.h"
 #include <algorithm>
 #include "../../Standard/Models/CommonModels.h"
+#include <chrono>
+#include <cmath>
+#include <cstdint>
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
@@ -22,6 +27,21 @@ namespace CGEngine {
             return Vector3f(value[0].get<float>(), value[1].get<float>(), value[2].get<float>());
         }
 
+        // "environment": the sky colour and fog. A scene that replaces the world starts from the defaults first.
+        void readEnvironment(const json& obj, Environment& environment) {
+            if (!obj.is_object()) throw std::invalid_argument("'environment' must be an object");
+            environment.skyColour = readVec3(obj, "skyColour", environment.skyColour);
+            environment.fogColour = readVec3(obj, "fogColour", environment.fogColour);
+            environment.fogStart = obj.value("fogStart", environment.fogStart);
+            environment.fogEnd = obj.value("fogEnd", environment.fogEnd);
+            if (obj.contains("zenithColour")) environment.zenithColour = readVec3(obj, "zenithColour", Vector3f());
+            environment.sunDirection = readVec3(obj, "sunDirection", environment.sunDirection);
+            environment.sunColour = readVec3(obj, "sunColour", environment.sunColour);
+            environment.sunSize = obj.value("sunSize", environment.sunSize);
+            environment.shadows = obj.value("shadows", environment.shadows);
+            environment.shadowRadius = obj.value("shadowRadius", environment.shadowRadius);
+        }
+
         std::string requireString(const json& obj, const char* key, const std::string& context) {
             if (!obj.contains(key) || !obj.at(key).is_string()) {
                 throw std::invalid_argument(context + ": '" + key + "' is required and must be a string");
@@ -29,27 +49,53 @@ namespace CGEngine {
             return obj.at(key).get<std::string>();
         }
 
+        // Each entry of "instances" is a transform relative to the body: position, rotation (degrees) and scale, all optional.
+        std::vector<glm::mat4> readInstances(const json& b, const std::string& name) {
+            std::vector<glm::mat4> matrices;
+            if (!b.contains("instances")) return matrices;
+            const json& list = b.at("instances");
+            if (!list.is_array()) {
+                throw std::invalid_argument("body '" + name + "': 'instances' must be an array");
+            }
+            for (const json& entry : list) {
+                if (!entry.is_object()) {
+                    throw std::invalid_argument("body '" + name + "': each instance must be an object");
+                }
+                Transformation3D transform(readVec3(entry, "position", Vector3f(0, 0, 0)),
+                    readVec3(entry, "rotation", Vector3f(0, 0, 0)), readVec3(entry, "scale", Vector3f(1, 1, 1)));
+                matrices.push_back(Mesh::modelMatrixOf(transform));
+            }
+            return matrices;
+        }
+
         // Cube or plane generated in code. Meshes are cached per size, so bodies can share them.
         void createPrimitiveBody(const json& b, const std::string& name, const Transformation3D& transform, const std::vector<id_t>& overrides) {
             std::string primitive = requireString(b, "primitive", "body '" + name + "'");
-            if (primitive != "cube" && primitive != "plane") {
-                throw std::invalid_argument("body '" + name + "' has unknown primitive '" + primitive + "' (use \"cube\" or \"plane\")");
+            if (primitive != "cube" && primitive != "plane" && primitive != "sphere") {
+                throw std::invalid_argument("body '" + name + "' has unknown primitive '" + primitive + "' (use \"cube\", \"plane\" or \"sphere\")");
             }
             float size = b.value("size", 1.0f);
             std::ostringstream meshName;
             meshName << "primitive:" << primitive << ":" << size;
 
-            auto meshData = assets.create<MeshData>(meshName.str(),
-                primitive == "cube" ? getCubeVertices(size) : getPlaneVertices(size, 0.0f, Vector3f(0, 0, 0)),
-                primitive == "cube" ? getCubeIndices() : getPlaneIndices());
+            // A sphere's "size" is its radius.
+            vector<VertexData> vertices = primitive == "cube" ? getCubeVertices(size)
+                : primitive == "plane" ? getPlaneVertices(size, 0.0f, Vector3f(0, 0, 0))
+                : getSphereVertices(size);
+            vector<unsigned int> indices = primitive == "cube" ? getCubeIndices()
+                : primitive == "plane" ? getPlaneIndices()
+                : getSphereIndices(16, 12, vertices);
+            auto meshData = assets.create<MeshData>(meshName.str(), vertices, indices);
             if (!meshData.has_value()) {
                 throw std::runtime_error("failed to create mesh for primitive body '" + name + "'");
             }
 
             id_t materialId = overrides.empty() ? assets.getDefaultId<Material>().value_or(0) : overrides.front();
             Mesh mesh(meshData.value().second, transform, { materialId });
-            // Bodies are cached by asset name, so the name carries the scene body name to stay unique.
-            auto body = assets.create<Body>("body:" + name, mesh);
+            mesh.setInstances(readInstances(b, name));
+            // Body asset names are cache keys. A new key per load stops a reloaded scene returning the old body with its old transform.
+            static size_t primitiveCount = 0;
+            auto body = assets.create<Body>("body:" + name + "#" + std::to_string(++primitiveCount), mesh);
             if (!body.has_value()) {
                 throw std::runtime_error("failed to create body '" + name + "'");
             }
@@ -59,9 +105,42 @@ namespace CGEngine {
         std::string nameOf(const json& obj, const std::string& context) {
             return requireString(obj, "name", context);
         }
+
+        Body* findBodyNamed(const std::string& name) {
+            for (Body* body : assets.getAllResources<Body>()) {
+                if (body->getName() == name) return body;
+            }
+            return nullptr;
+        }
+
+        // Removes every body under the world root except the root itself. Each direct child takes its subtree with it.
+        void clearWorld() {
+            Body* root = world->getRoot();
+            std::vector<Body*> topLevel;
+            for (Body* body : assets.getAllResources<Body>()) {
+                // A body with no parent yet is top-level too: Body::start() attaches it to the root on the first frame,
+                // and a scene loaded at startup runs before that.
+                Body* parent = body->getParent();
+                if (body != root && (parent == root || parent == nullptr)) topLevel.push_back(body);
+            }
+            for (Body* body : topLevel) body->deleteBody(ChildrenTermination::Terminate);
+            // Lights belong to the level too: a replaced world keeps none of the old scene's lights.
+            std::vector<id_t> lightIds;
+            for (Light* light : assets.getAllResources<Light>()) {
+                if (auto id = light->getId()) lightIds.push_back(id.value());
+            }
+            for (id_t id : lightIds) assets.remove<Light>(id);
+        }
     }
 
     SceneLoadResult SceneLoader::loadFile(const std::filesystem::path& path) {
+        auto start = std::chrono::steady_clock::now();
+        SceneLoadResult result = loadFileUntimed(path);
+        result.loadMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+        return result;
+    }
+
+    SceneLoadResult SceneLoader::loadFileUntimed(const std::filesystem::path& path) {
         std::ifstream file(path);
         if (!file) {
             SceneLoadResult result;
@@ -86,6 +165,15 @@ namespace CGEngine {
                 throw std::invalid_argument("scene must be an object with \"version\": 1");
             }
 
+            // "replaceWorld": true removes everything under the root first, so the scene is the whole level.
+            if (scene.value("replaceWorld", false)) {
+                clearWorld();
+                if (renderer) renderer->environment = Environment();
+            }
+            if (renderer && scene.contains("environment")) {
+                readEnvironment(scene.at("environment"), renderer->environment);
+            }
+
             // Clip files come first: a body may play any clip of its model.
             if (scene.contains("clips")) {
                 for (const json& path : scene.at("clips")) {
@@ -101,11 +189,36 @@ namespace CGEngine {
                     std::string name = nameOf(m, "material");
                     std::string texture = requireString(m, "diffuseTexture", "material '" + name + "'");
                     float uvScale = m.value("uvScale", 1.0f);
+                    // Strength of the white highlight, 0 (matte) to 1 (the engine default).
+                    float specular = m.value("specular", 1.0f);
+                    if (specular < 0.0f || specular > 1.0f) {
+                        throw std::invalid_argument("material '" + name + "': specular must be between 0 and 1");
+                    }
+                    std::uint8_t specularByte = static_cast<std::uint8_t>(std::lround(specular * 255.0f));
+                    // Opacity, 0 (invisible) to 1 (solid): a voxel material with less than 1 is drawn blended (see Renderer::render).
+                    float opacity = m.value("opacity", 1.0f);
+                    if (opacity < 0.0f || opacity > 1.0f) {
+                        throw std::invalid_argument("material '" + name + "': opacity must be between 0 and 1");
+                    }
+                    bool repeat = m.value("repeat", false);
+                    // A tint multiplies the texture (red 1, green 0.35, blue 0.25 reddens a creature when it is hurt); white is none.
+                    Vector3f tintRgb = readVec3(m, "tint", Vector3f(1, 1, 1));
+                    auto tintByte = [](float v) { return static_cast<std::uint8_t>(std::lround(std::max(0.0f, std::min(1.0f, v)) * 255.0f)); };
+                    Color tint(tintByte(tintRgb.x), tintByte(tintRgb.y), tintByte(tintRgb.z));
+                    // The texture scale is a Vector2f; a bare float would land in the colour intensity instead.
                     auto created = assets.create<Material>(name,
-                        SurfaceParameters(SurfaceDomain(texture, uvScale)),
+                        SurfaceParameters(SurfaceDomain(texture, Vector2f(uvScale, uvScale), tint),
+                            SurfaceDomain(32.0f, Color(specularByte, specularByte, specularByte)), SurfaceDomain(opacity)),
                         assets.get<Program>(assets.defaultProgramName));
                     if (!created.has_value()) {
                         throw std::runtime_error("failed to create material '" + name + "'");
+                    }
+                    // Texture coordinates past 1 (a merged voxel quad spans many blocks) wrap only if the texture repeats.
+                    // The texture file is shared, so every material that uses it repeats too.
+                    if (repeat) {
+                        if (Texture* diffuse = created.value().second->getParameterPtr<Texture>("diffuseTexture")) {
+                            diffuse->setRepeated(true);
+                        }
                     }
                     result.materials++;
                 }
@@ -116,13 +229,15 @@ namespace CGEngine {
                     std::string name = nameOf(l, "light");
                     Vector3f position = readVec3(l, "position", Vector3f(0, 0, 0));
                     bool directional = l.value("directional", false);
+                    // Defaults come from LightParameters, so scene files and C++ lights agree.
+                    const LightParameters defaults;
                     LightParameters params(
-                        l.value("brightness", 5.0f),
-                        readVec3(l, "color", Vector3f(1, 1, 1)),
-                        l.value("attenuation", 0.005f),
-                        l.value("ambiance", 0.001f),
-                        l.value("coneAngle", 180.0f),
-                        readVec3(l, "direction", Vector3f(0, 0, -1)));
+                        l.value("brightness", defaults.brightness),
+                        readVec3(l, "color", defaults.colorIntensities),
+                        l.value("attenuation", defaults.attenuation),
+                        l.value("ambiance", defaults.ambiance),
+                        l.value("coneAngle", defaults.coneAngle),
+                        readVec3(l, "direction", defaults.lightDirection));
                     auto created = assets.create<Light>(name, position, directional, params);
                     if (!created.has_value()) {
                         throw std::runtime_error("failed to create light '" + name + "'");
@@ -156,6 +271,9 @@ namespace CGEngine {
                         continue;
                     }
 
+                    if (b.contains("instances")) {
+                        throw std::invalid_argument("body '" + name + "': \"instances\" only applies to primitive bodies");
+                    }
                     std::string modelPath = requireString(b, "model", "body '" + name + "'");
                     auto model = assets.load<Model>(modelPath);
                     if (!model.has_value()) {
@@ -169,7 +287,9 @@ namespace CGEngine {
                     if (b.contains("animation")) {
                         std::string clip = requireString(b, "animation", "body '" + name + "'");
                         Model* loaded = model.value().second;
-                        Animator* animator = loaded->getAnimator();
+                        Body* root = assets.get<Body>(rootId.value());
+                        Animator* animator = root ? root->findInstanceAnimator() : nullptr;
+                        if (!animator) animator = loaded->getAnimator();
                         const auto& clips = loaded->getAnimationNames();
                         if (!animator || std::find(clips.begin(), clips.end(), clip) == clips.end()) {
                             throw std::invalid_argument("body '" + name + "' references unknown animation '" + clip + "' in model '" + modelPath + "'");
@@ -181,6 +301,24 @@ namespace CGEngine {
                     }
                     assets.get<Body>(rootId.value())->setName(name);
                     result.bodies++;
+                }
+            }
+
+            // Scripts attach to bodies by name. The body must exist by now, from this file or earlier.
+            if (scene.contains("scripts")) {
+                for (const json& s : scene.at("scripts")) {
+                    std::string bodyName = requireString(s, "body", "script entry");
+                    std::string module = requireString(s, "module", "script for body '" + bodyName + "'");
+                    std::string domain = s.value("domain", std::string("update"));
+                    if (domain != "start" && domain != "update" && domain != "delete") {
+                        throw std::invalid_argument("script for body '" + bodyName + "': domain must be \"start\", \"update\" or \"delete\"");
+                    }
+                    Body* body = findBodyNamed(bodyName);
+                    if (!body) throw std::invalid_argument("script for unknown body '" + bodyName + "'");
+                    Script* script = interpreter->createScript(module);
+                    if (!script) throw std::runtime_error("could not create a script from module '" + module + "' (see the engine console)");
+                    body->addScript(domain, script);
+                    result.scripts++;
                 }
             }
 

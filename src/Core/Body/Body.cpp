@@ -1,5 +1,6 @@
 #include "Body.h"
 #include "../Engine/Engine.h"
+#include "../Animation/Animator.h"
 
 namespace CGEngine {
     Body::Body(string displayName) : ScriptController(this) {
@@ -14,6 +15,11 @@ namespace CGEngine {
     
     Body::~Body() {
         valid = false;
+        delete instanceAnimator;
+        //A Body deleted before its start pass must not reach World::callUninitializedStart after it is freed.
+        if (world) world->removeUninitialized(this);
+        //The render order is rebuilt each frame, but a Body removed mid-frame would otherwise stay in it until then.
+        if (renderer && getId().has_value()) renderer->remove(getId().value());
         //Remove input actions from their domains (without deleting domains) and delete the input actions
         input->eraseActuatorIds(listenerIds);
         //Delete any timers
@@ -145,6 +151,18 @@ namespace CGEngine {
         }
     }
 
+    void Body::setInstanceAnimator(Animator* animator) {
+        delete instanceAnimator;
+        instanceAnimator = animator;
+    }
+
+    Animator* Body::findInstanceAnimator() const {
+        for (const Body* body = this; body; body = body->getParent()) {
+            if (body->instanceAnimator) return body->instanceAnimator;
+        }
+        return nullptr;
+    }
+
     Body* Body::getParent() const {
         if (parentId.has_value()) {
             // Assumes 'assets' is accessible globally or via a member/context
@@ -224,11 +242,15 @@ namespace CGEngine {
     }
 
     V2f Body::getLocalCenter()  const {
-        return ((Shape*)entity.get())->getGeometricCenter();
+        if (const Shape* shape = dynamic_cast<const Shape*>(entity.get())) return shape->getGeometricCenter();
+        return getLocalBounds().getCenter();
     }
 
     V2f Body::getGlobalCenter()  const {
-        return getGlobalTransform().transformPoint(((Shape*)entity.get())->getGeometricCenter());
+        if (const Shape* shape = dynamic_cast<const Shape*>(entity.get())) {
+            return getGlobalTransform().transformPoint(shape->getGeometricCenter());
+        }
+        return getGlobalTransform().transformPoint(getLocalBounds().getCenter());
     }
 
     V2f Body::getGlobalPosition() const {
@@ -527,6 +549,16 @@ namespace CGEngine {
         }
     }
 
+    // Every input actuator a Body registers is recorded, so the destructor can remove it. An actuator keeps raw
+    // pointers to its Body and Behavior; left behind after the Body is deleted, it crashes on the next key press.
+    optional<id_t> Body::registerActuator(InputCondition condition, Actuator* actuator) {
+        optional<id_t> id = input->addActuator(condition, actuator);
+        if (id.has_value()) {
+            listenerIds[condition].push_back(id.value());
+        }
+        return id;
+    }
+
     optional<id_t> Body::addOverlapMousePressScript(Script* script, Mouse::Button button, optional<id_t> behaviorId, bool alwaysAddListener) {
         //The input condition called by the InputMap
         InputCondition inputCondition = InputCondition((int)button, InputType::Button, InputState::Pressed);
@@ -535,7 +567,7 @@ namespace CGEngine {
             if (behaviorId.has_value()) {
                 behavior = behaviors.get(behaviorId.value()).get();
             }
-            input->addActuator(inputCondition, new Actuator(MouseOverlapPressEvent, this, behavior));
+            registerActuator(inputCondition, new Actuator(MouseOverlapPressEvent, this, behavior));
         }
         //Add the script to the input condition for clicking
         if (script != nullptr) {
@@ -552,7 +584,7 @@ namespace CGEngine {
             if (behaviorId.has_value()) {
                 behavior = behaviors.get(behaviorId.value()).get();
             }
-            input->addActuator(inputCondition, new Actuator(MouseOverlapReleaseEvent, this, behavior));
+            registerActuator(inputCondition, new Actuator(MouseOverlapReleaseEvent, this, behavior));
         }
         if (script != nullptr) {
             return scripts.addScript("mouseRelease_" + to_string((int)button), script);
@@ -590,7 +622,7 @@ namespace CGEngine {
         if (behaviorId.has_value()) {
             behavior = behaviors.get(behaviorId.value()).get();
         }
-        return input->addActuator(inputCondition, new Actuator(scriptEvt, this, behavior));
+        return registerActuator(inputCondition, new Actuator(scriptEvt, this, behavior));
     }
 
     optional<id_t> Body::addMousePressScript(ScriptEventHandler scriptEvt, Mouse::Button button, optional<id_t> behaviorId) {
@@ -600,7 +632,7 @@ namespace CGEngine {
         if (behaviorId.has_value()) {
             behavior = behaviors.get(behaviorId.value()).get();
         }
-        return input->addActuator(inputConditionGlobal, new Actuator(scriptEvt, this, behavior));
+        return registerActuator(inputConditionGlobal, new Actuator(scriptEvt, this, behavior));
     }
 
     optional<id_t> Body::addMouseReleaseScript(ScriptEventHandler scriptEvt, Mouse::Button button, optional<id_t> behaviorId) {
@@ -610,7 +642,7 @@ namespace CGEngine {
         if (behaviorId.has_value()) {
             behavior = behaviors.get(behaviorId.value()).get();
         }
-        return input->addActuator(inputConditionGlobal, new Actuator(scriptEvt, this, behavior));
+        return registerActuator(inputConditionGlobal, new Actuator(scriptEvt, this, behavior));
     }
 
     optional<id_t> Body::addKeyPressScript(ScriptEventHandler scriptEvt, Keyboard::Scan key, optional<id_t> behaviorId) {
@@ -619,7 +651,7 @@ namespace CGEngine {
         if (behaviorId.has_value()) {
             behavior = behaviors.get(behaviorId.value()).get();
         }
-        return input->addActuator(inputConditionGlobal, new Actuator(scriptEvt, this, behavior));
+        return registerActuator(inputConditionGlobal, new Actuator(scriptEvt, this, behavior));
     }
 
     optional<id_t> Body::addKeyReleaseScript(ScriptEventHandler scriptEvt, Keyboard::Scan key, optional<id_t> behaviorId) {
@@ -628,7 +660,7 @@ namespace CGEngine {
         if (behaviorId.has_value()) {
             behavior = behaviors.get(behaviorId.value()).get();
         }
-        return input->addActuator(inputConditionGlobal, new Actuator(scriptEvt, this, behavior));
+        return registerActuator(inputConditionGlobal, new Actuator(scriptEvt, this, behavior));
     }
 
     optional<id_t> Body::addTextEnteredScript(ScriptEventHandler scriptEvt, optional<id_t> behaviorId) {
@@ -637,7 +669,7 @@ namespace CGEngine {
         if (behaviorId.has_value()) {
             behavior = behaviors.get(behaviorId.value()).get();
         }
-        return input->addActuator(inputConditionGlobal, new Actuator(scriptEvt, this, behavior));
+        return registerActuator(inputConditionGlobal, new Actuator(scriptEvt, this, behavior));
     }
 
     optional<id_t> Body::addKeyHoldScript(Script* script, Keyboard::Scan key, optional<id_t> behaviorId) {
@@ -800,6 +832,8 @@ namespace CGEngine {
 
     void Body::queueRendering() {
         if (!getId().has_value()) return;
+        //A hidden Body hides its subtree, so hiding a model's root hides the whole model.
+        if (!bodyParams.rendering) return;
         renderer->add(getId().value());
 
         //Draw children recursively
@@ -817,15 +851,36 @@ namespace CGEngine {
     }
 
     void Body::onDraw(RenderTarget& target, const Transform& transform) const {
+        // The shadow map takes meshes only: 2D drawables and bounds would draw into the wrong target.
+        if (renderer->isShadowPass() && !dynamic_cast<Mesh*>(entity.get())) return;
         if (bodyParams.boundsRendering && boundsRect != nullptr) {
+            renderer->commitGL();
             target.draw(*boundsRect, transform);
         }
         if (bodyParams.rendering && entity != nullptr) {
             if (Mesh* mesh = dynamic_cast<Mesh*>(entity.get())) {
                 // Pull OpenGL State
                 mesh->render(transform);
-            } else {
-                target.draw(*(Shape*)entity.get(), transform);
+            } else if (const sf::Drawable* drawable = dynamic_cast<const sf::Drawable*>(entity.get())) {
+                // Shapes, text and sprites are drawn through their Drawable base, whatever their concrete type.
+                renderer->commitGL();
+                // Text and bodies marked overlay are drawn over the scene whatever their depth, and in window pixels (the screen's
+                // own view is a square in the middle of the window, which would clip a label that runs past it).
+                const bool drawOverlay = overlay || dynamic_cast<const sf::Text*>(entity.get()) != nullptr;
+                if (drawOverlay) {
+                    const sf::View scene = target.getView();
+                    // The default view is sized once, when the window is made, and is not resized with the window: after a full
+                    // screen switch it would still map the old size, which put the overlay off centre. A view of the target's
+                    // current size maps window pixels to the window.
+                    const sf::View pixels(sf::FloatRect({ 0.f, 0.f }, sf::Vector2f(target.getSize())));
+                    glDisable(GL_DEPTH_TEST);
+                    target.setView(pixels);
+                    target.draw(*drawable, transform);
+                    target.setView(scene);
+                    glEnable(GL_DEPTH_TEST);
+                } else {
+                    target.draw(*drawable, transform);
+                }
             }
         }
     }

@@ -1,0 +1,179 @@
+{
+  "about": "Where held items sit. Held_Offset_R_Transform and Held_Offset_L_Transform are the offsets of an item held in the right or left hand, from that hand's bone (hand.R, hand.L); an item in a hand uses that offset. An item's own Held_Item_Offset_Transform further offsets it from the hand offset (it is applied after the hand offset, in the hand's frame). Raised_Held_Item_Offset_Transform is the same for an item that is raised (a shield, while Q is held). A transform is position (blocks), rotation (degrees: X, then Y, then Z, applied as Rz * Ry * Rx) and scale. An item with \"bone\" is attached to that bone of its hand's model instead (a shield on the forearm), and then the hand offset is not used.",
+  "Held_Offset_R_Transform": {
+    "position": [
+      0.077812,
+      0.125853,
+      -0.041693
+    ],
+    "rotation": [
+      110.7027,
+      74.3546,
+      -170.6555
+    ],
+    "scale": 1.0
+  },
+  "Held_Offset_L_Transform": {
+    "position": [
+      -0.271718,
+      0.008046,
+      -0.162614
+    ],
+    "rotation": [
+      177.4094,
+      15.4347,
+      161.0071
+    ],
+    "scale": 1.0
+  },
+  "items": {
+    "pickaxe": {
+      "hand": "R"
+    },
+    "iron pickaxe": {
+      "hand": "R"
+    },
+    "sword": {
+      "hand": "R",
+      "Held_Item_Offset_Transform": {
+        "position": [
+          -0.15,
+          0.035,
+          -0.060622
+        ],
+        "rotation": [
+          110.0,
+          -30.0,
+          90.0
+        ],
+        "scale": 0.45
+      }
+    },
+    "shovel": {
+      "hand": "R",
+      "Held_Item_Offset_Transform": {
+        "position": [
+          0.03,
+          0.125,
+          -0.06
+        ],
+        "rotation": [
+          110.0,
+          -30.0,
+          90.0
+        ],
+        "scale": 0.001
+      }
+    },
+    "bucket": {
+      "hand": "R",
+      "Held_Item_Offset_Transform": {
+        "position": [
+          -0.01,
+          0.125,
+          -0.06
+        ],
+        "rotation": [
+          110.0,
+          -30.0,
+          90.0
+        ],
+        "scale": 0.01
+      }
+    },
+    "water bucket": {
+      "hand": "R",
+      "Held_Item_Offset_Transform": {
+        "position": [
+          -0.01,
+          0.125,
+          -0.06
+        ],
+        "rotation": [
+          110.0,
+          -30.0,
+          90.0
+        ],
+        "scale": 0.01
+      }
+    },
+    "lava bucket": {
+      "hand": "R",
+      "Held_Item_Offset_Transform": {
+        "position": [
+          -0.01,
+          0.125,
+          -0.06
+        ],
+        "rotation": [
+          110.0,
+          -30.0,
+          90.0
+        ],
+        "scale": 0.01
+      }
+    },
+    "bone blade": {
+      "hand": "R",
+      "Held_Item_Offset_Transform": {
+        "position": [
+          -0.15,
+          0.035,
+          -0.060622
+        ],
+        "rotation": [
+          110.0,
+          -30.0,
+          90.0
+        ],
+        "scale": 0.45
+      }
+    },
+    "shield": {
+      "hand": "L",
+      "bone": "forearm.L",
+      "Held_Item_Offset_Transform": {
+        "position": [
+          -0.211668,
+          0.255657,
+          -0.217948
+        ],
+        "rotation": [
+          172.7957,
+          18.355,
+          150.0492
+        ],
+        "scale": 0.01
+      },
+      "Raised_Held_Item_Offset_Transform": {
+        "position": [
+          -0.378887,
+          0.388112,
+          -0.156355
+        ],
+        "rotation": [
+          -167.2424,
+          15.1017,
+          -147.0873
+        ],
+        "scale": 0.01
+      }
+    },
+    "bow": {
+      "hand": "R",
+      "Held_Item_Offset_Transform": {
+        "position": [
+          -0.15,
+          -0.02,
+          -0.06
+        ],
+        "rotation": [
+          110.0,
+          -30.0,
+          90.0
+        ],
+        "scale": 0.45
+      }
+    }
+  }
+}

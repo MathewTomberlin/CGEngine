@@ -1,0 +1,74 @@
+{
+  "version": 1,
+  "name": "archer_idle",
+  "model": "models/dungeon/archer_rig.fbx",
+  "durationSeconds": 3.0,
+  "channels": [
+    {
+      "bone": "Torso",
+      "position": [
+        {
+          "t": 0.0,
+          "v": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "t": 1.5,
+          "v": [
+            0,
+            0.012,
+            0
+          ]
+        },
+        {
+          "t": 3.0,
+          "v": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "bone": "Head",
+      "rotation": [
+        {
+          "t": 0.0,
+          "euler": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "t": 1.0,
+          "euler": [
+            0,
+            14,
+            0
+          ]
+        },
+        {
+          "t": 2.0,
+          "euler": [
+            0,
+            -10,
+            0
+          ]
+        },
+        {
+          "t": 3.0,
+          "euler": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
+    }
+  ]
+}

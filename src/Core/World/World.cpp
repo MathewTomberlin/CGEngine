@@ -1,12 +1,19 @@
 #include "World.h"
 #include "../Engine/Engine.h"
 #include "../../Standard/Models/CommonModels.h"
+
+// Keeps the embedded cg_engine_bindings module (CoreBindings.cpp) in main.exe. The pointer has external
+// linkage, so the compiler cannot drop it as unused.
+extern bool cgEngineBindingsLinked;
+bool* keepBindingsLinked = &cgEngineBindingsLinked;
 #include "../Scene/SceneLoader.h"
 #include "../Control/ControlChannel.h"
+#include <algorithm>
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
+#include <thread>
 #ifdef _WIN32
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
@@ -117,9 +124,12 @@ namespace CGEngine {
                             world->lastConsoleTarget = target;
                             world->lastConsoleCommand = command;
                             world->lastConsoleInput = inputString;
-                            if (target != "") {
-                                Body* targetBody = assets.get<Body>(target);
+                            // A target that is not a body (a dot in a decimal, such as "time 0.5", names "time 0") has no body to run the command.
+                            Body* targetBody = target != "" ? assets.get<Body>(target) : nullptr;
+                            if (targetBody != nullptr) {
                                 targetBody->callScriptsWithData(command, DataMap(map<string, any>({ { "args",inputStrings} })));
+                            } else if (target != "") {
+                                log(world, LogWarn, "No body named '" + target + "' for the console command '" + command + "'");
                             }
                         }
                         txt->setString("_");
@@ -182,7 +192,7 @@ namespace CGEngine {
         }
         root->apply([](Body* b) { b->callStaticScripts(DeleteDomain); });
         running = false;
-        window->close();
+        if (window) window->close();
     }
 
     Body* World::getRoot() {
@@ -334,28 +344,25 @@ namespace CGEngine {
         interpreter = new PyInterpreter();
         renderer = new Renderer();
 
-        //Create window (via Screen and using the static WindowParameters) and set InputMap's window
-        screen->setWindowParameters(windowParameters);
-        window = screen->createWindow();
-        if(!window->setActive(true)) {
-            log(LogLevel::LogError, "World", "Failed to set window as active OpenGL context");
+        // CGENGINE_HEADLESS=1 starts with no window and no OpenGL context: the game runs its update loop and a host can serve
+        // the world, but nothing is drawn. Scripts check cge.is_headless() before they touch the window.
+        const char* headlessSetting = std::getenv("CGENGINE_HEADLESS");
+        headlessRun = headlessSetting && std::string(headlessSetting) == "1";
+        if (headlessRun) {
+            log(LogLevel::LogInfo, "World", "Headless start: no window or OpenGL context, so nothing is drawn");
+        } else {
+            //Create window (via Screen and using the static WindowParameters) and set InputMap's window
+            screen->setWindowParameters(windowParameters);
+            window = screen->createWindow();
+            if(!window->setActive(true)) {
+                log(LogLevel::LogError, "World", "Failed to set window as active OpenGL context");
+            }
+            renderer->setWindow(window);
+            openGLReady = renderer->initGlew() == GLEW_OK;
+            input->setWindow(window);
         }
-        renderer->setWindow(window);
-        renderer->initGlew();
-        input->setWindow(window);
 
         assets.initialize();
-
-        // Optional scene file (CGENGINE_SCENE=path) loaded before the first frame.
-        if (const char* scenePath = std::getenv("CGENGINE_SCENE")) {
-            SceneLoadResult scene = SceneLoader::loadFile(scenePath);
-            if (!scene.ok) {
-                std::cerr << "Scene load failed: " << scene.error << std::endl;
-                if (std::getenv("CGENGINE_SMOKE_FRAMES")) std::exit(1);
-            } else {
-                std::cerr << "SCENE loaded bodies=" << scene.bodies << " lights=" << scene.lights << " materials=" << scene.materials << std::endl;
-            }
-        }
 
         if (const char* smoke = std::getenv("CGENGINE_SMOKE_FRAMES")) {
             smokeFrameLimit = std::atoi(smoke);
@@ -389,6 +396,10 @@ namespace CGEngine {
         uninitialized.push_back(body);
     }
 
+    void World::removeUninitialized(Body* body) {
+        uninitialized.erase(std::remove(uninitialized.begin(), uninitialized.end(), body), uninitialized.end());
+    }
+
     void World::callUninitializedStart() {
         while (uninitialized.size() > 0) {
             if (auto uninit = uninitialized.back()) {
@@ -401,12 +412,43 @@ namespace CGEngine {
         }
     }
 
+    // The asset manager clears its types in hash order at exit, so a Body could be freed after the mesh data it still refers
+    // to (a voxel world has hundreds of them). Bodies go first, while their meshes, materials and scripts still exist.
+    void World::releaseBodies() {
+        vector<id_t> ids;
+        for (Body* body : assets.getAllResources<Body>()) {
+            if (body && body->getId().has_value()) ids.push_back(body->getId().value());
+        }
+        for (id_t id : ids) {
+            if (Body* body = assets.get<Body>(id)) body->deleteBody(ChildrenTermination::Terminate);
+        }
+    }
+
     void World::runWorld() {
         while (running) {
             renderer->initializeOpenGL();
             initSceneList();
 
-            while (window->isOpen()) {
+            // The scene file loads after the built-in scene, so its replaceWorld can clear the built-in bodies.
+            // Scene load events create those bodies, which is why this cannot run in startWorld.
+            // CGENGINE_SCENE overrides the program's default scene (defaultScene).
+            const char* envScene = std::getenv("CGENGINE_SCENE");
+            const std::string scenePath = envScene ? envScene : defaultScene;
+            if (!scenePath.empty()) {
+                SceneLoadResult scene = SceneLoader::loadFile(scenePath);
+                if (!scene.ok) {
+                    std::cerr << "Scene load failed: " << scene.error << std::endl;
+                    if (std::getenv("CGENGINE_SMOKE_FRAMES")) std::exit(1);
+                } else {
+                    std::cerr << "SCENE loaded bodies=" << scene.bodies << " lights=" << scene.lights << " materials=" << scene.materials << std::endl;
+                }
+            }
+
+            // A headless host runs at CGENGINE_HEADLESS_FPS (60 by default) and sleeps the rest of each frame, so it does not spin a core.
+            const double headlessFps = std::getenv("CGENGINE_HEADLESS_FPS") ? std::max(1.0, std::atof(std::getenv("CGENGINE_HEADLESS_FPS"))) : 60.0;
+            const std::chrono::duration<double> headlessFrame(1.0 / headlessFps);
+            while (headlessRun ? running : window->isOpen()) {
+                const auto frameStart = std::chrono::steady_clock::now();
                 if (smokeFrameLimit > 0 && ++smokeFramesRun >= smokeFrameLimit) {
                     // Average frame time over frames 2..N (frame 1 includes first-use setup).
                     double avgMs = 0;
@@ -424,7 +466,7 @@ namespace CGEngine {
 				}
                 callStaticScripts(UpdateDomain);
                 input->gather();
-                if (window->isOpen()) {
+                if (!headlessRun && window->isOpen()) {
                     if (renderer->setGLWindowState(true)) {
                         renderer->clearGL(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
                         if (!renderer->processRender()) return;
@@ -432,7 +474,12 @@ namespace CGEngine {
                     }
                 }
                 ControlChannel::poll();
+                if (headlessRun) std::this_thread::sleep_until(frameStart + std::chrono::duration_cast<std::chrono::steady_clock::duration>(headlessFrame));
             }
+            // The window closed (the close button, Quit in the game, or endWorld): the game is over. Without this the outer
+            // loop would start the scene again on a closed window.
+            releaseBodies();
+            running = false;
         }
     }
 

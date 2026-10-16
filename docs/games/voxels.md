@@ -1,0 +1,271 @@
+# Voxel sample
+
+A procedural block world in chunks, with trees, a day and night cycle and distance fog. Build it and run it with:
+
+```
+cmake --build build --config Release
+cd build/bin/Release
+$env:CGENGINE_FULLSCREEN = "1"; .oxel_game.exe
+```
+
+`voxel_game.exe` is built with every build and starts in the voxel scene. `CGENGINE_SCENE` still overrides the scene, and
+`main.exe` runs the tilemap scene unless it is set (`$env:CGENGINE_SCENE = "scenes/voxels.json"; .\main.exe` also works).
+
+`VOXEL_SEED` (set it before running, e.g. `$env:VOXEL_SEED = "1"`) picks the world. `VOXEL_TIME` sets the time of day at the start: 0 is sunrise, 0.25 noon, 0.5 sunset and
+0.75 midnight. `VOXEL_DAY_SECONDS` sets how long a day lasts (240 seconds by default). `VOXEL_FIXED_STEP` (seconds) makes every frame advance that
+much game time; the scripted tests use it. `VOXEL_SPAWN="x,z"` starts the player over that column. For the best frame
+rate, build and run the Release configuration.
+
+## Controls
+
+- W A S D walk, Space jumps, Enter toggles flying (then Space rises and R falls).
+- In water (a liquid block at the feet or chest) the player sinks slowly, Space swims up, and walking is slower. The
+  player floats at the surface; Space there jumps out, so a bank a block high can be climbed. Under the water the view
+  is a flat blue-green murk, since the water's faces are back faces from inside.
+- Mouse: left-click captures the mouse. Move it to look. Left-click breaks the block under the crosshair, right-click
+  places the selected block against it.
+- Escape opens the pause menu: the mouse is freed, the world stands still, and Resume (click it) locks the mouse again.
+  Quit (click it) closes the app. Settings (click it) opens a page with the mouse sensitivity (the arrows step it from 25%
+  to 500% of the base) and a time-of-day slider (drag it along the track), and Back (or Escape) returns to the menu. The choice is saved in `voxel_settings.json` beside the
+  game, and applies at once. `VOXEL_MOUSE_SENSITIVITY` sets the base look speed in degrees per pixel (0.00625 by default),
+  and `VOXEL_SETTINGS` moves the settings file.
+- Without the mouse: the arrow keys turn and look, J hits, K places. A block takes several hits (stone three, wood four, coal four, iron five, the rest one), and a
+  damaged block is shown darker and gets cracks; the last hit breaks it. The damage is kept with the edits (F5). The aimed block's outline flashes white on a hit, and chips fly from the face (a break throws more). L lights or puts out the torch you carry, which
+  lights the cave around you.
+- Keys 1 to 9, 0, - and = choose a hotbar slot (the first row of the inventory: 12 slots, drawn as boxes at the bottom of the
+  window). The player starts with 16 each of stone, dirt, grass, wood, leaves, sand, gravel, snow, water, the lamp, brick and
+  torches, one kind to a slot. Breaking a block puts it in the inventory, and placing takes one from the selected slot, so
+  the stock runs out and has to be mined; a stack holds 64, and a break that would finish a block is refused when the
+  inventory has no room for it (the HUD says "Inventory full"). A torch goes on the face of a block you aim at; aim at it to
+  break it, and it goes back into the inventory. Sand and gravel fall, and water falls and flows.
+- I opens the inventory: the two rows above the hotbar, with a panel and the mouse free (the world stands still while it is
+  open). A left click takes a whole stack from a slot, and a left click on another slot puts it down (onto the same item up
+  to 64, or swapping with a different one). A right click takes half a stack, or puts one down. I or Escape closes it, and
+  the stack in the cursor goes back into the inventory. The swatches are the blocks' colours until there are textures.
+- The player starts with nothing. The pickaxe is an item that a click on stone, coal, iron or brick uses (two swings with it
+  selected). It does not stack and cannot be placed, and there is no recipe for it yet.
+- Crafting is on the inventory screen (I), above the inventory: a category dropdown and the recipes you know. A recipe is
+  learned when you first hold one of its items. A recipe with an item missing is dimmed; a click makes it. Creative mode
+  knows every recipe and counts each item as 99.
+- The crafting grid (3 by 3, above the list) makes shaped recipes. Click a shaped recipe to show its pattern as faint
+  swatches, then left click cells to put in the items you hold (right click returns an item). When the grid holds a
+  pattern, the output box names the recipe; click it to make it. A pickaxe is a row of three stone, with two wood
+  going down from its middle stone. The grid's items return to the inventory when you close the screen or save.
+- First-person hands: the right arm holds the selected item (a pickaxe, or the lantern for a torch), swings it on each left click,
+  and a pickaxe's hit throws sparks. The left arm reaches out on each placement.
+- Creatures wander the terrain. A left click on one takes a hit (three hits kill it, and it leaves a hide). One in three is a
+  dark red biter: it chases you inside 7 blocks and bites, 1 health a bite. A wall in its way does not stop it: it walks round by a gap
+  (up to 14 blocks away), or wanders when there is none. The bar above the hotbar is your health (ten
+  points): it heals after a few seconds without a hit, a fall past 4 blocks hurts, and at zero you are back at the spawn with
+  the inventory kept.
+- C toggles creative mode: placing takes nothing from the slots and breaking adds nothing to them (the old unlimited
+  building). `VOXEL_CREATIVE=1` starts in it.
+- F5 saves the edited blocks to `cg_control/voxel_edits.bin` and the inventory to `cg_control/voxel_inventory.json`; F9 loads
+  them back. F12 saves a screenshot and the game state to `cg_control/snapshots/` (use it when something looks wrong).
+
+## The look: day, night and fog
+
+- The land has three biomes, in regions about 90 blocks across: deserts (sand on top, no trees), forests (about three times
+  the trees) and plains. `world.biome_at(x, z)` names one, and the state file reports the player's.
+- The sun crosses the sky in `VOXEL_DAY_SECONDS`. Its light, the ambient fill, the sky and the fog all follow it: a bright
+  sun by day, an orange light at sunrise and sunset, and a dim blue moon at night.
+- The fog starts halfway to the edge of the loaded chunks and is complete at that edge, so the land fades into the sky
+  rather than ending in a line.
+- Trees grow on grass, about one column in a hundred. A tree's leaves can reach into the next chunk, and each chunk
+  draws the parts of the trees that reach it, so the trees have no seams.
+- Caves are tunnels and rooms carved out of the stone, below the surface, from two 3D noise fields. The sky is a
+  gradient from the horizon to the zenith, with the sun's disc and glow, and the fog takes the horizon colour.
+- Sky light darkens the caves and the ground under trees. A block's sky light is full in the open and falls by a fifth
+  for each block walked through air from the sky, and is nothing beyond eight blocks. It is baked into each vertex
+  (`VoxelVertex::sky`), so it costs nothing per frame. The sun and the ambient light are multiplied by it on voxel meshes,
+  so a sealed cave gets none of either, at any hour of the day.
+- A light block (the lamp, `VoxelGen.LAMP`, id 17) gives 255 at its own cell and falls by the same 0.8 a block through air, for
+  eight blocks. The lamp's light is added to the sky's in the mesh colours, so it brightens sunlit ground as well as caves
+  (`light_at` gives the brighter of the two). Its light is twice the sky's in a cave (`VoxelLampLight`), and
+  about the sky's in the open, where the sun already lights the ground. A lamp is a solid block, drawn as a cube, and its
+  faces glow with the warm light colour at 0.8 whatever the sun and the shadows do (the glow is `VoxelVertex::glow`, added after the lighting; it stays under 1 so it does not clip to white, and the light a lamp gives its neighbours is tinted the same warm colour). Carried
+  Small torches are props on a block's face (see the controls above), not full blocks.
+- The sun casts shadows (`VOXEL_SHADOWS=0` turns them off; `VOXEL_SHADOW_RADIUS`, 40 blocks by default, sets how far
+  they reach). The map is drawn again when the camera moves, the sun turns, or a tenth of a second passes, and not at
+  all while the sun is down.
+
+## How blocks are drawn
+
+Each block type says how it is drawn, with `define_block(..., shape=, group=, material=)`:
+
+- `shape="smooth"` (the default) is drawn as the rounded skin; `shape="cube"` is a cube that never merges with its neighbours,
+  so it keeps sharp edges (brick).
+- `group="terrain"` (the default) puts the block in the chunk's terrain mesh: stone, dirt, grass, sand, gravel, snow.
+- `group="own"` gives the block a mesh of its own in each chunk, drawn with `material` (a material in the scene file, here
+  `voxel_wood`, `voxel_leaves`, `voxel_brick`). Wood and leaves are own: a canopy is its own skin, and the terrain treats its
+  blocks as air, so a canopy does not hide the ground under it, and the ground does not hide the canopy. A cube is always own.
+- A wood block whose top is covered by leaves joins the leaves' skin (`join_above=`): the trunk top and the canopy are one
+  surface, while the trunk's sides and bottom stay wood. The join is only through the cell above, so a leaf beside the trunk
+  top still meets the trunk's side with a seam, not a merge.
+- A trunk base stays wood: the sample sets no `join_below=` for wood (roadmap 27.1). A joined base pinched the drawn trunk to
+  0.8 of a block where it left the ground, so the base is wood and its skin runs down into the grass, and the trunk flares out
+  of the ground. The option itself is still there (a wood block standing on the listed blocks joins the terrain at its bottom).
+- Water is own too, in one mesh shared by the source and its flow (`mesh=` names the shared id). The ground under water has
+  its own skin, so the seabed and the shore are seen from the water, and the water surface is seen from below as well.
+  Under the water the sun's shadows are off: the surface would otherwise shade everything below it. The water is drawn
+  see-through (`opacity` 0.55 in the scene file, `transparent=True` in the block), after the opaque meshes.
+
+Collision follows the same rule: a body meets the skin of each mesh, so it stands on a brick's top face and on a leaf's
+rounded top. `voxel_world_check.py` checks the rules (a leaf alone is in its own mesh and not the terrain's, a brick is six
+cube faces, ground is in the terrain's mesh). Light is not split by mesh: every block still shades what is behind it, so
+the ground under a trunk or a leaf is in shade.
+
+## Block physics
+
+Each block id has a type (`define_block`): solid (it blocks movement), falls (sand and gravel move down into air, or
+swap down past water), and liquid (water flows). Water is a full source, block 5, and flows as levels 7 to 1 (blocks 9
+to 15): a flow spreads one level at a time, and drains when nothing feeds it, so it stays finite.
+
+The simulation only looks at cells that changed: a block set, or a block that moved, queues its cell and its neighbours.
+A quiet world queues nothing and costs nothing, and a far chunk that nothing touches is never looked at.
+
+```python
+world.define_block(9, cge.Vector3f(0.5, 0.5, 0.5), solid=False, falls=False, liquid=True)
+world.simulate(dt, 1.5)                  # run the due ticks within 1.5 ms of work (ticks every 0.1 s)
+world.add_rule(1, 5, 2, 0.5)             # grass touching water becomes dirt, half the time per tick
+# A rule file (`VoxelRules.py`): VOXEL_RULES=resources/voxel_rules_example.json loads the same rule as data; see below.
+world.set_tick_hook(lambda x, y, z, block: 7 if block == 3 and y > 60 else None)   # any Python rule
+world.is_solid(x, y, z)                  # collision queries use the types too
+world.active_count()                     # cells queued: 0 when everything has settled
+```
+
+Reactions can also be data. A rule file is JSON, `{"rules": [{"block": "grass", "touches": "water", "becomes": "dirt", "chance": 0.5}]}`,
+where a block is a name from `VoxelGen.NAMES` or an id from 0 to 255 and `chance` is optional (1 by default). `VOXEL_RULES=<path>`
+loads one when the sample starts, and replaces the rules the world had. A bad file is reported on the console and the game
+starts without it. `resources/scripts/VoxelRules.py` does the parsing and `tools/test_voxel_rules.py` checks it without the engine.
+Not yet: rules that move blocks other than by falling.
+
+## Files
+
+- `resources/scenes/voxels.json`: the scene. It replaces the world, sets the starting sky and fog, adds a sun, and
+  attaches `VoxelGame` to the root.
+- `resources/scripts/VoxelGame.py`: the game. It asks for the chunks near the player (`VIEW_RADIUS` = 14 chunks each way,
+  841 in all), moves the player and the camera, edits blocks, runs the day and night cycle, and writes
+  `cg_control/voxel_state.json` four times a second: chunk counts, quads, the player, the frame time, the time of day, the
+  sun, the fog, the camera's own basis, and how long the load and the ghost take (`ready`, `timings`, `preview`).
+  The rest of the game is in mixins it inherits, so the methods still share its state: `VoxelConfig.py` (the constants and the
+  helpers), `VoxelHud.py` (the HUD and the menus' drawing), `VoxelInventoryScreen.py` (the inventory and the crafting panel),
+  `VoxelNetSync.py` (two processes sharing their edits) and `VoxelSettingsMenu.py` (the pause menu and its settings).
+- `resources/scripts/VoxelPhysics.py`: the Python reference for the body mover on the skin (the game runs `world.step_body` in C++), and block
+  picking. Pure Python: `python -I tools/test_voxel_physics.py` checks it without the engine.
+- `resources/scripts/VoxelWalkers.py`: creatures that wander the terrain (`VOXEL_WALKERS`, 12 by default). Each is a box
+  mesh that the engine's voxel walker moves once per update, so it stands on the ground, turns at walls, jumps a block, and
+  does not fall through unloaded terrain. A creature runs from the player when it comes within 4.5 blocks.
+  `tools/voxel_world_check.py` checks them.
+- `resources/scripts/VoxelShapes.py`: the box meshes the outline and the creatures are made from.
+- `resources/scripts/VoxelGen.py`: block ids, colours and the tree chance. The terrain itself is C++ (below).
+- `resources/voxel_noise.png`: the base texture, a light grey noise, tinted per block. `tools/make_voxel_texture.py`
+  writes it again.
+
+## Architecture
+
+Chunks are built in the background, so the frame never waits for terrain or meshes:
+
+1. `request_chunk` queues a chunk. A worker thread generates its blocks (`src/Core/Voxel/VoxelTerrain.cpp`: smooth noise
+   for the columns, stone, dirt and a surface, water up to sea level, and trees).
+2. `update` installs the finished blocks, marks the chunk and its neighbours dirty, and starts meshing up to 16 dirty
+   chunks, nearest the player first. Meshing works on a copy: the chunk with a one-block border of its neighbours
+   (`src/Core/Voxel/VoxelMesher.cpp`).
+3. The mesher draws only faces against air, merges coplanar faces with the same block, shade and occlusion into one
+   quad (greedy meshing), and darkens corners next to solid blocks (ambient occlusion).
+4. `update` uploads the finished meshes until its time budget (2 ms) is spent, at least one per call. The upload makes
+   the chunk's body (`voxel_chunk_<cx>_<cz>`, a runtime mesh). The GPU copy is replaced in place when a chunk changes.
+
+The surface is a smooth skin by default (`VOXEL_SMOOTH`, samples per block, 1 by default; 0 draws cubes). The skin is
+surface nets (`buildSmoothMesh` in `src/Core/Voxel/VoxelMesher.cpp`): the blocks' occupancy, interpolated between block
+centres, is a density, and the surface is where it crosses one half. The blocks stay the truth for collision and editing;
+the skin is what is drawn. Each chunk's skin is a function of the blocks around it, so chunks join without cracks.
+
+Chunk vertices are 48 bytes, against 80 for an ordinary mesh vertex: they leave out the bone fields. Every attribute is a
+float, because the NVIDIA driver read byte attributes several times slower per draw.
+
+Trees are placed by a hash of each column, so every chunk computes the same trees. A trunk is 4 to 6 blocks of wood,
+with a crown of leaves. The crown is solid, so it casts the same ambient occlusion as the stone.
+
+```python
+world = cge.VoxelWorld(16, 64, "voxel")       # chunk size, world height, material for every chunk
+world.set_colour(1, cge.Vector3f(0.36, 0.72, 0.26))
+world.set_terrain(seed=1, sea_level=14, base_height=8, height_range=44, snow_level=40, tree_chance=0.01)
+world.request_chunk(0, 0)                      # generated on a worker; world.is_loaded(0, 0) once installed
+world.update(2.0, focus_x=0, focus_z=0)        # once a frame: install, upload within 2 ms, start meshing
+world.set_block(3, 10, 5, 0)                   # remove one block; its chunks are re-meshed by update()
+world.get_block(3, 10, 5)                      # 0 for air, and for chunks that are not loaded
+world.light_at(3, 10, 5)                       # sky light, 0 to 255 (computed on demand, for queries)
+cge.add_voxel_walker("creature", world)       # a mesh body that falls, lands and walks on the world (C++, each update)
+cge.set_voxel_velocity("creature", 1.0, 0.0)   # horizontal velocity; cge.voxel_jump(name, 9.0) jumps from the ground
+cge.voxel_walker_state("creature")             # (pos, vel, on_ground); cge.remove_voxel_walker(name) before dropping the world
+world.unload_chunk(0, 0)
+world.stats()                                  # chunks, loaded, pending, dirty, meshing, quads, upload_ms
+
+cge.set_environment(sky=cge.Vector3f(0.56, 0.76, 0.95), fog=cge.Vector3f(0.56, 0.76, 0.95),
+                    fog_start=52, fog_end=104)  # the sky is the clear colour; fog fades from start to end
+cge.set_light("sun", direction=cge.Vector3f(0, -1, 0), brightness=0.9)   # a scene light, changed live
+```
+
+Only `update` and the block setters touch the world; the workers see copies. Call `world.clear()` before dropping a
+world, so its chunk bodies are removed too.
+
+## Runtime meshes (`cge.create_mesh_body`)
+
+A mesh can be made from arrays. Arrays are `array.array`: `'f'` for numbers that are float32, `'I'` for indices.
+
+```python
+from array import array
+cge.create_mesh_body("tri", array("f", [0, 0, 0, 1, 0, 0, 0, 1, 0]),   # positions, 3 per vertex
+                     array("f"), array("f", [1, 0, 0] * 3),           # normals (empty: up), colours (3 per vertex)
+                     array("f"), array("f"),                           # uvs (2 per vertex), material ids
+                     array("I", [0, 1, 2]), ["voxel"], cge.Vector3f(0, 0, -5))
+cge.update_mesh_body("tri", ...)   # same arguments; the GPU copy is updated before the next frame
+cge.remove_mesh_body("tri")        # removes the body and frees its GPU buffers
+```
+
+Only bodies made this way can be updated. Each vertex's colour multiplies the surface colour, so colours tint a texture.
+
+## Player
+
+The player is a box 0.6 wide and 1.8 tall, with its feet at `pos`. It collides with the skin the terrain is drawn with,
+not with the blocks under it: the skin is the surface at density 0.3 of the blocks' occupancy, so the feet stand on the
+visible ground and the eye (1.6 above the feet, a point of the box) stays out of the walls. `world.step_body` (C++) moves
+the box one axis at a time, in steps of at most 0.1 blocks, and sets it flush against the surface by bisection. A walk
+that is blocked on the ground climbs one block and snaps back down, so the player walks up hills and over one-block
+steps; a four-block wall stops it. The camera follows the eye's height over a few frames, so a step is seen as a step.
+Gravity is 28 blocks per second squared; a jump is 9 blocks per second. The block picked is the first solid one along
+the view, within 6 blocks. Picking follows the drawn surface: the ray is marched through the skin to the surface under the
+crosshair, then the block behind it is the one picked. A block is not placed
+where the player stands.
+
+## Performance
+
+Release, 841 chunks in view: about 180 frames a second standing still on this machine, with about 0.55 million quads (the
+chunks more than 12 from the player are far skins, sampled every second block; `VOXEL_FAR_RADIUS` moves that line). The view
+distance is set on the settings page. Measured with `tools/voxel_perf.ps1` at each step (see the roadmap, 15.3 and 15.5): at
+24 about 80 frames a second, at 40 about 27, and the cost there is the number of chunk draws. `tools/test_voxels.ps1` checks
+the load, the walk, the view's level and the worst frame. `tools/voxel_load.ps1` measures how long the ground takes to arrive
+after a move (roadmap 22.1), and `tools/run_tests.ps1` runs every suite (`-Engine` for the ones that start the game).
+
+## Two players on one machine (roadmap 18.2, 18.3)
+
+Start one game with `VOXEL_NET=listen:7790` and a second with `VOXEL_NET=connect:127.0.0.1:7790`, both with the same
+`VOXEL_SEED`. Each shows the other as a box where its feet are. The listening game is the host and owns the world: it applies
+the edits (blocks, torches, hits, damage) and the block physics, and it sends each changed cell to the client. A client makes
+its edit at once, then asks the host for it (a request), and the host's answer overwrites the client's cell, so a request the
+host refuses is undone on the client. A client that connects later is sent every edited cell. Each game keeps its own
+inventory and health, and the creatures are not shared yet. `tools/test_voxel_net.ps1` runs the two processes and checks the
+sharing, including a refused placement and a client that joins late. There is no security, and the host still opens a window:
+a headless host is the next step (18.1).
+
+## Limits
+
+- Light is baked when a chunk is meshed, so an edit that lets the sky into a cave shows once the chunks around it are
+  re-meshed, a few frames later.
+- The simulation runs on the loaded chunks only. The player's collision is the skin, in C++ (`world.step_body`), and the
+  Python version (`VoxelPhysics.step`) stays as the reference that the tests and `tools/voxel_world_check.py` compare with.
+  Unloaded chunks count as solid, so a body cannot walk out of the loaded world.
+- Water is opaque, and the player cannot climb out of a pool onto its bank. The smooth skin has two levels of detail: two samples a block within 3 chunks of the player, and one a block beyond that.
+- Each chunk is one draw call. Region batching (several chunks in one mesh) is the next step if the draw count
+  becomes the limit.

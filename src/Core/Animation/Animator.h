@@ -17,6 +17,9 @@ namespace CGEngine {
 		void playAnimation(const string& animationName);
 		void calculateBoneTransform(const NodeData* node, glm::mat4 parentTransform);
 		vector<glm::mat4> getBoneMatrices();
+		/// The model-space transform of a node of the clip at the current time, with the bone's inverse bind pose not applied: where the
+		/// bone is, for an object that follows it. False if the clip has no node of that name.
+		bool getNodeTransform(const string& nodeName, glm::mat4& out) const;
 		void setSkeleton(Skeleton* skeleton) { this->skeleton = skeleton; }
 		/// Name of the clip being played, or empty if none.
 		string getCurrentAnimationName() const;
@@ -40,6 +43,8 @@ namespace CGEngine {
 		/// The matrix transformation passed to the shader for each bone in a pose
 		/// </summary>
 		vector<glm::mat4> pose;
+		/// Each node's model-space transform from the last update (see getNodeTransform).
+		map<string, glm::mat4> nodeTransforms;
 		Animation* currentAnimation;
 		float currentTime = 0.0;
 		/// <summary>

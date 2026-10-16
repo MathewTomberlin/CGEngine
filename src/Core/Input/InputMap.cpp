@@ -2,7 +2,18 @@
 #include "../Engine/Engine.h"
 
 namespace CGEngine {
+    namespace {
+        // Characters typed in the window, collected as events arrive and handed out by InputMap::takeTypedText.
+        std::u32string typedText;
+    }
+
     InputMap::InputMap() : window(nullptr) { }
+
+    std::u32string InputMap::takeTypedText() {
+        std::u32string text;
+        text.swap(typedText);
+        return text;
+    }
 
     void InputMap::clear() {
         domains.clear();
@@ -130,6 +141,7 @@ namespace CGEngine {
     }
 
     void InputMap::gather() {
+        if (!window) return; // Headless: no window, so no events (the control channel still drives the game).
         //Poll window events
         while (const optional event = window->pollEvent()) {
             if (event->is<Event::Closed>()) {
@@ -147,14 +159,17 @@ namespace CGEngine {
                 callDomain(InputCondition((int)mouseReleased->button, InputType::Button, InputState::Released), map<string, any>({ {"evt",mouseReleased } }));
             }
             else if (const auto* textEntered = event->getIf<Event::TextEntered>()) {
+                typedText.push_back(textEntered->unicode);
                 callDomain(InputCondition(0, InputType::Character, InputState::Atomic), map<string, any>({ {"evt", textEntered } }));
             }
             else if (const auto* mouseMoved = event->getIf<Event::MouseMoved>()) {
                 cursorPosition = mouseMoved->position;
                 callDomain(InputCondition(0, InputType::Cursor, InputState::Atomic), map<string, any>({ {"evt", mouseMoved->position } }));
             } else if (const auto* resized = event->getIf<sf::Event::Resized>()) {
-                // adjust the viewport when the window is resized
-                glViewport(0, 0, resized->size.x, resized->size.y);
+                // adjust the viewport when the window is resized. The event's size can be one from before a change made in
+                // the same frame (full screen switches the window in steps), so the window's own size is used.
+                const sf::Vector2u size = window->getSize();
+                glViewport(0, 0, static_cast<GLsizei>(size.x), static_cast<GLsizei>(size.y));
             }
         }
     }

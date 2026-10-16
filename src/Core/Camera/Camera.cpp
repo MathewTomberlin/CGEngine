@@ -27,11 +27,14 @@ namespace CGEngine {
 		}
 	}
 
+	// The view turns in this order: yaw about the world up axis, then pitch about the turned camera's own X axis, then roll
+	// about its view axis. Pitch therefore always tilts the view up or down, whatever the yaw, and the horizon stays level.
+	// (With pitch applied first, the horizon tilts by the pitch at any yaw except 0 and 180 degrees.)
 	glm::mat4 Camera::getOrientation() const {
 		glm::mat4 orientation;
 		orientation = glm::rotate(glm::radians(angleZ), glm::vec3(0, 0, 1));
-		orientation *= glm::rotate(glm::radians(angleY), glm::vec3(0, 1, 0));
 		orientation *= glm::rotate(glm::radians(angleX), glm::vec3(1, 0, 0));
+		orientation *= glm::rotate(glm::radians(angleY), glm::vec3(0, 1, 0));
 		return orientation;
 	}
 
@@ -46,8 +49,13 @@ namespace CGEngine {
 		glm::vec3 pos(position.x, position.y, position.z);
 		assert(pos != this->position);
 		glm::vec3 direction = glm::normalize(pos - this->position);
-		angleY = glm::radians(asinf(-direction.y));
-		angleX = -glm::radians(atan2f(-direction.x, -direction.z));
+		// The view direction getOrientation gives is (sin Y cos X, -sin X, -cos Y cos X), so the angles follow from the
+		// direction with no ambiguity. Straight up or down the yaw is not determined: keep the current one.
+		angleX = glm::degrees(asinf(glm::clamp(-direction.y, -1.0f, 1.0f)));
+		const float horizontal = sqrtf(direction.x * direction.x + direction.z * direction.z);
+		if (horizontal > 1e-6f) {
+			angleY = glm::degrees(atan2f(direction.x, -direction.z));
+		}
 		normalizeAngles();
 	}
 

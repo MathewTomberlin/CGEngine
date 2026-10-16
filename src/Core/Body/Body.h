@@ -1,6 +1,7 @@
 #pragma once
 
 #define _USE_MATH_DEFINES
+#include "glm.hpp"
 #include <math.h>
 #include <memory>
 #include "../Types/V2.h"
@@ -50,6 +51,8 @@ namespace CGEngine {
     /// 
     /// A Body creates a bounds RectangleShape and updates it with its entity. The bounds may be drawn by setting the correct setting in the World.
     /// </summary>
+    class Animator;
+
     class Body : public Transformable, public Drawable, public ScriptController, public IResource {
     public:
         using ScriptEventHandler = std::variant<ScriptEvent, pybind11::object>;
@@ -93,6 +96,20 @@ namespace CGEngine {
 
         std::optional<id_t> getParentId() const { return parentId; }
         Body* getParent() const;
+
+        /// Give this body the animator of a model instance. Only the root of an instance holds one, so every mesh of the instance
+        /// (its child bodies) plays the same clip, and two instances of one model animate on their own.
+        void setInstanceAnimator(Animator* animator);
+        /// The instance animator of this body, or of the nearest parent that has one. nullptr if the body is in no instance.
+        Animator* findInstanceAnimator() const;
+        /// A body that follows a bone of another body's model instance. Its matrix is the target's, then the bone's pose, then offset,
+        /// then its own mesh (see Renderer::getCombinedModelMatrix), so it moves with the bone and not with its parents. Set by cge.attach_to_bone.
+        struct BoneAttachment {
+            id_t target;
+            string bone;
+            glm::mat4 offset;
+        };
+        std::optional<BoneAttachment> boneAttachment;
         /// <summary>
         /// Return the drawn Shape as an object of the indicated type
         /// </summary>
@@ -308,7 +325,7 @@ namespace CGEngine {
         /// <returns>True if the Body will be rendered</returns>
         bool getRenderingEnabled() const;
         /// <summary>
-        /// Disable rendering of this Body (by world->renderWorld())
+        /// Enable or disable rendering of this Body and all of its children (by world->renderWorld())
         /// </summary>
         /// <param name="visible">Whether the Body is visible or not</param>
         void setRenderingEnabled(bool enabled);
@@ -598,6 +615,14 @@ namespace CGEngine {
         /// in front of their parents
         /// </summary>
         int zOrder = 0;
+        // Drawn after the opaque bodies, blended and without writing depth, so what is behind it still shows (the voxel water).
+        bool transparent = false;
+        // Drawn last, with the depth test off, so it shows through whatever is in front of it (the block outlines in the voxel sample).
+        bool xray = false;
+        // Drawn after the scene with the depth buffer cleared, so it is never clipped by the world: a first-person hand or a held item.
+        bool viewmodel = false;
+        /// Drawn over the scene in window pixels, like a text label (the HUD's rectangles are overlays).
+        bool overlay = false;
         /// <summary>
         /// The amount of time between calling scripts in the "update" domain for this Body
         /// </summary>
@@ -675,6 +700,8 @@ namespace CGEngine {
         /// The assigned Transformable entity
         /// </summary>
         unique_ptr<Transformable> entity = nullptr;
+        /// The animator of the model instance this body roots, if any (see setInstanceAnimator).
+        Animator* instanceAnimator = nullptr;
         /// <summary>
         /// The Behaviors assigned to this Body
         /// </summary>
@@ -723,6 +750,7 @@ namespace CGEngine {
         /// <summary>
         /// The map of listener ids by domain for the Body so they may be erased when the Body is deleted
         /// </summary>
+        optional<id_t> registerActuator(InputCondition condition, Actuator* actuator);
         map<InputCondition, vector<id_t>> listenerIds;
         /// <summary>
         /// Add the listener id so that it can be erased when the Body is deleted

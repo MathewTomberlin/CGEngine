@@ -1,5 +1,13 @@
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 #include "Screen.h"
 #include "../Engine/Engine.h"
+#include <cstdlib>
+#include <string>
 
 namespace CGEngine {
     Screen::Screen(Vector2i size, string title, bool fullscreen) : windowTitle(title) {
@@ -80,9 +88,59 @@ namespace CGEngine {
     }
 
     RenderWindow* Screen::createWindow() {
-        window = make_unique<RenderWindow>(VideoMode(size), windowTitle);
+        // CGENGINE_FULLSCREEN=1 opens the window full screen at the desktop's resolution. It is read once, at start-up:
+        // changing the mode later would recreate the window and its GL context.
+        const char* fullscreenSetting = std::getenv("CGENGINE_FULLSCREEN");
+        if (fullscreenSetting && std::string(fullscreenSetting) == "1") {
+            const VideoMode desktop = VideoMode::getDesktopMode();
+            setSize(Vector2i(static_cast<int>(desktop.size.x), static_cast<int>(desktop.size.y)));
+            window = make_unique<RenderWindow>(desktop, windowTitle, Style::Default, State::Fullscreen);
+            fullscreen = true;
+        } else {
+            window = make_unique<RenderWindow>(VideoMode(size), windowTitle);
+        }
+        // CGENGINE_UNATTENDED=1 (the test scripts set it) keeps the window hidden: a run without a person at the machine does not
+        // appear on screen or take the focus. The GL context still works, so frames and screenshots are as before.
+        if (std::getenv("CGENGINE_UNATTENDED")) window->setVisible(false);
         initView();
         return window.get();
+    }
+
+    bool Screen::setFullscreen(bool on) {
+#ifdef _WIN32
+        if (!window) return false;
+        if (on == fullscreen) return true;
+        // An unattended run has a hidden window: a full screen change would show it over the desk, so only the flag changes.
+        if (std::getenv("CGENGINE_UNATTENDED")) {
+            fullscreen = on;
+            return true;
+        }
+        HWND handle = static_cast<HWND>(window->getNativeHandle());
+        if (on) {
+            windowedPosition = window->getPosition();
+            windowedSize = window->getSize();
+            const Vector2u desktop = VideoMode::getDesktopMode().size;
+            SetWindowLongPtr(handle, GWL_STYLE, WS_POPUP | WS_VISIBLE);
+            SetWindowPos(handle, HWND_TOP, 0, 0, static_cast<int>(desktop.x), static_cast<int>(desktop.y), SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+            window->setPosition(Vector2i(0, 0));
+            window->setSize(desktop);
+        } else {
+            SetWindowLongPtr(handle, GWL_STYLE, WS_OVERLAPPEDWINDOW | WS_VISIBLE);
+            SetWindowPos(handle, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+            window->setSize(windowedSize);
+            window->setPosition(windowedPosition);
+        }
+        fullscreen = on;
+        // The size the view is laid out for is the window's new size; a resize event follows for the GL viewport.
+        const Vector2u now = window->getSize();
+        setSize(V2f(static_cast<float>(now.x), static_cast<float>(now.y)));
+        initView();
+        glViewport(0, 0, static_cast<GLsizei>(now.x), static_cast<GLsizei>(now.y));
+        return true;
+#else
+        (void)on;
+        return false;
+#endif
     }
 
     void Screen::initView() {

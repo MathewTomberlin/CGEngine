@@ -1,0 +1,5 @@
+{
+  "rules": [
+    {"block": "grass", "touches": "water", "becomes": "dirt", "chance": 0.5}
+  ]
+}

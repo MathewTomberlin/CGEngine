@@ -14,6 +14,9 @@ namespace CGEngine {
         size_t materials = 0;
         size_t lights = 0;
         size_t bodies = 0;
+        size_t scripts = 0;
+        /// Wall time of loadFile (read, parse and build), in milliseconds. Set by loadFile only.
+        double loadMs = 0.0;
     };
 
     /// <summary>
@@ -24,5 +27,8 @@ namespace CGEngine {
     public:
         static SceneLoadResult loadFile(const std::filesystem::path& path);
         static SceneLoadResult loadJson(const nlohmann::json& scene);
+
+    private:
+        static SceneLoadResult loadFileUntimed(const std::filesystem::path& path);
     };
 }

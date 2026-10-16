@@ -1,9 +1,16 @@
+#pragma once
+
 #include <pybind11/embed.h>
 #include <pybind11/stl.h>
 #include <string>
 #include <vector>
+#include <map>
+#include <stdexcept>
 #include <filesystem>
 #include <iostream>
+
+// Defined in src/Bindings/CoreBindings.cpp. Referencing it keeps the embedded Python module in the link.
+extern bool cgEngineBindingsLinked;
 
 inline std::filesystem::path getExecutableDirectory() {
     return std::filesystem::current_path();
@@ -14,7 +21,10 @@ namespace CGEngine {
 
 	class PyInterpreter {
     public:
-        PyInterpreter() { 
+        /// Message from the last failed runScript call, empty if it succeeded.
+        std::string lastError;
+
+        PyInterpreter() {
             try {
                 std::filesystem::path exeDir = getExecutableDirectory();
                 std::filesystem::path bindingsDir = exeDir;
@@ -72,6 +82,7 @@ namespace CGEngine {
         bool runScript(const std::string& scriptPath) {
             // Acquire the Python Global Interpreter Lock
             py::gil_scoped_acquire acquire;
+            lastError.clear();
 
             try {
                 // Use py::eval_file to execute the script.
@@ -81,6 +92,7 @@ namespace CGEngine {
                 // Check if a Python exception occurred *during* execution but was handled within Python
                 if (PyErr_Occurred()) {
                     py::error_already_set error; // Fetch the error
+                    lastError = error.what();
                     std::cerr << "[PyInterpreter] Python handled error running PyScript '" << scriptPath << "': " << error.what() << std::endl;
                     PyErr_Clear(); // Clear the error state
                     return false;
@@ -89,11 +101,13 @@ namespace CGEngine {
 
             } catch (const py::error_already_set& e) {
                 // Catch exceptions thrown by py::eval_file (syntax errors, runtime exceptions)
+                lastError = e.what();
                 std::cerr << "[PyInterpreter] Python error running PyScript '" << scriptPath << e.what() << std::endl;
                 // PyErr_Clear() is implicitly handled by error_already_set destructor
                 return false;
             } catch (const std::exception& e) {
                 // Catch C++ exceptions during the process
+                lastError = e.what();
                 std::cerr << "[PyInterpreter] C++ error running PyScript'" << scriptPath << "': " << e.what() << std::endl;
                 return false;
             }
@@ -168,12 +182,37 @@ namespace CGEngine {
         
         //This is name of the PyScript factory method to be called
         const std::string PYSCRIPT_FACTORY_METHOD = "create_instance";
-        
+
+        /**
+         * @brief Registers a control command written in Python (cge.add_command). The control channel runs it for a command
+         * name that has no built-in. The handler gets the command's params as JSON text and returns its result as JSON text.
+         */
+        void addCommand(const std::string& name, py::function handler) {
+            py::gil_scoped_acquire acquire;
+            pythonCommands[name] = handler;
+        }
+
+        bool hasCommand(const std::string& name) const { return pythonCommands.count(name) > 0; }
+
+        /**
+         * @brief Runs a registered command. Throws std::runtime_error with the Python error text if the handler raises.
+         */
+        std::string runCommand(const std::string& name, const std::string& paramsJson) {
+            py::gil_scoped_acquire acquire;
+            try {
+                py::object result = pythonCommands.at(name)(paramsJson);
+                return py::cast<std::string>(result);
+            } catch (const py::error_already_set& e) {
+                throw std::runtime_error(e.what());
+            }
+        }
+
         PyInterpreter(const PyInterpreter&) = delete;
         PyInterpreter& operator=(const PyInterpreter&) = delete;
         PyInterpreter(PyInterpreter&&) = delete;
         PyInterpreter& operator=(PyInterpreter&&) = delete;
     private:
 		pybind11::scoped_interpreter guard{};
+		std::map<std::string, py::function> pythonCommands;
 	};
 }

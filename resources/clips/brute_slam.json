@@ -1,0 +1,74 @@
+{
+  "version": 1,
+  "name": "brute_slam",
+  "model": "models/dungeon/brute_rig.fbx",
+  "durationSeconds": 0.7,
+  "channels": [
+    {
+      "bone": "ArmR",
+      "rotation": [
+        {
+          "t": 0.0,
+          "euler": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "t": 0.25,
+          "euler": [
+            -120,
+            0,
+            0
+          ]
+        },
+        {
+          "t": 0.4,
+          "euler": [
+            60,
+            0,
+            0
+          ]
+        },
+        {
+          "t": 0.7,
+          "euler": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "bone": "Body",
+      "rotation": [
+        {
+          "t": 0.0,
+          "euler": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "t": 0.4,
+          "euler": [
+            8,
+            0,
+            0
+          ]
+        },
+        {
+          "t": 0.7,
+          "euler": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
+    }
+  ]
+}
