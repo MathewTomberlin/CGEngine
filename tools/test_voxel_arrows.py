@@ -63,6 +63,25 @@ check("a point inside a creature's box is a hit, and a point just outside it is 
       and not arrows.hits_box((2.0, 1.0, 1.0), (0.5, 0.5, 0.5), (1.5, 1.5, 1.5)))
 check("the arrow's life is a few seconds", 1.0 <= arrows.LIFE_SECONDS <= 10.0)
 
+# The arrow points along its flight: turning +z by facing(velocity) gives the velocity's direction, for each direction.
+def turn(v, rot):
+    """v turned by rot in degrees, as the engine does it: about x, then y, then z (Z * Y * X)."""
+    rx, ry, rz = (math.radians(a) for a in rot)
+    x, y, z = v
+    y, z = y * math.cos(rx) - z * math.sin(rx), y * math.sin(rx) + z * math.cos(rx)
+    x, z = x * math.cos(ry) + z * math.sin(ry), -x * math.sin(ry) + z * math.cos(ry)
+    x, y = x * math.cos(rz) - y * math.sin(rz), x * math.sin(rz) + y * math.cos(rz)
+    return (x, y, z)
+worst = 0.0
+for velocity in [(0.0, 0.0, 1.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, -1.0, 0.0), (-3.0, 4.0, 0.5),
+                 (2.0, -5.0, -7.0), (-0.2, -0.1, -0.9)]:
+    length = math.sqrt(sum(v * v for v in velocity))
+    want = [v / length for v in velocity]
+    got = turn((0.0, 0.0, 1.0), arrows.facing(velocity))
+    worst = max(worst, max(abs(got[i] - want[i]) for i in range(3)))
+check("an arrow points along its flight, whatever the direction (worst error %.1e)" % worst, worst < 1e-6)
+check("an arrow with no velocity keeps its rotation", arrows.facing((0.0, 0.0, 0.0)) == (0.0, 0.0, 0.0))
+
 if failures:
     print(f"\n{len(failures)} check(s) failed")
     sys.exit(1)
