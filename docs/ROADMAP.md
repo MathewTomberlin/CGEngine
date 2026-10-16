@@ -804,7 +804,9 @@ Goal: an item looks like the thing it is: a tool is shaped, textured and held, a
 - [~] **34.1** Tool models in Blender: a pickaxe with a handle that is turned and worn, and a head with bevelled edges and a material
   (stone for the pickaxe, iron for the iron pickaxe), exported as FBX (`tools/blender/tool_models.py`: `item_pickaxe.fbx` with the
   Stone head, `item_pickaxe_iron.fbx` with the Iron head, whose metallic term is 1 (35.2); both have a Wood handle). Not yet: the models
-  are not checked in hand (the view shot did not show the item), and a dropped tool still lies on the ground as a cube (a model drop is not done).
+  are now held in hand (`voxel_view_shot.ps1 -View hands -Item pickaxe`): the models were 100 times too big until they were exported at the
+  viewmodel scale (0.01), and the held offset is the sword's, placed by eye, so the grip is close but not tuned. Not yet: a dropped tool
+  still lies on the ground as a cube (a model drop is not done).
 - [ ] **34.2** A held tool in the first-person view: the selected tool's model is drawn in the hand, and each swing that hits a block
   plays its swing clip (the hand moves; a sound alone is not enough).
 - [ ] **34.3** Icons: each tool's icon is a render of its model (the viewport screenshot through BlenderMCP, saved as a PNG), shown on

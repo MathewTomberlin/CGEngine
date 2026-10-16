@@ -23,6 +23,8 @@ from mathutils import Vector
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT_DIR = os.path.normpath(os.path.join(HERE, "..", "..", "resources", "models", "viewmodel"))
 COLLECTION = "ToolModels"
+# The engine reads an FBX's numbers as blocks, and Blender's importer scales them by 0.01 (the existing viewmodel files are the same): export at 0.01.
+FBX_SCALE = 0.01
 HANDLE_LENGTH = 0.66
 HANDLE_RADIUS = 0.024
 HEAD_SPAN = 0.46            # across the handle, the head's length
@@ -149,7 +151,7 @@ def export(objects, path):
     bpy.context.view_layer.objects.active = objects[0]
     os.makedirs(os.path.dirname(path), exist_ok=True)
     bpy.ops.export_scene.fbx(filepath=path, use_selection=True, object_types={"MESH"},
-                             global_scale=1.0, apply_scale_options="FBX_SCALE_NONE", apply_unit_scale=True,
+                             global_scale=FBX_SCALE, apply_scale_options="FBX_SCALE_NONE", apply_unit_scale=True,
                              bake_space_transform=True, add_leaf_bones=False, mesh_smooth_type="FACE")
     print("exported", path)
 
