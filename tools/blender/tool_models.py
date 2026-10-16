@@ -62,7 +62,7 @@ def make_handle():
     rings, sides = 14, 12
     for i in range(rings + 1):
         t = i / rings
-        z = -HANDLE_LENGTH / 2 + t * HANDLE_LENGTH
+        z = t * HANDLE_LENGTH                      # the origin is the grip: the handle runs from z 0 up to the head
         # The grip swells in the lower half and tapers to the top; the bend moves the top toward +X.
         radius = HANDLE_RADIUS * (1.0 + 0.25 * math.sin(math.pi * t) * (1.0 - t))
         bend = 0.012 * (t * t)
@@ -102,7 +102,7 @@ def make_head(name, material_name, colour):
         y = HEAD_HEIGHT * (1.0 - u * u) - HEAD_HEIGHT / 2
         taper = max(0.12, 1.0 - u ** 6)        # narrow to the tips
         half = HEAD_DEPTH / 2 * taper
-        z = HANDLE_LENGTH / 2                  # the head sits on the top of the handle
+        z = HANDLE_LENGTH                      # the head sits on the top of the handle
         sections.append([
             bm.verts.new((x, y, z + half)),
             bm.verts.new((x, y + half, z)),

@@ -31,32 +31,32 @@
       "hand": "R",
       "Held_Item_Offset_Transform": {
         "position": [
-          -0.15,
-          0.035,
-          -0.060622
+          0.0,
+          0.0,
+          0.0
         ],
         "rotation": [
-          110.0,
-          -30.0,
-          90.0
+          90.0,
+          0.0,
+          0.0
         ],
-        "scale": 0.45
+        "scale": 1.0
       }
     },
     "iron pickaxe": {
       "hand": "R",
       "Held_Item_Offset_Transform": {
         "position": [
-          -0.15,
-          0.035,
-          -0.060622
+          0.0,
+          0.0,
+          0.0
         ],
         "rotation": [
-          110.0,
-          -30.0,
-          90.0
+          90.0,
+          0.0,
+          0.0
         ],
-        "scale": 0.45
+        "scale": 1.0
       }
     },
     "sword": {
