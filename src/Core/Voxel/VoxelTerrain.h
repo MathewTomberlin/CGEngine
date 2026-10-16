@@ -37,9 +37,12 @@ namespace CGEngine {
 		// Height of the column at world (x, z), in blocks, from baseHeight up to baseHeight + heightRange.
 		int columnHeight(int x, int z) const;
 
-		// The biome of column (x, z): slow noise picks desert (sand on top, no trees), forest (many trees) or plains.
-		enum class Biome { Plains, Forest, Desert };
+		// The biome of column (x, z): slow noise picks the sea (a basin under the sea level, with sand and water), desert (sand on top,
+		// no trees), forest (many trees) or plains.
+		enum class Biome { Plains, Forest, Desert, Sea };
 		Biome biomeAt(int x, int z) const;
+		// How much of the sea column (x, z) is, from 0 (land) to 1 (the deep sea floor). The sea's shore is the range in between.
+		float seaWeight(int x, int z) const;
 
 		// Fills blocks for chunk (cx, cz): size * size * height blocks, block (x, y, z) at (y * size + z) * size + x.
 		// Trees are drawn last, into air only; the trees rooted just outside the chunk reach in and are drawn here too.

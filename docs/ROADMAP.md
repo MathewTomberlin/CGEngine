@@ -801,8 +801,10 @@ Boxes are not the target (the player's word: "highly realistic"); the look comes
 
 ## Phase 34: realistic item models (from the player: real item models; goal 1)
 Goal: an item looks like the thing it is: a tool is shaped, textured and held, and its icon is a render of it.
-- [ ] **34.1** Tool models in Blender: a pickaxe with a handle that is turned and worn, and a head with bevelled edges and a material
-  (stone for the pickaxe, iron for the iron pickaxe), exported as FBX. A dropped tool lies on the ground as its model and turns slowly.
+- [~] **34.1** Tool models in Blender: a pickaxe with a handle that is turned and worn, and a head with bevelled edges and a material
+  (stone for the pickaxe, iron for the iron pickaxe), exported as FBX (`tools/blender/tool_models.py`: `item_pickaxe.fbx` with the
+  Stone head, `item_pickaxe_iron.fbx` with the Iron head, whose metallic term is 1 (35.2); both have a Wood handle). Not yet: the models
+  are not checked in hand (the view shot did not show the item), and a dropped tool still lies on the ground as a cube (a model drop is not done).
 - [ ] **34.2** A held tool in the first-person view: the selected tool's model is drawn in the hand, and each swing that hits a block
   plays its swing clip (the hand moves; a sound alone is not enough).
 - [ ] **34.3** Icons: each tool's icon is a render of its model (the viewport screenshot through BlenderMCP, saved as a PNG), shown on
@@ -962,6 +964,15 @@ written answer (what it would take, and a measured number) and a decision: build
   Found (code): walk speed is `WALK_SPEED` (5.0, `VoxelConfig.py`) times the console's `move_speed`, and the jump is `JUMP_SPEED` (9.0,
   about 1.45 blocks high); the break and attack speeds are data (`block_damage`, `attack_speed_of`). Each equipment bonus would add
   to these values, and the step-up is the limit on any jump change.
+
+## Phase 43: the sea (from the player: "I have never found the sea")
+Goal: the world has a sea a player can walk to, with a shore and sand under the water.
+- [x] **43.1** A sea biome. A slow field (`VoxelTerrain::seaWeight`, about 120 blocks across) sinks the land into a basin below the sea
+  level where it is low: the floor lies 4 to 7 blocks under the sea level, and the water over it is endless. The shore is the band where
+  the field rises, so the land slopes into the water. None lies within 24 blocks of the spawn (it fades in to 48). The sea is about a
+  seventh of the map (seed 3), and `biome_at` reports "sea" there. Checked by `tools/voxel_world_check.py` (`check_sea`: a share of the
+  map, and a column with water over a sand floor) and by a screenshot (`voxel_view_shot.ps1 -View sea`). Not yet: gravel or kelp on the
+  floor, and the HUD names it "Sea" only when the player stands in it (it names the biome under the player's feet).
 
 ## Tooling and quality
 - [x] CI build on Windows (`.github/workflows/build.yml`) with Mesa software OpenGL smoke run

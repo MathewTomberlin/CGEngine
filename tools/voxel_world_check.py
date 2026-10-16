@@ -635,6 +635,35 @@ def measure_remesh(world, chunks, results):
     wait_meshed(world, chunks)
 
 
+def check_sea(world, checks, results):
+    """The sea (roadmap 40.5): a basin under the sea level, with its water on it and sand on its floor. It is a share of the map,
+    not all of it or none, and a column in it has water above its floor and nothing else."""
+    # Its own world: the chunks it loads must not change the checks that count the world's chunks after it.
+    world = cge.VoxelWorld(SIZE, HEIGHT, "voxel")
+    world.set_terrain(seed=3, sea_level=14, base_height=8, height_range=44, snow_level=40, tree_chance=0.01, cave_width=0.05)
+    grid = [(x, z) for x in range(-600, 600, 12) for z in range(-600, 600, 12)]
+    sea = [(x, z) for x, z in grid if world.biome_at(x, z) == "sea"]
+    share = len(sea) / len(grid)
+    results["seaShare"] = round(share, 3)
+    checks["the sea covers a share of the map, not all and not none"] = 0.02 <= share <= 0.4
+    if not sea:
+        checks["a sea column has water over a sand floor"] = False
+        return
+    x, z = sea[len(sea) // 2]
+    chunk = (x // SIZE, z // SIZE)
+    around = [(chunk[0] + dx, chunk[1] + dz) for dx in (-1, 0, 1) for dz in (-1, 0, 1)]
+    loaded = load_chunks(world, around)
+    floor = None
+    for y in range(HEIGHT - 1, 0, -1):
+        if world.get_block(x, y, z) not in (0, WATER, VOXEL_ENDLESS_WATER):
+            floor = y
+            break
+    results["seaColumn"] = [x, z, floor]
+    water_over = all(world.get_block(x, y, z) in (WATER, VOXEL_ENDLESS_WATER) for y in range(floor + 1, 14))
+    checks["a sea column has water over a sand floor"] = (loaded and floor is not None and floor < 14
+        and world.get_block(x, floor, z) == SAND and water_over)
+
+
 def check_rocks(world, chunks, checks, results):
     """Boulders are stone on the ground. The terrain's own columns end in grass, sand, snow or dirt, so a column whose top block
     is stone is a boulder. Some are in the chunks checked, and none is in the sea."""
@@ -949,9 +978,10 @@ def run(out_path="cg_control/voxel_check.json"):
     check_reactions(results)
     check_falling(results)
     check_far_feature(results)
-    biomes ={world.biome_at(x, z) for x in range(-200, 200, 10) for z in range(-200, 200, 10)}
-    results["check"]["biomes vary: plains, forest and desert occur"] = biomes == {"plains", "forest", "desert"}
+    biomes = {world.biome_at(x, z) for x in range(-200, 200, 10) for z in range(-200, 200, 10)}
+    results["check"]["biomes vary: plains, forest and desert occur"] = {"plains", "forest", "desert"} <= biomes
     results["biomes"] = sorted(biomes)
+    check_sea(world, results["check"], results)
 
     # An edit survives an unload of its chunk, and a save and load round trip.
     world.set_block(3, 20, 3, BLOCK_CHECK)

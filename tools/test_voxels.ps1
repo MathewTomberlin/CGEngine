@@ -174,7 +174,12 @@ cge.mouse_delta = lambda: (0.0, 0.0)
     Check "the camera looks where the player's yaw and pitch point (worst error $([math]::Round($aim, 6)))" ($samples -gt 0 -and $aim -lt 1e-4)
     Check "the day runs: the time of day moves while the game runs" ($after.time_of_day -ne $before.time_of_day)
     Check "the sun is up at the start (its light travels downwards)" ($before.sun[1] -lt -0.5)
-    Check "the fog is on and ends past the loaded chunks (fog $($after.fog[0]) to $($after.fog[1]))" ($after.fog[0] -gt 0 -and $after.fog[1] -gt $after.fog[0] -and $after.fog[1] -ge 100)
+    # Under water the fog is the water's own (short), so the walk may end in the sea (roadmap 40.5): then it is checked as water.
+    if ($after.swimming) {
+        Check "the fog is on under water (fog $($after.fog[0]) to $($after.fog[1]))" ($after.fog[0] -gt 0 -and $after.fog[1] -gt $after.fog[0])
+    } else {
+        Check "the fog is on and ends past the loaded chunks (fog $($after.fog[0]) to $($after.fog[1]))" ($after.fog[0] -gt 0 -and $after.fog[1] -gt $after.fog[0] -and $after.fog[1] -ge 100)
+    }
     Check "the player moved forward" (($after.player[2] - $before.player[2]) -ne 0 -or ($after.player[0] - $before.player[0]) -ne 0)
     Check "the worst frame while walking and turning is under $MaxFrameMs ms (was $([math]::Round($worst, 1)) ms)" ($samples -gt 0 -and $worst -lt $MaxFrameMs)
     Check "the chunks stay loaded while walking" ($after.loaded -ge 169)

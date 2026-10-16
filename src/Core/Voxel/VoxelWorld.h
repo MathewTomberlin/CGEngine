@@ -76,7 +76,7 @@ namespace CGEngine {
 		std::map<int, int> chunkGroupQuads(int cx, int cz) const;
 		// The generator's settings. Chunks requested later use them; loaded chunks keep what they have.
 		void setTerrain(const VoxelTerrain& settings) { terrain = settings; }
-		/// The biome of the column at world (x, z): "plains", "forest" or "desert" (see VoxelTerrain::biomeAt).
+		/// The biome of the column at world (x, z): "plains", "forest", "desert" or "sea" (see VoxelTerrain::biomeAt).
 		const char* biomeName(int x, int z) const;
 
 		int getBlock(int x, int y, int z) const;

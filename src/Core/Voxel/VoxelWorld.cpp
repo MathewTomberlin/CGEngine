@@ -221,6 +221,7 @@ namespace CGEngine {
 		switch (terrain.biomeAt(x, z)) {
 		case VoxelTerrain::Biome::Forest: return "forest";
 		case VoxelTerrain::Biome::Desert: return "desert";
+		case VoxelTerrain::Biome::Sea: return "sea";
 		default: return "plains";
 		}
 	}
