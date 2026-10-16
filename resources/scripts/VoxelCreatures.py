@@ -19,9 +19,11 @@ BITE = {"chase_pace", "bite_range", "bite_damage", "bite_interval", "prey_range"
 # Optional fields: "clips" names the clip each role plays (a kind whose model's clips are not named <clip_prefix>_<role>; a role it
 # leaves out is not played, so a kind with no hurt clip only flashes when hit); "flash_material" is the material drawn while a hit
 # flashes the creature (default: its own material).
-OPTIONAL = {"clips", "flash_material"}
+OPTIONAL = {"clips", "flash_material", "sight"}
+# "sight" is how far (in blocks, by day) a biter notices the player and chases it; it is scaled by the night like the default
+# (VoxelNight.CHASE_RANGE). A kind that does not bite has no sight: it runs away at its flee_range.
 CLIP_ROLES = {"walk", "bound", "attack", "hurt", "die"}
-POSITIVE = {"share", "pace", "flee_pace", "chase_pace", "bite_range", "bite_damage", "bite_interval", "prey_range"}
+POSITIVE = {"share", "pace", "flee_pace", "chase_pace", "bite_range", "bite_damage", "bite_interval", "prey_range", "sight"}
 NON_NEGATIVE = {"flee_range"}
 
 
@@ -57,6 +59,8 @@ def load(path):
         unknown = set(entry) - allowed
         if unknown:
             raise ValueError("creature %r: unknown or not allowed for this kind: %s" % (name, ", ".join(sorted(unknown))))
+        if "sight" in entry and not entry["bites"]:
+            raise ValueError("creature %r: 'sight' is for a biter (a kind that does not bite runs away at its flee_range)" % name)
         missing = (allowed - OPTIONAL) - set(entry)
         if missing:
             raise ValueError("creature %r: missing %s" % (name, ", ".join(sorted(missing))))
@@ -87,6 +91,8 @@ def load(path):
                 "clips": dict(clips) if clips is not None else None, "flash_material": flash_material}
         for key in (allowed - OPTIONAL) - {"name", "bites", "model", "material", "clip_prefix", "colours", "health"}:
             kind[key] = _number(name, key, entry[key])
+        if "sight" in entry:
+            kind["sight"] = _number(name, "sight", entry["sight"])
         kinds.append(kind)
     total = sum(kind["share"] for kind in kinds)
     if abs(total - 1.0) > 1e-6:

@@ -147,17 +147,39 @@ PICKAXE_BLOCKS = (STONE, COAL, IRON, BRICK, OBSIDIAN)   # the blocks a pickaxe m
 # block_damage: how much one strike breaks each block (a whole number of hits is made, and a part carries to the next strike);
 # a block it does not list takes harvest strikes' worth (1 for the hand, and the tool's harvest where it has one).
 # creature_damage: the health one strike takes from a creature (its health is VoxelCreatures' "health"); the hand does 1.
-TOOLS = {
-    PICKAXE: {"durability": 640, "tier": 1, "creature_damage": 1.5,
-              "block_damage": {STONE: 2, COAL: 2, IRON: 2, BRICK: 2, OBSIDIAN: 2}},
-    IRON_PICKAXE: {"durability": 2560, "tier": 2, "creature_damage": 1.75,
-                   "block_damage": {STONE: 3, COAL: 3, IRON: 3, BRICK: 3, OBSIDIAN: 3}},
-    SHOVEL: {"durability": 640, "tier": 0, "creature_damage": 1, "harvest": 1, "attack_speed": 3,
-             "block_damage": {DIRT: 8, SAND: 8, GRAVEL: 8}},
-}
-BLOCK_TIER = {OBSIDIAN: 2}
-# A weapon's durability is the strikes that hit a creature before it breaks (each strike takes one use, as a tool's swing does).
-WEAPONS = {SWORD: {"damage": 2.5, "durability": 1280}, BONE_BLADE: {"damage": 2, "durability": 30}}
+def _tools_table():
+    """The tool table, the mining tiers and the weapons from resources/voxel_tools.json (VOXEL_TOOLS picks another file). Each name
+    must be a constant of this file, so a typo in the data is an error here and not a silent gap in the game."""
+    if os.environ.get("VOXEL_TOOLS"):
+        path = os.environ["VOXEL_TOOLS"]
+    else:
+        here = os.path.dirname(os.path.abspath(__file__))
+        candidates = [os.path.join(here, "voxel_tools.json"), os.path.join(here, os.pardir, "voxel_tools.json")]
+        path = next((c for c in candidates if os.path.exists(c)), None)
+        if path is None:
+            raise FileNotFoundError("voxel_tools.json was not found beside the scripts or in resources")
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+
+    def ident(name):
+        value = globals().get(name)
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise ValueError("%s in %s is not a constant of VoxelGen.py" % (name, path))
+        return value
+
+    tools = {}
+    for entry in data["tools"]:
+        fields = {k: v for k, v in entry.items() if k != "key"}
+        fields["block_damage"] = {ident(block): hits for block, hits in entry.get("block_damage", {}).items()}
+        tools[ident(entry["key"])] = fields
+    tier = {ident(block): level for block, level in data["block_tier"].items()}
+    weapons = {ident(entry["key"]): {"damage": entry["damage"], "durability": entry["durability"]} for entry in data["weapons"]}
+    return tools, tier, weapons
+
+
+# The tools, the mining tiers and the weapons are data (resources/voxel_tools.json): a tool's durability, tier and damage, the blocks
+# it mines faster, and a weapon's damage and durability. See the file for what each field means.
+TOOLS, BLOCK_TIER, WEAPONS = _tools_table()
 # The buckets: an empty one is filled by a strike on a liquid, and a filled one places its liquid (VoxelGame, placement_check).
 BUCKETS = (BUCKET, WATER_BUCKET, LAVA_BUCKET)
 FILLED_BUCKET = {WATER: WATER_BUCKET, LAVA: LAVA_BUCKET}   # the bucket a liquid fills, by the liquid's source block
