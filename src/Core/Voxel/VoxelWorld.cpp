@@ -68,11 +68,34 @@ namespace CGEngine {
 		types.fill(BlockType());
 		types[0].solid = false;
 		types[VoxelTerrain::Sand].falls = true;
-		types[Water::Source] = BlockType{ false, false, true };
-		for (int id = Water::FlowFirst; id <= Water::FlowLast; ++id) types[static_cast<size_t>(id)] = BlockType{ false, false, true };
-		for (int id = LavaFlow.first; id <= LavaFlow.last; ++id) types[static_cast<size_t>(id)] = BlockType{ false, false, true };
-		types[LavaFlow.source] = BlockType{ false, false, true };
+		// Liquids are in their own mesh, drawn with their source's mesh, so the terrain's skin never counts them as ground (the game
+		// sets the same in defineBlock; this is the default for a world that defines no blocks).
+		const auto liquid = [](uint8_t source) {
+			BlockType type{ false, false, true };
+			type.own = true;
+			type.mesh = source;
+			type.blend = source == Water::Source;
+			type.passesLight = source == Water::Source;
+			return type;
+		};
+		// Each spring is its own mesh group's source (the water's group is 5, the lava's is LavaSpring): endless springs and the flows
+		// share it with the producing spring, and the volumes are drawn in it too (see the game's define_block).
+		types[Water::Source] = liquid(Water::Source);
+		types[Water::Endless] = liquid(Water::Source);
+		for (int id = Water::FlowFirst; id <= Water::FlowLast; ++id) types[static_cast<size_t>(id)] = liquid(Water::Source);
+		types[LavaSpring] = liquid(LavaSpring);
+		types[LavaEndless] = liquid(LavaSpring);
+		for (int id = LavaFlow.first; id <= LavaFlow.last; ++id) types[static_cast<size_t>(id)] = liquid(LavaSpring);
 		startWorkers();
+	}
+
+	std::vector<VoxelVertex> VoxelWorld::probeGroundMesh(int cx, int cz, uint8_t group) const {
+		PaddedChunk padded = snapshot(cx, cz, VoxelLightReach);
+		computeLight(padded);
+		computeSkin(padded);
+		MeshArrays part;
+		buildSmoothMesh(padded, palette, std::max(1, resolutionFor(cx, cz)), 1, 0, group, part);
+		return part.vertices;
 	}
 
 	void VoxelWorld::defineBlock(int blockId, const BlockType& type) {
@@ -563,6 +586,97 @@ namespace CGEngine {
 		if (chunk == propsByChunk.end()) return -1;
 		auto entry = chunk->second.find(localIndex(x - cx * size, y, z - cz * size));
 		return entry == chunk->second.end() ? -1 : entry->second;
+	}
+
+	std::pair<int, std::vector<std::array<int, 3>>> VoxelWorld::drainVolume(int x, int y, int z, int want, bool commit) {
+		// Breadth-first over the volume cells of the liquid, from the cell hit, so the nearest units go first. A cell holds up to 8 units.
+		struct Cell {
+			int x, y, z, units;
+		};
+		std::pair<int, std::vector<std::array<int, 3>>> result{ 0, {} };
+		const VolumeLiquid* family = volumeOf(static_cast<uint8_t>(getBlock(x, y, z)));
+		if (!family) return result;
+		const size_t MaxCells = 64;   // a bucket reaches this many cells of volume, which is more than any puddle a player makes
+		std::vector<Cell> cells;
+		std::vector<Cell> taken;
+		auto visited = [&cells](int cx, int cy, int cz) {
+			for (const Cell& c : cells) {
+				if (c.x == cx && c.y == cy && c.z == cz) return true;
+			}
+			return false;
+		};
+		cells.push_back({ x, y, z, family->units(static_cast<uint8_t>(getBlock(x, y, z))) });
+		const int Neighbours[6][3] = { { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 }, { 0, 0, 1 }, { 0, 0, -1 } };
+		for (size_t head = 0; head < cells.size() && result.first < want; ++head) {
+			const Cell cell = cells[head];
+			if (cell.units > 0) {
+				const int units = std::min(cell.units, want - result.first);
+				result.first += units;
+				taken.push_back({ cell.x, cell.y, cell.z, cell.units - units });
+			}
+			for (const auto& d : Neighbours) {
+				const int nx = cell.x + d[0], ny = cell.y + d[1], nz = cell.z + d[2];
+				if (cells.size() >= MaxCells || visited(nx, ny, nz)) continue;
+				const int units = family->units(static_cast<uint8_t>(getBlock(nx, ny, nz)));
+				if (units > 0) cells.push_back({ nx, ny, nz, units });
+			}
+		}
+		for (const Cell& cell : taken) {
+			result.second.push_back({ cell.x, cell.y, cell.z });
+			if (commit) setBlock(cell.x, cell.y, cell.z, cell.units == 0 ? 0 : family->block(cell.units));
+		}
+		return result;
+	}
+
+	std::pair<int, std::vector<std::array<int, 3>>> VoxelWorld::pourVolume(int x, int y, int z, int units, int unitOne, bool commit) {
+		// Breadth-first from the cell poured into, over air and the volume cells of the liquid that have room: the nearest cells fill first.
+		struct Cell {
+			int x, y, z, units;
+		};
+		std::pair<int, std::vector<std::array<int, 3>>> result{ 0, {} };
+		if (unitOne < 0 || unitOne > 255) return result;
+		const VolumeLiquid* family = volumeOf(static_cast<uint8_t>(unitOne));
+		if (!family || units <= 0) return result;
+		const size_t MaxCells = 64;
+		// The cells the liquid can go into: air, or the family's cells with room, as (x, y, z, units they hold now).
+		auto holds = [&](int cx, int cy, int cz) -> int {
+			const int block = getBlock(cx, cy, cz);
+			if (block == 0) return 0;
+			const int here = family->units(static_cast<uint8_t>(block));
+			return here > 0 ? here : -1;   // -1: another block, which takes no liquid
+		};
+		std::vector<Cell> cells;
+		std::vector<Cell> filled;
+		auto visited = [&cells](int cx, int cy, int cz) {
+			for (const Cell& c : cells) {
+				if (c.x == cx && c.y == cy && c.z == cz) return true;
+			}
+			return false;
+		};
+		const int start = holds(x, y, z);
+		if (start < 0) return result;
+		cells.push_back({ x, y, z, start });
+		const int Neighbours[6][3] = { { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 }, { 0, 0, 1 }, { 0, 0, -1 } };
+		for (size_t head = 0; head < cells.size() && result.first < units; ++head) {
+			const Cell cell = cells[head];
+			const int room = family->Full - cell.units;
+			if (room > 0) {
+				const int put = std::min(room, units - result.first);
+				result.first += put;
+				filled.push_back({ cell.x, cell.y, cell.z, cell.units + put });
+			}
+			for (const auto& d : Neighbours) {
+				const int nx = cell.x + d[0], ny = cell.y + d[1], nz = cell.z + d[2];
+				if (cells.size() >= MaxCells || visited(nx, ny, nz)) continue;
+				const int here = holds(nx, ny, nz);
+				if (here >= 0 && here < family->Full) cells.push_back({ nx, ny, nz, here });
+			}
+		}
+		for (const Cell& cell : filled) {
+			result.second.push_back({ cell.x, cell.y, cell.z });
+			if (commit) setBlock(cell.x, cell.y, cell.z, family->block(cell.units));
+		}
+		return result;
 	}
 
 	int VoxelWorld::hitBlock(int x, int y, int z) {
@@ -1065,7 +1179,8 @@ namespace CGEngine {
 			padded.rule[id].join = types[id].joinAbove;
 			padded.rule[id].joinBelow = types[id].joinBelow;
 			padded.rule[id].cube = types[id].cube;
-			padded.rule[id].transparent = types[id].transparent;
+			padded.rule[id].blend = types[id].blend;
+			padded.rule[id].passesLight = types[id].passesLight;
 			padded.rule[id].textured = types[id].textured;
 			padded.rule[id].splat = types[id].splat;
 			for (int k = 0; k < 3; ++k) padded.rule[id].tiles[k] = types[id].tiles[k];
@@ -1239,7 +1354,7 @@ namespace CGEngine {
 					std::move(part.mesh.indices), materials, position);
 				if (body) region.bodies[part.group] = body->getId().value_or(0);
 			}
-			if (body) body->transparent = types[part.group].transparent;
+			if (body) body->transparent = types[part.group].blend;
 		}
 		// A group that is drawn no more (its blocks were taken away) loses its body.
 		for (auto drawnBody = region.bodies.begin(); drawnBody != region.bodies.end();) {
@@ -1458,7 +1573,8 @@ namespace CGEngine {
 			padded.rule[id].join = types[id].joinAbove;
 			padded.rule[id].joinBelow = types[id].joinBelow;
 			padded.rule[id].cube = types[id].cube;
-			padded.rule[id].transparent = types[id].transparent;
+			padded.rule[id].blend = types[id].blend;
+			padded.rule[id].passesLight = types[id].passesLight;
 		}
 		const int cx = x - ox;
 		const int cy = y - oy;

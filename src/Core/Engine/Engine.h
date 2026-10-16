@@ -8,6 +8,7 @@
 #include "SFML/Graphics.hpp"
 #include "../AssetManager/AssetManager.h"
 #include "../Interpreter/PyInterpreter.h"
+#include "GLContext.h"
 
 namespace CGEngine {
 	extern WindowParameters windowParameters;

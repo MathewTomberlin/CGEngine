@@ -78,7 +78,7 @@
           -30.0,
           90.0
         ],
-        "scale": 0.0025
+        "scale": 0.01
       }
     },
     "water bucket": {
@@ -94,7 +94,7 @@
           -30.0,
           90.0
         ],
-        "scale": 0.0025
+        "scale": 0.01
       }
     },
     "lava bucket": {
@@ -110,7 +110,7 @@
           -30.0,
           90.0
         ],
-        "scale": 0.0025
+        "scale": 0.01
       }
     },
     "bone blade": {
@@ -163,8 +163,8 @@
       "hand": "R",
       "Held_Item_Offset_Transform": {
         "position": [
-          0.03,
-          0.15,
+          -0.15,
+          -0.02,
           -0.06
         ],
         "rotation": [

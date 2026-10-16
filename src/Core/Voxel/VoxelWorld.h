@@ -98,6 +98,14 @@ namespace CGEngine {
 		int healBlock(int x, int y, int z);
 		// The damage stage of the block at (x, y, z), 0 for none.
 		int damageAt(int x, int y, int z) const;
+		// Takes up to want units from the volume at (x, y, z) and the volume cells of the same liquid around it, nearest first,
+		// as a bucket does. Returns the units it took and the cells it changed. With commit false it only counts (the cells are
+		// not changed), so a bucket can check there is enough before it takes any.
+		std::pair<int, std::vector<std::array<int, 3>>> drainVolume(int x, int y, int z, int want, bool commit);
+		// Puts up to units of the liquid whose one unit is unitOne into the air at (x, y, z) and the volume cells around it (nearest
+		// first, each cell up to a full volume), as a bucket pours. Returns the units it placed and the cells it changed. With commit
+		// false it only counts. A caller that needs all of them placed checks that the count is units first.
+		std::pair<int, std::vector<std::array<int, 3>>> pourVolume(int x, int y, int z, int units, int unitOne, bool commit);
 		// Every prop as (x, y, z, dir). Props are kept with the edits, so a chunk that unloads keeps them.
 		std::vector<std::array<int, 4>> props() const;
 		// True if the column at (x, z) is in a loaded chunk, so its blocks are real.
@@ -370,6 +378,10 @@ namespace CGEngine {
 		void uploadMesh(RegionResult& result);
 		void startMeshing(std::pair<int, int> key);
 		PaddedChunk snapshot(int cx, int cz, int border) const;
+	public:
+		// The ground (group 0) smooth mesh of a chunk, built now the way a worker builds it, for the checks: its vertices.
+		std::vector<VoxelVertex> probeGroundMesh(int cx, int cz, uint8_t group = 0) const;
+	private:
 		std::string bodyName(int rx, int rz, uint8_t group) const;
 	};
 }

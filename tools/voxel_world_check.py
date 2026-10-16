@@ -676,6 +676,211 @@ def count_floating_leaves(world, chunks):
     return floating
 
 
+WATER_VOLUME = range(128, 136)   # units 1 to 8 of water (VoxelGen.WATER_VOLUME_FIRST and _FULL)
+LAVA_VOLUME = range(136, 144)    # units 1 to 8 of lava
+LAVA_SPRING = 22
+
+
+def prepare_box(world, x0, x1, z0, z1, floor=49, top=57):
+    """A flat stone floor at y = floor, with air above it up to top, over the box (inclusive)."""
+    for x in range(x0, x1 + 1):
+        for z in range(z0, z1 + 1):
+            world.set_block(x, floor, z, STONE)
+            for y in range(floor + 1, top):
+                world.set_block(x, y, z, 0)
+
+
+def settle_liquid(world, seconds):
+    """Runs the block physics until nothing is queued, for at most the given seconds. True when it settled."""
+    for _ in range(int(seconds / 0.05)):
+        world.simulate(0.05, 20.0)
+        if world.active_count() == 0:
+            return True
+    return False
+
+
+def volume_units(world, cells, family):
+    """The units each cell holds in the volume family (0 for a cell of any other block), as a dict."""
+    units = {}
+    for cell in cells:
+        block = world.get_block(*cell)
+        units[cell] = block - family.start + 1 if block in family else 0
+    return units
+
+
+def levels_out(world, units, layer, family):
+    """True when no cell holds two or more units beside air: a volume that has spread has every air face at one unit or less."""
+    for (x, y, z), u in units.items():
+        if u < 2:
+            continue
+        for dx, dz in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            if world.get_block(x + dx, y, z + dz) == 0:
+                return False
+    return True
+
+
+def check_volume(world, checks, name, family, box, layer, drop_y=None):
+    """A placed volume of 8 units spreads out and levels off (or falls onto the floor first, from drop_y). Units are moved, never
+    made or lost, so the total stays 8 across the box."""
+    x0, x1, z0, z1 = box
+    prepare_box(world, x0, x1, z0, z1)
+    cx, cz = (x0 + x1) // 2, (z0 + z1) // 2
+    start_y = drop_y if drop_y is not None else layer
+    world.set_block(cx, start_y, cz, family.start + 7)   # unit 8: a full volume
+    settled = settle_liquid(world, 60.0)
+    cells = [(x, y, z) for x in range(x0, x1 + 1) for y in range(layer, layer + 8) for z in range(z0, z1 + 1)]
+    units = volume_units(world, cells, family)
+    total = sum(units.values())
+    on_layer = {c: u for c, u in units.items() if c[1] == layer}
+    checks[name + " volume settles"] = settled
+    checks[name + " volume keeps its 8 units"] = total == 8
+    if drop_y is None:
+        checks[name + " volume spreads out over several cells"] = sum(1 for u in on_layer.values() if u > 0) >= 4
+    else:
+        checks[name + " volume falls onto the floor"] = sum(on_layer.values()) == 8 and all(
+            u == 0 for c, u in units.items() if c[1] > layer)
+    checks[name + " volume levels out: no cell with two units has air beside it"] = levels_out(world, on_layer, layer, family)
+
+
+def check_volume_step(world, checks):
+    """A volume on a high floor flows off its edge and falls to the lower floor beside it: a step down at x = -8 (the floor is 47 at x
+    >= -8, 49 before), so a unit is in the air over the drop, and the volume's units reach the low floor and stay there."""
+    x0, x1, z0, z1 = -14, -4, -14, -4
+    prepare_box(world, x0, x1, z0, z1)
+    # A solid floor under the basin too: the terrain here has caves, and a unit that reached one would leave the counted box.
+    for x in range(x0, x1 + 1):
+        for z in range(z0, z1 + 1):
+            for y in range(40, 49):
+                world.set_block(x, y, z, STONE)
+    # Walls round the basin, so no unit spills out of the counted box at the low edge.
+    for y in range(47, 57):
+        for k in range(-15, -2):
+            for wall in ((k, y, -3), (k, y, -15), (-3, y, k), (-15, y, k)):
+                world.set_block(wall[0], wall[1], wall[2], STONE)
+    for x in range(-8, x1 + 1):
+        for z in range(z0, z1 + 1):
+            world.set_block(x, 49, z, 0)
+            world.set_block(x, 48, z, 0)
+            world.set_block(x, 47, z, STONE)
+    world.set_block(-10, 50, -9, WATER_VOLUME[7])   # unit 8 on the high floor, two blocks from the edge
+    settled = settle_liquid(world, 60.0)
+    cells = [(x, y, z) for x in range(x0, x1 + 1) for y in range(44, 57) for z in range(z0, z1 + 1)]
+    units = volume_units(world, cells, WATER_VOLUME)
+    low = {c: u for c, u in units.items() if c[0] >= -8 and u > 0}
+    checks["a volume on a step flows to the low floor (settles)"] = settled
+    checks["the step's volume keeps its 8 units"] = sum(units.values()) == 8
+    checks["the volume reaches the low side of the step"] = sum(low.values()) > 0
+    checks["the volume on the low side lies on the low floor, not in the air"] = all(c[1] == 48 for c in low)
+
+
+def close_vertex(a, b):
+    return len(a) == len(b) and all(abs(p - q) < 1e-4 for p, q in zip(a, b))
+
+
+def check_ground_skin(world, checks):
+    """Placing water on the ground leaves the ground's skin as it was. The ground's smooth mesh is the same vertices (positions,
+    colours and splat weights) with the water there: water is open like air, so it does not change the blocks around it."""
+    # Water is defined as the game defines it (VoxelGame.setup): liquid, not solid, drawn in the water mesh, see-through.
+    for block in [WATER] + list(FLOW_IDS) + list(WATER_VOLUME):
+        world.define_block(block, cge.Vector3f(0.22, 0.45, 0.92), solid=False, liquid=True, group="own", mesh=WATER, transparent=True)
+    # A flat stone floor at y = 30 in a clear patch of chunk (0, 0), so the test does not depend on what the terrain has.
+    for x in range(2, 11):
+        for z in range(2, 11):
+            world.set_block(x, 30, z, STONE)
+            for y in range(31, 40):
+                world.set_block(x, y, z, 0)
+    spot = (6, 30, 6)
+    world.set_block(6, 30, 6, GRASS)   # grass in the stone, so a change of the block the skin takes its colour from shows
+    x, y, z = spot
+    before = list(world.ground_mesh(0, 0))
+    world.set_block(x, y + 1, z, WATER_VOLUME[7])
+    after = list(world.ground_mesh(0, 0))
+    # A liquid's surface is drawn only in cells with liquid in them: no liquid surface on the ground or on wood beside it.
+    liquid_ids = set([WATER] + list(FLOW_IDS) + list(WATER_VOLUME))
+    water_surface = list(world.ground_mesh(0, 0, WATER))
+    stray = sum(1 for v in water_surface if not any(
+        world.get_block(int(v[0] // 1) + dx, int(v[1] // 1) + dy, int(v[2] // 1) + dz) in liquid_ids
+        for dx in (-1, 0, 1) for dy in (-1, 0, 1) for dz in (-1, 0, 1)))
+    checks["the liquid's surface is drawn only where there is liquid (%d vertices, %d stray)" % (len(water_surface), stray)] = len(water_surface) > 0 and stray == 0
+    world.set_block(x, y + 1, z, 0)
+    checks["placing water on the ground leaves its skin as it was"] = len(before) == len(after) and all(close_vertex(a, b) for a, b in zip(before, after))
+
+
+def check_liquid_levels(world, checks):
+    """A liquid's surface is at its volume: 2 units make a quarter block of water, 8 a whole block, measured in the middle of a
+    patch (where the surface meets no lower ground). Water beside higher ground draws its face under the surface (roadmap 46)."""
+    for x in range(12, 18):
+        for z in range(2, 9):
+            world.set_block(x, 30, z, STONE)
+            for y in range(31, 36):
+                world.set_block(x, y, z, 0)
+    for x in range(12, 15):
+        for z in range(2, 5):
+            world.set_block(x, 31, z, WATER_VOLUME[1])   # 2 units, a 3 by 3 patch
+        for z in range(6, 9):
+            world.set_block(x, 31, z, WATER_VOLUME[7])   # 8 units, a 3 by 3 patch
+    mesh = list(world.ground_mesh(0, 0, WATER))
+    def top_over(x0, z0):
+        ys = [v[1] for v in mesh if x0 <= v[0] <= x0 + 1 and z0 <= v[2] <= z0 + 1]
+        return max(ys) if ys else -1.0
+    checks["two units make a water top a quarter block up"] = abs(top_over(13, 3) - 31.25) < 0.01
+    checks["eight units make a water top a whole block up"] = abs(top_over(13, 7) - 32.0) < 0.01
+    # Water beside stone that stands higher: the stone's face under the water is drawn, at the shared plane z = 11 (inside this chunk).
+    for x in range(12, 14):
+        for z in range(9, 12):
+            world.set_block(x, 30, z, STONE)
+            for y in range(31, 36):
+                world.set_block(x, y, z, 0)
+    world.set_block(12, 31, 10, WATER_VOLUME[1])
+    world.set_block(12, 31, 11, STONE)
+    wall = list(world.ground_mesh(0, 0, WATER))
+    checks["water beside higher stone draws its face under the water"] = any(
+        abs(v[2] - 11.0) < 1e-4 and 31.0 <= v[1] <= 31.26 and 12.0 <= v[0] <= 13.0 for v in wall)
+    world.set_block(12, 31, 10, 0)
+    world.set_block(12, 31, 11, 0)
+    for x in range(12, 15):
+        for z in range(2, 9):
+            world.set_block(x, 31, z, 0)
+
+
+def check_diagonal_reaction(world, checks):
+    """A lava spring touching water only at a corner (no face shared) becomes obsidian; the rule's diagonal flag is what lets it."""
+    x0, x1, z0, z1 = -14, -8, 10, 15
+    prepare_box(world, x0, x1, z0, z1)
+    world.set_block(-10, 50, 12, STONE)   # walls between the lava and the water, which share only a corner (the edge in the plane)
+    world.set_block(-11, 50, 13, STONE)
+    world.set_block(-9, 50, 13, STONE)
+    world.set_block(-10, 50, 14, STONE)
+    world.set_block(-10, 51, 13, STONE)
+    world.set_block(-11, 50, 12, LAVA_SPRING)
+    world.set_block(-10, 50, 13, WATER)
+    world.add_reaction(LAVA_SPRING, [WATER], 30, 1.0, 4.0, True)
+    settle_liquid(world, 8.0)
+    checks["lava touching water only at a corner becomes obsidian (diagonal rule)"] = world.get_block(-11, 50, 12) == 30
+    world.clear_rules()
+    world.set_block(-11, 50, 12, 0)
+    world.set_block(-10, 50, 13, 0)
+    settle_liquid(world, 2.0)
+
+
+def check_volumes(world, checks):
+    """Placed volumes: water and lava spread and level out, and a volume dropped from above falls onto the floor first."""
+    # The earlier checks left spring water and lava running over the land (their flows reach 7 blocks). Clear the liquid above
+    # the sea, so these volumes meet only their own floors.
+    liquids = set([WATER, LAVA_SPRING]) | set(FLOW_IDS) | set(range(23, 30)) | set(WATER_VOLUME) | set(LAVA_VOLUME)
+    for x in range(-SIZE, SIZE):
+        for z in range(-SIZE, SIZE):
+            for y in range(15, HEIGHT):
+                if world.get_block(x, y, z) in liquids:
+                    world.set_block(x, y, z, 0)
+    settle_liquid(world, 3.0)
+    check_volume(world, checks, "water", WATER_VOLUME, (-14, -4, -14, -4), 50)
+    check_volume(world, checks, "lava", LAVA_VOLUME, (-14, -4, -2, 8), 50)
+    check_volume(world, checks, "a falling water", WATER_VOLUME, (-14, -4, -14, -4), 50, drop_y=54)
+    check_volume_step(world, checks)
+    check_diagonal_reaction(world, checks)
+
+
 def run(out_path="cg_control/voxel_check.json"):
     results = {"check": {}}
     chunks = [(x, z) for x in range(-1, 1) for z in range(-1, 1)]
@@ -755,6 +960,9 @@ def run(out_path="cg_control/voxel_check.json"):
     check_body_parity(world, results["check"])
     check_physics(world, results["check"])
     check_motion(world, results["check"])
+    check_volumes(world, results["check"])
+    check_ground_skin(world, results["check"])
+    check_liquid_levels(world, results["check"])
     check_detail(results["check"])
 
     results["ok"] = all(results["check"].values())

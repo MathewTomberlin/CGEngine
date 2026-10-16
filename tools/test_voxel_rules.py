@@ -43,14 +43,14 @@ class FakeWorld:
     def clear_rules(self):
         self.calls.append(("clear",))
 
-    def add_reaction(self, block, kinds, becomes, chance, seconds):
-        self.calls.append(("add", block, kinds, becomes, chance, seconds))
+    def add_reaction(self, block, kinds, becomes, chance, seconds, diagonal=False):
+        self.calls.append(("add", block, kinds, becomes, chance, seconds, diagonal))
 
 
 example = os.path.join(ROOT, "resources", "voxel_rules_example.json")
 with open(example, encoding="utf-8") as f:
     check("the example file parses to its one rule (touching the water family)",
-          VoxelRules.parse(json.load(f)) == [(1, sorted(VoxelGen.WATER_BLOCKS), 2, 0.5, 0.0)])
+          VoxelRules.parse(json.load(f)) == [(1, sorted(VoxelGen.WATER_BLOCKS), 2, 0.5, 0.0, False)])
 
 check("names and ids are the same rule",
       VoxelRules.parse({"rules": [{"block": "grass", "touches": "sand", "becomes": "dirt"}]})
@@ -98,11 +98,11 @@ with tempfile.TemporaryDirectory() as folder:
         json.dump({"rules": [{"block": "grass", "touches": "water", "becomes": "dirt", "chance": 0.5}]}, f)
     count = VoxelRules.load(world, good)
     check("a good file replaces the rules and reports the count",
-          count == 1 and world.calls == [("clear",), ("add", 1, water, 2, 0.5, 0.0)])
+          count == 1 and world.calls == [("clear",), ("add", 1, water, 2, 0.5, 0.0, False)])
 
     world = FakeWorld()
     count = VoxelRules.add_file(world, good)
-    check("a rule file adds to the reactions without clearing them", count == 1 and world.calls == [("add", 1, water, 2, 0.5, 0.0)])
+    check("a rule file adds to the reactions without clearing them", count == 1 and world.calls == [("add", 1, water, 2, 0.5, 0.0, False)])
 
     world = FakeWorld()
     bad = os.path.join(folder, "bad.json")
@@ -127,3 +127,16 @@ if failures:
     print("%d check(s) failed" % len(failures))
     sys.exit(1)
 print("All voxel rule checks passed.")
+
+def raises(fn):
+    try:
+        fn()
+    except ValueError:
+        return True
+    return False
+
+
+# A diagonal rule is kept as a flag, and a rule file that says so reaches the world (roadmap 29.3 follow-up: lava and water corners).
+check("a rule without diagonal does not count corners", VoxelRules.parse({"rules": [{"block": 1, "touches": 5, "becomes": 2}]})[0][5] is False)
+check("diagonal is kept as a flag", VoxelRules.parse({"rules": [{"block": 1, "touches": 5, "becomes": 2, "diagonal": True}]})[0][5] is True)
+check("a diagonal that is not true or false is refused", raises(lambda: VoxelRules.parse({"rules": [{"block": 1, "touches": 5, "becomes": 2, "diagonal": 1}]})))

@@ -13,6 +13,10 @@ namespace CGEngine {
 		// Cells in a key: x and z are offset by 2^20 so they are never negative, y is below 2^21.
 		const int64_t KeyBias = int64_t(1) << 20;
 		const int64_t KeyMask21 = (int64_t(1) << 21) - 1;
+		// How far a volume's unit looks along a level for a drop (see downhillSide), in cells.
+		const int DownhillReach = 4;
+		// Seconds between the units a producing spring (Water::Source, LavaSpring) puts into the air beside it.
+		const double SpringSeconds = 1.0;
 	}
 
 	int64_t VoxelSimulation::keyOf(int x, int y, int z) {
@@ -87,10 +91,16 @@ namespace CGEngine {
 	}
 
 	namespace {
-		// Whether a neighbour of the cell holds one of the kinds.
-		bool touching(VoxelWorld& world, int x, int y, int z, const std::bitset<256>& kinds) {
-			for (const auto& d : Neighbours) {
-				if (kinds[static_cast<uint8_t>(world.getBlock(x + d[0], y + d[1], z + d[2]))]) return true;
+		// Whether a neighbour of the cell holds one of the kinds: one of the six faces, or with diagonal, any of the 26 around it.
+		bool touching(VoxelWorld& world, int x, int y, int z, const std::bitset<256>& kinds, bool diagonal) {
+			for (int dx = -1; dx <= 1; ++dx) {
+				for (int dy = -1; dy <= 1; ++dy) {
+					for (int dz = -1; dz <= 1; ++dz) {
+						const int faces = (dx != 0) + (dy != 0) + (dz != 0);
+						if (faces == 0 || (!diagonal && faces > 1)) continue;
+						if (kinds[static_cast<uint8_t>(world.getBlock(x + dx, y + dy, z + dz))]) return true;
+					}
+				}
 			}
 			return false;
 		}
@@ -104,7 +114,7 @@ namespace CGEngine {
 		bool reacting = false;
 		for (size_t r = 0; r < rules.size() && !reacting; ++r) {
 			const Rule& rule = rules[r];
-			if (rule.block != block || !touching(world, x, y, z, rule.neighbours)) continue;
+			if (rule.block != block || !touching(world, x, y, z, rule.neighbours, rule.diagonal)) continue;
 			if (rule.seconds <= 0.0f) {
 				if (nextRandom() < rule.chance) {
 					set(world, x, y, z, rule.becomes);
@@ -180,10 +190,40 @@ namespace CGEngine {
 			}
 		}
 
+		// A producing spring makes a unit of its liquid's volume every SpringSeconds, into the air beside it (see tickSpring).
+		if (block == Water::Source) {
+			tickSpring(world, x, y, z, WaterVolume, tickSeconds);
+			return;
+		}
+		if (block == LavaSpring) {
+			tickSpring(world, x, y, z, LavaVolume, tickSeconds);
+			return;
+		}
+
+		if (const VolumeLiquid* volume = volumeOf(block)) {
+			tickVolume(world, x, y, z, *volume);
+			return;
+		}
+
 		if (type.liquid && type.flows) {
 			// A liquid (water or lava) falls into air below, and otherwise spreads sideways one level at a time, so a flow is finite.
 			const Liquid* liquid = liquidOf(block);
 			const int level = liquid ? liquid->level(block) : 0;
+			// A flow that nothing feeds drains first, before it spreads: the same liquid above feeds level 7, a neighbour one level more
+			// feeds one less. Its liquid is not lost: it becomes a volume of its level, which stays and flows (a spring that is destroyed
+			// leaves the water it made, rather than taking it away). The volume is the one with the same spring.
+			if (liquid && block != liquid->source) {
+				int feed = liquid->level(static_cast<uint8_t>(world.getBlock(x, y + 1, z))) > 0 ? 7 : 0;
+				for (const auto& side : Sides) {
+					const int neighbour = liquid->level(static_cast<uint8_t>(world.getBlock(x + side[0], y, z + side[1])));
+					feed = std::max(feed, neighbour - 1);
+				}
+				if (feed < level) {
+					// An endless spring's flow does not accumulate: when nothing feeds it, it is gone (volume is made only by a producing spring).
+					set(world, x, y, z, 0);
+					return;
+				}
+			}
 			if (liquid && y > 0 && world.getBlock(x, y - 1, z) == 0) {
 				set(world, x, y - 1, z, liquid->flowing(7));
 			} else if (liquid && level > 1) {
@@ -193,16 +233,114 @@ namespace CGEngine {
 					if (world.getBlock(nx, y, nz) == 0) set(world, nx, y, nz, liquid->flowing(level - 1));
 				}
 			}
-			// A flow that nothing feeds drains: the same liquid above feeds level 7, a neighbour one level more feeds one less.
-			if (liquid && block != liquid->source) {
-				int feed = liquid->level(static_cast<uint8_t>(world.getBlock(x, y + 1, z))) > 0 ? 7 : 0;
-				for (const auto& side : Sides) {
-					const int neighbour = liquid->level(static_cast<uint8_t>(world.getBlock(x + side[0], y, z + side[1])));
-					feed = std::max(feed, neighbour - 1);
-				}
-				if (feed < level) set(world, x, y, z, 0);
+		}
+	}
+
+	void VoxelSimulation::tickSpring(VoxelWorld& world, int x, int y, int z, const VolumeLiquid& volume, double tickSeconds) {
+		// The spring keeps itself queued, so it keeps its clock. When the time is up it pours one unit into the first cell beside it
+		// that holds air or its liquid (above first, so it spills up and falls back as water does). A spring with neither waits.
+		activate(x, y, z);
+		double& elapsed = springClock[keyOf(x, y, z)];
+		elapsed += tickSeconds;
+		if (elapsed < SpringSeconds) return;
+		const int Above[5][3] = { { 0, 1, 0 }, { 1, 0, 0 }, { -1, 0, 0 }, { 0, 0, 1 }, { 0, 0, -1 } };
+		for (const auto& d : Above) {
+			const int nx = x + d[0], ny = y + d[1], nz = z + d[2];
+			// Air, or the spring's own liquid (a full volume passes the unit on to the nearest cell with room, see pourVolume).
+			if (ny < 0 || !world.loadedAt(nx, nz)) continue;
+			const uint8_t here = static_cast<uint8_t>(world.getBlock(nx, ny, nz));
+			if (here != 0 && volume.units(here) == 0) continue;
+			if (world.pourVolume(nx, ny, nz, 1, volume.first, true).first == 1) {
+				elapsed = 0.0;
+				return;
 			}
 		}
+	}
+
+	void VoxelSimulation::tickVolume(VoxelWorld& world, int x, int y, int z, const VolumeLiquid& volume) {
+		// A volume's units, and the units of the spring's flows of the same liquid (a flow holds its level). Other blocks hold none.
+		const auto unitsOf = [&volume](uint8_t block) {
+			if (const int units = volume.units(block)) return units;
+			const Liquid* flow = liquidOf(block);
+			return (flow && flow->source == volume.spring) ? flow->level(block) : 0;
+		};
+		const int units = unitsOf(static_cast<uint8_t>(world.getBlock(x, y, z)));
+		if (units == 0) return;
+		if (y > 0) {
+			// Falling: the whole volume drops into air, or fills the liquid below up to a full cell.
+			const uint8_t below = static_cast<uint8_t>(world.getBlock(x, y - 1, z));
+			if (below == 0 && !reserved.count(keyOf(x, y - 1, z))) {
+				set(world, x, y - 1, z, volume.block(units));
+				set(world, x, y, z, 0);
+				return;
+			}
+			const int belowUnits = unitsOf(below);
+			if (belowUnits > 0 && belowUnits < VolumeLiquid::Full) {
+				const int moved = std::min(units, VolumeLiquid::Full - belowUnits);
+				set(world, x, y - 1, z, volume.block(belowUnits + moved));
+				set(world, x, y, z, moved == units ? 0 : volume.block(units - moved));
+				return;
+			}
+		}
+		// Evening out: a unit moves to a side that is air, or the same liquid with at least two units less. Air with open air
+		// below it is a drop: a unit moves over it at once, and falls there, so a volume runs off an edge and downhill.
+		for (const auto& side : Sides) {
+			const int nx = x + side[0];
+			const int nz = z + side[1];
+			if (!world.loadedAt(nx, nz)) continue;
+			const uint8_t neighbour = static_cast<uint8_t>(world.getBlock(nx, y, nz));
+			const int sideUnits = unitsOf(neighbour);
+			if (neighbour != 0 && sideUnits == 0) continue;   // another kind of block holds its own liquid
+			const int mine = unitsOf(static_cast<uint8_t>(world.getBlock(x, y, z)));
+			if (mine == 0) return;
+			const bool drop = neighbour == 0 && y > 0 && world.getBlock(nx, y - 1, nz) == 0;
+			if (!drop && mine - sideUnits < 2) continue;
+			set(world, nx, y, nz, volume.block(sideUnits + 1));
+			// The last unit leaves the cell as air: volume.block(0) is the id below the family (127 for water).
+			set(world, x, y, z, mine - 1 == 0 ? 0 : volume.block(mine - 1));
+		}
+		// Downhill: a unit with no drop beside it still flows to a drop that is near, over level air (a flat step on a slope), so a
+		// trickle keeps going down a slope instead of stopping at its first step. A pool spreads by the pressure above, not by this.
+		const int mineNow = unitsOf(static_cast<uint8_t>(world.getBlock(x, y, z)));
+		if (mineNow > 0 && y > 0) {
+			const int side = downhillSide(world, x, y, z);
+			if (side >= 0) {
+				const int nx = x + Sides[side][0];
+				const int nz = z + Sides[side][1];
+				set(world, nx, y, nz, volume.block(1));
+				set(world, x, y, z, mineNow - 1 == 0 ? 0 : volume.block(mineNow - 1));
+			}
+		}
+	}
+
+	int VoxelSimulation::downhillSide(VoxelWorld& world, int x, int y, int z) {
+		// Breadth-first over the air at this level, DownhillReach steps at most. Returns the side (index into Sides) of the first step
+		// toward the nearest cell with air beneath it, or -1 when no drop is that near.
+		struct Step {
+			int x, z, first, depth;
+		};
+		auto air = [&](int cx, int cz) { return world.loadedAt(cx, cz) && world.getBlock(cx, y, cz) == 0; };
+		std::vector<Step> frontier;
+		std::unordered_set<int64_t> seen;
+		seen.insert(keyOf(x, y, z));
+		for (int i = 0; i < 4; ++i) {
+			const int nx = x + Sides[i][0];
+			const int nz = z + Sides[i][1];
+			if (!air(nx, nz) || !seen.insert(keyOf(nx, y, nz)).second) continue;
+			frontier.push_back({ nx, nz, i, 1 });
+		}
+		for (size_t head = 0; head < frontier.size(); ++head) {
+			const Step step = frontier[head];
+			if (y > 0 && world.getBlock(step.x, y - 1, step.z) == 0) return step.first;
+			if (step.depth >= DownhillReach) continue;
+			for (int i = 0; i < 4; ++i) {
+				const int nx = step.x + Sides[i][0];
+				const int nz = step.z + Sides[i][1];
+				if (!air(nx, nz) || !seen.insert(keyOf(nx, y, nz)).second) continue;
+				frontier.push_back({ nx, nz, step.first, step.depth + 1 });
+			}
+		}
+		return -1;
 	}
 
 	int VoxelSimulation::simulate(VoxelWorld& world, double dt, double budgetMs, double tickSeconds) {

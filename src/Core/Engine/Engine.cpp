@@ -1,6 +1,9 @@
 #include "Engine.h"
 
 namespace CGEngine {
+    bool openGLReady = false;
+    bool headlessRun = false;
+
     //Size and name to give created window
     WindowParameters windowParameters = WindowParameters({ 1000,500 }, "CGEngine App");
     

@@ -22,7 +22,10 @@ def limit(item):
 
 
 def new_stack(item, count):
-    """A slot's contents for an item: [item, count], and for a tool or weapon [item, 1, uses left], a new one having all its uses."""
+    """A slot's contents for an item: [item, count], for a tool or weapon [item, 1, uses left] (a new one having all its uses), and for
+    a filled vessel [item, 1, units] (a new one full)."""
+    if item in VoxelGen.FILLED_VESSELS:
+        return [item, count, VoxelGen.vessel_capacity(item)]
     if VoxelGen.durability_of(item) is not None:
         return [item, count, VoxelGen.durability_of(item)]
     return [item, count]
@@ -108,7 +111,7 @@ class Inventory:
         if self.held is None:
             if s is None:
                 return
-            if secondary and s[0] not in VoxelGen.TOOLS:
+            if secondary and s[0] not in VoxelGen.TOOLS and s[0] not in VoxelGen.FILLED_VESSELS:
                 half = (s[1] + 1) // 2
                 self.held = [s[0], half]
                 self.take(index, half)
@@ -117,7 +120,7 @@ class Inventory:
                 self.slots[index] = None
             return
         item, count = self.held[0], self.held[1]   # a tool's stack has a third entry, its uses left
-        if secondary and item not in VoxelGen.TOOLS:
+        if secondary and item not in VoxelGen.TOOLS and item not in VoxelGen.FILLED_VESSELS:
             if s is None:
                 self.slots[index] = new_stack(item, 1)
             elif s[0] == item and s[1] < limit(item):
@@ -129,7 +132,7 @@ class Inventory:
             self.slots[index] = self.held
             self.held = None
             return
-        elif s[0] == item and item not in VoxelGen.TOOLS:
+        elif s[0] == item and item not in VoxelGen.TOOLS and item not in VoxelGen.FILLED_VESSELS:
             moved = min(count, limit(item) - s[1])
             s[1] += moved
             self.held[1] -= moved
@@ -142,6 +145,13 @@ class Inventory:
     def return_held(self):
         """Put the stack the cursor holds back into the inventory (when the screen closes, or before a save)."""
         if self.held is not None:
+            if self.held[0] in VoxelGen.FILLED_VESSELS:
+                # A filled vessel keeps its units, so it goes back whole into an empty slot (or the first one that is free).
+                free = next((i for i, slot in enumerate(self.slots) if slot is None), None)
+                if free is not None:
+                    self.slots[free] = list(self.held)
+                    self.held = None
+                return
             self.add(self.held[0], self.held[1])
             self.held = None
 
@@ -165,6 +175,15 @@ class Inventory:
             except (TypeError, ValueError, IndexError, KeyError):
                 continue
             if not (0 < item < 256 and 0 < count <= limit(item)):
+                continue
+            if item in VoxelGen.FILLED_VESSELS:
+                # A saved filled vessel keeps its units; a file without them gives a full one (what an old save held).
+                capacity = VoxelGen.vessel_capacity(item)
+                try:
+                    units = int(entry[2])
+                except (TypeError, ValueError, IndexError, KeyError):
+                    units = capacity
+                self.slots[index] = [item, 1, min(max(units, 1), capacity)]
                 continue
             if VoxelGen.durability_of(item) is not None:
                 # A saved tool or weapon keeps its uses; a file without them gives a new one, and the uses stay within its durability.

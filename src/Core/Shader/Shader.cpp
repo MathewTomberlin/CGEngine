@@ -17,6 +17,13 @@ namespace CGEngine {
 		default: shaderTypeName = "unknown"; break;
 		}
 
+		if (!openGLReady) {
+			// Headless: no context, so the shader stays unset (objectId 0) and nothing compiles it. It still has a count, so copies work.
+			refCount = new unsigned;
+			*refCount = 1;
+			return;
+		}
+
 		objectId = GL_CHECK(glCreateShader(shaderType));
 		if (objectId == 0) {
 			log(this, LogError, "Failed to create {} shader", shaderTypeName);
@@ -97,11 +104,12 @@ namespace CGEngine {
 	}
 
 	void Shader::release() {
-		assert(refCount && *refCount > 0);
+		if (refCount == NULL) return; // Never compiled (headless), so there is nothing to delete.
+		assert(*refCount > 0);
 		*refCount -= 1;
 		if (*refCount == 0) {
 			log(this, LogDebug, "Deleting shader (ID: {})", (unsigned int)objectId);
-			GL_CHECK(glDeleteShader(objectId));
+			if (objectId != 0) GL_CHECK(glDeleteShader(objectId));
 			objectId = 0;
 			delete refCount;
 			refCount = NULL;

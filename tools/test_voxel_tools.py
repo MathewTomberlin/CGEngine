@@ -62,9 +62,11 @@ check("a bucket is unstacked, as are the filled ones", all(b in VoxelInventory.U
 check("a shovel is unstacked and wears", SHOVEL in VoxelInventory.UNSTACKED and VoxelGen.durability_of(SHOVEL) is not None)
 check("water fills a bucket into a water bucket, lava into a lava bucket",
       VoxelGen.FILLED_BUCKET[VoxelGen.WATER] == VoxelGen.WATER_BUCKET and VoxelGen.FILLED_BUCKET[VoxelGen.LAVA] == VoxelGen.LAVA_BUCKET)
-check("a filled bucket places its liquid, and the empty one places nothing",
-      VoxelGen.BUCKET_LIQUID == {VoxelGen.WATER_BUCKET: VoxelGen.WATER, VoxelGen.LAVA_BUCKET: VoxelGen.LAVA}
-      and VoxelGen.BUCKET not in VoxelGen.BUCKET_LIQUID)
+check("a filled bucket pours its liquid's volume, and the empty one pours nothing",
+      VoxelGen.BUCKET_VOLUME == {VoxelGen.WATER_BUCKET: VoxelGen.WATER_VOLUME_FIRST, VoxelGen.LAVA_BUCKET: VoxelGen.LAVA_VOLUME_FIRST}
+      and VoxelGen.BUCKET not in VoxelGen.BUCKET_VOLUME)
+check("every bucket holds units: the empty one and the filled ones have a capacity",
+      all(VoxelGen.vessel_capacity(b) == 8 for b in VoxelGen.BUCKETS) and set(VoxelGen.FILLED_VESSELS) == {VoxelGen.WATER_BUCKET, VoxelGen.LAVA_BUCKET})
 check("the bucket names are in the item names", all(VoxelGen.NAMES[b] for b in VoxelGen.BUCKETS))
 
 if failures:

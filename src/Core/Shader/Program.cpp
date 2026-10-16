@@ -12,6 +12,8 @@ namespace CGEngine {
 			log(this, LogError, "No shaders provided to program");
 		}
 
+		if (!openGLReady) return; // Headless: no context, so the program stays unlinked (objectId 0) and nothing draws with it.
+
 		objectId = glCreateProgram();
 		if (objectId == 0) {
 			log(this, LogError, "glCreateProgram failed");

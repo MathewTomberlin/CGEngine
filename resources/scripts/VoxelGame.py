@@ -61,6 +61,8 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
         self.requested = set()          # (cx, cz) of the chunks asked for, loaded or not
         self.wanted_centre = None       # chunk the wanted set was last built for
         self.pos = [8.5, SPAWN_HEIGHT, 8.5]   # the player's feet, y up
+        # A headless host (CGENGINE_HEADLESS=1) has no window: it runs the world, the physics and the network, and draws nothing.
+        self.headless = cge.is_headless()
         if os.environ.get("VOXEL_SPAWN"):
             # VOXEL_SPAWN="x,z" starts the player over that column (for checks and for looking at a place)
             spawn_x, spawn_z = (float(v) for v in os.environ["VOXEL_SPAWN"].split(","))
@@ -201,12 +203,13 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
 
         if not self.hud_ready and self.frames >= 2:
             # Made a frame after the world, not during the scene's start: the outlines first, then the labels, so the
-            # labels are drawn over the bars.
-            self.show_outline("target_break", None, None)
-            self.hide_placement_outlines()
-            self.setup_hud()
+            # labels are drawn over the bars. A headless host has no window to lay them out in, so it makes none.
+            if not self.headless:
+                self.show_outline("target_break", None, None)
+                self.hide_placement_outlines()
+                self.setup_hud()
+                self.apply_window_settings()
             self.hud_ready = True
-            self.apply_window_settings()
         self.update_pause_key()
         self.update_inventory_key()
         self.console.update()
@@ -234,9 +237,10 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
             self.update_target()
             self.edit_blocks(dt)
             self.learn_recipes()
-        self.update_outlines()
-        self.update_preview()
-        self.update_hud()
+        if not self.headless:
+            self.update_outlines()
+            self.update_preview()
+            self.update_hud()
         self.update_sky(dt)
         self.update_held_torch()
         self.update_healing()
@@ -246,7 +250,8 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
         self.update_arrows(dt)
         self.frame_dt = dt
         self.place_camera()
-        self.update_hands(dt)
+        if not self.headless:
+            self.update_hands(dt)
 
         self.state_timer -= raw_dt   # the state keeps being written while paused, so tests can read the menu
         if self.state_timer <= 0.0:
@@ -686,7 +691,12 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
 
     def selected_name(self):
         item = self.selected()
-        return "empty slot" if item is None else VoxelGen.NAMES[item]
+        if item is None:
+            return "empty slot"
+        name = VoxelGen.NAMES.get(item, "unknown block %d" % item)
+        if item in VoxelGen.FILLED_VESSELS:
+            name += " (%d of %d)" % (self.inventory.slots[self.slot][2], VoxelGen.vessel_capacity(item))
+        return name
 
     def gain(self, item, amount=1):
         """Put broken blocks (or torches) into the inventory. Creative mode keeps no stock, so nothing is added."""
@@ -721,12 +731,34 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
             self.notify("Inventory full: no room for the %s" % VoxelGen.NAMES[blocked])
 
     def fill_bucket(self, block, kind):
-        """A strike on a liquid with an empty bucket: the liquid goes into the bucket, and its block goes to air. The host takes the
-        block with the same rules (a "scoop" request)."""
+        """A strike on a liquid with a bucket. An empty bucket takes what the volume gives up to its capacity (VoxelGen.VESSEL_CAPACITY),
+        from the cell hit and the volume around it, so the water goes down by that much; a filled bucket of the same liquid takes more
+        until it is full. A spring's block goes to air and fills an empty bucket. The host takes the same units (a "scoop" request)."""
+        x, y, z = block
         liquid = VoxelGen.WATER if kind in VoxelGen.WATER_BLOCKS else VoxelGen.LAVA
-        self.inventory.slots[self.slot] = [VoxelGen.FILLED_BUCKET[liquid], 1]
-        self.world.set_block(block[0], block[1], block[2], VoxelGen.AIR)
-        self.send_request({"op": "scoop", "c": list(block)})
+        tool = self.selected()
+        filled = tool in VoxelGen.FILLED_VESSELS
+        if filled and VoxelGen.FILLED_BUCKET[liquid] != tool:
+            self.notify("Your bucket holds %s: empty it first" % VoxelGen.NAMES[tool].split()[0])
+            return
+        capacity = VoxelGen.vessel_capacity(tool)
+        held = self.inventory.slots[self.slot][2] if filled else 0
+        if held >= capacity:
+            self.notify("Your bucket is full")
+            return
+        if kind in VoxelGen.VOLUME_BLOCKS:
+            taken, _ = self.world.drain_volume(x, y, z, capacity - held, True)
+            if taken == 0:
+                self.notify("There is no water here to fill a bucket")
+                return
+        else:
+            if filled:
+                self.notify("Empty the bucket before you take from a spring")
+                return
+            taken = capacity
+            self.world.set_block(x, y, z, VoxelGen.AIR)
+        self.inventory.slots[self.slot] = [VoxelGen.FILLED_BUCKET[liquid], 1, held + taken]
+        self.send_request({"op": "scoop", "c": list(block), "want": capacity - held})
         cge.play_sound("place", 0.6, 0.7)
         self.hands_hit("block", [block[i] + 0.5 for i in range(3)])
 
@@ -975,10 +1007,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
             kind = self.world.get_block(*block)
             tool = self.selected()
             if tool in VoxelGen.BUCKETS and kind in VoxelGen.LIQUIDS:
-                if tool == VoxelGen.BUCKET:
-                    self.fill_bucket(block, kind)
-                else:
-                    self.notify("Your bucket is full")
+                self.fill_bucket(block, kind)
                 return
             if kind in VoxelGen.LAVA_BLOCKS:
                 self.notify("Lava cannot be broken")
@@ -1049,12 +1078,16 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
                 # A torch leans on the block it is aimed at: the request names that block, so the host can check it.
                 self.world.set_prop(cell[0], cell[1], cell[2], direction)
                 self.send_request({"op": "prop", "c": list(cell), "s": list(block), "dir": direction})
+            elif item in VoxelGen.VOLUME_BLOCKS:
+                units = self.inventory.slots[self.slot][2]
+                self.world.pour_volume(cell[0], cell[1], cell[2], units, item, True)
+                self.send_request({"op": "pour", "c": list(cell), "id": item, "units": units})
             else:
                 self.world.set_block(cell[0], cell[1], cell[2], item)
                 self.send_request({"op": "place", "c": list(cell), "id": item})
             cge.play_sound("place", 0.7, 0.95 + 0.1 * self.sound_rng.random())
-            if self.selected() in VoxelGen.BUCKET_LIQUID:
-                # A filled bucket places its liquid and is empty again (creative mode keeps it full).
+            if item in VoxelGen.VOLUME_BLOCKS:
+                # A filled bucket pours its units and is empty again (creative mode keeps it full).
                 if not self.creative:
                     self.inventory.slots[self.slot] = [VoxelGen.BUCKET, 1]
             else:
@@ -1075,13 +1108,16 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
         item = self.selected()
         if item is None:
             return None, None if self.creative else "This slot is empty"
-        liquid = VoxelGen.BUCKET_LIQUID.get(item)
+        liquid = VoxelGen.BUCKET_VOLUME.get(item)
         if liquid is None and item not in VoxelGen.COLOURS:
-            return None, "A %s cannot be placed" % VoxelGen.NAMES[item]
+            return None, "A %s cannot be placed" % VoxelGen.NAMES.get(item, "unknown block %d" % item)
         if self.world.get_block(*cell) != VoxelGen.AIR or self.world.prop_at(*cell) != -1:
             return None, "That space is taken"
         if liquid is not None:
-            # A filled bucket places its liquid into the air cell in front of the face it is aimed at.
+            # A filled bucket pours its units into the air cell in front of the face it is aimed at, and all of them must fit.
+            units = self.inventory.slots[self.slot][2]
+            if self.world.pour_volume(cell[0], cell[1], cell[2], units, liquid, False)[0] < units:
+                return None, "There is no room here for the water"
             return (cell, liquid, -1), None
         if item == VoxelGen.TORCH:
             # A torch goes on a face: into the air cell in front of a solid block, leaning on it.
@@ -1304,7 +1340,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
                              "max_ms": round(self.preview_stats[2], 3)},
                  "dirty": stats["dirty"], "meshing": stats["meshing"], "quads": stats["quads"],
                  "upload_ms": round(stats["upload_ms"], 3), "uploads": stats["uploads"], "edits": stats["edits"], "slot": self.slot,
-                 "smoothing": self.world.smoothing(), "active": self.world.active_count(), "paused": self.paused,
+                 "smoothing": self.world.smoothing(), "active": self.world.active_count(), "paused": self.paused, "headless": self.headless,
                  "menu": self.menu_page if self.paused else None, "sensitivity": self.sensitivity, "view_radius": self.view_radius,
                  "seed": self.seed, "frames": self.frames, "inventory": self.inventory.to_list(), "drops": len(self.drops.live), "creative": self.creative,
                  "known_recipes": self.crafting.to_list(), "recipes_shown": len(self.crafting.visible(self.creative)),

@@ -6,6 +6,7 @@
 #include <functional>
 #include <unordered_set>
 #include <vector>
+#include "VoxelBlocks.h"
 
 namespace CGEngine {
 	class VoxelWorld;
@@ -32,6 +33,7 @@ namespace CGEngine {
 			uint8_t becomes;
 			float chance;
 			float seconds;
+			bool diagonal = false;   // the neighbours are the 26 around the cell (edges and corners too), not the six faces
 		};
 
 		// A block on its way from one cell to the cell below (or any neighbour). Progress runs from 0 to 1.
@@ -71,6 +73,8 @@ namespace CGEngine {
 			double elapsed;
 		};
 		std::unordered_map<int64_t, Progress> progress;
+		// The time each producing spring has run toward its next unit, by cell (see tickSpring).
+		std::unordered_map<int64_t, double> springClock;
 		Hook hook;
 		double accumulator = 0.0;
 		uint32_t randomState = 0x9E3779B9u;
@@ -83,6 +87,13 @@ namespace CGEngine {
 		float nextRandom();
 		// Looks at one cell and changes what is there, through the world.
 		void tickCell(VoxelWorld& world, int x, int y, int z, double tickSeconds);
+		// A volume's tick: it falls whole into air, or into the same volume below up to a full cell, then evens out with its
+		// sides (a side with at least two units less takes one). Units are moved, never made or lost.
+		void tickVolume(VoxelWorld& world, int x, int y, int z, const VolumeLiquid& volume);
+		// A producing spring's tick: after SpringSeconds it pours a unit of volume into the air beside it.
+		void tickSpring(VoxelWorld& world, int x, int y, int z, const VolumeLiquid& volume, double tickSeconds);
+		// The side (index into the cell's horizontal neighbours) of the nearest drop reachable over air at this level, or -1.
+		static int downhillSide(VoxelWorld& world, int x, int y, int z);
 		// Applies the reactions of a cell. Returns true when the cell became another block at once.
 		bool react(VoxelWorld& world, int x, int y, int z, uint8_t block, double tickSeconds);
 		void set(VoxelWorld& world, int x, int y, int z, uint8_t block);

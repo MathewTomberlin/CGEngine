@@ -81,7 +81,8 @@ namespace CGEngine {
 			bool textured = false;        // drawn with the tile array (BlockType::textured)
 			uint8_t tiles[3] = { 0, 0, 0 };   // its tile layers: top, sides, bottom (BlockType::tiles)
 			int8_t splat = -1;                // its terrain splat channel, 0 to 7, or -1 (BlockType::splat)
-			bool transparent = false;         // its mesh is blended (the water): light goes through it (BlockType::transparent)
+			bool blend = false;               // its mesh is blended, drawn after the opaque ones (BlockType::blend)
+			bool passesLight = false;         // light goes through it (BlockType::passesLight)
 		};
 		std::array<MeshRule, 256> rule{};
 		// The props (torches) in the chunk and its border, in chunk coordinates. A prop's cell is air: it gives light there, and
