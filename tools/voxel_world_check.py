@@ -996,6 +996,13 @@ def run(out_path="cg_control/voxel_check.json"):
     results["check"]["load reads"] = world.load_edits(edit_file)
     results["check"]["edit count after load"] = world.edit_count() == 1
     results["check"]["loaded edit applies at once"] = world.get_block(3, 20, 3) == BLOCK_CHECK
+    # A load replaces the edits: an edit made after the save is undone, and its cell shows the terrain again.
+    terrain_at_9 = world.get_block(9, 20, 9)
+    world.set_block(9, 20, 9, VOXEL_LAMP)
+    world.load_edits(edit_file)
+    results["check"]["a load drops the edits made after the save"] = (world.get_block(9, 20, 9) == terrain_at_9
+                                                                      and terrain_at_9 != VOXEL_LAMP
+                                                                      and world.edit_count() == 1)
     # Torches are saved with the edits too: one goes out and comes back from the file.
     world.set_block(5, 30, 5, 0)
     world.set_prop(5, 30, 5, 2)

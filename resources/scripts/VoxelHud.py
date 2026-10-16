@@ -108,8 +108,10 @@ class HudMixin:
         cx, cy = size.x / 2, size.y / 2
         items = {
             "resume": ((cx - 100, cy - 4, cx + 100, cy + 30), (cx - 62, cy)),
-            "settings": ((cx - 100, cy + 40, cx + 100, cy + 74), (cx - 62, cy + 44)),
-            "quit": ((cx - 100, cy + 84, cx + 100, cy + 118), (cx - 40, cy + 88)),
+            "save": ((cx - 100, cy + 40, cx + 100, cy + 74), (cx - 60, cy + 44)),
+            "load": ((cx - 100, cy + 84, cx + 100, cy + 118), (cx - 60, cy + 88)),
+            "settings": ((cx - 100, cy + 128, cx + 100, cy + 162), (cx - 62, cy + 132)),
+            "quit": ((cx - 100, cy + 172, cx + 100, cy + 206), (cx - 40, cy + 176)),
             "sens_value": (None, (cx - 120, cy - 92)),
             "view_value": (None, (cx - 120, cy - 52)),
             "window_value": (None, (cx - 120, cy - 12)),

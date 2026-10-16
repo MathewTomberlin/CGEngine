@@ -15,9 +15,11 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SOUNDS = os.path.join(ROOT, "resources", "sounds")
 GAME = os.path.join(ROOT, "resources", "scripts", "VoxelGame.py")
 
-EFFECTS = ["break", "place", "hurt", "step", "pickup", "bite", "splash", "tool_break"]
+EFFECTS = ["break", "place", "hurt", "step", "pickup", "bite", "splash", "tool_break",
+           "step_grass", "step_dirt", "step_stone", "step_sand", "step_gravel", "step_snow",
+           "lava"]   # the footsteps of the ground blocks, and the hiss in lava
 # The event each effect is played for, as the game's code spells it (play_sound("name", ...)).
-WIRED = {"break": "break", "place": "place", "hurt": "hurt", "step": "step", "pickup": "pickup", "bite": "bite", "splash": "splash", "tool_break": "tool_break"}
+WIRED = {"break": "break", "place": "place", "hurt": "hurt", "pickup": "pickup", "bite": "bite", "splash": "splash", "tool_break": "tool_break", "lava": "lava"}
 
 failures = []
 
@@ -63,6 +65,8 @@ with open(GAME, encoding="utf-8") as f:
     game = f.read()
 for name, event in WIRED.items():
     check(f"the game plays {name} for {event}", re.search(r'play_sound\("%s"' % name, game) is not None)
+check("the game plays a footstep for the ground under the player", "play_sound(self.footstep_sound()" in game
+      and "def footstep_sound(self)" in game and 'VoxelGen.STEPS.get(below, "step")' in game)
 check("the game starts the night loop", re.search(r'play_music\("ambient"', game) is not None)
 check("the game stops the night loop by day", "stop_music()" in game)
 

@@ -346,6 +346,8 @@ def main():
         # checks run unpaused for the two presses.
         inv.slots[0] = [DIRT, 7]
         game.slot = 2
+        clock_before = game.clock
+        game.clock = 0.3   # the time of day is the world's too: it is saved with the inventory
         game.paused = False
         PRESSED["key:F5"] = True
         game.save_and_load()
@@ -355,11 +357,14 @@ def main():
         checks["F5 saves the inventory beside the edits"] = data["slots"][0] == [DIRT, 7] and data["slot"] == 2
         inv.slots = [None] * VoxelInventory.SLOTS
         game.slot = 0
+        game.clock = 0.8
         PRESSED["key:F9"] = True
         game.save_and_load()
         PRESSED["key:F9"] = False
         game.paused = True
         checks["F9 loads the inventory back"] = inv.slots[0] == [DIRT, 7] and game.slot == 2
+        checks["F9 brings the time of day back with the inventory"] = abs(game.clock - 0.3) < 1e-3 and abs(data["clock"] - 0.3) < 1e-3
+        game.clock = clock_before
 
         # C toggles creative mode (the game is unpaused for the press, as F5 and F9 are).
         game.paused = False

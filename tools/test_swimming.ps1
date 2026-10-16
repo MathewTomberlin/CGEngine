@@ -1,4 +1,4 @@
-# Integration test for swimming in the voxel sample: the player starts over a pool (seed 1, column 0,-31), drops into it, sinks
+# Integration test for swimming in the voxel sample: the player starts over a pool (seed 1, column 0,-30; the sea biome (43.1) lowered the old column 0,-31 to a floor at 10), drops into it, sinks
 # to the floor, swims up while Space is held, and walks in the water. The keys are counted in frames (the Enter key is asked
 # for once a frame), and the game runs a fixed step, so the checks hold at any frame rate.
 # Usage (from the repo root, after building):
@@ -71,7 +71,7 @@ cge.mouse_delta = lambda: (0.0, 0.0)
 Remove-Item -Recurse -Force $control -ErrorAction SilentlyContinue
 $env:CGENGINE_SCENE = "scenes/voxels.json"
 $env:VOXEL_SEED = "1"
-$env:VOXEL_SPAWN = "0.5,-30.5"
+$env:VOXEL_SPAWN = "0.5,-29.5"
 $env:VOXEL_FIXED_STEP = "0.0166667"
 # No ambient creatures and survival mode: a bite would send the swimmer back to the spawn.
 $env:VOXEL_WALKERS = "0"; $env:VOXEL_CREATIVE = "0"
@@ -79,7 +79,7 @@ $app = Start-Unattended (Join-Path $exeDir "main.exe") $exeDir
 Remove-Item Env:CGENGINE_SCENE; Remove-Item Env:VOXEL_SEED; Remove-Item Env:VOXEL_SPAWN; Remove-Item Env:VOXEL_FIXED_STEP; Remove-Item Env:VOXEL_WALKERS, Env:VOXEL_CREATIVE
 
 try {
-    # The pool's floor is the solid block at y = 11, so the player's feet rest at 12 on the bottom of the water.
+    # The pool's floor is the solid block at y = 11 (tools/voxel_pool_probe.ps1), so the player's feet rest at 12 on the bottom of the water.
     $landed = Wait-State { param($s) $s.on_ground -eq $true -and $s.pending -eq 0 -and $s.player[1] -lt 20 } 90
     Check "the player drops into the pool and lands on its floor" ([bool]$landed)
     Check "the player is swimming in the water" ([bool]($landed -and $landed.swimming))

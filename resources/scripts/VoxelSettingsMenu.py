@@ -149,6 +149,10 @@ class SettingsMixin:
         if clicked and self.menu_hover == "quit":
             cge.quit()
             return
+        if clicked and self.menu_hover == "save":
+            self.save_world()
+        if clicked and self.menu_hover == "load":
+            self.load_world()
         if clicked and self.menu_hover == "settings":
             self.open_page("settings")
             return

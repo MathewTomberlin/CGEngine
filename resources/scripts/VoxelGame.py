@@ -46,6 +46,7 @@ LAVA_DAMAGE = 2.0           # health lost a second in lava (ten points last five
 LAVA_FOG = (1.00, 0.45, 0.12)   # the view inside lava: orange and short
 LAVA_FOG_START = 1.0
 LAVA_FOG_END = 9.0
+LAVA_SOUND_SECONDS = 0.9    # seconds between the hisses while the player stands in lava (the lava sound)
 LAVA_INTERVAL = 0.5          # seconds between a creature's losses of health in lava
 REPEAT_DELAY = 0.35         # seconds a held mouse button waits before it repeats its break or place
 REPEAT_RATE = 0.25          # seconds between the repeats while it is held
@@ -71,6 +72,8 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
         self.swimming = False
         self.was_swimming = False       # for the splash when the player goes under
         self.step_timer = 0.0           # seconds until the next footstep sound
+        self.lava_sound_timer = 0.0     # seconds until the next hiss while the player is in lava
+        self.world_io = ""              # the last save or load from the pause menu or F5 and F9 ("saved" or "loaded"), for the state file
         self.music_on = False           # the night loop is playing
         self.night = 0.0                # how dark it is, 0 to 1 (update_sky)
         self.sound_rng = random.Random(self.seed + 7)   # the pitch of each footstep and placement: its own sequence, not the global one
@@ -153,6 +156,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
         self.net_pending = {}           # the host's cell states for chunks not loaded yet: cell -> (block, damage, prop)
         self.net_touched = set()        # cells a client asked for this frame, sent back to it even if the host refused them
         self.net_snapshot = False       # send every edited cell next frame (a new client, or a load on the host)
+        self.net_reverts = set()        # cells a host's load undid: sent to the client once their chunk is loaded
         self.net_requests = {}          # the client's requests the host has not answered: id -> what this client did at once (settle_request)
         self.net_request_id = 0         # the id of the last request this client sent
         self.net_moves_shown = 0        # falling blocks the host started that this client has shown (VoxelNetSync)
@@ -611,7 +615,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
         if walking:
             self.step_timer -= dt
             if self.step_timer <= 0.0:
-                cge.play_sound("step", 0.35, 0.9 + 0.2 * self.sound_rng.random())
+                cge.play_sound(self.footstep_sound(), 0.35, 0.9 + 0.2 * self.sound_rng.random())
                 self.step_timer = STEP_SECONDS
         else:
             self.step_timer = 0.0
@@ -850,6 +854,11 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
             cge.screenshot(os.path.join(folder, "shot_%s.png" % stamp))
             self.write_state(os.path.join(folder, "state_%s.json" % stamp))
 
+    def footstep_sound(self):
+        """The footstep for the block the player stands on (VoxelGen.STEPS): the sound of its ground, or the default step."""
+        below = self.world.get_block(math.floor(self.pos[0]), math.floor(self.pos[1] - 0.25), math.floor(self.pos[2]))
+        return VoxelGen.STEPS.get(below, "step")
+
     def save_and_load(self):
         """F5 saves the edits and the inventory, F9 loads them (see save_world and load_world)."""
         if self.pressed("Save", self.hotkey_down("F5")):
@@ -858,9 +867,9 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
             self.load_world()
 
     def save_world(self):
-        """The edits and the inventory go to cg_control. The held stack and the crafting grid go back into the inventory first, so a
-        save does not lose them."""
-        os.makedirs("cg_control", exist_ok=True)
+        """The edits, the inventory and the time of day go to the world's folder (VoxelConfig.WORLD_FOLDER). The held stack and the
+        crafting grid go back into the inventory first, so a save does not lose them."""
+        os.makedirs(WORLD_FOLDER, exist_ok=True)
         self.world.settle_moves()   # blocks in flight land first, so none is missing from the file
         self.world.save_edits(EDITS_FILE)
         self.crafting.return_grid(self.inventory)
@@ -868,17 +877,22 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
         StateFile.write_json(INVENTORY_FILE, {"slots": self.inventory.to_list(), "slot": self.slot, "offhand": self.offhand,
                                               "offhand_uses": self.offhand_uses,
                                               "drops": self.drops.to_list(), "recipes": self.crafting.to_list(),
-                                              "equipment": self.equipment.to_list()})
+                                              "equipment": self.equipment.to_list(),
+                                              "clock": round(self.clock, 5), "moon_days": round(self.moon_days, 5)})
+        self.world_io = "saved"
         self.notify("Saved")
 
     def load_world(self):
         if self.net_client:
             self.notify("The host owns the world: loading is off")
             return
+        before = [tuple(c) for c in self.world.edited_cells()]
         self.world.load_edits(EDITS_FILE)
         if self.net_host:
             self.net_snapshot = True   # the host sends the loaded edits to its client
+            self.net_reverts |= set(before)   # the edits the file lacks: the client is told their cells again
         self.load_inventory()
+        self.world_io = "loaded"
         self.notify("Loaded")
 
     def load_inventory(self):
@@ -893,6 +907,9 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
             self.drops.load_list(data.get("drops", []), lambda item: VoxelGen.ITEM_COLOURS.get(item, (0.8, 0.8, 0.8)))
             self.crafting.load_list(data.get("recipes", []))
             self.equipment.load_list(data.get("equipment"))
+            if "clock" in data:   # the time of day and the moon are the world's, so a load brings them back
+                self.clock = float(data["clock"]) % 1.0
+                self.moon_days = float(data.get("moon_days", self.moon_days))
         except (OSError, ValueError, TypeError, AttributeError):
             pass
 
@@ -1218,6 +1235,12 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
         nothing heals while the game is paused."""
         if self.in_lava():
             self.hurt_player(LAVA_DAMAGE * dt)
+            self.lava_sound_timer -= dt
+            if self.lava_sound_timer <= 0.0:
+                cge.play_sound("lava", 0.4, 0.9 + 0.2 * self.sound_rng.random())
+                self.lava_sound_timer = LAVA_SOUND_SECONDS
+        else:
+            self.lava_sound_timer = 0.0
         if self.health < PLAYER_HEALTH and time.time() - self.hurt_at > REGEN_DELAY:
             self.health = min(PLAYER_HEALTH, self.health + REGEN_RATE * dt)
 
@@ -1369,7 +1392,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
                  "mouse_captured": self.mouse_captured, "yaw": round(self.yaw, 3), "pitch": round(self.pitch, 3),
                  "max_frame_ms": round(self.max_dt * 1000.0, 2),
                  "sounds": cge.sound_count(), "music": self.music_on,
-                 "time_of_day": round(self.clock, 5), "moon_phase": round((self.moon_days / MOON_MONTH_DAYS) % 1.0, 4), "moon_share": round(moon_share((self.moon_days / MOON_MONTH_DAYS) % 1.0), 4), "sun": [round(v, 5) for v in self.sun],
+                 "time_of_day": round(self.clock, 5), "world_io": self.world_io, "moon_phase": round((self.moon_days / MOON_MONTH_DAYS) % 1.0, 4), "moon_share": round(moon_share((self.moon_days / MOON_MONTH_DAYS) % 1.0), 4), "sun": [round(v, 5) for v in self.sun],
                  "fog": [round(v, 3) for v in self.fog],
                  "look": [round(v, 6) for v in self.look_direction()],
                  "camera_forward": [round(v, 6) for v in basis["forward"]],

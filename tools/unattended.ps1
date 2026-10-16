@@ -24,6 +24,9 @@ function Start-Unattended([string]$exe, [string]$workingDirectory, [string]$outL
 function New-TestCopy([string]$source, [string]$name) {
     $root = Join-Path $env:TEMP "cgengine_tests"
     $copy = Join-Path $root $name
+    # A game left running from an earlier run holds the copy's files, so it is stopped first (only games run from this copy).
+    Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($copy, [StringComparison]::OrdinalIgnoreCase) } |
+        ForEach-Object { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue }
     if (Test-Path $copy) { Remove-Item -Recurse -Force $copy }
     New-Item -ItemType Directory -Force -Path $root | Out-Null
     Copy-Item -Recurse -Force $source $copy

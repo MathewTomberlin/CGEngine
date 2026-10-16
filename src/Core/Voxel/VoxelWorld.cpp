@@ -2,6 +2,7 @@
 #include <cstddef>
 #include <cstdlib>
 #include <cstring>
+#include <set>
 #include <unordered_set>
 #include <chrono>
 #include "VoxelWorld.h"
@@ -1108,6 +1109,12 @@ namespace CGEngine {
 		uint32_t count = 0;
 		in.read(magic, 4);
 		if (!in || std::string(magic, 4) != "CGVE" || !get32(version) || (version < 1 || version > 3) || !get32(count)) return false;
+		// The file is the whole state of the edits, so an edit made since the save is undone by the load. The file is read into its
+		// own maps first, so a damaged file changes nothing.
+		using ChunkMap = std::map<std::pair<int, int>, std::map<int, uint8_t>>;
+		ChunkMap fileEdits;
+		ChunkMap fileProps;
+		ChunkMap fileDamage;
 		for (uint32_t i = 0; i < count; ++i) {
 			uint32_t x = 0, y = 0, z = 0;
 			if (!get32(x) || !get32(y) || !get32(z)) return false;
@@ -1119,7 +1126,7 @@ namespace CGEngine {
 			if (wy < 0 || wy >= height) continue;
 			const int cx = floorDiv(wx, size);
 			const int cz = floorDiv(wz, size);
-			edits[std::make_pair(cx, cz)][localIndex(wx - cx * size, wy, wz - cz * size)] = static_cast<uint8_t>(block);
+			fileEdits[std::make_pair(cx, cz)][localIndex(wx - cx * size, wy, wz - cz * size)] = static_cast<uint8_t>(block);
 		}
 		// Version 2 carries the torches after the blocks (see saveEdits). They are kept like the edits, by chunk.
 		if (version >= 2) {
@@ -1136,14 +1143,9 @@ namespace CGEngine {
 				if (wy < 0 || wy >= height || dir > 5) continue;
 				const int cx = floorDiv(wx, size);
 				const int cz = floorDiv(wz, size);
-				propsByChunk[std::make_pair(cx, cz)][localIndex(wx - cx * size, wy, wz - cz * size)] = static_cast<uint8_t>(dir);
-			}
-			for (const auto& chunkProps : propsByChunk) {
-				if (isLoaded(chunkProps.first.first, chunkProps.first.second)) markNeighboursDirty(chunkProps.first.first, chunkProps.first.second);
-				if (isLoaded(chunkProps.first.first, chunkProps.first.second)) markDirty(chunkProps.first.first, chunkProps.first.second);
+				fileProps[std::make_pair(cx, cz)][localIndex(wx - cx * size, wy, wz - cz * size)] = static_cast<uint8_t>(dir);
 			}
 		}
-
 		// Version 3 carries the damage after the torches: the stage of each damaged block, kept by chunk like the torches.
 		if (version >= 3) {
 			uint32_t damaged = 0;
@@ -1159,20 +1161,26 @@ namespace CGEngine {
 				if (wy < 0 || wy >= height || stage <= 0) continue;
 				const int cx = floorDiv(wx, size);
 				const int cz = floorDiv(wz, size);
-				damageByChunk[std::make_pair(cx, cz)][localIndex(wx - cx * size, wy, wz - cz * size)] = static_cast<uint8_t>(stage);
-			}
-			for (const auto& chunkDamage : damageByChunk) {
-				if (isLoaded(chunkDamage.first.first, chunkDamage.first.second)) markNeighboursDirty(chunkDamage.first.first, chunkDamage.first.second);
+				fileDamage[std::make_pair(cx, cz)][localIndex(wx - cx * size, wy, wz - cz * size)] = static_cast<uint8_t>(stage);
 			}
 		}
 
-		// Loaded chunks take the edits now; the rest take them when they load.
-		for (const auto& chunkEdits : edits) {
-			Chunk* chunk = findChunk(chunkEdits.first.first, chunkEdits.first.second);
+		// Every chunk that had edits, or has some in the file, is looked at. A loaded one is made again from its terrain and then
+		// the file's edits, so an edit the file lacks shows the terrain again. A chunk not loaded takes the file's edits when it loads.
+		std::set<std::pair<int, int>> touched;
+		for (const ChunkMap* map : { &edits, &propsByChunk, &damageByChunk, &fileEdits, &fileProps, &fileDamage }) {
+			for (const auto& chunk : *map) touched.insert(chunk.first);
+		}
+		edits = std::move(fileEdits);
+		propsByChunk = std::move(fileProps);
+		damageByChunk = std::move(fileDamage);
+		for (const auto& key : touched) {
+			Chunk* chunk = findChunk(key.first, key.second);
 			if (!chunk || !chunk->loaded) continue;
-			applyEdits(chunkEdits.first.first, chunkEdits.first.second, chunk->blocks);
-			markDirty(chunkEdits.first.first, chunkEdits.first.second);
-			markNeighboursDirty(chunkEdits.first.first, chunkEdits.first.second);
+			terrain.fillChunk(key.first, key.second, size, height, chunk->blocks);
+			applyEdits(key.first, key.second, chunk->blocks);
+			markDirty(key.first, key.second);
+			markNeighboursDirty(key.first, key.second);
 		}
 		return true;
 	}
