@@ -116,6 +116,15 @@ namespace CGEngine {
 		void defineBlock(int blockId, const BlockType& type);
 		const BlockType& blockType(int blockId) const { return types[static_cast<size_t>(std::clamp(blockId, 0, 255))]; }
 		bool isSolid(int x, int y, int z) const;
+		// Whether the solid blocks around (x, y, z) hang from the ground (roadmap 39.1). Call it after the block at (x, y, z) has gone (set
+		// to air). A flood fill over solid face neighbours from the solid blocks beside the cell: status 0 when it reaches the ground
+		// (y = 0) or the edge of the loaded world, 1 when it runs out (a piece that is no longer connected, which would fall), 2 when it
+		// stops at maxBlocks. visited is the number of blocks the fill took in.
+		struct SupportResult {
+			int status = 0;
+			int visited = 0;
+		};
+		SupportResult checkSupport(int x, int y, int z, int maxBlocks) const;
 		// The material a block's own mesh is drawn with (BlockType::own). Blocks without one use the world's material.
 		void setMaterial(int blockId, const std::string& name);
 

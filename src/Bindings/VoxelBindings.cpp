@@ -174,6 +174,11 @@ void bindVoxel(py::module_& m) {
              "groups have none.")
         .def("is_solid", &VoxelWorld::isSolid, py::arg("x"), py::arg("y"), py::arg("z"),
              "True if the block at these coordinates is solid. Air and liquids are not.")
+        .def("check_support", [](const VoxelWorld& world, int x, int y, int z, int maxBlocks) {
+            const VoxelWorld::SupportResult r = world.checkSupport(x, y, z, maxBlocks);
+            return std::make_pair(r.status, r.visited);
+        }, py::arg("x"), py::arg("y"), py::arg("z"), py::arg("max_blocks") = 16384,
+             "Whether the solid blocks around a cell that is now air hang from the ground: (status, visited). Status 0 means they reach the ground or the edge of the loaded world, 1 means they do not (a piece that would fall), 2 means the fill stopped at max_blocks.")
         .def("biome_at", &VoxelWorld::biomeName, py::arg("x"), py::arg("z"),
              "The biome of the column at x, z: \"plains\", \"forest\" or \"desert\". Set by the terrain settings and the seed.")
         .def("skin_surface", [](const VoxelWorld& world, std::array<double, 3> origin, std::array<double, 3> direction,
