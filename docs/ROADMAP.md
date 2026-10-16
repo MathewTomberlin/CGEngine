@@ -740,6 +740,10 @@ Goal: a tool is a choice: it is needed for some blocks, it wears out, and a bett
 - [~] **28.4** Done: a notice ("Your pickaxe is nearly broken") as a tool crosses a tenth of its uses left (`VoxelGame.edit_blocks`).
   Open: the iron pickaxe's recipe needs iron ore that is found, not only mined near the surface (iron is 0.6% of stone and only
   above depth 20 in `VoxelTerrain.cpp`, so it is seldom seen from the surface).
+  Done: iron lies in the stone at least 3 blocks under its column's ground (`IronCover`), not at a depth of 20. Measured with
+  `tools/voxel_ore_probe.ps1` (the 81 by 81 blocks around the spawn, seed 1): iron 671 to 779, iron within 8 blocks of the ground
+  107 to 184 (columns 106 to 180), and iron touching air 23 to 28. So a dig finds it, but a cave wall rarely shows it: veins in
+  caves are the next step, and a design call (how often, and how big). Seed 2: 436 iron, 129 within 8 of the ground.
 
 ## Phase 29: recipes as data (from the vision: goal 2)
 Goal: a recipe is an edit to a file, and the game reads it, so an agent can add one and test it without rebuilding.

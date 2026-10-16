@@ -20,10 +20,11 @@ namespace CGEngine {
 			return static_cast<float>((h ^ (h >> 16)) & 0xFFFFu) / 65535.0f;
 		}
 
-		// Ores: iron is rare and only deep (above IronDepth it is not drawn); coal is more common, at any depth.
+		// Ores: iron is rare, and only in the stone under the ground (see IronCover); coal is more common, at any depth.
 		const float IronChance = 0.006f;
 		const float CoalChance = 0.02f;
-		const int IronDepth = 20;
+		// Iron lies at least this many blocks under its column's ground, so a dig from the surface, or a cave wall, shows it.
+		const int IronCover = 3;
 		// Caves at or below this height are full of lava instead of air, so the deep caves hold lakes of it.
 		const int LavaLevel = 6;
 
@@ -129,13 +130,14 @@ namespace CGEngine {
 			}
 		}
 		// Ores: a stone block becomes iron or coal by its position's value, so the same block is the same in any chunk.
-		for (int y = 1; y < height; ++y) {
-			for (int lz = 0; lz < size; ++lz) {
-				for (int lx = 0; lx < size; ++lx) {
+		for (int lz = 0; lz < size; ++lz) {
+			for (int lx = 0; lx < size; ++lx) {
+				const int ground = std::min(columnHeight(cx * size + lx, cz * size + lz), height);
+				for (int y = 1; y < height; ++y) {
 					uint8_t& block = blocks[(static_cast<size_t>(y) * size + lz) * size + lx];
 					if (block != Stone) continue;
 					const float r = blockValue(cx * size + lx, y, cz * size + lz, seed);
-					if (r < IronChance && y < IronDepth) {
+					if (r < IronChance && y < ground - IronCover) {
 						block = Iron;
 					} else if (r < IronChance + CoalChance) {
 						block = Coal;
