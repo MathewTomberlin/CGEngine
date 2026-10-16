@@ -1,0 +1,11 @@
+{
+  "about": "The armour the player wears (roadmap 39.3, 39.4): one piece to each slot, worn from the inventory (shift and left click on the piece). Each item's constant is named here and must exist in resources/scripts/VoxelGen.py. 'speed' and 'jump' are fractions added to the walk speed and the jump (the worn pieces' sum, clamped in VoxelEquipment.py): a heavy piece has a negative speed. The jump stays above the one-block step: a jump is at least 0.9 of the base, which still clears a block. 'name' is the item's name in the game and in the recipes. 'colour' is 0 to 1 for the swatch.",
+  "slots": ["head", "chest", "legs", "feet", "gloves"],
+  "items": {
+    "LEATHER_CAP": {"name": "leather cap", "slot": "head", "colour": [0.55, 0.38, 0.24], "speed": 0.0, "jump": 0.02},
+    "LEATHER_TUNIC": {"name": "leather tunic", "slot": "chest", "colour": [0.62, 0.44, 0.28], "speed": -0.03, "jump": 0.0},
+    "LEATHER_LEGGINGS": {"name": "leather leggings", "slot": "legs", "colour": [0.5, 0.34, 0.2], "speed": 0.02, "jump": 0.0},
+    "LEATHER_BOOTS": {"name": "leather boots", "slot": "feet", "colour": [0.4, 0.26, 0.16], "speed": 0.04, "jump": 0.0},
+    "LEATHER_GLOVES": {"name": "leather gloves", "slot": "gloves", "colour": [0.66, 0.5, 0.34], "speed": 0.0, "jump": 0.0}
+  }
+}

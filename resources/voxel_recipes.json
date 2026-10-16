@@ -137,6 +137,56 @@
       "makes": {
         "arrow": 4
       }
+    },
+    {
+      "name": "Leather cap",
+      "category": "Armour",
+      "takes": {
+        "hide": 3
+      },
+      "makes": {
+        "leather cap": 1
+      }
+    },
+    {
+      "name": "Leather tunic",
+      "category": "Armour",
+      "takes": {
+        "hide": 6
+      },
+      "makes": {
+        "leather tunic": 1
+      }
+    },
+    {
+      "name": "Leather leggings",
+      "category": "Armour",
+      "takes": {
+        "hide": 5
+      },
+      "makes": {
+        "leather leggings": 1
+      }
+    },
+    {
+      "name": "Leather boots",
+      "category": "Armour",
+      "takes": {
+        "hide": 3
+      },
+      "makes": {
+        "leather boots": 1
+      }
+    },
+    {
+      "name": "Leather gloves",
+      "category": "Armour",
+      "takes": {
+        "hide": 2
+      },
+      "makes": {
+        "leather gloves": 1
+      }
     }
   ]
 }

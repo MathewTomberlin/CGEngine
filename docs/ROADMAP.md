@@ -921,13 +921,22 @@ written answer (what it would take, and a measured number) and a decision: build
   no CPU. Open: how they are placed (the same rule as torches, `setProp`, or a density-driven scatter).
   Found (code): torches are props (`VoxelWorld::setProp`, `buildPropMesh`), so a decoration can reuse that path. The per-chunk count and
   its frame cost are not measured.
-- [ ] **39.3** Player equipment: a screen with slots for the left and right hands, head, chest, legs, feet and gloves, and a side bar
+- [~] **39.3** Player equipment (the first form is in: five pieces of leather armour, one to each of head, chest, legs, feet and gloves,
+  from hide (`resources/voxel_equipment.json`, `VoxelEquipment.py`); shift and left click on a piece in the inventory puts it on, and a
+  shift and left click on a line of the side bar takes it off; the bar names each worn piece with its bonuses; the worn pieces save
+  with the inventory; `tools/test_voxel_equipment.py`). Not yet: the hands' slots, a body view, the slots as a panel of their own, and
+  the bar's place at a narrow window (it sits right of the inventory panel and is cut off at 1000 pixels; check it at the game's size).
+  The original question:
+- [ ] **39.3** Player equipment (question): a screen with slots for the left and right hands, head, chest, legs, feet and gloves, and a side bar
   naming each equipped item with its stats, bonuses and penalties. Questions: whether the existing inventory screen can host it
   (`VoxelInventoryScreen.py`), how equipment is stored (a slot list in the save, or a separate file), and how much of it shows on the
   player (the first-person arms show the hands only; a chest or helmet would need a view of the body, which the game does not draw).
   Found (code): the inventory is a 12 by 3 grid (`VoxelInventory.SLOTS`). Equipment is 8 more slots (two hands, head, chest, legs,
   feet, gloves): a second slot list saved with the inventory, and the hands already exist (the held item and the offhand shield).
-- [ ] **39.4** Equipment effects: an item changes movement speed and jump height (by its weight, or by a bonus), and gives bonuses to
+- [~] **39.4** Equipment effects (first form: a piece adds to the walk speed (`speed`) and the jump (`jump`), the sums clamped to
+  `SPEED_LIMITS` and `JUMP_LIMITS`, so a heavy suit's jump stays above the one-block step; the walk and the jump are read in
+  `VoxelGame`). Not yet: the attack, damage and break bonuses. The original question:
+- [ ] **39.4** Equipment effects (question): an item changes movement speed and jump height (by its weight, or by a bonus), and gives bonuses to
   attack speed, damage, and break speed against certain blocks. Questions: where the player's speed and jump are set (in one place
   or many; `VoxelPhysics.py`, `VoxelGame.py`), whether the stats can be one base value plus a sum of modifiers, and the balance risk:
   a heavy suit that makes the jump too low to climb a one-block step (`stepUp` 1.0) would stop the player from walking up the terrain.

@@ -4,7 +4,7 @@
 # The screenshot is written to -Out (default: the temp folder). Exits 0 when it is saved.
 
 param(
-    [ValidateSet("hands", "water", "volume", "shore")][string]$View = "hands",
+    [ValidateSet("hands", "water", "volume", "shore", "equipment")][string]$View = "hands",
     [ValidateSet("pickaxe", "iron_pickaxe", "sword", "shovel", "bucket", "water_bucket", "lava_bucket", "bow", "torch", "none")][string]$Item = "pickaxe",
     [int]$Seed = 1,
     [ValidateSet("", "carried", "raised")][string]$Shield = "",
@@ -36,7 +36,7 @@ Remove-Item Env:CGENGINE_SCENE, Env:VOXEL_SEED, Env:VOXEL_FIXED_STEP, Env:VOXEL_
 try {
     # The spawn area loads and meshes in the first seconds; the hands are drawn from the start.
     Start-Sleep -Seconds 25
-    $viewFile = switch ($View) { "water" { "voxel_water_view.py" } "volume" { "voxel_volume_view.py" } "shore" { "voxel_shore_view.py" } default { "voxel_hands_view.py" } }
+    $viewFile = switch ($View) { "water" { "voxel_water_view.py" } "volume" { "voxel_volume_view.py" } "shore" { "voxel_shore_view.py" } "equipment" { "voxel_equipment_view.py" } default { "voxel_hands_view.py" } }
     $script = (Resolve-Path (Join-Path $PSScriptRoot $viewFile)).Path.Replace('\', '/')
     $id = "01_hands"
     Set-Content -Path (Join-Path $inbox "$id.json.tmp") -Value ('{"command":"run_script","params":{"path":"' + $script + '"}}') -Encoding utf8
