@@ -103,6 +103,9 @@ namespace CGEngine {
 		// The terrain's occupancy, 1 where a block is group 0 and 0 elsewhere, in the layout of blocks. Set by computeSkin with the
 		// skin; the terrain's density reads the block centres from it, which is much cheaper than asking inGroup for each.
 		std::vector<uint8_t> terrain;
+		// The mesh group of each block position, in the layout of blocks (-1 for air). Set by computeSkin with the terrain; a smooth
+		// mesh reads group membership from it, which is one lookup where inGroup works through the block's join rules.
+		std::vector<int16_t> member;
 
 		size_t index(int x, int y, int z) const {
 			const int p = size + 2 * border;
@@ -147,13 +150,22 @@ namespace CGEngine {
 	// face shade times ambient occlusion.
 	void buildChunkMesh(const PaddedChunk& chunk, const std::array<glm::vec3, 256>& palette, uint8_t group, MeshArrays& out);
 
+	// The block bounds of each group in a padded chunk, in the chunk's coordinates, inclusive on each axis (x, y, z). A group with no
+	// block has lo > hi. One pass over the chunk, so it is taken once per chunk, not per group. Needs computeSkin (PaddedChunk::member).
+	struct GroupBounds {
+		int lo[3] = { 1 << 30, 1 << 30, 1 << 30 };
+		int hi[3] = { -(1 << 30), -(1 << 30), -(1 << 30) };
+	};
+	std::array<GroupBounds, 256> groupBounds(const PaddedChunk& chunk);
+
 	// A smooth skin over one group of the blocks (see buildChunkMesh): a surface through the group's solid blocks, rounded
 	// at the edges and corners. Surface nets (one vertex per cell the surface crosses, quads across the crossed edges) on
 	// a density that is the group's occupancy, interpolated between block centres. resolution is the number of samples per
 	// block: 1 is the block scale, 2 gives half-block detail. Chunks join without cracks, since every vertex is a function
 	// of the blocks around it. The chunk needs a border of 3 (PaddedChunk::border).
+	// bounds is the group's blocks (groupBounds): the sample grid is only filled where they can reach, for a group of blocks.
 	void buildSmoothMesh(const PaddedChunk& chunk, const std::array<glm::vec3, 256>& palette, int resolution, int stride,
-		unsigned skirtSides, uint8_t group, MeshArrays& out);
+		unsigned skirtSides, uint8_t group, const GroupBounds& bounds, MeshArrays& out);
 
 	// A round ball of a block's colour, centred at centre and appended to out. The moving blocks are drawn with it.
 	void buildBlob(const std::array<glm::vec3, 256>& palette, uint8_t block, glm::vec3 centre, float radius, MeshArrays& out);

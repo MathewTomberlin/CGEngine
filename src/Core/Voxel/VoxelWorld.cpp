@@ -94,7 +94,7 @@ namespace CGEngine {
 		computeLight(padded);
 		computeSkin(padded);
 		MeshArrays part;
-		buildSmoothMesh(padded, palette, std::max(1, resolutionFor(cx, cz)), 1, 0, group, part);
+		buildSmoothMesh(padded, palette, std::max(1, resolutionFor(cx, cz)), 1, 0, group, groupBounds(padded)[group], part);
 		return part.vertices;
 	}
 
@@ -1255,9 +1255,17 @@ namespace CGEngine {
 						clock = std::chrono::steady_clock::now();
 						auto built = std::make_shared<ChunkMesh>();
 						// The terrain, and a mesh of its own for each block type in the chunk that has one (see PaddedChunk::rule).
+						// The groups: the terrain, and each block type with blocks in the chunk. A smooth mesh takes the groups' bounds, which
+						// need the skin (computeSkin); a chunk of cubes has no skin, so it finds its groups from the rules.
+						std::array<GroupBounds, 256> bounds{};
 						std::array<bool, 256> present{};
-						for (uint8_t block : input.padded.blocks) {
-							if (input.padded.rule[block].group != 0) present[input.padded.rule[block].group] = true;
+						if (input.resolution > 0) {
+							bounds = groupBounds(input.padded);
+							for (size_t id = 1; id < 256; ++id) present[id] = bounds[id].lo[0] <= bounds[id].hi[0];
+						} else {
+							for (uint8_t block : input.padded.blocks) {
+								if (input.padded.rule[block].group != 0) present[input.padded.rule[block].group] = true;
+							}
 						}
 						std::vector<uint8_t> groups = { 0 };
 						for (size_t id = 1; id < 256; ++id) {
@@ -1270,7 +1278,7 @@ namespace CGEngine {
 							if (cubes) {
 								buildChunkMesh(input.padded, colours, group, part);
 							} else {
-								buildSmoothMesh(input.padded, colours, input.resolution, input.stride, input.skirtSides, group, part);
+								buildSmoothMesh(input.padded, colours, input.resolution, input.stride, input.skirtSides, group, bounds[group], part);
 							}
 							// The torches are drawn with the terrain (their cells are air to it, so they are not part of any block's mesh).
 							if (group == 0) buildPropMesh(input.padded, part);
@@ -1603,9 +1611,9 @@ namespace CGEngine {
 				padded.blocks[padded.index(cx, cy, cz)] = static_cast<uint8_t>(blockId);
 				computeLight(padded);
 				computeSkin(before);
-				if (group == 0) computeSkin(padded);
+				computeSkin(padded);
 				MeshArrays full;
-				buildSmoothMesh(padded, colours, resolution, 1, 0, group, full);
+				buildSmoothMesh(padded, colours, resolution, 1, 0, group, groupBounds(padded)[group], full);
 				const glm::vec3 centre(cx + 0.5f, cy + 0.5f, cz + 0.5f);
 				// The triangles kept, and the vertices they use. The ghost keeps a little past PreviewKeep and fades out there.
 				std::vector<bool> kept(full.vertices.size(), false);

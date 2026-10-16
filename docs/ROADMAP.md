@@ -621,10 +621,15 @@ Goal: a chunk's mesh costs a few milliseconds, so a view of 40 settles in a few 
 - [ ] **26.1** The light pass is a third of the mesh time: a breadth-first walk over the padded chunk (82,000 cells at light reach
   8) for each chunk, with a `vector` frontier. Measure it alone; then flat arrays, and the light of a region's chunks computed once
   for the region rather than per chunk.
-- [ ] **26.2** The surface: the sample grid calls the density 24,000 times a chunk and each vertex calls it seven more. Cache the
-  gradient's samples on the grid, or derive the normal from the grid's own neighbours.
-- [ ] **26.3** Allocation: each chunk job copies its padded area and allocates its vectors. Reuse per-worker buffers. Measure first:
-  more worker threads did not help, which points at the memory the threads share.
+- [x] **26.2** The surface, from 6.3 s to 2.0 s (headless Release, seed 1, 841 chunks; the whole mesh from 8.5 s to 3.7 s), with the
+  same 1,109,384 quads. A chunk reads each block's group once (`PaddedChunk::member`), so a density lookup is an array read. An
+  occupancy group samples only the box its blocks reach (`groupBounds`), a half-block group only the samples beside its blocks, and a
+  cell reads its corners only where the surface crosses it. Left: the gradient calls the density six times a vertex (deriving the
+  normal from the grid would change the shading, so it is a look decision), and the terrain's density is a trilinear per sample (about
+  0.6 s). Measure with `tools/voxel_mesh_timing.ps1`.
+- [ ] **26.3** Allocation, partly: the smooth mesh's grids (samples, cell positions, emitted) are per thread and reused, which was most
+  of its allocation. Reusing the light and skin scratch measured within noise (about 5%), so it was not kept. Left: the copy of each
+  chunk's padded area (`snapshot`) and the mesh vectors the job hands back to the region.
 
 ## Phase 27: tree bases (from playing the voxel sample)
 Goal: a tree stands on the ground as one object, with its trunk and its base joined.
