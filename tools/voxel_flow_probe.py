@@ -16,6 +16,7 @@ with open("cg_control/flow_phase.txt") as f:   # written by voxel_flow_probe.ps1
 game = [o for o in gc.get_objects() if type(o).__name__ == "VoxelGame"][0]
 world = game.world
 WATER_UNITS = range(VoxelGen.WATER_VOLUME_FIRST, VoxelGen.WATER_VOLUME_FULL + 1)
+LAVA_UNITS = range(VoxelGen.LAVA_VOLUME_FIRST, VoxelGen.LAVA_VOLUME_FULL + 1)
 DIRS = [(1, 0), (-1, 0), (0, 1), (0, -1)]
 
 
@@ -43,12 +44,12 @@ def find_slope():
     return None, None, None
 
 
-if phase in ("spring_make", "endless_make", "spring_kill", "spring_read"):
+if phase in ("spring_make", "endless_make", "lava_make", "spring_kill", "spring_read"):
     # A water spring on a slope: make it, let it run, destroy it, and count what is left (flows and volume units) around it.
-    if phase in ("spring_make", "endless_make"):
+    if phase in ("spring_make", "endless_make", "lava_make"):
         spot, direction, tops = find_slope()
         if spot is not None:
-            spring = VoxelGen.WATER if phase == "spring_make" else VoxelGen.ENDLESS_WATER
+            spring = {"spring_make": VoxelGen.WATER, "endless_make": VoxelGen.ENDLESS_WATER, "lava_make": VoxelGen.LAVA}[phase]
             world.set_block(spot[0], spot[1] + 1, spot[2], spring)
         with open("cg_control/flow_probe.json", "w") as f:
             json.dump({"ok": spot is not None, "spot": list(spot) if spot else None}, f, indent=1)
@@ -62,8 +63,8 @@ if phase in ("spring_make", "endless_make", "spring_kill", "spring_read"):
             flows = 0
             volume = 0
             flow_cells = []
-            for cx in range(c[0] - 8, c[0] + 9):
-                for cz in range(c[2] - 8, c[2] + 9):
+            for cx in range(c[0] - 25, c[0] + 26):
+                for cz in range(c[2] - 25, c[2] + 26):
                     for cy in range(c[1] - 30, c[1] + 3):
                         b = world.get_block(cx, cy, cz)
                         if VoxelGen.FLOW_FIRST <= b <= VoxelGen.FLOW_LAST:
@@ -72,6 +73,8 @@ if phase in ("spring_make", "endless_make", "spring_kill", "spring_read"):
                                 flow_cells.append([cx, cy, cz, b, world.get_block(cx, cy + 1, cz), world.get_block(cx, cy - 1, cz)])
                         elif b in WATER_UNITS:
                             volume += b - VoxelGen.WATER_VOLUME_FIRST + 1
+                        elif b in LAVA_UNITS:
+                            volume += b - VoxelGen.LAVA_VOLUME_FIRST + 1
             with open("cg_control/flow_probe_result.json", "w") as f:
                 json.dump({"flows": flows, "volume_units": volume, "spring": world.get_block(c[0], c[1], c[2]), "flow_cells": flow_cells, "active": world.active_count()}, f, indent=1)
             print("SPRING READ", flows, volume)

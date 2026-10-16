@@ -237,8 +237,8 @@ namespace CGEngine {
 	}
 
 	void VoxelSimulation::tickSpring(VoxelWorld& world, int x, int y, int z, const VolumeLiquid& volume, double tickSeconds) {
-		// The spring keeps itself queued, so it keeps its clock. When the time is up it pours one unit into the first air cell
-		// beside it (above first, so it spills up and falls back as water does). A spring with no air beside it waits.
+		// The spring keeps itself queued, so it keeps its clock. When the time is up it pours one unit into the first cell beside it
+		// that holds air or its liquid (above first, so it spills up and falls back as water does). A spring with neither waits.
 		activate(x, y, z);
 		double& elapsed = springClock[keyOf(x, y, z)];
 		elapsed += tickSeconds;
@@ -246,10 +246,14 @@ namespace CGEngine {
 		const int Above[5][3] = { { 0, 1, 0 }, { 1, 0, 0 }, { -1, 0, 0 }, { 0, 0, 1 }, { 0, 0, -1 } };
 		for (const auto& d : Above) {
 			const int nx = x + d[0], ny = y + d[1], nz = z + d[2];
-			if (ny < 0 || !world.loadedAt(nx, nz) || world.getBlock(nx, ny, nz) != 0) continue;
-			world.pourVolume(nx, ny, nz, 1, volume.first, true);
-			elapsed = 0.0;
-			return;
+			// Air, or the spring's own liquid (a full volume passes the unit on to the nearest cell with room, see pourVolume).
+			if (ny < 0 || !world.loadedAt(nx, nz)) continue;
+			const uint8_t here = static_cast<uint8_t>(world.getBlock(nx, ny, nz));
+			if (here != 0 && volume.units(here) == 0) continue;
+			if (world.pourVolume(nx, ny, nz, 1, volume.first, true).first == 1) {
+				elapsed = 0.0;
+				return;
+			}
 		}
 	}
 

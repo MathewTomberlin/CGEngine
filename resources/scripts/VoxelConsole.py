@@ -58,7 +58,8 @@ def parse_int(text, what):
 
 def block_id(name):
     """The id of a block or item by its name (VoxelGen.NAMES and ITEM_NAMES). 'air' is no block."""
-    key = name.lower()
+    # The console splits its words at spaces, so a name with a space is typed with underscores (endless_water is endless water).
+    key = name.lower().replace("_", " ")
     if key == "air":
         return VoxelGen.AIR
     for ident, label in list(VoxelGen.NAMES.items()) + list(VoxelGen.ITEM_NAMES.items()):

@@ -7,7 +7,7 @@ param(
     [int]$Seed = 1,
     [string]$ExeDir = "build/bin/Debug",
     [int]$Wait = 20,
-    [ValidateSet("place", "place8", "bucket", "spring", "endless")][string]$Place = "place"
+    [ValidateSet("place", "place8", "bucket", "spring", "endless", "lava")][string]$Place = "place"
 )
 
 $ErrorActionPreference = "Stop"
@@ -41,8 +41,8 @@ function Invoke-Phase([string]$phase, [string]$id) {
 try {
     # The spawn area loads and meshes in the first seconds.
     Start-Sleep -Seconds 25
-    if ($Place -eq "spring" -or $Place -eq "endless") {
-        $make = if ($Place -eq "spring") { "spring_make" } else { "endless_make" }
+    if ($Place -eq "spring" -or $Place -eq "endless" -or $Place -eq "lava") {
+        $make = @{ spring = "spring_make"; endless = "endless_make"; lava = "lava_make" }[$Place]
         Invoke-Phase $make "02_spring_make"
         $m = Get-Content (Join-Path $control "flow_probe.json") -Raw | ConvertFrom-Json
         if (-not $m.ok) { Write-Host "no slope near the spawn (seed $Seed)"; exit 1 }
