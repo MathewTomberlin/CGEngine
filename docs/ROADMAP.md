@@ -617,9 +617,12 @@ Goal: a skin takes the shape of its blocks: a one-block column is one block wide
 
 ## Phase 26: meshing cost (from Phase 22's measurements)
 Goal: a chunk's mesh costs a few milliseconds, so a view of 40 settles in a few seconds from launch.
-- [ ] **26.1** The light pass is a third of the mesh time: a breadth-first walk over the padded chunk (82,000 cells at light reach
-  8) for each chunk, with a `vector` frontier. Measure it alone; then flat arrays, and the light of a region's chunks computed once
-  for the region rather than per chunk.
+- [~] **26.1** The light pass: about a quarter of the mesh time now. Its four walks, summed over 830 chunks (instrumented, headless
+  Release, seed 1): the column walk 0.35 s, the sky walk 0.3 s (0.6 s before), the emission scan 0.14 s, the fill 0.3 s. Done: which
+  block ids light passes is a 256-entry table, and the sky walk runs on a flat grid with an unlit ring around the chunk, so a neighbour
+  needs no bounds check. Checked against the old walk on every chunk of a run: no cell differs, and the voxel suite passes 261 of 261.
+  Left: the light of a region's chunks computed once for the region rather than per chunk (the larger saving, and it changes when light
+  is read, so it is its own step). The machine's timings varied by 30 percent between runs of one build, so compare phases in one run.
 - [x] **26.2** The surface, from 6.3 s to 2.0 s (headless Release, seed 1, 841 chunks; the whole mesh from 8.5 s to 3.7 s), with the
   same 1,109,384 quads. A chunk reads each block's group once (`PaddedChunk::member`), so a density lookup is an array read. An
   occupancy group samples only the box its blocks reach (`groupBounds`), a half-block group only the samples beside its blocks, and a
