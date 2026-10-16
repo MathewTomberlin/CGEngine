@@ -28,7 +28,7 @@ from VoxelConfig import *
 # The armour slots: a column on the left of the screen, beside the crafting panel. Each slot is a box with its name and the worn
 # piece's name beside it (window pixels).
 EQUIPMENT_LEFT = 8
-EQUIPMENT_TOP = 76
+EQUIPMENT_TOP = 82
 EQUIPMENT_ROW = 44
 EQUIPMENT_BOX = 36
 EQUIPMENT_LABELS = {"head": "Head", "chest": "Chest", "legs": "Legs", "feet": "Feet", "gloves": "Gloves"}
@@ -186,6 +186,7 @@ class InventoryMixin:
             self.draw_text("equip_piece_%d" % index, piece, (left + EQUIPMENT_BOX + 6, top + 16), 11,
                            (200, 200, 190, 255) if item is not None else (130, 130, 130, 255))
         self.draw_text("equip_bonus", self.equipment.summary(), (14, 54), 11, (220, 220, 200, 255))
+        self.draw_text("equip_combat", self.equipment.combat_summary(), (14, 66), 11, (220, 200, 160, 255))
 
     def update_inventory_screen(self):
         """Hides the key help line while the inventory is open: the crafting panel's grid sits under it, and the two would overlap."""

@@ -78,6 +78,16 @@ check("the data file's pieces are VoxelGen's armour", set(VoxelGen.EQUIPMENT) ==
       VoxelGen.LEATHER_LEGGINGS, VoxelGen.LEATHER_BOOTS, VoxelGen.LEATHER_GLOVES})
 check("each piece's slot is one the equipment has", all(e["slot"] in eq.SLOTS for e in VoxelGen.EQUIPMENT.values()))
 check("each piece has its name in the game", all(VoxelGen.NAMES.get(item) == e["name"] for item, e in VoxelGen.EQUIPMENT.items()))
+g = eq.Equipment(VoxelGen.EQUIPMENT)
+check("nothing worn: no strike bonus line", g.combat_summary() == "" and g.damage_factor() == 1.0 and g.break_factor() == 1.0)
+g.wear(VoxelGen.LEATHER_GLOVES)
+check("gloves add to the strike against creatures", abs(g.damage_factor() - 1.15) < 1e-9)
+check("gloves add to the blocks a strike breaks", abs(g.break_factor() - 1.1) < 1e-9)
+check("the strike line names the gloves' bonuses", g.combat_summary() == "hit +15%  dig +10%")
+h = eq.Equipment(TABLE)
+h.table[60] = {"slot": "gloves", "speed": 0.0, "jump": 0.0, "damage": 2.0, "break": -2.0, "name": "giant"}
+h.wear(60)
+check("strike bonuses are clamped too", abs(h.damage_factor() - 2.0) < 1e-9 and abs(h.break_factor() - 0.5) < 1e-9)
 check("every slot has a piece to wear", {e["slot"] for e in VoxelGen.EQUIPMENT.values()} == set(eq.SLOTS))
 
 if failures:

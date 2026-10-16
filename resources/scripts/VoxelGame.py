@@ -988,7 +988,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
             self.flash_until = time.time() + HIT_FLASH_SECONDS
             lo, hi = walker.box()
             centre = [(lo[i] + hi[i]) / 2 for i in range(3)]
-            if walker.hurt((self.pos[0], self.pos[2]), VoxelGen.damage_of(self.selected())):
+            if walker.hurt((self.pos[0], self.pos[2]), VoxelGen.damage_of(self.selected()) * self.equipment.damage_factor()):
                 self.creature_died(walker)
             else:
                 self.bursts.add(centre, (0.85, 0.25, 0.2), 4, 0.12, 0.4)
@@ -1025,7 +1025,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
                 self.notify("You need an iron pickaxe to mine %s" % VoxelGen.NAMES.get(kind, "that"))
                 return
             key = tuple(block)
-            carry = self.hit_carry.get(key, 0.0) + VoxelGen.block_damage(tool, kind)
+            carry = self.hit_carry.get(key, 0.0) + VoxelGen.block_damage(tool, kind) * self.equipment.break_factor()
             swings = int(carry + 1e-9)
             breaks = swings > 0 and self.world.damage_at(*block) + swings >= VoxelGen.HITS.get(kind, 1)
             if breaks and not self.creative and not self.inventory.fits(kind):

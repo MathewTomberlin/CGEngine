@@ -11,6 +11,8 @@ SLOTS = ("head", "chest", "legs", "feet", "gloves")
 SLOT_ABBREVIATIONS = {"head": "Hd", "chest": "Ch", "legs": "Lg", "feet": "Ft", "gloves": "Gl"}
 SPEED_LIMITS = (-0.3, 0.5)      # the most a suit slows or speeds the walk, as a fraction of the walk speed
 JUMP_LIMITS = (-0.1, 0.2)       # the least and most it changes the jump; -0.1 keeps a jump above the one-block step
+DAMAGE_LIMITS = (-0.5, 1.0)     # the strikes on creatures: at most half as hard, or twice as hard
+BREAK_LIMITS = (-0.5, 1.0)      # the blocks a strike breaks: at most half as many, or twice as many
 
 
 def clamp(value, low, high):
@@ -50,6 +52,14 @@ class Equipment:
         """The sum of a stat ('speed' or 'jump') over the worn pieces, before the limits."""
         return sum(self.table[item][stat] for item in self.worn.values() if item is not None)
 
+    def damage_factor(self):
+        """The multiplier on a strike's health against a creature: 1 with nothing worn."""
+        return 1.0 + clamp(self.total("damage"), *DAMAGE_LIMITS)
+
+    def break_factor(self):
+        """The multiplier on the blocks a strike breaks: 1 with nothing worn."""
+        return 1.0 + clamp(self.total("break"), *BREAK_LIMITS)
+
     def speed_factor(self):
         """The walk speed's multiplier: 1 with nothing worn."""
         return 1.0 + clamp(self.total("speed"), *SPEED_LIMITS)
@@ -67,6 +77,14 @@ class Equipment:
             name = "-" if item is None else self.table[item]["name"]
             out.append("%s %s" % (SLOT_ABBREVIATIONS[slot], name))
         return out
+
+    def combat_summary(self):
+        """The bar's second line: the strike bonuses (against creatures, and on blocks), or "" when neither is worn."""
+        hit = round((self.damage_factor() - 1.0) * 100)
+        dig = round((self.break_factor() - 1.0) * 100)
+        if hit == 0 and dig == 0:
+            return ""
+        return "hit %+d%%  dig %+d%%" % (hit, dig)
 
     def summary(self):
         """The bar's last line: the total speed and jump bonuses of the worn pieces, after the limits."""

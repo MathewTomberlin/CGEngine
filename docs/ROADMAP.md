@@ -944,7 +944,10 @@ written answer (what it would take, and a measured number) and a decision: build
   feet, gloves): a second slot list saved with the inventory, and the hands already exist (the held item and the offhand shield).
 - [~] **39.4** Equipment effects (first form: a piece adds to the walk speed (`speed`) and the jump (`jump`), the sums clamped to
   `SPEED_LIMITS` and `JUMP_LIMITS`, so a heavy suit's jump stays above the one-block step; the walk and the jump are read in
-  `VoxelGame`). Not yet: the attack, damage and break bonuses. The original question:
+  `VoxelGame`). The gloves add a strike bonus: `damage` to the health a strike takes from a creature, and `break` to the blocks a
+  strike breaks (`VoxelEquipment.damage_factor` and `break_factor`, clamped; the bar's second line shows them, and they are checked in
+  `tools/test_voxel_equipment.py` and by the gear view, which also checks the strike). Not yet: bonuses on the bow and the arrows, and
+  the pieces beyond the gloves. The original question:
 - [ ] **39.4** Equipment effects (question): an item changes movement speed and jump height (by its weight, or by a bonus), and gives bonuses to
   attack speed, damage, and break speed against certain blocks. Questions: where the player's speed and jump are set (in one place
   or many; `VoxelPhysics.py`, `VoxelGame.py`), whether the stats can be one base value plus a sum of modifiers, and the balance risk:
