@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <chrono>
+#include <cstddef>
 #include "VoxelSimulation.h"
 #include "VoxelBlocks.h"
 #include "VoxelWorld.h"
@@ -44,8 +45,12 @@ namespace CGEngine {
 	}
 
 	void VoxelSimulation::set(VoxelWorld& world, int x, int y, int z, uint8_t block) {
-		// VoxelWorld::setBlock queues the changed cell and its neighbours, so the change is seen on the next tick.
+		// VoxelWorld::setBlock queues the changed cell and its neighbours, so the change is seen on the next tick. The simulation's own
+		// changes (a falling block, a liquid, a reaction) are not breaks, so they do not look for detached pieces.
+		const bool detaching = world.detachChecksOn();
+		world.setDetachChecks(false);
 		world.setBlock(x, y, z, block);
+		world.setDetachChecks(detaching);
 	}
 
 	void VoxelSimulation::beginMove(VoxelWorld& world, int fromX, int fromY, int fromZ, int toX, int toY, int toZ, uint8_t block) {
@@ -78,6 +83,57 @@ namespace CGEngine {
 			moves.pop_back();
 			reserved.erase(keyOf(landed.to[0], landed.to[1], landed.to[2]));
 			set(world, landed.to[0], landed.to[1], landed.to[2], landed.block);
+		}
+	}
+
+	void VoxelSimulation::detach(std::vector<PieceCell> cells) {
+		Piece piece;
+		for (const PieceCell& c : cells) pieceKeys.insert(keyOf(c.x, c.y, c.z));
+		piece.cells = std::move(cells);
+		piece.elapsed = 0.0;
+		pieces.push_back(std::move(piece));
+	}
+
+	void VoxelSimulation::advancePieces(VoxelWorld& world, double dt) {
+		for (size_t p = 0; p < pieces.size();) {
+			Piece& piece = pieces[p];
+			piece.elapsed += dt;
+			if (piece.elapsed < PieceSeconds) {
+				++p;
+				continue;
+			}
+			piece.elapsed -= PieceSeconds;
+			// The piece can move when every cell below it is air, or is the piece itself.
+			std::unordered_set<int64_t> own;
+			for (const PieceCell& c : piece.cells) own.insert(keyOf(c.x, c.y, c.z));
+			bool free = true;
+			for (const PieceCell& c : piece.cells) {
+				if (c.y - 1 < 0 || !world.loadedAt(c.x, c.z)) {
+					free = false;
+					break;
+				}
+				if (own.count(keyOf(c.x, c.y - 1, c.z))) continue;
+				if (world.getBlock(c.x, c.y - 1, c.z) != 0) {
+					free = false;
+					break;
+				}
+			}
+			if (!free) {
+				for (const PieceCell& c : piece.cells) pieceKeys.erase(keyOf(c.x, c.y, c.z));
+				pieces.erase(pieces.begin() + static_cast<std::ptrdiff_t>(p));
+				continue;
+			}
+			// The writes below are the piece moving, not a break: the world must not look for detached pieces around them.
+			world.setDetachChecks(false);
+			for (const PieceCell& c : piece.cells) set(world, c.x, c.y, c.z, 0);
+			for (PieceCell& c : piece.cells) {
+				pieceKeys.erase(keyOf(c.x, c.y, c.z));
+				c.y -= 1;
+				pieceKeys.insert(keyOf(c.x, c.y, c.z));
+				set(world, c.x, c.y, c.z, c.block);
+			}
+			world.setDetachChecks(true);
+			++p;
 		}
 	}
 
@@ -345,6 +401,7 @@ namespace CGEngine {
 
 	int VoxelSimulation::simulate(VoxelWorld& world, double dt, double budgetMs, double tickSeconds) {
 		advanceMoves(world, dt);
+		advancePieces(world, dt);
 		accumulator += dt;
 		int looked = 0;
 		const auto start = std::chrono::steady_clock::now();

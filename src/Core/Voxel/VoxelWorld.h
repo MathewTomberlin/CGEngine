@@ -125,6 +125,16 @@ namespace CGEngine {
 			int visited = 0;
 		};
 		SupportResult checkSupport(int x, int y, int z, int maxBlocks) const;
+		// The same fill from the given blocks (each solid). With cells not null, a result of status 1 fills it with every block the fill
+		// took in: the detached piece.
+		SupportResult checkSupportFrom(const std::vector<std::array<int, 3>>& seeds, int maxBlocks,
+			std::vector<std::array<int, 3>>* cells) const;
+		// Detached pieces (roadmap 39.1): when a block is broken, the solid blocks it held up that no longer reach the ground fall as one
+		// piece (VoxelSimulation::detach). setDetachChecks(false) turns the look-up off, as a piece does while it moves.
+		void setDetachChecks(bool on) { detachChecks = on; }
+		bool detachChecksOn() const { return detachChecks; }
+		int fallingPieces() const { return simulation.pieceCount(); }
+		int fallingCells() const { return simulation.pieceCellCount(); }
 		// The material a block's own mesh is drawn with (BlockType::own). Blocks without one use the world's material.
 		void setMaterial(int blockId, const std::string& name);
 
@@ -225,6 +235,10 @@ namespace CGEngine {
 		void setDamage(int x, int y, int z, int stage);
 
 	private:
+		bool detachChecks = true;
+		// Called for a block broken at (x, y, z): every solid block beside it that no longer reaches the ground starts a falling piece.
+		void detachAround(int x, int y, int z);
+		void setBlockQuiet(int x, int y, int z, int blockId);
 		struct Chunk {
 			std::vector<uint8_t> blocks;    // empty until the terrain is installed
 			bool loaded = false;
