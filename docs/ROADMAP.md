@@ -925,8 +925,11 @@ written answer (what it would take, and a measured number) and a decision: build
   from hide (`resources/voxel_equipment.json`, `VoxelEquipment.py`); shift and left click on a piece in the inventory puts it on, and a
   shift and left click on a line of the side bar takes it off; the bar names each worn piece and the total bonuses; the worn pieces save
   with the inventory; `tools/test_voxel_equipment.py`). Not yet: the hands' slots, a body view, the slots as a panel of their own, and
-  the bar's look in play. The bar is a column on the left of the screen, checked at the default window (1000 by 500, which is the game's
-  own default): each slot's abbreviation and piece, then the total speed and jump.
+  the look in play. The armour slots are boxes in a column on the left, beside the crafting panel (1000 by 500, the game's own default):
+  each box with the slot's name and the worn piece's name beside it. A held piece of armour is clicked onto its box to put it on (the piece it
+  replaces is held in its place), and a click on a worn box with nothing held takes the piece off into the cursor (`click_equipment`;
+  `tools/voxel_view_shot.ps1 -View gear` runs those clicks and checks them). The total bonuses are at the top left, in small type, both with
+  the inventory open and in play.
   The original question:
 - [ ] **39.3** Player equipment (question): a screen with slots for the left and right hands, head, chest, legs, feet and gloves, and a side bar
   naming each equipped item with its stats, bonuses and penalties. Questions: whether the existing inventory screen can host it

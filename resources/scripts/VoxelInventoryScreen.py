@@ -25,9 +25,13 @@ import StateFile
 from VoxelConfig import *
 
 
-EQUIPMENT_BAR_LEFT = 8          # the armour side bar: its left edge, its top, and the width of a line (window pixels)
-EQUIPMENT_BAR_TOP = 272
-EQUIPMENT_BAR_WIDTH = 132
+# The armour slots: a column on the left of the screen, beside the crafting panel. Each slot is a box with its name and the worn
+# piece's name beside it (window pixels).
+EQUIPMENT_LEFT = 8
+EQUIPMENT_TOP = 60
+EQUIPMENT_ROW = 44
+EQUIPMENT_BOX = 36
+EQUIPMENT_LABELS = {"head": "Head", "chest": "Chest", "legs": "Legs", "feet": "Feet", "gloves": "Gloves"}
 
 
 class InventoryMixin:
@@ -98,17 +102,43 @@ class InventoryMixin:
             key = hotbar_key(index) if row == 0 else ""
             self.draw_text("key_%d" % index, key, (left + 4, top + 1), 12, (200, 200, 200, 255))
 
-    def equipment_line_at(self):
-        """The top left corner of each line of the armour side bar, in window pixels: on the left of the screen, under the crafting
-        panel and clear of the hotbar (the default window is 1000 by 500). One line a slot, then the totals."""
-        return [(EQUIPMENT_BAR_LEFT, EQUIPMENT_BAR_TOP + 16 * index) for index in range(len(VoxelEquipment.SLOTS) + 1)]
-
-    def equipment_slot_at(self, x, y):
-        """The armour slot whose side bar line is under the window point, or None."""
-        for index, (left, top) in enumerate(self.equipment_line_at()):
-            if index < len(VoxelEquipment.SLOTS) and left <= x < left + EQUIPMENT_BAR_WIDTH and top <= y < top + 16:
-                return VoxelEquipment.SLOTS[index]
+    def equipment_box_at(self, x, y):
+        """The armour slot whose box is under the window point, or None."""
+        for index, slot in enumerate(VoxelEquipment.SLOTS):
+            left, top = EQUIPMENT_LEFT, EQUIPMENT_TOP + EQUIPMENT_ROW * index
+            if left <= x < left + EQUIPMENT_BOX and top <= y < top + EQUIPMENT_BOX:
+                return slot
         return None
+
+    def click_equipment(self, slot):
+        """A click on an armour box. With a piece of armour held (the cursor, which follows the mouse), the piece goes on, and the
+        piece it replaces is held in its place; with nothing held, the worn piece is taken off into the cursor."""
+        held = self.inventory.held
+        worn = self.equipment.worn[slot]
+        if held and self.equipment.is_armour(held[0]):
+            item = held[0]
+            if self.equipment.slot_of(item) != slot:
+                self.notify("The %s goes on the %s" % (VoxelGen.NAMES.get(item, "piece"), self.equipment.slot_of(item)))
+                return
+            if worn is not None and held[1] > 1 and not self.inventory.fits(worn):
+                self.notify("No room for the %s" % VoxelGen.NAMES.get(worn, "piece"))
+                return
+            if held[1] > 1:
+                held[1] -= 1
+            else:
+                self.inventory.held = None
+            self.equipment.wear(item)
+            if worn is not None:
+                if self.inventory.held is None:
+                    self.inventory.held = [worn, 1]
+                else:
+                    self.inventory.add(worn)
+            self.notify("Wearing the %s" % VoxelGen.NAMES.get(item, "piece"))
+        elif held:
+            self.notify("Only armour goes on the armour slots")
+        elif worn is not None:
+            self.inventory.held = [worn, 1]
+            self.equipment.take_off(slot)
 
     def wear_from_slot(self, index):
         """Puts on the armour in a slot (one piece). The piece it replaces goes back into the inventory; with no room for it, nothing
@@ -134,26 +164,26 @@ class InventoryMixin:
             self.inventory.add(replaced)
         self.notify("Wearing the %s" % VoxelGen.NAMES.get(item, "piece"))
 
-    def take_off_slot(self, slot):
-        """Takes a worn piece off into the inventory. With no room for it, it stays on."""
-        item = self.equipment.worn[slot]
-        if item is None:
-            return
-        if not self.creative and not self.inventory.fits(item):
-            self.notify("Inventory full")
-            return
-        self.equipment.take_off(slot)
-        self.inventory.add(item)
-        self.notify("Took off the %s" % VoxelGen.NAMES.get(item, "piece"))
-
     def update_equipment_bar(self):
-        """The armour side bar: a line a slot, naming the worn piece and its speed and jump bonuses. Shown with the inventory open."""
-        lines = self.equipment.lines() + [self.equipment.summary()] if self.inventory_open else []
-        for index, (left, top) in enumerate(self.equipment_line_at()):
-            if self.inventory_open:
-                self.draw_text("equip_%d" % index, lines[index], (left, top), 12, (220, 220, 200, 255))
-            else:
-                self.draw_text("equip_%d" % index, "", (0, 0), 12)
+        """The armour slots, beside the crafting panel while the inventory is open: a box a slot with the worn piece's colour, its
+        name beside it and the piece's name under it. The bonuses are always shown at the top left, in a small font."""
+        hover = self.equipment_box_at(*cge.mouse_position()) if self.inventory_open else None
+        for index, slot in enumerate(VoxelEquipment.SLOTS):
+            left, top = EQUIPMENT_LEFT, EQUIPMENT_TOP + EQUIPMENT_ROW * index
+            if not self.inventory_open:
+                self.hide_rect("equip_box_%d" % index, (left, top, EQUIPMENT_BOX, EQUIPMENT_BOX))
+                self.draw_text("equip_name_%d" % index, "", (0, 0), 11)
+                self.draw_text("equip_piece_%d" % index, "", (0, 0), 11)
+                continue
+            item = self.equipment.worn[slot]
+            fill = tuple(int(c * 255) for c in VoxelGen.ITEM_COLOURS[item]) + (255,) if item is not None else (30, 30, 36, 225)
+            outline = (255, 255, 255, 255) if hover == slot else (130, 130, 140, 255)
+            self.draw_rect("equip_box_%d" % index, (left, top, EQUIPMENT_BOX, EQUIPMENT_BOX), fill, outline, 2, layer=985)
+            self.draw_text("equip_name_%d" % index, EQUIPMENT_LABELS[slot], (left + EQUIPMENT_BOX + 6, top + 2), 11, (230, 230, 220, 255))
+            piece = VoxelGen.NAMES.get(item, "") if item is not None else "empty"
+            self.draw_text("equip_piece_%d" % index, piece, (left + EQUIPMENT_BOX + 6, top + 16), 11,
+                           (200, 200, 190, 255) if item is not None else (130, 130, 130, 255))
+        self.draw_text("equip_bonus", "Bonuses: " + self.equipment.summary(), (8, 4), 11, (220, 220, 200, 255))
 
     def update_inventory_screen(self):
         """The inventory screen: a panel over the two rows above the hotbar, its title and how to use it, and the held stack, which
@@ -464,15 +494,15 @@ class InventoryMixin:
             elif right and target[0] == "cell":
                 self.click_crafting(target, secondary=True)
             return
+        box = self.equipment_box_at(mouse_x, mouse_y) if self.inventory_open else None
+        if box is not None:
+            if left:
+                self.click_equipment(box)
+            return
         shift = bool(cge.key_down("LShift") or cge.key_down("RShift"))
-        if shift and left:
-            # Shift and a left click: a piece of armour is put on from its slot, or a worn piece is taken off from the side bar.
-            if self.inventory_hover is not None:
-                self.wear_from_slot(self.inventory_hover)
-                return
-            slot = self.equipment_slot_at(mouse_x, mouse_y)
-            if slot is not None:
-                self.take_off_slot(slot)
+        if shift and left and self.inventory_hover is not None:
+            # Shift and a left click on a piece of armour in the grid puts it on.
+            self.wear_from_slot(self.inventory_hover)
             return
         if self.inventory_hover is None:
             return
