@@ -28,7 +28,7 @@ from VoxelConfig import *
 # The armour slots: a column on the left of the screen, beside the crafting panel. Each slot is a box with its name and the worn
 # piece's name beside it (window pixels).
 EQUIPMENT_LEFT = 8
-EQUIPMENT_TOP = 60
+EQUIPMENT_TOP = 76
 EQUIPMENT_ROW = 44
 EQUIPMENT_BOX = 36
 EQUIPMENT_LABELS = {"head": "Head", "chest": "Chest", "legs": "Legs", "feet": "Feet", "gloves": "Gloves"}
@@ -183,7 +183,7 @@ class InventoryMixin:
             piece = VoxelGen.NAMES.get(item, "") if item is not None else "empty"
             self.draw_text("equip_piece_%d" % index, piece, (left + EQUIPMENT_BOX + 6, top + 16), 11,
                            (200, 200, 190, 255) if item is not None else (130, 130, 130, 255))
-        self.draw_text("equip_bonus", "Bonuses: " + self.equipment.summary(), (8, 4), 11, (220, 220, 200, 255))
+        self.draw_text("equip_bonus", self.equipment.summary(), (14, 54), 11, (220, 220, 200, 255))
 
     def update_inventory_screen(self):
         """The inventory screen: a panel over the two rows above the hotbar, its title and how to use it, and the held stack, which
