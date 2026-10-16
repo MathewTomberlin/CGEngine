@@ -259,6 +259,30 @@ def check_falling(results):
     world.clear()
 
 
+def check_far_feature(results):
+    """A far skin (stride 2) samples every second block, so a one-block pillar at an odd block was missed (roadmap 25.4). The skin
+    of a stride-2 chunk must show the pillar, as the full-detail skin does (the control)."""
+    checks = results["check"]
+    world = cge.VoxelWorld(SIZE, HEIGHT, "voxel")
+    world.set_smoothing(1)
+    chunk = [(0, 0)]
+    load_chunks(world, chunk)
+    for x in range(SIZE):
+        for z in range(SIZE):
+            world.fill_column(x, z, 0, HEIGHT, 0)
+            world.fill_column(x, z, 0, 6, VOXEL_STONE)
+    for y in range(6, 10):
+        world.set_block(5, y, 5, VOXEL_STONE)   # one block wide, at odd x and z
+    def top_near_pillar(stride):
+        verts = world.ground_mesh(0, 0, 0, stride)
+        return max((v[1] for v in verts if 4.5 <= v[0] <= 6.5 and 4.5 <= v[2] <= 6.5), default=None)
+    full = top_near_pillar(1)
+    far = top_near_pillar(2)
+    checks["control: the full-detail skin shows a one-block pillar at an odd block"] = full is not None and full > 8.0
+    checks["a far skin (stride 2) shows a one-block pillar at an odd block"] = far is not None and far > 8.0
+    world.clear()
+
+
 def check_reactions(results):
     """Reactions (VoxelWorld.add_reaction): a lava block that water touches takes damage as it goes and becomes obsidian after its
     seconds; if the water leaves first, it heals and stays lava. Dirt beside grass becomes grass after its second, and air beside
@@ -924,6 +948,7 @@ def run(out_path="cg_control/voxel_check.json"):
     check_lava(results)
     check_reactions(results)
     check_falling(results)
+    check_far_feature(results)
     biomes ={world.biome_at(x, z) for x in range(-200, 200, 10) for z in range(-200, 200, 10)}
     results["check"]["biomes vary: plains, forest and desert occur"] = biomes == {"plains", "forest", "desert"}
     results["biomes"] = sorted(biomes)
