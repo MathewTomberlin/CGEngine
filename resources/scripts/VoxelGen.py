@@ -82,6 +82,7 @@ for _b, _e in BLOCK_TABLE.items():
         _names = _e["tiles"] * 3 if len(_e["tiles"]) == 1 else _e["tiles"]
         TILES[_b] = tuple(TILE_NAMES.index(_n) for _n in _names)
 HITS = {b: e["hits"] for b, e in BLOCK_TABLE.items() if "hits" in e}   # hits to break a block (the others take one); see VoxelWorld.hit_block
+STEPS = {b: "step_" + e["step"] for b, e in BLOCK_TABLE.items() if "step" in e}   # the footstep sound of each ground block (play_sound name); the default is "step"
 EMITS = {b: e["emits"] for b, e in BLOCK_TABLE.items() if e.get("emits")}   # the light each block gives off at its own cell, 0 to 255
 FALLS = tuple(b for b in sorted(BLOCK_TABLE) if BLOCK_TABLE[b].get("falls"))   # blocks that fall into air or liquid
 _LIQUID_IDS = tuple(b for b in sorted(BLOCK_TABLE) if BLOCK_TABLE[b].get("liquid"))

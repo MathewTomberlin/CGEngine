@@ -421,16 +421,26 @@ class Walkers:
         return bites
 
     def prey_for(self, index, spots):
-        """The index of the nearest timid creature within the biter's prey_range of the biter at index, or None."""
-        best = None
+        """The index of the prey of the biter at index, or None. The nearest timid creature within its prey_range comes first; with
+        none, the nearest biter that is wounded (a healthy biter is not hunted). Each kind's nearest is kept apart, so a timid
+        creature is taken over a wounded biter however near that biter is."""
         prey_range = self.walkers[index].kind["prey_range"]
+        nearest = {}   # 0 for a timid creature, 1 for a wounded biter: the (distance, index) of the nearest of each
         for j, other in enumerate(self.walkers):
-            if other.biter or other.removed or j == index:
+            if other.removed or j == index:
+                continue
+            if other.biter and other.health >= other.kind["health"]:
                 continue
             distance = math.hypot(spots[index][0] - spots[j][0], spots[index][2] - spots[j][2])
-            if distance < prey_range and (best is None or distance < best[0]):
-                best = (distance, j)
-        return None if best is None else best[1]
+            if distance >= prey_range:
+                continue
+            rank = 1 if other.biter else 0
+            if rank not in nearest or distance < nearest[rank][0]:
+                nearest[rank] = (distance, j)
+        for rank in (0, 1):
+            if rank in nearest:
+                return nearest[rank][1]
+        return None
 
     def remove(self, walker):
         """Take a creature out of the herd and out of the world (when it dies)."""

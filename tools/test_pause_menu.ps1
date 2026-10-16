@@ -102,15 +102,18 @@ cge.mouse_delta = lambda: (0.0, 0.0)
 "@
 }
 
-# The menu of the 1000 x 500 window: the pause page has Resume (y 260), Settings (y 305) and Quit (y 351). The settings
+# The menu of the 1000 x 500 window: the pause page has Resume (y 260), Save world (y 307), Load world (y 351), Settings (y 395)
+# and Quit (y 439). The settings
 # page has the sensitivity arrows (the up arrow at x 665, y 169), the view arrows (y 209), the window and speed rows, the
 # time-of-day track (y 383, from x 350 to 650) and Back (y 427). The Auto jump row sits between Window and Speed.
-$settingsScript = Click-Script 500 305
+$settingsScript = Click-Script 500 395
+$saveScript = Click-Script 500 307
+$loadScript = Click-Script 500 351
 $sensUpScript = Click-Script 665 169
 $viewUpScript = Click-Script 680 209
 $trackScript = Click-Script 500 383
 $backScript = Click-Script 500 427
-$quitScript = Click-Script 500 351
+$quitScript = Click-Script 500 439
 
 Remove-Item -Recurse -Force $control -ErrorAction SilentlyContinue
 $env:CGENGINE_SCENE = "scenes/voxels.json"
@@ -188,6 +191,14 @@ try {
     $ran = Run-Script "08_back" $backScript
     $back = Wait-State { param($s) $s.menu -eq "pause" } 10
     Check "Back returns to the pause page" ($back -and $back.menu -eq "pause")
+    # Save world and Load world on the pause page: the world's files are written, and Load reads them back, still paused.
+    Remove-Item -Force (Join-Path $exeDir "cg_control/voxel_edits.bin") -ErrorAction SilentlyContinue
+    $ran = Run-Script "10_save" $saveScript
+    $saved = Wait-State { param($s) $s.world_io -eq "saved" } 10
+    Check "clicking Save world writes the world's files" ($ran -and $ran.ok -and $saved -and (Test-Path (Join-Path $exeDir "cg_control/voxel_edits.bin")) -and (Test-Path (Join-Path $exeDir "cg_control/voxel_inventory.json")))
+    $ran = Run-Script "11_load" $loadScript
+    $loaded = Wait-State { param($s) $s.world_io -eq "loaded" } 10
+    Check "clicking Load world reads the world back and the game stays paused" ($ran -and $ran.ok -and $loaded -and $loaded.paused -eq $true)
     $ran = Run-Script "09_quit" $quitScript
     Check "the quit script installs" ($ran -and $ran.ok)
     $deadline = (Get-Date).AddSeconds(15)

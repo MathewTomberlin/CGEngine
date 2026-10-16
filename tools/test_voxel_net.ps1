@@ -296,6 +296,19 @@ with open("cg_control/net_cells.json", "w") as f:
     $bad = Send-Command $second "net_voxel_bad" "voxel_edit" @{ op = "dig"; c = $above }
     Check "a bad voxel_edit is reported as an error" (($null -ne $bad) -and ($bad.ok -eq $false) -and ($bad.error -match "op must be"))
 
+    # The host's load undoes the edits made since its save (F5 then F9): the cell the save lacks shows its terrain again, on the
+    # host and on the client. The cell is at top+4, above the sand that fell. Its terrain is read first, then a lamp is set there.
+    $c = @($x, ($top + 4), $z)
+    $orig = (Read-Cell $base $c).block
+    # One script for both: the engine runs script files in name order, so separate scripts could run the lamp first.
+    Send-Code $base "net_a_save_lamp" ("game.save_world()`n" +
+        "game.world.set_block($($c[0]), $($c[1]), $($c[2]), 17)`n")
+    $lampB = Wait-Cell $second $c { param($r) $r.block -eq 17 }
+    Send-Code $base "net_a_load" "game.load_world()`n"
+    $undoA = Wait-Cell $base $c { param($r) $r.block -eq $orig }
+    $undoB = Wait-Cell $second $c { param($r) $r.block -eq $orig }
+    Check "a host's load undoes an edit made after its save, on the host and on the client" (($null -ne $lampB) -and ($null -ne $undoA) -and ($null -ne $undoB))
+
     # Positions: each game knows where the other player is.
     $aSeesB = Wait-Until $base { param($s) $s.net -and $s.net.remote -ne $null } 20
     $bSeesA = Wait-Until $second { param($s) $s.net -and $s.net.remote -ne $null } 20

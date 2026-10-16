@@ -6,6 +6,7 @@ import json
 import math
 import os
 import random
+import re
 import time
 import traceback
 
@@ -83,8 +84,15 @@ CRAFT_GRID_CELL = 22      # pixels, a side, of a cell in the crafting grid
 CRAFT_GRID_GAP = 2        # pixels between the cells of the crafting grid
 CRAFT_BUTTON_WIDTH = 220   # pixels, the dropdown button's width
 HEALTH_SEGMENT = 16         # pixels, a side, of one segment of the health bar
-INVENTORY_FILE = "cg_control/voxel_inventory.json"
-EDITS_FILE = "cg_control/voxel_edits.bin"
+# A named world keeps its files in a folder of its own, cg_control/worlds/<name> (VOXEL_WORLD), so one world can be copied or
+# shared as a folder. The name is letters, digits, "-" and "_"; another name is ignored, and the default folder is used.
+WORLD = os.environ.get("VOXEL_WORLD", "")
+if WORLD and not re.fullmatch(r"[A-Za-z0-9_-]{1,40}", WORLD):
+    print("[voxel] VOXEL_WORLD %r is not a world name (letters, digits, - and _): using the default world" % WORLD)
+    WORLD = ""
+WORLD_FOLDER = os.path.join("cg_control", "worlds", WORLD) if WORLD else "cg_control"
+INVENTORY_FILE = os.path.join(WORLD_FOLDER, "voxel_inventory.json")   # the inventory, the drops, the recipes, the clock
+EDITS_FILE = os.path.join(WORLD_FOLDER, "voxel_edits.bin")
 NET_SPEC = os.environ.get("VOXEL_NET")   # listen:<port> or connect:<host>:<port>: two processes share their edits (VoxelNet)
 POS_INTERVAL = 0.1         # seconds between the player's position messages
 
@@ -179,12 +187,12 @@ def moon_share(phase):
 
 # The pause menu's pages: the title, and the items on each page. The settings page holds the mouse sensitivity.
 MENU_PAGES = {
-    "pause": ("PAUSED", ("resume", "settings", "quit")),
+    "pause": ("PAUSED", ("resume", "save", "load", "settings", "quit")),
     "settings": ("SETTINGS", ("sens_down", "sens_value", "sens_up", "view_down", "view_value", "view_up",
                               "window_down", "window_value", "window_up", "jump_value", "speed_down", "speed_value",
                               "speed_up", "time_value", "time_track", "back")),
 }
-MENU_TEXT = {"resume": "Resume", "settings": "Settings", "quit": "Quit", "back": "Back", "sens_down": "<", "sens_up": ">",
+MENU_TEXT = {"resume": "Resume", "save": "Save world", "load": "Load world", "settings": "Settings", "quit": "Quit", "back": "Back", "sens_down": "<", "sens_up": ">",
              "view_down": "<", "view_up": ">", "window_down": "<", "window_up": ">", "speed_down": "<", "speed_up": ">"}
 
 

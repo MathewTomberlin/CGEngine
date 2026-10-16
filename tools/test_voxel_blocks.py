@@ -52,6 +52,9 @@ check("lava's flows glow as the lava does", all(VoxelGen.EMITS[b] == VoxelGen.EM
 check("the cube blocks are in their own meshes", all(b in VoxelGen.OWN for b in VoxelGen.CUBES))
 check("every liquid is in its own mesh", all(b in VoxelGen.OWN for b in VoxelGen.LIQUIDS))
 check("the wood joins the leaves above it", VoxelGen.JOINS.get(VoxelGen.WOOD) == VoxelGen.LEAVES)
+check("every ground block has its own footstep", set(VoxelGen.GROUND) <= set(VoxelGen.STEPS))
+check("every footstep names a sound file that exists", all(
+    os.path.exists(os.path.join(HERE, "..", "resources", "sounds", name + ".wav")) for name in VoxelGen.STEPS.values()))
 
 # Each kind of mistake is refused, with the file's name in the error.
 with tempfile.TemporaryDirectory() as tmp:

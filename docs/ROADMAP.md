@@ -391,7 +391,7 @@ Goal: blocks and creatures take several hits, and what the player has hit looks 
   the player inside 7 blocks and bites at 1 health each 1.2 s when within 1.3 blocks. The others still run from the player.
   With no player near, a biter hunts the nearest timid creature within 6 blocks and bites it (`VoxelWalkers.PREY_RANGE`, one
   health a 1.2 s); a creature a biter kills leaves a hide, as a hit does. Checked by `voxel_console_check.py`. Timid creatures fight back now: a hit that leaves one alive makes it chase and bite for
-  5 s (`fight_back_seconds` in `voxel_creatures.json`, checked by `tools/test_voxel_walkers.py`). Not yet: biters do not hunt each other.
+  5 s (`fight_back_seconds` in `voxel_creatures.json`, checked by `tools/test_voxel_walkers.py`). Biters hunt each other too: a biter with no player or timid creature near hunts a wounded biter within its prey range (healthy ones are not hunted; `VoxelWalkers.prey_for`, checked by `tools/test_voxel_walkers.py`).
 - [x] **16.6** The player has health: ten points on a bar above the hotbar. Bites and falls lower it (a fall past 4 blocks costs
   1 point a block beyond that; the spawn drop does not count). It heals 0.25 a second after 6 s without a hit, and does not heal
   while the game is paused. At zero the player is back at the spawn with the inventory kept.
@@ -411,7 +411,7 @@ Goal: blocks and creatures take several hits, and what the player has hit looks 
   dies to it with the same hide as a hit, and a creature turns a quarter turn from lava a block ahead of it (`VoxelWalkers.lava_ahead`).
   Checked by `voxel_world_check.py` (no spread, water beside it does spread, its own
   mesh, lava only at or below height 6), `voxel_game_check.py` (the player's health) and `voxel_console_check.py` (a creature).
-  Not yet: lava in the hotbar, and a sound for it. The fog was seen in code only; the glow and the colour were seen in a screenshot.
+  Not yet: lava in the hotbar. The hiss: a lava sound plays every 0.9 s while the player stands in lava (`lava.wav`, made by `tools/make_voxel_sounds.py`, checked by `tools/test_voxel_sounds.py`); not heard in play yet. The fog was seen in code only; the glow and the colour were seen in a screenshot.
 
 ## Phase 17: inventory and a real hotbar (from playtesting: the hotbar is a line of text)
 Goal: items have quantities, the inventory is a grid the player can see and change, and the hotbar is a UI, not text.
@@ -459,9 +459,9 @@ Goal: several people (or an AI and a person) work in one CG Engine world at the 
   `tools/test_voxel_net.ps1`: a client's hit, break, placement and torch; a refused placement; a hit on the host; a late client.
   Not yet: the host's headless run (31.2) is tested as a host, but the host does not arbitrate cells in chunks it has not
   loaded, so the two players must stay within each other's view; a client's own edits from before it connected stay on that
-  client; F9 on the host removes no cell the file lacks; a falling block pops on the client (no moving-block draw); the inventory
+  client; a falling block pops on the client (no moving-block draw); the inventory
   is settled by the host's answer (an ack, `settle_request`, checked by `test_voxel_net.ps1`): a placement or torch the host
-  refuses gives its item back, and a hit is counted once, as the host broke it. Buckets (pour, scoop) still count on the client alone.
+  refuses gives its item back, and a hit is counted once, as the host broke it. Buckets (pour, scoop) still count on the client alone. F9 on the host now undoes the edits the file lacks (`VoxelWorld::loadEdits` makes each touched loaded chunk again from its terrain, and the host sends the reverted cells to its client; `tools/test_voxel_net.ps1`).
 - [~] **18.4** Stretch goal, the multiplayer voxel game, in its first form: the two processes see each other (a box where the other
   player's feet are, with no name yet), share the edits (blocks, torches, damage), and one breaks what the other placed. Each has
   its own inventory and health, so the inventory per player is in place by construction. Not yet: a name, the creatures (each
@@ -707,10 +707,33 @@ Things worth doing, roughly by what they would change for a player. Each one nee
 - **Tools with wear** (17.5 has none): a pickaxe that breaks after N blocks, and a tool-tier table in data.
 - **A crafting grid** instead of the craft list, and recipes that use blocks made by crafting (planks from wood, sticks).
 - **Lava that spreads slowly into water** and water that cools lava: one rule each, in the rule file (10.3).
-- **Sound**: footsteps by block, the splash, lava hiss. The engine has no audio yet; this needs an audio binding first.
 - **Headless host** (18.1): the same world, with no window, so a server can run on a machine with no screen.
 - **Measure the HUD's share of the frame** (17.3), and the cost of many damaged blocks (16.2), in Release.
-- **Save file per world**: the edits, inventory and time of day in one folder, so a run can be copied or shared.
+
+## Phase 44: named worlds, the lava hiss and the swimming test (this round)
+- [x] **44.1** Named worlds: `VOXEL_WORLD=<name>` keeps a world's edits, inventory, drops, recipes and clock in `cg_control/worlds/<name>/`
+  (letters, digits, `-` and `_`; another name is refused and the default is used). Without it the files stay in `cg_control` as before.
+  The clock and the moon are saved with the inventory, so F9 brings the time of day back. Checked by `tools/test_voxel_worlds.py` and in the
+  engine by `voxel_game_check.py` (through `test_voxels.ps1`).
+- [x] **44.2** Swimming test: stale since the sea biome (43.1), which lowered the old pool at column 0,-31 to a sand floor at 10. The test now
+  starts over column 0,-30 (floor 11, two blocks of water). `tools/voxel_pool_probe.ps1` lists the pools near a spot.
+- [x] **44.3** Lava hiss: a lava sound every 0.9 s while the player stands in lava (16.8). Made by `tools/make_voxel_sounds.py`.
+- [x] **44.4** Biters hunt a wounded biter when no timid creature is near (16.5); a healthy biter is not hunted.
+- [x] **44.5** Pause menu: Save world and Load world buttons (between Resume and Settings). They call the same save and load as
+  F5 and F9, and the state file records the last one (`world_io`). Checked by `tools/test_pause_menu.ps1`.
+- Not done: a lamp on the hotbar is not needed (the hotbar is the first inventory row, so any item can go there), and a sky console
+  command would only repeat `time`.
+
+## Phase 45: a world with no floor and no ceiling (open: a refactor, not started)
+Checked: the world is 64 blocks high and bounded. Each chunk is a full-height column (`VoxelWorld::Chunk`, 16 by 64 by 16). The
+terrain fills stone from y = 0 (`VoxelTerrain::fillChunk`), so y = 0 is a solid floor and nothing exists below it; breaking it
+shows the void (the kill zone at y = -20). `setBlock` refuses y < 0 and y >= 64, so the ceiling is 63 and nothing can be built
+above it. The sky is drawn wherever the world has no block.
+- [ ] **45.1** Vertical chunks: chunks of 16 by 16 by 16 keyed by (cx, cy, cz), created on demand. The player's view loads a
+  band of them above and below the player, so the world has no floor or ceiling in practice. Terrain below the surface stays
+  stone and caves, so digging down keeps finding ground. Affects `VoxelWorld` (chunks, regions, light, skin counts, snapshots,
+  the edit file), the mesher, `VoxelTerrain::fillChunk` and the Python bindings. Measure the frame time and memory before and after.
+- [ ] **45.2** Stretch: sky biomes with clouds, floating islands above the ground, and space between planets. Needs 45.1 first.
 
 ## Phase 27: sound and music (from the vision: a game people want to play, goal 1)
 Goal: the sample has sounds for what the player does, and a night loop, through the engine's audio, with the sounds made from data.
@@ -728,6 +751,10 @@ Goal: the sample has sounds for what the player does, and a night loop, through 
   moon's disc and the sounds need a listen.
 - [ ] **27.5** Music from the medium model (`stable_audio_3_medium`) for a day theme. Its clips are not seamless loops, so it would
   play once per part of the day, not as a loop.
+- [x] **27.6** Footsteps by ground: each ground block names its footstep in `resources/voxel_blocks.json` (`step`), and the player's
+  step plays the sound of the block under the feet (`VoxelGame.footstep_sound`, `VoxelGen.STEPS`). Six sounds, made procedurally by
+  `tools/make_voxel_sounds.py` (grass, dirt, stone, sand, gravel, snow); blocks without one keep the default `step`. Checked by
+  `tools/test_voxel_blocks.py` (each ground block has a sound file). Not heard in play yet (27.4).
 
 ## Phase 28: tools that wear out, and mining tiers (from the vision: goal 1)
 Goal: a tool is a choice: it is needed for some blocks, it wears out, and a better one lasts longer and mines more.

@@ -149,6 +149,21 @@ prey.hurt((2.0, 0.0), 1, provoked=False)
 check("a biter's hit on a timid creature does not turn it on the player", prey.fight_timer == 0.0)
 check("a creature that bites takes no fight_back_seconds (it bites already)", "fight_back_seconds" not in kind)
 
+# Biters hunt a wounded biter, and a timid creature first.
+herd_world = OpenGround()
+hunter = VoxelWalkers.Walker(herd_world, "biter_hunter", (0.0, FEET, 0.0), (0.9, 0.9, 0.9), random.Random(10), kind=kind)
+hurt_biter = VoxelWalkers.Walker(herd_world, "biter_hurt", (4.0, FEET, 0.0), (0.9, 0.9, 0.9), random.Random(11), kind=kind)
+healthy_biter = VoxelWalkers.Walker(herd_world, "biter_healthy", (3.0, FEET, 0.0), (0.9, 0.9, 0.9), random.Random(12), kind=kind)
+hurt_biter.health = 1
+herd = VoxelWalkers.Walkers.__new__(VoxelWalkers.Walkers)
+herd.walkers = [hunter, healthy_biter, hurt_biter]
+spots = [w.state()[0] for w in herd.walkers]
+check("a biter hunts a wounded biter when no timid creature is near", herd.prey_for(0, spots) == 2)
+check("a healthy biter is not hunted by another biter", herd.prey_for(2, spots) is None)
+herd.walkers.append(VoxelWalkers.Walker(herd_world, "timid_near", (5.5, FEET, 0.0), (0.9, 0.9, 0.9), random.Random(13), kind=timid))
+spots = [w.state()[0] for w in herd.walkers]
+check("a timid creature is taken over a wounded biter, however near that biter is", herd.prey_for(0, spots) == 3)
+
 if failures:
     print(f"\n{len(failures)} check(s) failed")
     sys.exit(1)

@@ -73,7 +73,7 @@ class NetMixin:
     def send_cells(self):
         """The host sends the state of each cell that changed this frame, or that a request touched, in one message. A cell in a
         chunk the host has not loaded is not sent: the host cannot tell what is there."""
-        changed = {tuple(c) for c in self.world.take_changes()} | self.net_touched
+        changed = {tuple(c) for c in self.world.take_changes()} | self.net_touched | self.net_reverts
         self.net_touched = set()
         if self.net_snapshot:
             changed |= {tuple(c) for c in self.world.edited_cells()}
@@ -82,6 +82,7 @@ class NetMixin:
         if not self.net.connected:
             return
         cells = [self.cell_state(cell) for cell in sorted(changed) if self.loaded_at(cell)]
+        self.net_reverts = {cell for cell in self.net_reverts if not self.loaded_at(cell)}   # the rest wait for their chunks
         if cells:
             self.net.send({"t": "cells", "cells": cells})
         # After the cells, so the source is already clear when the client starts drawing the block leaving it.
