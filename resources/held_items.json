@@ -53,16 +53,16 @@
       "hand": "R",
       "Held_Item_Offset_Transform": {
         "position": [
-          0.03,
+          0.08,
           0.125,
-          -0.06
+          -0.09
         ],
         "rotation": [
           110.0,
           -30.0,
           90.0
         ],
-        "scale": 0.001
+        "scale": 0.00075
       }
     },
     "bucket": {
