@@ -904,8 +904,9 @@ written answer (what it would take, and a measured number) and a decision: build
   Built: a break (`setBlock` to air, the hit that breaks a block, or the console) checks each solid block beside it, and a piece that
   no longer reaches the ground falls as one (`VoxelSimulation::detach`): the piece moves down a cell every 0.15 s while every cell
   below is air or its own, and lands where it cannot move. Checked by `tools/voxel_fall_probe.ps1`: a 2 by 2 slab on a pillar falls one
-  cell when the pillar's top block is broken, and lands. Fills, liquids and edit loads do not look for pieces (`setBlockQuiet`), and
-  `clear` drops them. Not yet: the move is a jump, not a drawn fall (the blocks are not shown in flight); a break at a chunk edge with
+  cell when the pillar's top block is broken, and lands (`tools/voxel_world_check.py`, `check_falling`, checks the drawn move too). Fills, liquids and edit loads do not look for pieces (`setBlockQuiet`), and
+  `clear` drops them. The blocks are drawn in flight: each cell is a move (`beginMove`, 0.135 s), so the moving-block mesh shows them falling.
+  Not yet: a break at a chunk edge with
   an unloaded neighbour, which the check counts as held (not measured); a piece that spans two chunks (the flood crosses chunks; not
   measured).
 - [ ] **39.2** Terrain-aligned decorations: grass that sways, pebbles, foliage and vines that sit on a block's face and follow its

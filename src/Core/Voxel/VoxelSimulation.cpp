@@ -53,7 +53,7 @@ namespace CGEngine {
 		world.setDetachChecks(detaching);
 	}
 
-	void VoxelSimulation::beginMove(VoxelWorld& world, int fromX, int fromY, int fromZ, int toX, int toY, int toZ, uint8_t block) {
+	void VoxelSimulation::beginMove(VoxelWorld& world, int fromX, int fromY, int fromZ, int toX, int toY, int toZ, uint8_t block, double seconds) {
 		Move move;
 		move.from[0] = fromX;
 		move.from[1] = fromY;
@@ -63,7 +63,7 @@ namespace CGEngine {
 		move.to[2] = toZ;
 		move.block = block;
 		move.elapsed = 0.0;
-		move.duration = moveDuration;
+		move.duration = seconds >= 0.0 ? seconds : moveDuration;
 		reserved.insert(keyOf(toX, toY, toZ));
 		moves.push_back(move);
 		// The source is cleared now, so the block is drawn leaving it rather than in two places.
@@ -125,12 +125,13 @@ namespace CGEngine {
 			}
 			// The writes below are the piece moving, not a break: the world must not look for detached pieces around them.
 			world.setDetachChecks(false);
-			for (const PieceCell& c : piece.cells) set(world, c.x, c.y, c.z, 0);
+			// Each cell is a move down (drawn as it falls); the lowest goes first, so the cell below it is free for the one above.
+			std::sort(piece.cells.begin(), piece.cells.end(), [](const PieceCell& a, const PieceCell& b) { return a.y < b.y; });
 			for (PieceCell& c : piece.cells) {
 				pieceKeys.erase(keyOf(c.x, c.y, c.z));
+				beginMove(world, c.x, c.y, c.z, c.x, c.y - 1, c.z, c.block, PieceSeconds * 0.9);
 				c.y -= 1;
 				pieceKeys.insert(keyOf(c.x, c.y, c.z));
-				set(world, c.x, c.y, c.z, c.block);
 			}
 			world.setDetachChecks(true);
 			++p;

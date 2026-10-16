@@ -218,6 +218,47 @@ def check_trunk_base(results):
         any(w is None or w < 0.55 for w in joined))
 
 
+def check_falling(results):
+    """A detached piece (roadmap 39.1): breaking the block under a 2 by 2 slab that stands on a pillar drops the slab one cell, and it
+    is drawn while it falls (moving_blocks); it lands on the pillar. A pillar that stays whole holds the slab."""
+    checks = results["check"]
+    world = cge.VoxelWorld(SIZE, HEIGHT, "voxel")
+    world.set_smoothing(1)
+    chunk = [(0, 0)]
+    load_chunks(world, chunk)
+    for x in range(SIZE):
+        for z in range(SIZE):
+            world.fill_column(x, z, 0, HEIGHT, 0)
+            world.fill_column(x, z, 0, 6, VOXEL_STONE)
+    for y in range(6, 10):
+        world.set_block(8, y, 8, VOXEL_STONE)
+    for x in (8, 9):
+        for z in (8, 9):
+            for y in (11, 12):
+                world.set_block(x, y, z, VOXEL_STONE)
+    world.set_block(8, 10, 8, 0)   # the break: the slab is no longer held
+    checks["a broken block leaves the slab as a falling piece of 8 blocks"] = (
+        world.falling_pieces() == 1 and world.falling_cells() == 8)
+    world.simulate(0.2, 20.0)
+    checks["the falling piece is drawn in flight as it moves down a cell"] = len(world.moving_blocks()) == 8
+    world.simulate(1.0, 20.0)
+    checks["the slab lands on the pillar, one cell lower"] = (
+        world.get_block(8, 10, 8) == VOXEL_STONE and world.get_block(9, 10, 9) == VOXEL_STONE
+        and world.get_block(8, 12, 8) == 0 and world.falling_pieces() == 0)
+    # Control: the pillar whole, and its top broken, so the blocks below still hold to the floor and nothing falls.
+    world.clear()
+    load_chunks(world, chunk)
+    for x in range(SIZE):
+        for z in range(SIZE):
+            world.fill_column(x, z, 0, HEIGHT, 0)
+            world.fill_column(x, z, 0, 6, VOXEL_STONE)
+    for y in range(6, 13):
+        world.set_block(8, y, 8, VOXEL_STONE)
+    world.set_block(8, 12, 8, 0)   # the top of the pillar: what is below it still reaches the floor
+    checks["a break that holds nothing up starts no piece"] = world.falling_pieces() == 0
+    world.clear()
+
+
 def check_reactions(results):
     """Reactions (VoxelWorld.add_reaction): a lava block that water touches takes damage as it goes and becomes obsidian after its
     seconds; if the water leaves first, it heals and stays lava. Dirt beside grass becomes grass after its second, and air beside
@@ -882,6 +923,7 @@ def run(out_path="cg_control/voxel_check.json"):
     check_trunk_base(results)
     check_lava(results)
     check_reactions(results)
+    check_falling(results)
     biomes ={world.biome_at(x, z) for x in range(-200, 200, 10) for z in range(-200, 200, 10)}
     results["check"]["biomes vary: plains, forest and desert occur"] = biomes == {"plains", "forest", "desert"}
     results["biomes"] = sorted(biomes)

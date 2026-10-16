@@ -114,7 +114,8 @@ namespace CGEngine {
 		bool react(VoxelWorld& world, int x, int y, int z, uint8_t block, double tickSeconds);
 		void set(VoxelWorld& world, int x, int y, int z, uint8_t block);
 		// Starts a move: the source is cleared now, and the block is written at the destination when the move ends.
-		void beginMove(VoxelWorld& world, int fromX, int fromY, int fromZ, int toX, int toY, int toZ, uint8_t block);
+		// seconds below 0 uses the world's move time (setMoveSeconds).
+		void beginMove(VoxelWorld& world, int fromX, int fromY, int fromZ, int toX, int toY, int toZ, uint8_t block, double seconds = -1.0);
 		void advanceMoves(VoxelWorld& world, double dt);
 		// Each falling piece: when its step is due, it moves down one cell, or lands.
 		static constexpr double PieceSeconds = 0.15;
