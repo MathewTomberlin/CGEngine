@@ -406,6 +406,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
         hi = (0.02, 0.02, 0.3)
         arrays = boxes_arrays([(lo, hi, VoxelGen.ITEM_COLOURS[VoxelGen.ARROW])])
         cge.create_mesh_body(name, *arrays, materials=["voxel"], position=cge.Vector3f(*pos))
+        cge.set_mesh_body_rotation(name, cge.Vector3f(*VoxelArrows.facing(velocity)))
         self.arrows.append({"name": name, "pos": pos, "vel": velocity, "damage": VoxelArrows.damage_of_charge(charge), "age": 0.0})
         cge.play_sound("place", 0.5, 1.3)
 
@@ -443,6 +444,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
                 continue
             arrow["pos"], arrow["vel"] = pos, vel
             cge.set_mesh_body_position(arrow["name"], cge.Vector3f(*pos))
+            cge.set_mesh_body_rotation(arrow["name"], cge.Vector3f(*VoxelArrows.facing(vel)))
 
     def end_arrow(self, arrow):
         """Take an arrow out of the world: its body goes, and it is no longer in flight."""

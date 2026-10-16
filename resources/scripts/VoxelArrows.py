@@ -59,3 +59,15 @@ def step(pos, velocity, dt, solid):
 def hits_box(pos, lo, hi, margin=0.05):
     """Whether the point pos is inside the box lo..hi (its corners), grown by margin on every side."""
     return all(lo[i] - margin <= pos[i] <= hi[i] + margin for i in range(3))
+
+
+def facing(velocity):
+    """The rotation, in degrees (x, y, z), that turns an arrow's length (along +z) to point along velocity. The engine turns a
+    body as Z * Y * X: a pitch about x (up or down), then a yaw about y (toward x). No roll. Zero velocity keeps the arrow as it is."""
+    speed = math.sqrt(sum(v * v for v in velocity))
+    if speed < 1e-9:
+        return (0.0, 0.0, 0.0)
+    dx, dy, dz = (v / speed for v in velocity)
+    pitch = -math.degrees(math.asin(max(-1.0, min(1.0, dy))))
+    yaw = math.degrees(math.atan2(dx, dz))
+    return (pitch, yaw, 0.0)
