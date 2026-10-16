@@ -188,6 +188,11 @@ class InventoryMixin:
         self.draw_text("equip_bonus", self.equipment.summary(), (14, 54), 11, (220, 220, 200, 255))
 
     def update_inventory_screen(self):
+        """Hides the key help line while the inventory is open: the crafting panel's grid sits under it, and the two would overlap."""
+        help_shown = not self.inventory_open
+        if help_shown != getattr(self, "help_shown", True):
+            cge.set_text_body("hud_help", HELP_TEXT if help_shown else "")
+            self.help_shown = help_shown
         """The inventory screen: a panel over the two rows above the hotbar, its title and how to use it, and the held stack, which
         follows the mouse. All of it is hidden while the screen is closed."""
         width = COLUMNS * SLOT_SIZE + (COLUMNS - 1) * SLOT_GAP
