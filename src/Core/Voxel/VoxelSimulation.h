@@ -62,6 +62,22 @@ namespace CGEngine {
 		const std::vector<Move>& inFlight() const { return moves; }
 		// Ends every move now: the blocks land where they were going.
 		void settleMoves(VoxelWorld& world);
+		// A block of a detached piece: its place and what it is. See detach.
+		struct PieceCell {
+			int x, y, z;
+			uint8_t block;
+		};
+		// Starts a detached piece falling: its blocks stay where they are until the next step, when the whole piece moves down one cell
+		// (every cell below must be air or the piece itself), and it lands where it cannot move (roadmap 39.1).
+		void detach(std::vector<PieceCell> cells);
+		// Whether a cell belongs to a piece that is falling (its blocks are not held, so the world does not check them again).
+		bool inPiece(int x, int y, int z) const { return pieceKeys.count(keyOf(x, y, z)) > 0; }
+		int pieceCount() const { return static_cast<int>(pieces.size()); }
+		int pieceCellCount() const { return static_cast<int>(pieceKeys.size()); }
+		void clearPieces() {
+			pieces.clear();
+			pieceKeys.clear();
+		}
 
 	private:
 		std::vector<int64_t> queue;
@@ -98,7 +114,17 @@ namespace CGEngine {
 		bool react(VoxelWorld& world, int x, int y, int z, uint8_t block, double tickSeconds);
 		void set(VoxelWorld& world, int x, int y, int z, uint8_t block);
 		// Starts a move: the source is cleared now, and the block is written at the destination when the move ends.
-		void beginMove(VoxelWorld& world, int fromX, int fromY, int fromZ, int toX, int toY, int toZ, uint8_t block);
+		// seconds below 0 uses the world's move time (setMoveSeconds).
+		void beginMove(VoxelWorld& world, int fromX, int fromY, int fromZ, int toX, int toY, int toZ, uint8_t block, double seconds = -1.0);
 		void advanceMoves(VoxelWorld& world, double dt);
+		// Each falling piece: when its step is due, it moves down one cell, or lands.
+		static constexpr double PieceSeconds = 0.15;
+		struct Piece {
+			std::vector<PieceCell> cells;
+			double elapsed;
+		};
+		std::vector<Piece> pieces;
+		std::unordered_set<int64_t> pieceKeys;   // the cells of every piece, so a piece is not checked as held
+		void advancePieces(VoxelWorld& world, double dt);
 	};
 }

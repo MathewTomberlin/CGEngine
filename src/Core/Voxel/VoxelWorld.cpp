@@ -116,22 +116,33 @@ namespace CGEngine {
 
 	VoxelWorld::SupportResult VoxelWorld::checkSupport(int x, int y, int z, int maxBlocks) const {
 		static const int Dirs[6][3] = { { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 }, { 0, 0, 1 }, { 0, 0, -1 } };
+		std::vector<std::array<int, 3>> seeds;
+		for (const auto& d : Dirs) {
+			if (isSolid(x + d[0], y + d[1], z + d[2])) seeds.push_back({ x + d[0], y + d[1], z + d[2] });
+		}
+		return checkSupportFrom(seeds, maxBlocks, nullptr);
+	}
+
+	VoxelWorld::SupportResult VoxelWorld::checkSupportFrom(const std::vector<std::array<int, 3>>& seeds, int maxBlocks,
+		std::vector<std::array<int, 3>>* cells) const {
+		static const int Dirs[6][3] = { { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 }, { 0, 0, 1 }, { 0, 0, -1 } };
 		// A block is keyed by its coordinates, offset so each fits in its bits (the world is under 1024 blocks high).
 		auto key = [](int bx, int by, int bz) {
 			return (static_cast<uint64_t>(bx + (1 << 20)) << 42) | (static_cast<uint64_t>(by + (1 << 10)) << 21) | static_cast<uint64_t>(bz + (1 << 20));
 		};
 		std::unordered_set<uint64_t> seen;
 		std::vector<std::array<int, 3>> open;
-		for (const auto& d : Dirs) {
-			const int bx = x + d[0], by = y + d[1], bz = z + d[2];
-			if (!isSolid(bx, by, bz)) continue;
-			if (seen.insert(key(bx, by, bz)).second) open.push_back({ bx, by, bz });
+		std::vector<std::array<int, 3>> visited;
+		for (const auto& seed : seeds) {
+			if (!isSolid(seed[0], seed[1], seed[2])) continue;
+			if (seen.insert(key(seed[0], seed[1], seed[2])).second) open.push_back(seed);
 		}
 		SupportResult result;
 		while (!open.empty()) {
 			const std::array<int, 3> block = open.back();
 			open.pop_back();
 			++result.visited;
+			if (cells) visited.push_back(block);
 			if (block[1] == 0) {
 				result.status = 0;
 				return result;
@@ -151,7 +162,23 @@ namespace CGEngine {
 			}
 		}
 		result.status = 1;
+		if (cells) *cells = std::move(visited);
 		return result;
+	}
+
+	void VoxelWorld::detachAround(int x, int y, int z) {
+		static const int Dirs[6][3] = { { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 }, { 0, 0, 1 }, { 0, 0, -1 } };
+		for (const auto& d : Dirs) {
+			const int nx = x + d[0], ny = y + d[1], nz = z + d[2];
+			if (!isSolid(nx, ny, nz) || simulation.inPiece(nx, ny, nz)) continue;
+			std::vector<std::array<int, 3>> cells;
+			const SupportResult result = checkSupportFrom({ { nx, ny, nz } }, 16384, &cells);
+			if (result.status != 1) continue;
+			std::vector<VoxelSimulation::PieceCell> piece;
+			piece.reserve(cells.size());
+			for (const auto& c : cells) piece.push_back({ c[0], c[1], c[2], static_cast<uint8_t>(getBlock(c[0], c[1], c[2])) });
+			simulation.detach(std::move(piece));
+		}
 	}
 
 	int VoxelWorld::skinFast(int x, int y, int z) const {
@@ -558,6 +585,14 @@ namespace CGEngine {
 		return chunk->blocks[localIndex(x - cx * size, y, z - cz * size)];
 	}
 
+	// A write that is not a break (a fill, a liquid, an edit file): it does not look for detached pieces around it.
+	void VoxelWorld::setBlockQuiet(int x, int y, int z, int blockId) {
+		const bool was = detachChecks;
+		detachChecks = false;
+		setBlock(x, y, z, blockId);
+		detachChecks = was;
+	}
+
 	void VoxelWorld::setBlock(int x, int y, int z, int blockId) {
 		if (y < 0 || y >= height) return;
 		const int cx = floorDiv(x, size);
@@ -591,6 +626,7 @@ namespace CGEngine {
 		simulation.activate(x, y - 1, z);
 		simulation.activate(x, y, z + 1);
 		simulation.activate(x, y, z - 1);
+		if (block == 0 && detachChecks) detachAround(x, y, z);
 	}
 
 	bool VoxelWorld::setProp(int x, int y, int z, int dir) {
@@ -664,7 +700,7 @@ namespace CGEngine {
 		}
 		for (const Cell& cell : taken) {
 			result.second.push_back({ cell.x, cell.y, cell.z });
-			if (commit) setBlock(cell.x, cell.y, cell.z, cell.units == 0 ? 0 : family->block(cell.units));
+			if (commit) setBlockQuiet(cell.x, cell.y, cell.z, cell.units == 0 ? 0 : family->block(cell.units));
 		}
 		return result;
 	}
@@ -715,7 +751,7 @@ namespace CGEngine {
 		}
 		for (const Cell& cell : filled) {
 			result.second.push_back({ cell.x, cell.y, cell.z });
-			if (commit) setBlock(cell.x, cell.y, cell.z, family->block(cell.units));
+			if (commit) setBlockQuiet(cell.x, cell.y, cell.z, family->block(cell.units));
 		}
 		return result;
 	}
@@ -860,7 +896,7 @@ namespace CGEngine {
 
 	void VoxelWorld::fillColumn(int x, int z, int yFrom, int yTo, int blockId) {
 		for (int y = std::max(0, yFrom); y < std::min(height, yTo); ++y) {
-			setBlock(x, y, z, blockId);
+			setBlockQuiet(x, y, z, blockId);
 		}
 	}
 
@@ -1551,6 +1587,7 @@ namespace CGEngine {
 	void VoxelWorld::clear() {
 		for (const auto& entry : regions) removeRegionBodies(entry.first);
 		chunks.clear();
+		simulation.clearPieces();
 		memoChunk = nullptr;
 		dirtyRegions.clear();
 	}

@@ -179,6 +179,8 @@ void bindVoxel(py::module_& m) {
             return std::make_pair(r.status, r.visited);
         }, py::arg("x"), py::arg("y"), py::arg("z"), py::arg("max_blocks") = 16384,
              "Whether the solid blocks around a cell that is now air hang from the ground: (status, visited). Status 0 means they reach the ground or the edge of the loaded world, 1 means they do not (a piece that would fall), 2 means the fill stopped at max_blocks.")
+        .def("falling_pieces", &VoxelWorld::fallingPieces, "How many detached pieces are falling (roadmap 39.1).")
+        .def("falling_cells", &VoxelWorld::fallingCells, "How many blocks are in falling pieces.")
         .def("biome_at", &VoxelWorld::biomeName, py::arg("x"), py::arg("z"),
              "The biome of the column at x, z: \"plains\", \"forest\" or \"desert\". Set by the terrain settings and the seed.")
         .def("skin_surface", [](const VoxelWorld& world, std::array<double, 3> origin, std::array<double, 3> direction,

@@ -906,9 +906,15 @@ written answer (what it would take, and a measured number) and a decision: build
   Measured (headless Release, `tools/voxel_support_probe.ps1`): `VoxelWorld.checkSupport` (the binding `check_support`) takes a
   flood fill over the solid face neighbours of a broken block. A block on the ground returns after about 250 blocks, 0.10 ms. A
   detached piece of 2048 blocks is found detached in 0.47 ms (about 0.23 microseconds a block), so the 16 by 64 by 16 chunk (16,384
-  blocks) costs about 4 ms at worst, once per break, not per frame. A cap (500 blocks) stops it at 0.12 ms. Not yet built: the
-  falling of the detached piece (its blocks become falling blocks, which the engine already moves), and a break at a chunk edge
-  with an unloaded neighbour, which the check counts as held (not measured).
+  blocks) costs about 4 ms at worst, once per break, not per frame. A cap (500 blocks) stops it at 0.12 ms.
+  Built: a break (`setBlock` to air, the hit that breaks a block, or the console) checks each solid block beside it, and a piece that
+  no longer reaches the ground falls as one (`VoxelSimulation::detach`): the piece moves down a cell every 0.15 s while every cell
+  below is air or its own, and lands where it cannot move. Checked by `tools/voxel_fall_probe.ps1`: a 2 by 2 slab on a pillar falls one
+  cell when the pillar's top block is broken, and lands (`tools/voxel_world_check.py`, `check_falling`, checks the drawn move too). Fills, liquids and edit loads do not look for pieces (`setBlockQuiet`), and
+  `clear` drops them. The blocks are drawn in flight: each cell is a move (`beginMove`, 0.135 s), so the moving-block mesh shows them falling.
+  Not yet: a break at a chunk edge with
+  an unloaded neighbour, which the check counts as held (not measured); a piece that spans two chunks (the flood crosses chunks; not
+  measured).
 - [ ] **39.2** Terrain-aligned decorations: grass that sways, pebbles, foliage and vines that sit on a block's face and follow its
   slope. Questions: whether they are one mesh per chunk (cheap to draw, rebuilt on each edit) or instanced bodies, how many fit a
   chunk without a frame-time cost (measure with `tools/voxel_perf.ps1`), and whether the sway can be a vertex-shader wind so it costs
