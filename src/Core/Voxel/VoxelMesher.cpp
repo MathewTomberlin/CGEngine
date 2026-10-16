@@ -764,7 +764,7 @@ namespace CGEngine {
 		int hi[3] = { NX + 1, NY + 1, NX + 1 };
 		if (occupancy) {
 			for (int a = 0; a < 3; ++a) {
-				lo[a] = std::max(lo[a], ceilDivide(bounds.lo[a], T));
+				lo[a] = std::max(lo[a], ceilDivide(bounds.lo[a] - T + 1, T));
 				hi[a] = std::min(hi[a], floorDivide(bounds.hi[a], T));
 			}
 		} else if (group != 0 && bounds.lo[0] <= bounds.hi[0]) {
@@ -776,11 +776,28 @@ namespace CGEngine {
 			}
 		}
 		auto sampleIndex = [sx](int i, int j, int k) { return static_cast<size_t>(((j + 1) * sx + (k + 1)) * sx + (i + 1)); };
+		// A sample is the density at its point. A far sample (T above 1) stands for a T by T by T patch of blocks, so it takes the
+		// largest of the patch's blocks: a one-block feature at an odd block is then seen, where a sample on the even block alone
+		// missed it (roadmap 25.4).
+		auto sampleAt = [&](int i, int j, int k) {
+			if (T == 1) return occupancy ? (chunk.member[chunk.index(i, j, k)] == group ? 1.0f : 0.0f) : densityAt(chunk, group, position(i, j, k));
+			float best = 0.0f;
+			for (int dz = 0; dz < T; ++dz) {
+				for (int dy = 0; dy < T; ++dy) {
+					for (int dx = 0; dx < T; ++dx) {
+						const int bx = i * T + dx, by = j * T + dy, bz = k * T + dz;
+						const float v = occupancy ? (chunk.member[chunk.index(bx, by, bz)] == group ? 1.0f : 0.0f)
+							: densityAt(chunk, group, glm::vec3(static_cast<float>(bx) + 0.5f, static_cast<float>(by) + 0.5f, static_cast<float>(bz) + 0.5f));
+						best = std::max(best, v);
+					}
+				}
+			}
+			return best;
+		};
 		for (int j = lo[1]; j <= hi[1]; ++j) {
 			for (int k = lo[2]; k <= hi[2]; ++k) {
 				for (int i = lo[0]; i <= hi[0]; ++i) {
-					samples[sampleIndex(i, j, k)] = occupancy ? (chunk.member[chunk.index(i * T, j * T, k * T)] == group ? 1.0f : 0.0f)
-						: densityAt(chunk, group, position(i, j, k));
+					samples[sampleIndex(i, j, k)] = sampleAt(i, j, k);
 				}
 			}
 		}

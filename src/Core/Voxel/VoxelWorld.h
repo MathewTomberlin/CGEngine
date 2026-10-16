@@ -403,7 +403,7 @@ namespace CGEngine {
 		PaddedChunk snapshot(int cx, int cz, int border) const;
 	public:
 		// The ground (group 0) smooth mesh of a chunk, built now the way a worker builds it, for the checks: its vertices.
-		std::vector<VoxelVertex> probeGroundMesh(int cx, int cz, uint8_t group = 0) const;
+		std::vector<VoxelVertex> probeGroundMesh(int cx, int cz, uint8_t group = 0, int stride = 1) const;
 	private:
 		std::string bodyName(int rx, int rz, uint8_t group) const;
 	};

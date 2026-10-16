@@ -606,8 +606,10 @@ Goal: a skin takes the shape of its blocks: a one-block column is one block wide
   faces half way between block centres; a tower's top is its block face; a wall keeps its corner width; flat ground keeps its 0.1
   bulge. `test_voxel_physics.py` and the voxel suite (181 checks) pass.
 - [x] **25.3** A vertex inside solid blocks takes the brightest air within a block for its sky and lamp light, not zero.
-- [ ] **25.4** Open: the far skins (stride 2) read the same centres, so a one-block feature at an odd block is still missed there;
-  check a far hill in play. Textures: the terrain is triplanar in world space (`StdFragShader.frag`), so the texture does not
+- [~] **25.4** Far skins at odd blocks: a far sample (stride above 1) now takes the largest of the patch of blocks it stands for, so a
+  one-block feature at an odd block shows (`check_far_feature` in `tools/voxel_world_check.py`: the full-detail skin shows the pillar, the
+  stride-2 skin did not before the change and does now). Cost, measured headless Release seed 1: surface 2.0 s to 2.2 to 2.4 s, quads
+  1,109,384 to 1,115,546 (far skins now show the features they missed). Open: check a far hill in play. Textures: the terrain is triplanar in world space (`StdFragShader.frag`), so the texture does not
   stretch on a slope; the black patches it was blamed for are the vertices above, but a close look in play is still to do.
   Found (the hard line where two LOD bands meet): `smoothVertex`'s `stride` argument, which averages the occlusion over a far
   vertex's patch, was never passed, so far vertices and skirts took one air cell. It is passed now (`VoxelMesher.cpp`), so
