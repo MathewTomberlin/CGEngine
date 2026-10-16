@@ -444,8 +444,7 @@ Goal: several people (or an AI and a person) work in one CG Engine world at the 
 - [~] **18.1** Engine assumptions to change first: the engine is single-process by design. The globals (`world`, `renderer`,
   `assets`, the Python interpreter) are process singletons, and the control channel is one file inbox. Found by building 18.2:
   two processes do not need the singletons changed, because each one is a separate game (a loopback link is enough). A server
-  in the same process would need them changed. A headless server (18.3) also needs the engine to start without a window, which
-  it does not yet: `World::startWorld` makes the window. Still open: the window-free start, and the state that a presentation
+  in the same process would need them changed. The window-free start is done (31.1, `CGENGINE_HEADLESS=1`). Still open: the state that a presentation
   draws from (the world is drawn straight from `VoxelWorld`). The host of 18.3 is already the one that owns the edits, so the
   window-free start is the step that makes it a server rather than a player with a server's rules.
 - [x] **18.2** A transport, as a loopback test: `VoxelNet.py` links two game processes over TCP, JSON lines, non-blocking and polled
@@ -458,15 +457,15 @@ Goal: several people (or an AI and a person) work in one CG Engine world at the 
   back (`cells`), so a request the host refuses is undone on the client. A client that joins later is sent every edited cell.
   The C++ side records the changed cells (`VoxelWorld::setRecordChanges`, `takeChanges`, `editedCells`, `setDamage`). Checked by
   `tools/test_voxel_net.ps1`: a client's hit, break, placement and torch; a refused placement; a hit on the host; a late client.
-  Not yet: the host still has a window (the headless start is 18.1); the host does not arbitrate cells in chunks it has not
+  Not yet: the host's headless run (31.2) is tested as a host, but the host does not arbitrate cells in chunks it has not
   loaded, so the two players must stay within each other's view; a client's own edits from before it connected stay on that
   client; F9 on the host removes no cell the file lacks; a falling block pops on the client (no moving-block draw); the inventory
   is local, so a placement the host refuses still spends the item, and a break the host had already made still gives one.
 - [~] **18.4** Stretch goal, the multiplayer voxel game, in its first form: the two processes see each other (a box where the other
   player's feet are, with no name yet), share the edits (blocks, torches, damage), and one breaks what the other placed. Each has
   its own inventory and health, so the inventory per player is in place by construction. Not yet: a name, the creatures (each
-  process has its own, so a creature hit in one is not seen in the other), the other player's damage on a player, and a
-  headless server (18.3): the host now owns the edits, but it still has a window and a player in it.
+  process has its own, so a creature hit in one is not seen in the other), the other player's damage on a player. A headless
+  host (31.1) now runs without a window; it has no player of its own to move.
 - [x] **18.5** Shared authoring: an AI and a person change the same world through the same requests a second player sends. The
   engine takes commands from Python (`cge.add_command`, `docs/ai/control-api.md`), and the voxel sample registers `voxel_edit`,
   which an agent writes to a client's inbox like any command. The host applies it under the click rules and sends the cell
@@ -573,7 +572,7 @@ skin, and 0.7 s the terrain: the meshing was the cost, not the terrain.
   exist; `assets.get` returned null, and the command was run on it. Fixed by a null check (the engine logs "No body named ..." and
   carries on). Found with a trace of the input dispatch (`input_trace.txt`, since removed). Verified: the keystroke test on the symbol
   build runs `time 0.5` three times without a crash; `tools/run_tests.ps1` passes. Not yet verified: the warning in the engine log.
-- [ ] **23.5** The window-free start (18.1), which a headless server needs before 18.3 is a real server.
+- [x] **23.5** The window-free start (18.1), which a headless server needs before 18.3 is a real server. Done with 31.1.
 
 ## Phase 24: placement feedback (from playtesting round 3: the aim and the placed block)
 Goal: the player sees what a placement will do before they make it, and a placement never costs an item for nothing.
@@ -618,11 +617,14 @@ Goal: a skin takes the shape of its blocks: a one-block column is one block wide
 
 ## Phase 26: meshing cost (from Phase 22's measurements)
 Goal: a chunk's mesh costs a few milliseconds, so a view of 40 settles in a few seconds from launch.
-- [ ] **26.1** The light pass is a third of the mesh time: a breadth-first walk over the padded chunk (82,000 cells at light reach
-  8) for each chunk, with a `vector` frontier. Measure it alone; then flat arrays, and the light of a region's chunks computed once
-  for the region rather than per chunk.
+- [ ] **26.1** Measured (headless Release, seed 1, 841 chunks, the state file's timings): the light pass is 1.4 s of 11.1 s of
+  meshing, about 12 per cent, not a third. The surface is 8.8 s (79 per cent), so 26.2 is the item that matters. A pass that
+  precomputes each cell's passability for the walks changed nothing (1.38 s before, 1.38 to 1.40 s after; quads identical), so it
+  was not kept. Open: flat frontiers, and the light of a region's chunks computed once for the region rather than per chunk.
 - [ ] **26.2** The surface: the sample grid calls the density 24,000 times a chunk and each vertex calls it seven more. Cache the
-  gradient's samples on the grid, or derive the normal from the grid's own neighbours.
+  gradient's samples on the grid, or derive the normal from the grid's own neighbours. Measured (headless Release, 841 chunks):
+  the surface pass is 8.6 to 8.8 s. Flattening the density's eight corner lookups into offsets from one index changed nothing
+  (8.6 to 8.7 s, quads identical), so the cost is in how many calls there are, or in allocation (26.3), not in the indexing.
 - [ ] **26.3** Allocation: each chunk job copies its padded area and allocates its vectors. Reuse per-worker buffers. Measure first:
   more worker threads did not help, which points at the memory the threads share.
 
@@ -739,8 +741,12 @@ Goal: a recipe is an edit to a file, and the game reads it, so an agent can add 
 - [x] **29.1** The recipes are `resources/voxel_recipes.json`, by item name (torch, pickaxe, iron pickaxe). `VoxelRecipes.load`
   turns the names into ids and names an unknown item in its error; `VOXEL_RECIPES` picks another file. Checked by
   `tools/test_voxel_recipes.py`, including a bad file, and by the engine check of the panel.
-- [x] **29.2** Creatures as data: `resources/voxel_creatures.json` lists the kinds (pace, health, colours, whether it bites, its bite or flee numbers, its model and clip prefix), read and checked by `VoxelCreatures.py`; the walkers take their numbers from the kind. Sight is not a field yet (the walkers see the player by range). `tools/test_voxel_creatures.py` checks the file and the shares; `tools/test_voxels.ps1` and the contact test still pass.
-- [ ] **29.3** Blocks as data: the block table (colour, hits, tier, tile) in a file, so a new block is an edit.
+- [x] **29.2** Creatures as data: `resources/voxel_creatures.json` lists the kinds (pace, health, colours, whether it bites, its bite or flee numbers, its model and clip prefix), read and checked by `VoxelCreatures.py`; the walkers take their numbers from the kind. Sight is a field now: a biter may name `sight`, its day chase distance, scaled by the night (`VoxelWalkers.chase_distance`; checked in `tools/test_voxel_walkers.py`, and the file in `tools/test_voxel_creatures.py`). `tools/test_voxel_creatures.py` checks the file and the shares; `tools/test_voxels.ps1` and the contact test still pass.
+- [x] **29.3** Blocks as data: `resources/voxel_blocks.json` holds each block's colour, tiles, hits, falls, liquid, light, mesh, material,
+  join and splat channel, by id (an id range for the flowing blocks). `VoxelGen.py` derives its tables from it and refuses a file whose
+  key, liquid ids, splat channels or ids disagree with the scripts. The ids themselves stay in Python (the C++ names some). Checked by
+  `tools/test_voxel_blocks.py` (now in `run_tests.ps1`), and the mesh is unchanged: 1,109,384 quads at seed 1, view 14. The tiers, the tool table and the weapons are data too (`resources/voxel_tools.json`, PR #211, checked
+  against VoxelGen's constants when it loads). Not yet: the item table.
 
 ## Phase 30: a crafting grid (from the vision: goal 1)
 Goal: crafting is a small puzzle: the items go in a grid, and the pattern makes the output, so a recipe is a shape, not a list.
@@ -749,11 +755,9 @@ Goal: crafting is a small puzzle: the items go in a grid, and the pattern makes 
 
 ## Phase 31: a headless host (from the vision: goal 3, and 18.1 and 23.5)
 Goal: the game runs as a server with no window, so a host owns the world while players connect (and an AI can play).
-- [~] **31.1** Measured (2026-10-14): the OpenGL calls outside the renderer are in the texture loader (`AssetLoader.h`, an `sf::Texture`), the shader and program code (`Shader/Shader.cpp`, `Shader/Program.cpp`), `Types.h` and `Body`; meshes and voxel chunks keep their buffers in the renderer and need no context to build. `World::startWorld` makes the window and the renderer first, so a headless start has to skip those and let textures and programs fail to the defaults (a named warning) until a context exists. Not started.
-- [ ] **31.1a** `World::startWorld` makes the window and the renderer. A `--headless` start (an environment variable is enough for
-  the tests) makes neither, and runs the game's update loop at a fixed step.
-- [ ] **31.2** The state file and the control channel work headless, and `tools/test_voxel_net.ps1` runs with a headless host and a
-  windowed client.
+- [x] **31.1** The OpenGL calls outside the renderer were in the texture loader, the shader and program code, and the tile upload (`Renderer::uploadVoxelTiles`); meshes and voxel chunks keep their buffers in the renderer and need no context to build. Done: `CGENGINE_HEADLESS=1` skips the window, the context and GLEW (`openGLReady`, `headlessRun` in `src/Core/Engine/GLContext.h`). Shaders and programs are made as empty objects and textures as empty textures, so nothing calls GL; the default program logs `Failed to create default program!` (the named warning). The loop runs at `CGENGINE_HEADLESS_FPS` (60 by default) and draws nothing. Scripts check `cge.is_headless()`; the HUD, hands, outlines and preview are skipped, and `quit`, `screenshot` and the window calls say why they cannot run.
+- [x] **31.1a** `World::startWorld` makes the window and the renderer. A headless start (`CGENGINE_HEADLESS=1`) makes neither, and runs the game's update loop at `CGENGINE_HEADLESS_FPS`. Checked by a 1,231-frame headless run (Debug: 841 chunks loaded, the player on the ground, `headless` in the state file).
+- [x] **31.2** The state file and the control channel work headless, and `tools/test_voxel_net.ps1 -HeadlessHost` runs with a headless host and a windowed client: all 16 link checks pass, and the same test passes with two windowed games.
 
 ## Phase 32: a night that matters (from the vision: goal 1, and the review's first idea)
 Goal: the day is for building and mining, and the night is for staying in.
@@ -854,7 +858,7 @@ Goal: the player sees a right arm that holds the selected item and swings it on 
   Its hand offset (scale 0.003, the sword's rotation) is not yet right in hand.
 - [~] **40.4** Bucket: an iron recipe; a strike on water or lava takes the liquid (the block goes to air, `scoop` op) and makes a
   water or lava bucket; a right click places the liquid and empties the bucket. The model is a cylinder
-  (`item_bucket.fbx`, made in Blender at 0.0025 scale); its hand offset is not yet right (it floats to the right of the hand).
+  (`item_bucket.fbx`, made in Blender at 0.0025 scale); its hand offset is not yet right: `voxel_view_shot.ps1 -Item bucket` shows it at the fingers, not in the palm, and it is not yet checked in play.
 
 ## Phase 41: phone play (from testing on a phone: one button at a time)
 - [x] **41.1** Auto jump: a Settings toggle (`auto_jump`, saved with the other settings). With it on, a walk stopped by a wall of 1 to 4
@@ -871,7 +875,9 @@ Goal: the player sees a right arm that holds the selected item and swings it on 
   (`resources/scripts/VoxelArrows.py`, tested in `tools/test_voxel_arrows.py`), stops at the first solid block (it lies there, for
   the player to take) or the first creature it reaches, and is spent after 6 s. Checked in the engine by `voxel_game_check.py`.
 - [~] **42.3** Not yet: the bow's draw is not drawn on the model (no draw clip), the arrow has no orientation (its body is a box),
-  and the bow's hand offset is a first guess from the sword's (it sits in the right hand, between the fingers).
+  and the bow's hand offset is not right yet: it now uses the sword's x and y (-0.15, -0.02, -0.06, from `held_items.json`), which
+  shows the bow whole in `voxel_view_shot.ps1 -Item bow`, but the grip still sits above the palm, not in it. Blind shifts of the
+  offset moved it little, so the next step is a look by eye, then a few measured moves.
 
 - [x] **42.4** Shield durability (from the review: a shield breaks after N blocks): a shield in the left hand takes one use for each
   bite it blocks (`VoxelGen.SHIELD_USES`, 120; `VoxelGame.wear_shield`). Its uses go with it when it is moved to the hotbar, and its
