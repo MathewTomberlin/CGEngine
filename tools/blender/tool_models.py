@@ -96,7 +96,8 @@ def make_head(name, material_name, colour):
         t = i / segments                       # 0 at one tip, 1 at the other
         x = -HEAD_SPAN / 2 + t * HEAD_SPAN
         u = 2 * t - 1
-        y = HEAD_HEIGHT * (1.0 - u * u)        # the curve: highest at the middle
+        # The curve: highest at the middle, centred on the handle's axis, so the head's middle crosses the top of the handle.
+        y = HEAD_HEIGHT * (1.0 - u * u) - HEAD_HEIGHT / 2
         taper = max(0.12, 1.0 - u ** 6)        # narrow to the tips
         half = HEAD_DEPTH / 2 * taper
         z = HANDLE_LENGTH / 2                  # the head sits on the top of the handle
@@ -153,9 +154,24 @@ def export(objects, path):
     print("exported", path)
 
 
+def check_connected(handle, head):
+    """The head must touch the handle: their bounds overlap in the handle's top (the head's own z range reaches the handle's top
+    cap, and its y range includes the handle's axis). A head that floats above the handle is a broken model."""
+    hz = [v.co.z for v in handle.data.vertices]
+    ez = [v.co.z for v in head.data.vertices]
+    ey = [v.co.y for v in head.data.vertices]
+    top = max(hz)
+    assert min(ez) < top < max(ez), "the head does not reach the handle's top"
+    assert min(ey) < 0.0 < max(ey) or min(ey) < HANDLE_RADIUS, "the head's curve does not reach the handle"
+
+
 def main():
-    export(build("Stone", (0.5, 0.5, 0.52)), os.path.join(OUT_DIR, "item_pickaxe.fbx"))
-    export(build("Iron", (0.78, 0.8, 0.84)), os.path.join(OUT_DIR, "item_pickaxe_iron.fbx"))
+    handle, head = build("Stone", (0.5, 0.5, 0.52))
+    check_connected(handle, head)
+    export([handle, head], os.path.join(OUT_DIR, "item_pickaxe.fbx"))
+    handle, head = build("Iron", (0.78, 0.8, 0.84))
+    check_connected(handle, head)
+    export([handle, head], os.path.join(OUT_DIR, "item_pickaxe_iron.fbx"))
 
 
 if __name__ == "__main__" or __name__ == "<string>":
