@@ -92,7 +92,7 @@ try {
     # The generator's caves and the block edits, checked inside the engine by tools/voxel_world_check.py.
     $checkFile = (Resolve-Path "tools/voxel_world_check.py").Path -replace '\\', '/'
     Send-Command "00_world_check" ('{"command":"run_script","params":{"path":"' + $checkFile + '"}}')
-    $ranCheck = Wait-Result "00_world_check" 120
+    $ranCheck = Wait-Result "00_world_check" 600   # the world check builds several worlds, which takes minutes
     Check "the world check script runs" ($ranCheck -and $ranCheck.ok)
     $worldCheck = Get-Content (Join-Path $control "voxel_check.json") -Raw | ConvertFrom-Json
     $worldCheck.check.PSObject.Properties | ForEach-Object { Check ("world: " + $_.Name) ([bool]$_.Value) }
