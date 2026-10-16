@@ -698,11 +698,15 @@ namespace CGEngine {
 		const int sx = NX + 3;
 		const int sy = NY + 3;
 		std::vector<float> samples(static_cast<size_t>(sx) * sy * sx);
+		// A block group sampled at block centres (one sample a block) has the density 1 in its blocks and 0 elsewhere: densityAt's
+		// weights are 1 at the block's own corner and 0 at the rest, so one lookup gives the same value as its eight.
+		const bool occupancy = group != 0 && R == 1;
 		auto sampleIndex = [sx](int i, int j, int k) { return static_cast<size_t>(((j + 1) * sx + (k + 1)) * sx + (i + 1)); };
 		for (int j = -1; j <= NY + 1; ++j) {
 			for (int k = -1; k <= NX + 1; ++k) {
 				for (int i = -1; i <= NX + 1; ++i) {
-					samples[sampleIndex(i, j, k)] = densityAt(chunk, group,position(i, j, k));
+					samples[sampleIndex(i, j, k)] = occupancy ? (solidAt(chunk, group, i * T, j * T, k * T) ? 1.0f : 0.0f)
+						: densityAt(chunk, group, position(i, j, k));
 				}
 			}
 		}
