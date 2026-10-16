@@ -34,6 +34,9 @@ EQUIPMENT_BOX = 36
 EQUIPMENT_LABELS = {"head": "Head", "chest": "Chest", "legs": "Legs", "feet": "Feet", "gloves": "Gloves"}
 
 
+# The pictures of the tools in the hotbar and the inventory (tools/blender/tool_icons.py renders them): an item's icon in resources/icons.
+ICON_FILES = {VoxelGen.PICKAXE: "icons/pickaxe.png", VoxelGen.IRON_PICKAXE: "icons/iron_pickaxe.png"}
+
 class InventoryMixin:
     craft_scroll = 0           # the first recipe the scrollbox shows (its offset into the visible recipes)
     craft_wheel = 0.0          # wheel notches not yet applied to the scroll (a trackpad turns in fractions)
@@ -73,6 +76,7 @@ class InventoryMixin:
             if not shown:
                 self.hide_rect("slot_%d" % index, box)
                 self.hide_rect("swatch_%d" % index, box)
+                self.draw_icon("icon_%d" % index, None, box)
                 self.hide_rect("wear_%d" % index, box)
                 self.draw_text("count_%d" % index, "", (left, top), 14)
                 self.draw_text("key_%d" % index, "", (left, top), 12)
@@ -86,7 +90,10 @@ class InventoryMixin:
             self.draw_rect("slot_%d" % index, box, (20, 20, 26, 190), edge, width, layer=991)
             inset = 7
             swatch = (left + inset, top + inset, SLOT_SIZE - 2 * inset, SLOT_SIZE - 2 * inset)
-            if stack:
+            icon = ICON_FILES.get(stack[0]) if stack else None
+            # A tool with an icon shows the icon in place of its colour swatch.
+            self.draw_icon("icon_%d" % index, icon, swatch)
+            if stack and icon is None:
                 self.draw_rect("swatch_%d" % index, swatch, self.item_colour(stack[0]), (0, 0, 0, 170), 1, layer=992)
             else:
                 self.hide_rect("swatch_%d" % index, swatch)

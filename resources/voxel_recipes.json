@@ -12,6 +12,17 @@
       }
     },
     {
+      "name": "Lamp",
+      "category": "Light",
+      "takes": {
+        "stone": 4,
+        "torch": 1
+      },
+      "makes": {
+        "lamp": 1
+      }
+    },
+    {
       "name": "Pickaxe",
       "category": "Tools",
       "pattern": [

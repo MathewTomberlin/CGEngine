@@ -278,7 +278,7 @@ full block, and light blocks (full cells that give light) are wanted too.
 - [x] **14.1** Light blocks: a block gives off light (`BlockType::emits`; the lamp, id 17, gives 255). Its light is full at its
   cell and falls 0.8 a block through air, for 8 blocks, the same walk as sky light; each cell takes the brighter of the two.
   The lamp is a solid block drawn as a cube, so it is placed like any block. `check_lamp` in `voxel_world_check.py` checks
-  a sealed pocket: the sky floor before the lamp, 0.8 one block away, 0.8 cubed three blocks away. Not on the hotbar yet.
+  a sealed pocket: the sky floor before the lamp, 0.8 one block away, 0.8 cubed three blocks away. Not on the hotbar yet. It is craftable now (stone and a torch, the Light category), so a player can get one without the console.
 - [x] **14.2** Small torch as an item, not a block: a torch is a prop on one face of a block (`VoxelWorld::setProp`), drawn as
   a thin stick with a flame (`buildPropMesh`), so it takes a fraction of a block and the grid does not change. Its cell stays
   air for collision, meshing and the walk. It enters the light pass as an emitter at that cell (0.8 of full light, `VoxelTorchLight`),
@@ -390,8 +390,8 @@ Goal: blocks and creatures take several hits, and what the player has hit looks 
   mesh) and leaves a hide on the ground where it fell (16.7). The hide is `VoxelGen.HIDE`, an item that cannot be placed. One in three is a biter: it chases
   the player inside 7 blocks and bites at 1 health each 1.2 s when within 1.3 blocks. The others still run from the player.
   With no player near, a biter hunts the nearest timid creature within 6 blocks and bites it (`VoxelWalkers.PREY_RANGE`, one
-  health a 1.2 s); a creature a biter kills leaves a hide, as a hit does. Checked by `voxel_console_check.py`. Not yet: timid
-  creatures do not fight back, and biters do not hunt each other.
+  health a 1.2 s); a creature a biter kills leaves a hide, as a hit does. Checked by `voxel_console_check.py`. Timid creatures fight back now: a hit that leaves one alive makes it chase and bite for
+  5 s (`fight_back_seconds` in `voxel_creatures.json`, checked by `tools/test_voxel_walkers.py`). Not yet: biters do not hunt each other.
 - [x] **16.6** The player has health: ten points on a bar above the hotbar. Bites and falls lower it (a fall past 4 blocks costs
   1 point a block beyond that; the spawn drop does not count). It heals 0.25 a second after 6 s without a hit, and does not heal
   while the game is paused. At zero the player is back at the spawn with the inventory kept.
@@ -460,7 +460,8 @@ Goal: several people (or an AI and a person) work in one CG Engine world at the 
   Not yet: the host's headless run (31.2) is tested as a host, but the host does not arbitrate cells in chunks it has not
   loaded, so the two players must stay within each other's view; a client's own edits from before it connected stay on that
   client; F9 on the host removes no cell the file lacks; a falling block pops on the client (no moving-block draw); the inventory
-  is local, so a placement the host refuses still spends the item, and a break the host had already made still gives one.
+  is settled by the host's answer (an ack, `settle_request`, checked by `test_voxel_net.ps1`): a placement or torch the host
+  refuses gives its item back, and a hit is counted once, as the host broke it. Buckets (pour, scoop) still count on the client alone.
 - [~] **18.4** Stretch goal, the multiplayer voxel game, in its first form: the two processes see each other (a box where the other
   player's feet are, with no name yet), share the edits (blocks, torches, damage), and one breaks what the other placed. Each has
   its own inventory and health, so the inventory per player is in place by construction. Not yet: a name, the creatures (each
@@ -800,20 +801,33 @@ Boxes are not the target (the player's word: "highly realistic"); the look comes
 
 ## Phase 34: realistic item models (from the player: real item models; goal 1)
 Goal: an item looks like the thing it is: a tool is shaped, textured and held, and its icon is a render of it.
-- [ ] **34.1** Tool models in Blender: a pickaxe with a handle that is turned and worn, and a head with bevelled edges and a material
-  (stone for the pickaxe, iron for the iron pickaxe), exported as FBX. A dropped tool lies on the ground as its model and turns slowly.
-- [ ] **34.2** A held tool in the first-person view: the selected tool's model is drawn in the hand, and each swing that hits a block
-  plays its swing clip (the hand moves; a sound alone is not enough).
-- [ ] **34.3** Icons: each tool's icon is a render of its model (the viewport screenshot through BlenderMCP, saved as a PNG), shown on
-  the hotbar in place of the colour swatch.
+- [~] **34.1** Tool models in Blender: a pickaxe with a handle that is turned and worn, and a head with bevelled edges and a material
+  (stone for the pickaxe, iron for the iron pickaxe), exported as FBX (`tools/blender/tool_models.py`: `item_pickaxe.fbx` with the
+  Stone head, `item_pickaxe_iron.fbx` with the Iron head, whose metallic term is 1 (35.2); both have a Wood handle). Not yet: the models
+  are now held in hand (`voxel_view_shot.ps1 -View hands -Item pickaxe`): the models were 100 times too big until they were exported at the
+  viewmodel scale (0.01), and the models' origin is the grip, so the held offset is zero translation with a 90 degree turn on the blade axis (X), which lays the handle
+  along the forearm (`held_items.json`). The grip is in the hand; the head's tilt is not checked in play. Not yet: a dropped tool
+  still lies on the ground as a cube (a model drop is not done).
+- [x] **34.2** A held tool in the first-person view: the selected tool's model is drawn in the hand (the pickaxes since 8cb02e1), and each
+  strike plays the arm's swing clip (`VoxelHands.start_swing`). The clip plays on each strike, hit or miss, which is how a swing reads.
+- [~] **34.3** Icons: each tool's icon is a render of its model, shown on the hotbar in place of the colour swatch. Done for the two
+  pickaxes: `tools/blender/tool_icons.py` renders `resources/icons/pickaxe.png` and `iron_pickaxe.png` (Blender's own renderer, not the
+  viewport screenshot: the same picture, framed by a temporary camera), and `create_image_body` draws a PNG over the scene, so the hotbar
+  shows it (checked in `voxel_view_shot.ps1 -View hands -Item pickaxe`). Not yet: the other tools (they keep the swatch), and the
+  icons are small and dark against the slot (seen once, not tuned).
 
 ## Phase 35: a shader that can make the models look real (from the review: the engine's look is the limit)
 Goal: the engine can light a surface the way a surface looks: normal maps and a physically based material, so the Blender models
 and the textures show their detail, not only their shape.
-- [ ] **35.1** Normal maps in the standard shader: a material takes a normal texture, and the lighting uses it. Checked on a test model
-  by a screenshot against its flat version.
-- [ ] **35.2** A roughness and metallic term, so the iron pickaxe's head shines and the wood does not; the existing ambient and sun
-  stay as they are.
+- [x] **35.1** Normal maps in the standard shader: a material takes a normal texture (`normalTexture`, `normalStrength` in a scene's
+  material), and the lighting uses it. The tangent frame comes from the screen derivatives, so meshes need no tangents. Checked by
+  `tools/test_normal_maps.ps1`: a wall with the map, at strength 0, and with no map (`tools/make_normal_test.py` makes the map). Not yet:
+  the voxel terrain has no normal maps; the normal samplers add 8 to the standard shader's sampler count (34 in all, linked on this GPU).
+- [x] **35.2** A metallic term (`metallic` in a scene's material, 0 to 1): a metal's highlight takes the surface's colour, a
+  dielectric's stays the material's specular colour. The roughness is the material's existing `smoothnessFactor` (the highlight's
+  power), so no new roughness field. Checked by `tools/test_normal_maps.ps1` (`tools/metal_check.py`: a red metal wall against a red
+  dielectric one, the metal's green-to-red ratio at most 90% of the dielectric's; measured 87%, a small margin). Not yet: the iron
+  pickaxe and the voxel materials do not set it, so the look in play is not checked.
 - [ ] **35.3** Textures for the creatures' skin and the items, made in Blender with the same procedural materials, baked to PNG so the
   game does not depend on Blender at run time.
 
@@ -946,8 +960,9 @@ written answer (what it would take, and a measured number) and a decision: build
   `SPEED_LIMITS` and `JUMP_LIMITS`, so a heavy suit's jump stays above the one-block step; the walk and the jump are read in
   `VoxelGame`). The gloves add a strike bonus: `damage` to the health a strike takes from a creature, and `break` to the blocks a
   strike breaks (`VoxelEquipment.damage_factor` and `break_factor`, clamped; the bar's second line shows them, and they are checked in
-  `tools/test_voxel_equipment.py` and by the gear view, which also checks the strike). Not yet: bonuses on the bow and the arrows, and
-  the pieces beyond the gloves. The original question:
+  `tools/test_voxel_equipment.py` and by the gear view, which also checks the strike). Done: the leather cap adds `shot` to the arrows' damage (`VoxelEquipment.shot_factor`, `VoxelGame.fire_arrow`;
+  `tools/test_voxel_equipment.py`). Not yet: the tunic, leggings and boots give speed or jump only, so a strike or shot bonus
+  on them is a balance choice still open. Fixed: a piece with no strike bonus raised a KeyError in the strike line. The original question:
 - [ ] **39.4** Equipment effects (question): an item changes movement speed and jump height (by its weight, or by a bonus), and gives bonuses to
   attack speed, damage, and break speed against certain blocks. Questions: where the player's speed and jump are set (in one place
   or many; `VoxelPhysics.py`, `VoxelGame.py`), whether the stats can be one base value plus a sum of modifiers, and the balance risk:
@@ -955,6 +970,15 @@ written answer (what it would take, and a measured number) and a decision: build
   Found (code): walk speed is `WALK_SPEED` (5.0, `VoxelConfig.py`) times the console's `move_speed`, and the jump is `JUMP_SPEED` (9.0,
   about 1.45 blocks high); the break and attack speeds are data (`block_damage`, `attack_speed_of`). Each equipment bonus would add
   to these values, and the step-up is the limit on any jump change.
+
+## Phase 43: the sea (from the player: "I have never found the sea")
+Goal: the world has a sea a player can walk to, with a shore and sand under the water.
+- [x] **43.1** A sea biome. A slow field (`VoxelTerrain::seaWeight`, about 120 blocks across) sinks the land into a basin below the sea
+  level where it is low: the floor lies 4 to 7 blocks under the sea level, and the water over it is endless. The shore is the band where
+  the field rises, so the land slopes into the water. None lies within 24 blocks of the spawn (it fades in to 48). The sea is about a
+  seventh of the map (seed 3), and `biome_at` reports "sea" there. Checked by `tools/voxel_world_check.py` (`check_sea`: a share of the
+  map, and a column with water over a sand floor) and by a screenshot (`voxel_view_shot.ps1 -View sea`). Not yet: gravel or kelp on the
+  floor, and the HUD names it "Sea" only when the player stands in it (it names the biome under the player's feet).
 
 ## Tooling and quality
 - [x] CI build on Windows (`.github/workflows/build.yml`) with Mesa software OpenGL smoke run

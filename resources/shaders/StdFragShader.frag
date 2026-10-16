@@ -25,6 +25,10 @@ struct Material {
     int useLighting;
     int useGammaCorrection;
     int opacityMasked;
+    vec2 normalTextureUVScale;
+    float normalStrength;
+    int useNormalTexture;
+    float metallic;
 };
 layout(std140, binding = 2) uniform TransformBlock {
     mat4 camera;
@@ -68,6 +72,7 @@ struct MaterialTextures {
     sampler2D diffuseTexture;
     sampler2D specularTexture;
     sampler2D opacityTexture;
+    sampler2D normalTexture;
 };
 uniform MaterialTextures materialTextures[8];
 
@@ -198,6 +203,23 @@ float shadowAmount(vec3 pos, vec3 normal, vec3 towardsLight){
     return mix(1.0, lit / 9.0, fade);
 }
 
+//A tangent-space normal map (roadmap 35.1). The tangent frame comes from the screen derivatives of the position and the uv, so a
+//mesh needs no tangents: the map's blue channel points out of the surface, its red and green tilt the normal, and strength scales the tilt.
+vec3 perturbNormal(vec3 n, vec3 p, vec2 texUV, sampler2D map, float strength){
+    vec3 mapN = texture(map, texUV).xyz * 2.0 - 1.0;
+    mapN.xy *= strength;
+    vec3 dp1 = dFdx(p);
+    vec3 dp2 = dFdy(p);
+    vec2 duv1 = dFdx(texUV);
+    vec2 duv2 = dFdy(texUV);
+    vec3 dp2perp = cross(dp2, n);
+    vec3 dp1perp = cross(n, dp1);
+    vec3 T = dp2perp * duv1.x + dp1perp * duv2.x;
+    vec3 B = dp2perp * duv1.y + dp1perp * duv2.y;
+    float invmax = inversesqrt(max(max(dot(T, T), dot(B, B)), 1e-12));
+    return normalize(mat3(T * invmax, B * invmax, n) * mapN);
+}
+
 vec3 applyLight(Light light, vec3 surfColor, vec3 surfNormal, vec3 surfPos, vec3 surfViewDir, int mtl){
     vec3 lightIntensities = light.intensities.xyz;
     vec3 surfLightDir;
@@ -231,7 +253,8 @@ vec3 applyLight(Light light, vec3 surfColor, vec3 surfNormal, vec3 surfPos, vec3
     
     //Specular lighting
     float specularity = 0.0;
-    vec3 specularColor = materials[mtl].specularColor.rgb;
+    //A metal's highlight takes the surface's colour (metallic 1); a dielectric's stays the material's own (metallic 0).
+    vec3 specularColor = mix(materials[mtl].specularColor.rgb, surfColor.rgb, materials[mtl].metallic);
     float specularPower = max(1.0,materials[mtl].smoothnessFactor);
     float specularOpacity = clamp(materials[mtl].smoothnessFactor,0.0,1.0);
     vec3 specularMap = vec3(1,1,1);
@@ -326,6 +349,9 @@ void main() {
     if(materials[mtl].useLighting != 0){
         linearColor = vec3(0.0);
         vec3 surfNormal = normalize(normal);
+        if(materials[mtl].useNormalTexture != 0 && triplanar == 0){
+            surfNormal = perturbNormal(surfNormal, surfPos, uv * materials[mtl].normalTextureUVScale, materialTextures[mtl].normalTexture, materials[mtl].normalStrength);
+        }
         //Voxel skins are closed surfaces drawn from both sides: seen from behind, the face is lit as the side the viewer is on.
         if(triplanar != 0 && !gl_FrontFacing) surfNormal = -surfNormal;
         vec3 surfViewDir = normalize(cameraPosition - surfPos);

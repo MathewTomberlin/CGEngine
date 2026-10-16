@@ -60,6 +60,21 @@ namespace CGEngine {
 		int simulate(VoxelWorld& world, double dt, double budgetMs, double tickSeconds = 0.1);
 		int activeCount() const { return static_cast<int>(queue.size()); }
 		const std::vector<Move>& inFlight() const { return moves; }
+		// The moves that begin from now on are recorded while on, for a host to send; takeStarted returns them and forgets them.
+		void setRecordStarts(bool on) {
+			recordStarts = on;
+			if (!on) started.clear();
+		}
+		std::vector<Move> takeStarted() {
+			std::vector<Move> out;
+			out.swap(started);
+			return out;
+		}
+		// A move another process started: it is drawn and lands like a move, but its source is not cleared (the source's state
+		// comes from the process that owns the world, as a cell).
+		void showMove(int fromX, int fromY, int fromZ, int toX, int toY, int toZ, uint8_t block, double seconds);
+		// Advances the moves in flight by dt, landing the ones that are due (a client calls this, since it does not simulate).
+		void advance(VoxelWorld& world, double dt) { advanceMoves(world, dt); }
 		// Ends every move now: the blocks land where they were going.
 		void settleMoves(VoxelWorld& world);
 		// A block of a detached piece: its place and what it is. See detach.
@@ -96,6 +111,8 @@ namespace CGEngine {
 		uint32_t randomState = 0x9E3779B9u;
 		double moveDuration = 0.0;
 		std::vector<Move> moves;
+		bool recordStarts = false;
+		std::vector<Move> started;   // the moves that began while recordStarts is on
 		std::unordered_set<int64_t> reserved;   // destinations of moves in flight, which no other block may take
 
 		static int64_t keyOf(int x, int y, int z);

@@ -114,6 +114,17 @@
       "name": "viewmodel_brass",
       "diffuseTexture": "viewmodel_brass.png",
       "specular": 0
+    },
+    {
+      "name": "Stone",
+      "diffuseTexture": "viewmodel_stone.png",
+      "specular": 0
+    },
+    {
+      "name": "Iron",
+      "diffuseTexture": "viewmodel_steel.png",
+      "specular": 1,
+      "metallic": 1
     }
   ],
   "environment": {

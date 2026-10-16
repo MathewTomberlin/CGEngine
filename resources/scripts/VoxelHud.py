@@ -197,6 +197,21 @@ class HudMixin:
             self.bodies.add(name)
             cge.create_rect_body(name, position, size, cge.Color(*fill), cge.Color(*outline), float(thickness), z_order=layer)
 
+    def draw_icon(self, name, path, box, layer=993):
+        """A picture on the HUD (a tool's icon), in box (x, y, width, height) window pixels, or nothing when path is None. A picture's
+        texture is fixed when it is made, so a change of picture or box makes it again."""
+        key = (path, box)
+        if self.drawn.get(name) == key:
+            return
+        self.drawn[name] = key
+        if name in self.bodies:
+            cge.remove_body(name)
+            self.bodies.discard(name)
+        if path is None:
+            return
+        self.bodies.add(name)
+        cge.create_image_body(name, path, cge.Vector2f(box[0], box[1]), cge.Vector2f(box[2], box[3]), z_order=layer)
+
     def draw_text(self, name, text, position, size, colour=(255, 255, 255, 255)):
         """A label on the HUD at position (window pixels). Its text, and its position, change only when they differ from last time."""
         key = (text, position, colour)

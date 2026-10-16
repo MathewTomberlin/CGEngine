@@ -30,7 +30,8 @@ WOOD, TORCH, STONE, IRON = VoxelGen.WOOD, VoxelGen.TORCH, VoxelGen.STONE, VoxelG
 PICKAXE, IRON_PICKAXE = VoxelGen.PICKAXE, VoxelGen.IRON_PICKAXE
 BY_NAME = {recipe["name"]: recipe for recipe in VoxelRecipes.RECIPES}
 torch, pickaxe, iron_pickaxe = BY_NAME["Torch"], BY_NAME["Pickaxe"], BY_NAME["Iron pickaxe"]
-ALL_NAMES = ["Torch", "Pickaxe", "Iron pickaxe", "Sword", "Shield", "Bone blade", "Shovel", "Bucket", "Bow", "Arrow",
+lamp = BY_NAME["Lamp"]
+ALL_NAMES = ["Torch", "Lamp", "Pickaxe", "Iron pickaxe", "Sword", "Shield", "Bone blade", "Shovel", "Bucket", "Bow", "Arrow",
              "Leather cap", "Leather tunic", "Leather leggings", "Leather boots", "Leather gloves"]
 
 check("the recipes come from the data file, in file order", [r["name"] for r in VoxelRecipes.RECIPES] == ALL_NAMES)
@@ -50,8 +51,10 @@ check("learning from an empty inventory teaches nothing", crafting.learn(inv) ==
 inv.add(WOOD, 3)
 inv.add(IRON, 3)   # iron teaches the recipes that take iron (the bucket takes only iron)
 inv.add(VoxelGen.HIDE, 3)   # hide teaches the armour recipes
-check("holding wood, iron and hide teaches the recipes that take them", crafting.learn(inv) == ALL_NAMES and crafting.known == set(ALL_NAMES))
+inv.add(VoxelGen.STONE, 4)   # stone teaches the stone recipes (the lamp, the pickaxe, the shovel)
+check("holding wood, iron, hide and stone teaches the recipes that take them", crafting.learn(inv) == ALL_NAMES and crafting.known == set(ALL_NAMES))
 check("a recipe is learned only once", crafting.learn(inv) == [])
+inv.take_item(VoxelGen.STONE, 4)   # the stone was only to teach the stone recipes (the lamp, the pickaxe, the shovel)
 check("a known recipe is listed", [r["name"] for r in crafting.visible(creative=False)] == ALL_NAMES)
 
 # Missing items disable the recipe; a made recipe takes its items and gives its output.
@@ -85,7 +88,7 @@ check("the made tool has its full durability", ironed.slots[0][2] == VoxelGen.TO
 # Category filter.
 check("the dropdown lists All and the categories of the recipes", VoxelRecipes.CATEGORIES == ("All", "Armour", "Light", "Tools"))
 crafting.category = "Light"
-check("the Light category lists the torch", crafting.visible(creative=False) == [torch])
+check("the Light category lists the torch and the lamp", crafting.visible(creative=False) == [torch, lamp])
 crafting.category = "Tools"
 check("the Tools category lists the pickaxes, the sword, the shield, the bone blade, the shovel and the bucket", [r["name"] for r in crafting.visible(creative=False)] == ["Pickaxe", "Iron pickaxe", "Sword", "Shield", "Bone blade", "Shovel", "Bucket", "Bow", "Arrow"])
 crafting.category = VoxelRecipes.ALL

@@ -16,6 +16,9 @@ import os
 COMMON = {"name", "share", "bites", "model", "material", "clip_prefix", "colours", "health", "pace"}
 FLEE = {"flee_range", "flee_pace"}
 BITE = {"chase_pace", "bite_range", "bite_damage", "bite_interval", "prey_range"}
+# A kind that does not bite may fight back once it is hit and still alive: for fight_back_seconds it chases the player and bites with
+# the bite fields below (the same meaning as a biter's). A kind that fights back keeps its flee fields for when it has stopped.
+FIGHT_BACK = {"fight_back_seconds", "chase_pace", "bite_range", "bite_damage", "bite_interval"}
 # Optional fields: "clips" names the clip each role plays (a kind whose model's clips are not named <clip_prefix>_<role>; a role it
 # leaves out is not played, so a kind with no hurt clip only flashes when hit); "flash_material" is the material drawn while a hit
 # flashes the creature (default: its own material).
@@ -23,7 +26,8 @@ OPTIONAL = {"clips", "flash_material", "sight"}
 # "sight" is how far (in blocks, by day) a biter notices the player and chases it; it is scaled by the night like the default
 # (VoxelNight.CHASE_RANGE). A kind that does not bite has no sight: it runs away at its flee_range.
 CLIP_ROLES = {"walk", "bound", "attack", "hurt", "die"}
-POSITIVE = {"share", "pace", "flee_pace", "chase_pace", "bite_range", "bite_damage", "bite_interval", "prey_range", "sight"}
+POSITIVE = {"share", "pace", "flee_pace", "chase_pace", "bite_range", "bite_damage", "bite_interval", "prey_range", "sight",
+            "fight_back_seconds"}
 NON_NEGATIVE = {"flee_range"}
 
 
@@ -55,7 +59,9 @@ def load(path):
         names.add(name)
         if not isinstance(entry.get("bites"), bool):
             raise ValueError("creature %r: 'bites' must be true or false" % name)
-        allowed = COMMON | OPTIONAL | (BITE if entry["bites"] else FLEE)
+        if "fight_back_seconds" in entry and entry["bites"]:
+            raise ValueError("creature %r: 'fight_back_seconds' is for a kind that does not bite (a biter already bites)" % name)
+        allowed = COMMON | OPTIONAL | (BITE if entry["bites"] else (FLEE | (FIGHT_BACK if "fight_back_seconds" in entry else set())))
         unknown = set(entry) - allowed
         if unknown:
             raise ValueError("creature %r: unknown or not allowed for this kind: %s" % (name, ", ".join(sorted(unknown))))

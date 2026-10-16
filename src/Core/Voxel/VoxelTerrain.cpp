@@ -32,6 +32,11 @@ namespace CGEngine {
 		const float VeinLevel = 0.62f;
 		// Caves at or below this height are full of lava instead of air, so the deep caves hold lakes of it.
 		const int LavaLevel = 6;
+		// The sea: the sea field (VoxelTerrain::seaWeight) is full sea below SeaDeep and dry land above SeaShore.
+		const float SeaDeep = 0.26f;
+		const float SeaShore = 0.36f;
+		const float SpawnDry = 24.0f;
+		const float SpawnFade = 24.0f;
 
 		// Smooth noise in [0, 1]: lattice values blended with smoothstep.
 		float valueNoise(float x, float z, uint32_t seed) {
@@ -88,12 +93,28 @@ namespace CGEngine {
 		}
 	}
 
+	float VoxelTerrain::seaWeight(int x, int z) const {
+		// A slow field over about 120 blocks: where it is low, the land sinks into a basin. Full sea below SeaDeep, land above SeaShore.
+		const float n = valueNoise(static_cast<float>(x) / 120.0f, static_cast<float>(z) / 120.0f, seed + 7919u);
+		const float t = std::clamp((SeaShore - n) / (SeaShore - SeaDeep), 0.0f, 1.0f);
+		// No sea near the spawn (the origin): the land fades back in between SpawnDry and SpawnDry + SpawnFade blocks out.
+		const float distance = std::sqrt(static_cast<float>(x) * x + static_cast<float>(z) * z);
+		const float dry = std::clamp((distance - SpawnDry) / SpawnFade, 0.0f, 1.0f);
+		return t * t * (3.0f - 2.0f * t) * dry * dry * (3.0f - 2.0f * dry);
+	}
+
 	int VoxelTerrain::columnHeight(int x, int z) const {
 		const float n = fractalNoise(static_cast<float>(x), static_cast<float>(z), seed);
-		return baseHeight + static_cast<int>(std::pow(n, 1.6f) * static_cast<float>(heightRange));
+		const int land = baseHeight + static_cast<int>(std::pow(n, 1.6f) * static_cast<float>(heightRange));
+		const float sea = seaWeight(x, z);
+		if (sea <= 0.0f) return land;
+		// The sea floor lies 4 to 7 blocks under the sea level, so the water over it is that deep; it wanders a little.
+		const float floorHeight = static_cast<float>(seaLevel) - 4.0f - 3.0f * valueNoise(static_cast<float>(x) / 10.0f, static_cast<float>(z) / 10.0f, seed + 9001u);
+		return static_cast<int>(std::lround(static_cast<float>(land) + (floorHeight - static_cast<float>(land)) * sea));
 	}
 
 	VoxelTerrain::Biome VoxelTerrain::biomeAt(int x, int z) const {
+		if (seaWeight(x, z) > 0.5f) return Biome::Sea;
 		// One noise field over about 90 blocks: the regions are large, so a desert or a forest is a place to walk through.
 		const float n = valueNoise(static_cast<float>(x) / 90.0f, static_cast<float>(z) / 90.0f, seed + 4241u);
 		if (n > 0.7f) return Biome::Desert;

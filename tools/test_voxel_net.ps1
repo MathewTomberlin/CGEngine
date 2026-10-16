@@ -65,6 +65,25 @@ function Wait-Result($folder, $name, $timeoutSec = 30) {
     return $null
 }
 
+# The number of an item one game holds, and the count that the refused placement began from (see net_b_refused).
+function Read-Count($folder, $item) {
+    $tag = "count_" + [guid]::NewGuid().ToString("N").Substring(0, 10)
+    Send-Code $folder $tag ("import json`nn = sum(s[1] for s in game.inventory.slots if s and s[0] == $item)`n" +
+        "with open('cg_control/$tag.json', 'w') as f:`n    json.dump({'count': n, 'before': getattr(game, '_test_before', None)}, f)`n")
+    $r = Wait-Result $folder $tag 10
+    Remove-Item -Force (Join-Path $folder "cg_control/$tag.json") -ErrorAction SilentlyContinue
+    return $r
+}
+
+# A number the game holds (an expression over `game`), read back through a file the game writes.
+function Read-Int($folder, $expr) {
+    $tag = "int_" + [guid]::NewGuid().ToString("N").Substring(0, 10)
+    Send-Code $folder $tag ("import json`nv = $expr`nwith open('cg_control/$tag.json', 'w') as f:`n    json.dump({'value': v}, f)`n")
+    $r = Wait-Result $folder $tag 10
+    Remove-Item -Force (Join-Path $folder "cg_control/$tag.json") -ErrorAction SilentlyContinue
+    if ($r) { return [int]$r.value } else { return -1 }
+}
+
 # The block, damage stage and torch of a cell in one game, as the game sees them now.
 function Read-Cell($folder, $cell) {
     $tag = "cell_" + [guid]::NewGuid().ToString("N").Substring(0, 10)
@@ -186,11 +205,18 @@ with open("cg_control/net_cells.json", "w") as f:
 
     # The client places stone on the damaged stone, as a click would (a local edit, then the request). The host refuses it, so
     # the client must go back to the host's stone with its damage.
-    Send-Code $second "net_b_refused" ("game.world.set_block($($below[0]), $($below[1]), $($below[2]), 4)`n" +
-        "game.send_request({'op': 'place', 'c': [$($below[0]), $($below[1]), $($below[2])], 'id': 4})`n")
+    # The client spends an item as a click does, then asks. The host refuses, so the item must come back (ack, settle_request).
+    Send-Code $second "net_b_refused" ("import VoxelGen`n" +
+        "game.inventory.add(4, 1)`n" +
+        "game._test_before = sum(s[1] for s in game.inventory.slots if s and s[0] == 4)`n" +
+        "game.inventory.take_item(4, 1)`n" +
+        "game.world.set_block($($below[0]), $($below[1]), $($below[2]), 4)`n" +
+        "game.send_request({'op': 'place', 'c': [$($below[0]), $($below[1]), $($below[2])], 'id': 4}, {'item': 4, 'spent': True})`n")
     $b4 = Wait-Cell $second $below { param($r) $r.block -eq 3 -and $r.damage -eq 1 }
     $a4 = Read-Cell $base $below
     Check "a placement the host refuses is undone on the client" (($null -ne $b4) -and $a4 -and $a4.block -eq 3)
+    $refund = Read-Count $second 4
+    Check "a placement the host refuses gives its item back" (($null -ne $refund) -and $refund.count -eq $refund.before)
 
     # The client places stone in the air above the hole: the host and the client both have it.
     # The cell above the hole is dirt on this seed, and a placement must not replace dirt, so the host clears it first (a host
@@ -199,6 +225,16 @@ with open("cg_control/net_cells.json", "w") as f:
     $preA = Wait-Cell $base $above { param($r) $r.block -eq 0 }
     $preB = Wait-Cell $second $above { param($r) $r.block -eq 0 }
     Check "the cell above the hole is cleared on the host and on the client" ($preA -and $preB)
+    # The client's own strike gains the item it broke, but the host did not break that block (its cell is air): the item goes back.
+    Send-Code $second "net_b_phantom" ("game._test_before = sum(s[1] for s in game.inventory.slots if s and s[0] == 4)`n" +
+        "game.gain(4)`n" +
+        "game.send_request({'op': 'hit', 'c': [$($above[0]), $($above[1]), $($above[2])], 'swings': 1}, {'kind': 4, 'gained': True})`n")
+    $phantomOk = $false
+    for ($i = 0; $i -lt 40 -and -not $phantomOk; $i++) {
+        $pc = Read-Count $second 4
+        if ($pc -and $pc.count -eq $pc.before) { $phantomOk = $true } else { Start-Sleep -Milliseconds 250 }
+    }
+    Check "a hit the host did not break gives back the item the client gained for it" $phantomOk
     Send-Code $second "net_b_place" ("game.world.set_block($($above[0]), $($above[1]), $($above[2]), 3)`n" +
         "game.send_request({'op': 'place', 'c': [$($above[0]), $($above[1]), $($above[2])], 'id': 3})`n")
     $a5 = Wait-Cell $base $above { param($r) $r.block -eq 3 }
@@ -244,6 +280,18 @@ with open("cg_control/net_cells.json", "w") as f:
     # and a bad op is reported as an error with the game still running.
     $cmd = Send-Command $second "net_voxel_edit" "voxel_edit" @{ op = "hit"; c = $above; swings = 1 }
     $a8 = Wait-Cell $base $above { param($r) $r.damage -eq 1 }
+    # A falling block the host starts is shown moving on the client, then lands there (VoxelNetSync, moves). The cell at top+2
+    # is cleared, and sand is set at top+3: it falls onto the stone at top+1 through top+2.
+    $fall = @($x, ($top + 3), $z)
+    $landing = @($x, ($top + 2), $z)
+    $shownBefore = Read-Int $second "game.net_moves_shown"
+    Send-Code $base "net_a_fall" ("game.world.set_block($($landing[0]), $($landing[1]), $($landing[2]), 0)`n" +
+        "game.world.set_block($($fall[0]), $($fall[1]), $($fall[2]), 4)`n")
+    $fallA = Wait-Cell $base $landing { param($r) $r.block -eq 4 }
+    $fallB = Wait-Cell $second $landing { param($r) $r.block -eq 4 }
+    $shownAfter = Read-Int $second "game.net_moves_shown"
+    Check "a falling block the host starts is shown moving on the client, and lands on both" (($null -ne $fallA) -and ($null -ne $fallB) -and ($shownAfter -gt $shownBefore))
+
     Check "a voxel_edit control command from a client reaches the host" (($null -ne $cmd) -and ($cmd.ok -eq $true) -and ($null -ne $a8))
     $bad = Send-Command $second "net_voxel_bad" "voxel_edit" @{ op = "dig"; c = $above }
     Check "a bad voxel_edit is reported as an error" (($null -ne $bad) -and ($bad.ok -eq $false) -and ($bad.error -match "op must be"))

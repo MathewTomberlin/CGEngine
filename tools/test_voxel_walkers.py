@@ -129,6 +129,26 @@ check("a biter circling a raised shield keeps circling", other.flank_timer > 0.0
 step(other, 0.02, None)
 check("with the shield lowered, the circling ends", other.flank_timer == 0.0)
 
+# A timid creature runs from the player until it is hit; a hit that leaves it alive makes it fight back for a while (16.5).
+timid = VoxelWalkers.VoxelCreatures.by_name("timid")
+state["pos"] = (3.0, FEET, 0.0)
+runner = VoxelWalkers.Walker(OpenGround(), "timid_test", (3.0, FEET, 0.0), (0.9, 0.9, 0.9), random.Random(7), kind=timid)
+step(runner, 0.5, None)
+check("an unhurt timid creature runs away from the player", state["vel"][0] > 0.0 and runner.fight_timer == 0.0)
+runner.hurt((2.0, 0.0), 1)
+check("a hit that leaves it alive makes it fight back", runner.fight_timer == timid["fight_back_seconds"] and runner.health == 2)
+bite, _ = step(runner, 3.0, None)
+check("while it fights, it chases the player and bites", bite > 0.0)
+step(runner, timid["fight_back_seconds"], None)
+check("the fight ends after its seconds, and the creature goes back to running", runner.fight_timer == 0.0)
+dying = VoxelWalkers.Walker(OpenGround(), "timid_dying", (3.0, FEET, 0.0), (0.9, 0.9, 0.9), random.Random(8), kind=timid)
+dying.health = 1
+check("a killing hit does not start a fight", dying.hurt((2.0, 0.0), 1) and dying.fight_timer == 0.0)
+prey = VoxelWalkers.Walker(OpenGround(), "timid_prey", (3.0, FEET, 0.0), (0.9, 0.9, 0.9), random.Random(9), kind=timid)
+prey.hurt((2.0, 0.0), 1, provoked=False)
+check("a biter's hit on a timid creature does not turn it on the player", prey.fight_timer == 0.0)
+check("a creature that bites takes no fight_back_seconds (it bites already)", "fight_back_seconds" not in kind)
+
 if failures:
     print(f"\n{len(failures)} check(s) failed")
     sys.exit(1)

@@ -221,6 +221,7 @@ namespace CGEngine {
 		switch (terrain.biomeAt(x, z)) {
 		case VoxelTerrain::Biome::Forest: return "forest";
 		case VoxelTerrain::Biome::Desert: return "desert";
+		case VoxelTerrain::Biome::Sea: return "sea";
 		default: return "plains";
 		}
 	}
@@ -824,6 +825,7 @@ namespace CGEngine {
 
 	void VoxelWorld::setRecordChanges(bool on) {
 		recordChanges = on;
+		simulation.setRecordStarts(on);
 		if (!on) changedCells.clear();
 	}
 

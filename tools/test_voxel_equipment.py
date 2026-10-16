@@ -88,6 +88,18 @@ h = eq.Equipment(TABLE)
 h.table[60] = {"slot": "gloves", "speed": 0.0, "jump": 0.0, "damage": 2.0, "break": -2.0, "name": "giant"}
 h.wear(60)
 check("strike bonuses are clamped too", abs(h.damage_factor() - 2.0) < 1e-9 and abs(h.break_factor() - 0.5) < 1e-9)
+check("nothing worn: no shot bonus", g.shot_factor() == 1.0 and "shot" not in g.combat_summary())
+c = eq.Equipment(VoxelGen.EQUIPMENT)
+c.wear(VoxelGen.LEATHER_CAP)
+check("the cap adds to the arrows' damage", abs(c.shot_factor() - 1.2) < 1e-9)
+check("the cap's strike line names the arrows", c.combat_summary() == "shot +20%")
+c.wear(VoxelGen.LEATHER_GLOVES)
+check("gloves and cap show together on the strike line", c.combat_summary() == "hit +15%  dig +10%  shot +20%")
+k = eq.Equipment(TABLE)
+k.table[61] = {"slot": "head", "speed": 0.0, "jump": 0.0, "shot": 5.0, "name": "sniper"}
+k.wear(61)
+check("a cap with no strike bonus reads as none, not as an error", abs(c.damage_factor() - 1.15) < 1e-9 and abs(eq.Equipment(TABLE).damage_factor() - 1.0) < 1e-9)
+check("the arrow bonus is clamped", abs(k.shot_factor() - 2.0) < 1e-9)
 check("every slot has a piece to wear", {e["slot"] for e in VoxelGen.EQUIPMENT.values()} == set(eq.SLOTS))
 
 if failures:

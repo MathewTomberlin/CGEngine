@@ -205,11 +205,24 @@ namespace CGEngine {
                     Vector3f tintRgb = readVec3(m, "tint", Vector3f(1, 1, 1));
                     auto tintByte = [](float v) { return static_cast<std::uint8_t>(std::lround(std::max(0.0f, std::min(1.0f, v)) * 255.0f)); };
                     Color tint(tintByte(tintRgb.x), tintByte(tintRgb.y), tintByte(tintRgb.z));
+                    // A normal map (roadmap 35.1): a tangent-space texture; its strength is 1 as made, 0 for a flat surface.
+                    float normalStrength = m.value("normalStrength", 1.0f);
+                    if (normalStrength < 0.0f) {
+                        throw std::invalid_argument("material '" + name + "': normalStrength must not be negative");
+                    }
                     // The texture scale is a Vector2f; a bare float would land in the colour intensity instead.
-                    auto created = assets.create<Material>(name,
-                        SurfaceParameters(SurfaceDomain(texture, Vector2f(uvScale, uvScale), tint),
-                            SurfaceDomain(32.0f, Color(specularByte, specularByte, specularByte)), SurfaceDomain(opacity)),
-                        assets.get<Program>(assets.defaultProgramName));
+                    SurfaceParameters surface(SurfaceDomain(texture, Vector2f(uvScale, uvScale), tint),
+                        SurfaceDomain(32.0f, Color(specularByte, specularByte, specularByte)), SurfaceDomain(opacity));
+                    surface.normalTexturePath = m.value("normalTexture", std::string());
+                    surface.normalTextureUVScale = Vector2f(uvScale, uvScale);
+                    surface.normalStrength = normalStrength;
+                    // Metallic (roadmap 35.2): 0 for a dielectric, 1 for a metal whose highlight takes the surface's colour.
+                    float metallic = m.value("metallic", 0.0f);
+                    if (metallic < 0.0f || metallic > 1.0f) {
+                        throw std::invalid_argument("material '" + name + "': metallic must be between 0 and 1");
+                    }
+                    surface.metallic = metallic;
+                    auto created = assets.create<Material>(name, surface, assets.get<Program>(assets.defaultProgramName));
                     if (!created.has_value()) {
                         throw std::runtime_error("failed to create material '" + name + "'");
                     }

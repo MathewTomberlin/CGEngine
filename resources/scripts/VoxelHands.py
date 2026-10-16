@@ -24,8 +24,8 @@ LEFT_ARM = "models/viewmodel/viewarm_left.fbx"      # the arm on the left of the
 ARM_OFFSET = (0.42, 0.00, 0.25)                    # where each shoulder sits from the eye: right, up, forward (the left mirrors the right)
 HOLD = (0.19, -0.15, 0.62)                          # in the arm's frame, where the held item's middle is (the wrist is near (0.19, -0.15, 0.45))
 ITEM_MODELS = {
-    VoxelGen.PICKAXE: "models/viewmodel/item_pickaxe.fbx",
-    VoxelGen.IRON_PICKAXE: "models/viewmodel/item_pickaxe.fbx",
+    VoxelGen.PICKAXE: "models/viewmodel/item_pickaxe.fbx",   # its Stone head and Wood handle are named by the model's materials
+    VoxelGen.IRON_PICKAXE: "models/viewmodel/item_pickaxe_iron.fbx",   # its Iron head (tools/blender/tool_models.py)
     VoxelGen.TORCH: "models/viewmodel/item_lantern.fbx",   # the carried torch is the lantern
     VoxelGen.SWORD: "models/viewmodel/item_sword.fbx",     # its materials (Metal, Wood, Cloth) are named in the scene file
     VoxelGen.BONE_BLADE: "models/viewmodel/item_sword.fbx",   # the sword's blade, in the bone blade's own offset (held_items.json)
@@ -55,8 +55,6 @@ HIT_EFFECTS = {
 # The materials (resources/scenes/voxels.json) the arms and held items are drawn with: a flat skin, and a colour per item.
 SKIN = "viewmodel_skin"
 ITEM_MATERIALS = {
-    VoxelGen.PICKAXE: "viewmodel_steel",
-    VoxelGen.IRON_PICKAXE: "viewmodel_steel",
     VoxelGen.TORCH: "viewmodel_brass",
     VoxelGen.BUCKET: "viewmodel_steel",
     VoxelGen.WATER_BUCKET: "bucket_water",    # the bucket's steel, tinted by the liquid in it (resources/scenes/voxels.json)
