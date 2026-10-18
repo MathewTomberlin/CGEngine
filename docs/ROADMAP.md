@@ -729,11 +729,71 @@ Checked: the world is 64 blocks high and bounded. Each chunk is a full-height co
 terrain fills stone from y = 0 (`VoxelTerrain::fillChunk`), so y = 0 is a solid floor and nothing exists below it; breaking it
 shows the void (the kill zone at y = -20). `setBlock` refuses y < 0 and y >= 64, so the ceiling is 63 and nothing can be built
 above it. The sky is drawn wherever the world has no block.
-- [ ] **45.1** Vertical chunks: chunks of 16 by 16 by 16 keyed by (cx, cy, cz), created on demand. The player's view loads a
-  band of them above and below the player, so the world has no floor or ceiling in practice. Terrain below the surface stays
-  stone and caves, so digging down keeps finding ground. Affects `VoxelWorld` (chunks, regions, light, skin counts, snapshots,
-  the edit file), the mesher, `VoxelTerrain::fillChunk` and the Python bindings. Measure the frame time and memory before and after.
-- [ ] **45.2** Stretch: sky biomes with clouds, floating islands above the ground, and space between planets. Needs 45.1 first.
+- [~] **45.1** Vertical chunks: done in code, with the frame budget not met. Sections are 16 blocks cubed, keyed (cx, cy, cz); a
+  uniform section is one block id. The world has no floor and no ceiling: stone goes on below y = 0, the sky is open above the
+  surface. The band is the vertical view distance: the sections within `view_radius // 4` of the player's section (`VoxelWorld.set_band`,
+  set each frame by `VoxelGame.frame`), so a view of 14 loads 7 sections up and down, not 13. A section leaves the band only
+  after two more sections beyond it (hysteresis), so a bounce across a section line does not rebuild the band. Beyond the band a
+  read is the terrain as the generator makes it (its edits first, no trees). Regions are 4 by 4 by 4 sections. Light walks the
+  padded box with a per-column sky flag from the column's roofs (`tops`). Sections more than 16 blocks under the surface mesh at
+  stride 2 (a quarter of the quads); a stride of 4 crashed the mesher, so it is not used. Edits, props and damage are keyed by
+  section, and the edit file is unchanged (version 3, absolute coordinates).
+  Checks: `voxel_world_check.py` 115 of 115 (it now asks `is_loaded` per column, and `chunk_group_quads` and `ground_mesh` take a
+  y range or section height); `test_voxels.ps1` all pass (272 checks); `test_pause_menu.ps1` and `test_voxel_net.ps1` pass.
+  Region snapshots are built on the workers: the main thread copies the sections a region reads (`gather`), and a worker builds each
+  section's padded box and its occlusion faces (`buildPadded`, `reachOf`), so a region start costs the copy only. Occlusion (`Chunk::reach`)
+  is applied on upload; the visibility walk runs over a flat grid of the loaded sections, not a map lookup per step.
+  Checks: `voxel_world_check.py` 115 of 115; `test_voxels.ps1` all pass (272 checks).
+  The render between frames was the window's GL context being switched off and on each frame (about 0.7 ms per switch); the context now
+  stays current (`Renderer::processRender` no longer deactivates it). Measured with `voxel_perf.ps1` (Release, view 14, HUD on, creatures
+  on): standing 246 fps (worst frame 6.8 ms), turning 260 fps (worst 7.2 ms), walking 219 fps (worst 16 ms). Before the change, the same
+  runs were 130 to 140 fps with a 10 to 12 ms worst frame. Each update's phases are timed (the visibility walk, the uploads, the mesh
+  starts and the dirty-region scan).
+  Vertical band equal to the view distance (view 14): the spikes came from the dirty-region scan (now at most 24 surveys an update),
+  the terrain installs (now budgeted at 3 ms an update), the stride refresh (column heights read once per pass), and the body creation
+  (a compact mesh's constructor copied its arrays; it now moves them). Measured: standing 249 fps, turning 242 fps (worst 13.6 ms),
+  walking 256 to 275 fps (worst 13 ms) after the walking fixes: the stride refresh reads each section's stored deep flag (no column lookups),
+  and the visibility walk waits up to 4 updates on section-only changes (a camera move still walks at once). Still open: the visibility
+  walk on camera moves (about 6 ms), and the GPU copy of each new region body (about 2 ms a body).
+  Strikes and state writes: the state file (written every quarter second) is built on the frame thread and written by a background
+  thread; its counts are one pass over the sections (`counts`, `ready_counts`). Region visibility reads the walk's marks instead of a
+  set. The state write was 6 to 12 ms in strike spikes. Still open: the visibility walk on camera moves (about 6 ms), the terrain
+  install and stride refresh on a chunk crossing (about 10 ms in the worst crossings), and the GPU copy of each new region body.
+  Flying and crossing sections: the band reconcile is incremental (only the heights that left or entered the window are touched), and
+  the sections that go are dropped in one batch (one pass over the jobs, a column's roofs rechecked only when a dropped section held its
+  top). A section's level is refreshed per column, when the column's class changes. The visibility walk waits a few updates after any
+  change. Measured (view 14): flying 122 fps (worst 26 ms, was 109 fps and 127 ms), walking 236 fps (worst 8 ms). Biter attacks are not
+  measured yet. Still open: the neighbour marks when a band layer goes (about 5 ms), the visibility walk (about 6 ms), installs.
+  Biter attacks (8 biters, standing still): the engine gap per frame fell from about 13.5 to 8.4 ms. Each animator's bones are sent once
+  per frame (the meshes of a creature share its pose), the bone buffer is no longer zeroed and copied per draw, and the animator's node
+  walk does no string copies. The biter scene averages about 80 fps, against about 210 walking; the rest is per-creature animation and
+  skinned draws, which are not culled (their bind-pose bounds do not cover the animated pose). Still open: that cost.
+  Biter attacks, the main cost: the creatures' scripts looked up their bodies by name each frame, and each lookup scanned every body.
+  Lookups are now cached by id (checked against the name). Biter scene (8 biters, standing): 184 fps, up from 86; walking 275 fps. The
+  render stats (skinned draws, render time) are in the state file as `render`. Still open: a second spawn wave's spawn frame (65 ms).
+  Latest (view 14, HUD on): standing 258 fps, turning 263, walking 226 (worst 24 ms, one-off spikes), flying 147 (worst 25 ms), biters 179
+  (worst 10 ms). Done since the last note: level changes mark their sections in one batch, and the visibility box comes from the wanted
+  columns. Since then: a dropped band layer marks its neighbours in one batch, and drops no longer scan the queued jobs (a late result is ignored).
+  Flying is now limited by terrain generation: each vertical step requests about 840 new band sections (98 to 115 fps, worst 24 to 57 ms).
+  Terrain: `bench_terrain` (1,008 sections, same checksum before and after) went from 185 ms to 145 ms. Column height and biome are
+  remembered per thread for the trees and rocks, and the cave test reads its second noise field only where the first is in the band.
+  Most of what remains is the per-cell noise (about 32 ns a cell); the trees and rocks are about 10% of it.
+  A column's top changing marks its 3 by 3 columns in one batch (it marked about 260 sections one by one).
+  Spawn and fight stalls (biter scene): a spawn itself is about 1 ms, and its frame is normal. The long frames (70 to 100 ms, once or
+  twice a run) are in the render pass: the first GL state call after a heavy frame waits for the GPU. Timing each body in the render
+  loop pins the stall on whichever body draws first (blanking that body's text does not move it), so the GPU is behind at that point.
+  Next step: GPU timing (a profiler capture) to find the heavy frame. Font glyphs for the HUD are now made at setup (`warm_font`).
+  Known and still open: the visibility walk (about 4 ms), installs (3 to 4 ms),
+  the GPU copy of each new region body (about 2 ms), the shadow pass (about 1.2 ms of CPU a frame), the water's double draw, and a
+  creature spawn wave (about 70 ms in its first frame).
+  Open: the shadow pass (about 1.2 ms of CPU per frame, drawing the bodies again), and the water's second draw (its depth pass and its
+  colour pass), and the draw cost per region (more bodies than before).
+- [~] **45.2** Stretch: done in part. Floating islands: blobs of stone, dirt and grass between blocks 60 and 76, above the ground
+  (`VoxelTerrain::islandAt`, drawn by the generator, so the sections and the sky over them work as for the ground). Clouds: a sheet of
+  translucent quads at height 100 over the blocks around the player, drifting with the game's clock (`VoxelWorld.update_clouds`,
+  rebuilt twice a second). Not done: sky biomes (the sky colour by biome) and space between planets (a separate world of planets:
+  a new world with its own sections, not started).
+  Islands above the band (about 80 blocks) are only loaded by a player who is high up, so they are reached by climbing.
 
 ## Phase 27: sound and music (from the vision: a game people want to play, goal 1)
 Goal: the sample has sounds for what the player does, and a night loop, through the engine's audio, with the sounds made from data.

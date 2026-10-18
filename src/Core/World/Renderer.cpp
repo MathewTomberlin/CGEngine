@@ -408,13 +408,13 @@ namespace CGEngine {
 				setGLWindowState(false);
 				return false;
 			}
+			const auto renderBegan = std::chrono::steady_clock::now();
 			root->queueRendering();
 			if (environment.shadows) renderShadowMap(window);
 			drawSky();
 			//Sort and render Meshes and SFML entities
 			render(window);
 			endFrame();
-
 #ifdef DEBUG
 			// Check for errors before display
 			GLenum err = glGetError();
@@ -437,8 +437,9 @@ namespace CGEngine {
 				saveScreenshot(pendingScreenshotPath);
 				pendingScreenshotPath.clear();
 			}
+			lastFrameRenderMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - renderBegan).count();
 			window->display();
-			setGLWindowState(false);
+			// The context stays current between frames: switching it off and on again costs ~0.7 ms each time (see setGLWindowState).
 			return true;
 		} catch (const exception& ex) {
 			log(this, LogError, "Exception in processRender: {}", ex.what());
@@ -543,6 +544,7 @@ namespace CGEngine {
 		// Skinned meshes are never culled or instanced: their bind-pose bounds do not cover the animated pose.
 		const glm::mat4 bodyMatrix = getBodyGlobalTransform(mesh->getBodyId());
 		const bool instanced = meshData->bones.empty() && !mesh->getInstances().empty();
+		if (!meshData->bones.empty()) ++skinnedDrawsThisFrame;
 		if (meshData->bones.empty()) {
 			if (!meshData->boundsValid) meshData->computeBounds();
 			if (instanced) {
@@ -587,10 +589,7 @@ namespace CGEngine {
 			TransformUBO transformUBOData = TransformUBO();
 			setTransformUBOData(transformUBOData, bodyMatrix);
 			//If the mesh has bones, set the bone uniform values
-			if (animator) {
-				BoneUBO boneUBOData = BoneUBO();
-				setBoneUBOData(boneUBOData, animator);
-			}
+			if (animator) setBoneUBOData(animator);
 			program->setUniform("cameraPosition", toGlm(currentCamera->getPosition()));
 			program->setUniform("timeSec", time.getElapsedSec());
 			program->setUniform("fogColour", toGlm(environment.fogColour));
@@ -661,6 +660,7 @@ namespace CGEngine {
 
 	void Renderer::endFrame() {
 		updatedAnimators.clear();
+		boneUploadedFor = nullptr;
 	}
 
 	glm::mat4 Renderer::getBodyGlobalTransform(optional<id_t> bodyId) {
@@ -885,13 +885,17 @@ namespace CGEngine {
 		}
 	}
 
-	void Renderer::setBoneUBOData(BoneUBO boneUBOData, Animator* animator) {
-		vector<glm::mat4> transforms = animator->getBoneMatrices();
-		for (int i = 0; i < transforms.size(); ++i) {
-			boneUBOData.boneMatrices[i] = transforms[i];
+	void Renderer::setBoneUBOData(Animator* animator) {
+		// The meshes of one animator share its pose, so the buffer is sent once for it in a frame.
+		if (animator == boneUploadedFor) return;
+		boneUploadedFor = animator;
+		const vector<glm::mat4>& transforms = animator->getBoneMatrices();
+		const size_t count = std::min(transforms.size(), static_cast<size_t>(BoneUBO::MAX_BONES));
+		for (size_t i = 0; i < count; ++i) {
+			boneScratch.boneMatrices[i] = transforms[i];
 		}
-		boneUBOData.boneCount = transforms.size();
-		updateBoneUBO(boneUBOData);
+		boneScratch.boneCount = static_cast<int>(count);
+		updateBoneUBO(boneScratch);
 	}
 
 	void Renderer::setTransformUBOData(TransformUBO transformUBOData, glm::mat4 combinedTransform) {
@@ -1088,6 +1092,8 @@ namespace CGEngine {
 		drawCallsThisFrame = 0;
 		lastFrameCulledDraws = culledDrawsThisFrame;
 		culledDrawsThisFrame = 0;
+		lastFrameSkinnedDraws = skinnedDrawsThisFrame;
+		skinnedDrawsThisFrame = 0;
 		lastFrameCulledInstances = culledInstancesThisFrame;
 		culledInstancesThisFrame = 0;
 	}

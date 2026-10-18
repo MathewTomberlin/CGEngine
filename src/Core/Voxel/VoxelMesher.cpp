@@ -151,32 +151,37 @@ namespace CGEngine {
 		};
 		const int b = chunk.border;
 		const int h = chunk.height;
+		const int P = chunk.size + 2 * b;
 		const int lo = -b;
-		const int hi = chunk.size + b;
+		const int hiXZ = chunk.size + b;
+		const int hiY = h + b;
 		// Whether light goes through each block id (lightPasses), read once here rather than per cell.
 		std::array<bool, 256> passes{};
 		for (size_t id = 0; id < 256; ++id) passes[id] = lightPasses(chunk, static_cast<uint8_t>(id));
-		// The walk runs on a grid one cell larger than the padded chunk on each side, and that ring is never lit, so a neighbour is
-		// always a valid index and needs no bounds check. Layout: ((y + 1) * E + (z + b + 1)) * E + (x + b + 1), with E = size + 2b + 2.
-		const size_t E = static_cast<size_t>(chunk.size + 2 * b + 2);
+		// The walk runs over the whole padded box (its border too, so the light at the box's faces is the light the neighbour computes),
+		// on a grid one cell larger than the box on each side, and that ring is never lit, so a neighbour is always a valid index and needs
+		// no bounds check. Layout: ((y + b + 1) * E + (z + b + 1)) * E + (x + b + 1), with E = P + 2.
+		const size_t E = static_cast<size_t>(P + 2);
+		const size_t EY = static_cast<size_t>(h + 2 * b + 2);
 		auto ext = [E, b](int x, int y, int z) {
-			return (static_cast<size_t>(y + 1) * E + static_cast<size_t>(z + b + 1)) * E + static_cast<size_t>(x + b + 1);
+			return (static_cast<size_t>(y + b + 1) * E + static_cast<size_t>(z + b + 1)) * E + static_cast<size_t>(x + b + 1);
 		};
-		// lit: the cells light goes through (the padded chunk's cells that passes; the ring around them is 0).
-		std::vector<uint8_t> lit(E * E * static_cast<size_t>(h + 2), 0);
-		for (int z = lo; z < hi; ++z) {
-			for (int x = lo; x < hi; ++x) {
-				for (int y = 0; y < h; ++y) lit[ext(x, y, z)] = passes[chunk.at(x, y, z)];
+		// lit: the cells light goes through (the box's cells that passes; the ring around them is 0).
+		std::vector<uint8_t> lit(E * E * EY, 0);
+		for (int z = lo; z < hiXZ; ++z) {
+			for (int x = lo; x < hiXZ; ++x) {
+				for (int y = lo; y < hiY; ++y) lit[ext(x, y, z)] = passes[chunk.at(x, y, z)];
 			}
 		}
 		// steps: the walk from the open sky to each air cell, 0xFF while it is not reached (air under a block, or too far).
 		std::vector<uint8_t> steps(lit.size(), 0xFF);
 		std::vector<size_t> frontier;
-		for (int z = lo; z < hi; ++z) {
-			for (int x = lo; x < hi; ++x) {
-				// Walking down the column, the air above the first block is open to the sky; the air under a block is not.
-				bool open = true;
-				for (int y = h - 1; y >= 0; --y) {
+		for (int z = lo; z < hiXZ; ++z) {
+			for (int x = lo; x < hiXZ; ++x) {
+				// Walking down the column from the top of the box, the air above the first block is open to the sky, and the air under a block
+				// is not. The top starts open only where the sky is open above the box (PaddedChunk::sky); no sky means open everywhere.
+				bool open = chunk.sky.empty() || chunk.sky[static_cast<size_t>((z + b) * P + (x + b))] != 0;
+				for (int y = hiY - 1; y >= lo; --y) {
 					if (!lit[ext(x, y, z)]) {
 						open = false;
 						continue;
@@ -211,9 +216,9 @@ namespace CGEngine {
 		// done when the chunk has no light block, which is most of the time.
 		std::vector<float> emitted;
 		std::vector<Cell> sources;
-		for (int z = lo; z < hi; ++z) {
-			for (int x = lo; x < hi; ++x) {
-				for (int y = 0; y < h; ++y) {
+		for (int z = lo; z < hiXZ; ++z) {
+			for (int x = lo; x < hiXZ; ++x) {
+				for (int y = lo; y < hiY; ++y) {
 					const uint8_t level = chunk.emission[chunk.at(x, y, z)];
 					if (level == 0) continue;
 					if (emitted.empty()) emitted.assign(chunk.blocks.size(), 0.0f);
@@ -238,7 +243,7 @@ namespace CGEngine {
 				const float carried = emitted[chunk.index(cell.x, cell.y, cell.z)] * LightPerStep;
 				for (const auto& d : Directions) {
 					const int x = cell.x + d[0], y = cell.y + d[1], z = cell.z + d[2];
-					if (x < lo || x >= hi || z < lo || z >= hi || y < 0 || y >= h) continue;
+					if (x < lo || x >= hiXZ || z < lo || z >= hiXZ || y < lo || y >= hiY) continue;
 					const size_t i = chunk.index(x, y, z);
 					if (chunk.blocks[i] != 0 && chunk.emission[chunk.blocks[i]] == 0) continue;
 					if (carried <= emitted[i]) continue;
@@ -253,20 +258,18 @@ namespace CGEngine {
 		for (int s = 0; s <= VoxelLightReach; ++s) {
 			byStep[s] = std::max(LightFloor, std::pow(LightPerStep, static_cast<float>(s)));
 		}
-		// Every position of the padded chunk, including the air above the world (full light) and below it (none). The levels are a
-		// few fixed values, so each one's byte is worked out once (the same rounding as a per-cell lround).
+		// Every position of the padded chunk. The levels are a few fixed values, so each one's byte is worked out once (the same rounding
+		// as a per-cell lround). A cell that is not reached by the sky is dark; a block (which light does not pass) gives 0.
 		uint8_t stepByte[VoxelLightReach + 1];
 		for (int s = 0; s <= VoxelLightReach; ++s) stepByte[s] = static_cast<uint8_t>(std::lround(byStep[s] * 255.0f));
 		const uint8_t floorByte = static_cast<uint8_t>(std::lround(LightFloor * 255.0f));
 		chunk.light.assign(chunk.blocks.size(), 0);
 		chunk.lamp.assign(chunk.blocks.size(), 0);
-		for (int z = lo; z < hi; ++z) {
-			for (int x = lo; x < hi; ++x) {
-				for (int y = -b; y < h + b; ++y) {
+		for (int z = lo; z < hiXZ; ++z) {
+			for (int x = lo; x < hiXZ; ++x) {
+				for (int y = lo; y < hiY; ++y) {
 					const size_t i = chunk.index(x, y, z);
-					if (y >= h) {
-						chunk.light[i] = 255;
-					} else if (y >= 0 && passes[chunk.blocks[i]]) {
+					if (passes[chunk.blocks[i]]) {
 						const uint8_t step = steps[ext(x, y, z)];
 						chunk.light[i] = step == 0xFF ? floorByte : stepByte[step];
 					}

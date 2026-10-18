@@ -470,7 +470,6 @@ namespace CGEngine {
                     if (renderer->setGLWindowState(true)) {
                         renderer->clearGL(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
                         if (!renderer->processRender()) return;
-                        renderer->setGLWindowState(false);
                     }
                 }
                 ControlChannel::poll();

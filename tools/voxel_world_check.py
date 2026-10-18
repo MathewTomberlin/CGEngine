@@ -43,7 +43,7 @@ def wait_meshed(world, chunks, timeout=60.0):
     while time.time() < deadline:
         world.update(5.0, 0, 0)
         stats = world.stats()
-        if stats["dirty"] == 0 and stats["meshing"] == 0 and stats["loaded"] == len(chunks):
+        if stats["dirty"] == 0 and stats["meshing"] == 0 and all(world.is_loaded(*c) for c in chunks):
             return True
         time.sleep(0.005)
     return False
@@ -123,13 +123,13 @@ def check_groups(checks):
 
     world.set_block(8, 8, 8, VOXEL_LEAVES)
     wait_meshed(world, chunk)
-    groups = world.chunk_group_quads(0, 0)
+    groups = world.chunk_group_quads(0, 0, 0, HEIGHT)
     checks["a leaf alone is in its own mesh, not the terrain's"] = set(groups) == {VOXEL_LEAVES} and groups[VOXEL_LEAVES] > 0
     checks["a leaf is a skin of its own to collision"] = world.skin_at(8, 8, 8) == 256 + VOXEL_LEAVES
 
     world.set_block(8, 8, 8, VOXEL_BRICK)
     wait_meshed(world, chunk)
-    checks["a brick alone is six cube faces in its own mesh"] = world.chunk_group_quads(0, 0) == {VOXEL_BRICK: 6}
+    checks["a brick alone is six cube faces in its own mesh"] = world.chunk_group_quads(0, 0, 0, HEIGHT) == {VOXEL_BRICK: 6}
     checks["a brick is a cube skin to collision"] = world.skin_at(8, 8, 8) == 512 + VOXEL_BRICK
     world.set_block(8, 8, 8, 0)
 
@@ -137,7 +137,7 @@ def check_groups(checks):
         for z in range(SIZE):
             world.fill_column(x, z, 0, 6, VOXEL_STONE)
     wait_meshed(world, chunk)
-    checks["ground is in the terrain mesh alone"] = set(world.chunk_group_quads(0, 0)) == {0} and world.chunk_group_quads(0, 0)[0] > 0
+    checks["ground is in the terrain mesh alone"] = set(world.chunk_group_quads(0, 0, 0, HEIGHT)) == {0} and world.chunk_group_quads(0, 0, 0, HEIGHT)[0] > 0
     checks["stone is the terrain skin to collision"] = world.skin_at(8, 5, 8) == 1 and world.skin_at(8, 6, 8) == 0
 
     world.set_block(8, 6, 8, VOXEL_BRICK)
@@ -145,7 +145,7 @@ def check_groups(checks):
     world.set_block(10, 6, 10, VOXEL_LEAVES)
     world.set_block(6, 6, 9, VOXEL_BRICK)
     wait_meshed(world, chunk)
-    groups = world.chunk_group_quads(0, 0)
+    groups = world.chunk_group_quads(0, 0, 0, HEIGHT)
     checks["on the ground, the terrain and each own mesh are separate"] = (
         set(groups) == {0, VOXEL_LEAVES, VOXEL_BRICK} and groups[VOXEL_BRICK] == 12)
     checks["wood standing on the ground joins the terrain's skin"] = world.skin_at(5, 6, 5) == 1
@@ -173,7 +173,7 @@ def check_groups(checks):
     checks["wood beside leaves keeps its own skin"] = world.skin_at(7, 8, 12) == 256 + VOXEL_WOOD
     world.set_block(6, 7, 9, VOXEL_WOOD)
     checks["wood standing on a brick keeps its own skin"] = world.skin_at(6, 7, 9) == 256 + VOXEL_WOOD
-    groups = world.chunk_group_quads(0, 0)
+    groups = world.chunk_group_quads(0, 0, 0, HEIGHT)
     checks["a joined trunk top is drawn with the leaves' mesh"] = groups.get(VOXEL_LEAVES, 0) > 0 and groups.get(VOXEL_WOOD, 0) > 0
     world.clear()
 
@@ -654,7 +654,8 @@ def check_sea(world, checks, results):
     around = [(chunk[0] + dx, chunk[1] + dz) for dx in (-1, 0, 1) for dz in (-1, 0, 1)]
     loaded = load_chunks(world, around)
     floor = None
-    for y in range(HEIGHT - 1, 0, -1):
+    # From below the islands (VoxelTerrain::IslandMin, 60): a sea column has no ground above 14, so an island is not its floor.
+    for y in range(50, 0, -1):
         if world.get_block(x, y, z) not in (0, WATER, VOXEL_ENDLESS_WATER):
             floor = y
             break
@@ -895,14 +896,15 @@ def check_ground_skin(world, checks):
     spot = (6, 30, 6)
     world.set_block(6, 30, 6, GRASS)   # grass in the stone, so a change of the block the skin takes its colour from shows
     x, y, z = spot
-    before = list(world.ground_mesh(0, 0))
+    before = list(world.ground_mesh(0, 0, cy=1))
     world.set_block(x, y + 1, z, WATER_VOLUME[7])
-    after = list(world.ground_mesh(0, 0))
+    after = list(world.ground_mesh(0, 0, cy=1))
     # A liquid's surface is drawn only in cells with liquid in them: no liquid surface on the ground or on wood beside it.
-    liquid_ids = set([WATER] + list(FLOW_IDS) + list(WATER_VOLUME))
-    water_surface = list(world.ground_mesh(0, 0, WATER))
+    liquid_ids = set([WATER, VOXEL_ENDLESS_WATER] + list(FLOW_IDS) + list(WATER_VOLUME))   # the sea is endless water (31)
+    water_surface = list(world.ground_mesh(0, 0, WATER, cy=1))
+    # ground_mesh gives the vertices in the section's own coordinates (section cy = 1 starts at y = 16), so the block is y + 16.
     stray = sum(1 for v in water_surface if not any(
-        world.get_block(int(v[0] // 1) + dx, int(v[1] // 1) + dy, int(v[2] // 1) + dz) in liquid_ids
+        world.get_block(int(v[0] // 1) + dx, 16 + int(v[1] // 1) + dy, int(v[2] // 1) + dz) in liquid_ids
         for dx in (-1, 0, 1) for dy in (-1, 0, 1) for dz in (-1, 0, 1)))
     checks["the liquid's surface is drawn only where there is liquid (%d vertices, %d stray)" % (len(water_surface), stray)] = len(water_surface) > 0 and stray == 0
     world.set_block(x, y + 1, z, 0)

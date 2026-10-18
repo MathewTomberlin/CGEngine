@@ -71,6 +71,10 @@ namespace CGEngine {
 		std::vector<uint8_t> lamp;
 		// The light each block id gives off at its own cell, 0 to 255. Set from the world's block types (BlockType::emits).
 		std::array<uint8_t, 256> emission{};
+		// Whether the sky is open above the box in each column, (size + 2 * border)^2 entries in the order (z + border) * P + (x + border).
+		// 1 where no solid block is above the box, so the air at its top is sunlit. Empty means open everywhere (the sky of a chunk
+		// with no roof above it, as the world's top was before sections).
+		std::vector<uint8_t> sky;
 		// How each block id is drawn: the mesh it goes in (group 0 is the terrain, else the block's own id) and whether it is
 		// cubes. Set from the world's block types (BlockType::own and cube). A mesh holds only the blocks of its group.
 		struct MeshRule {

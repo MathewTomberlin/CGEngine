@@ -22,6 +22,8 @@ namespace CGEngine {
         /// <returns>True if they are equivalent</returns>
         bool equals(const map<string, BoneData>& other) const;
         bool hasBone(const string& boneName) const;
+        // The bone's data, read in place (nullptr if it has none): one lookup where hasBone and getBoneData are two.
+        const BoneData* findBoneData(const string& boneName) const;
         /// Names of all bones in the skeleton.
         vector<string> getBoneNames() const;
         optional<BoneData> getBoneData(const string& boneName) const;

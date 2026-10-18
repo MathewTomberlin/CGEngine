@@ -1,4 +1,5 @@
 #include "ControlChannel.h"
+#include <chrono>
 #include "../Engine/Engine.h"
 #include "../Mesh/Mesh.h"
 #include "../Light/Light.h"
@@ -306,10 +307,21 @@ namespace CGEngine {
         return frames;
     }
 
+    static double lastPollDurationMs = 0.0;
+
+    double ControlChannel::lastPollMs() {
+        return lastPollDurationMs;
+    }
+
     void ControlChannel::poll() {
         ++frames;
         if (++framesSincePoll < pollIntervalFrames) return;
         framesSincePoll = 0;
+        const auto pollBegan = std::chrono::steady_clock::now();
+        struct Timer {
+            std::chrono::steady_clock::time_point began;
+            ~Timer() { lastPollDurationMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - began).count(); }
+        } timer{ pollBegan };
 
         std::error_code ec;
         std::vector<fs::path> commands;

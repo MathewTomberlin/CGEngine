@@ -35,6 +35,7 @@ import VoxelPhysics as physics
 from VoxelShapes import boxes_arrays, mix, outline_arrays
 import VoxelWalkers
 from VoxelConfig import *
+SPIKE_MS = 12.0              # a frame longer than this (in python, or in the gap before it) is recorded with its phases
 from VoxelHud import HudMixin
 from VoxelInventoryScreen import InventoryMixin
 from VoxelHands import HandsMixin
@@ -62,6 +63,13 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
         self.world = None
         self.requested = set()          # (cx, cz) of the chunks asked for, loaded or not
         self.wanted_centre = None       # chunk the wanted set was last built for
+        self.walker_ms = []             # creature update times, ms, for the state (median and max)
+        self.frame_end = None           # when the last frame ended, for the engine's gap (roadmap 45.3)
+        self.gap_ms = 0.0
+        self.spikes = []                # the frames that took long, with their phases (see record_spike)
+        self.frame_sums = {}            # the phases summed over the frames since the state file was last written (see record_spike)
+        self.frame_count = 0
+        self.cloud_time = 0.0           # seconds the clouds have drifted for (roadmap 45.2)
         self.pos = [8.5, SPAWN_HEIGHT, 8.5]   # the player's feet, y up
         # A headless host (CGENGINE_HEADLESS=1) has no window: it runs the world, the physics and the network, and draws nothing.
         self.headless = cge.is_headless()
@@ -192,6 +200,10 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
 
     def frame(self):
         now = time.perf_counter()
+        # Frame timing for the spikes (roadmap 45.3): each phase's time, and the gap since the last frame ended (the engine's render).
+        marks = [("start", now)]
+        if self.frame_end is not None:
+            self.gap_ms = (now - self.frame_end) * 1000.0
         raw = 0.0 if self.last is None else now - self.last
         if FIXED_STEP is not None:
             raw = 0.0 if self.last is None else FIXED_STEP
@@ -207,8 +219,16 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
         if centre != self.wanted_centre:
             self.wanted_centre = centre
             self.request_chunks(centre)
-        self.world.update(UPLOAD_BUDGET_MS, centre[0], centre[1])
+        # The vertical view is the same distance as the horizontal one, in sections up and down from the player's (VoxelWorld.set_band).
+        self.world.set_band(self.view_radius)
+        # The clouds drift with the game's clock (roadmap 45.2): the sheet is rebuilt about twice a second inside the world.
+        self.world.update_clouds(self.cloud_time, centre[0] * VoxelGen.CHUNK, centre[1] * VoxelGen.CHUNK)
+        self.cloud_time += raw_dt
+        marks.append(("requests", time.perf_counter()))
+        self.world.update(UPLOAD_BUDGET_MS, centre[0], centre[1], math.floor(self.pos[1]))
+        marks.append(("world", time.perf_counter()))
         self.update_net(raw_dt)
+        marks.append(("net", time.perf_counter()))
 
         if not self.hud_ready and self.frames >= 2:
             # Made a frame after the world, not during the scene's start: the outlines first, then the labels, so the
@@ -248,26 +268,60 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
             self.update_target()
             self.edit_blocks(dt)
             self.learn_recipes()
+        marks.append(("interaction", time.perf_counter()))
         if not self.headless:
             self.update_outlines()
             self.update_preview()
             self.update_hud()
+        marks.append(("hud", time.perf_counter()))
         self.update_sky(dt)
         self.update_held_torch()
         self.update_healing()
         self.update_health(dt)
+        marks.append(("sky_health", time.perf_counter()))
         self.bursts.update(dt)
         self.drops.update(dt)
         self.update_arrows(dt)
+        marks.append(("bursts_arrows", time.perf_counter()))
         self.frame_dt = dt
         self.place_camera()
         if not self.headless:
             self.update_hands(dt)
+        marks.append(("camera_hands", time.perf_counter()))
 
         self.state_timer -= raw_dt   # the state keeps being written while paused, so tests can read the menu
         if self.state_timer <= 0.0:
             self.state_timer = STATE_INTERVAL
             self.write_state()
+        marks.append(("state", time.perf_counter()))
+        self.record_spike(marks)
+        self.frame_end = time.perf_counter()
+
+    def record_spike(self, marks):
+        """Keeps the last few frames that took long: the python time of each phase, and the engine's gap before the frame."""
+        total = (marks[-1][1] - marks[0][1]) * 1000.0
+        # Every frame's phases are summed (the state file reports the averages), not only the long ones.
+        parts = {}
+        for (name, at), (_next, later) in zip(marks, marks[1:]):
+            parts[_next] = round((later - at) * 1000.0, 2)
+        phases = self.world.phases()
+        parts["world_phases"] = [round(v, 2) for v in phases]
+        stats = cge.render_stats()
+        parts["render_ms"] = round(stats["render_ms"], 2)
+        parts["poll_ms"] = round(stats["poll_ms"], 2)
+        self.frame_sums["gap"] = self.frame_sums.get("gap", 0.0) + self.gap_ms
+        self.frame_sums["total"] = self.frame_sums.get("total", 0.0) + total
+        for key, value in parts.items():
+            if key == "world_phases":
+                sums = self.frame_sums.get(key, [0.0] * len(value))
+                self.frame_sums[key] = [a + b for a, b in zip(sums, value)]
+            else:
+                self.frame_sums[key] = self.frame_sums.get(key, 0.0) + value
+        self.frame_count += 1
+        if total < SPIKE_MS and self.gap_ms < SPIKE_MS:
+            return
+        self.spikes.append({"total": round(total, 1), "gap": round(self.gap_ms, 1), "parts": parts})
+        del self.spikes[:-6]
 
     # ----- world --------------------------------------------------------------------------
 
@@ -344,7 +398,10 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
         if self.shield_up():
             yaw = math.radians(self.yaw)
             shield = (math.sin(yaw), -math.cos(yaw))
+        began = time.perf_counter()
         bites = self.walkers.update(dt, (self.pos[0], self.pos[2]), self.pos[1], self.night, shield)
+        self.walker_ms.append((time.perf_counter() - began) * 1000.0)
+        del self.walker_ms[:-300]   # the last 300 frames, for the state
         if self.walkers.blocks:
             cge.play_sound("hurt", 0.3)
             self.wear_shield(self.walkers.blocks)
@@ -1365,8 +1422,10 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
         stats = self.world.stats()
         basis = cge.camera_basis()
         centre = self.chunk_under_player()
-        ready = {"r%d" % r: self.world.ready_within(centre[0], centre[1], r) for r in READY_RADII}
-        ready["view"] = self.world.ready_within(centre[0], centre[1], self.view_radius)
+        radii = list(READY_RADII) + [self.view_radius]
+        counts = self.world.ready_counts(centre[0], centre[1], radii)
+        ready = {"r%d" % r: counts[i] for i, r in enumerate(READY_RADII)}
+        ready["view"] = counts[-1]
         state = {"chunks": stats["chunks"], "loaded": stats["loaded"], "pending": stats["pending"], "ready": ready,
                  "timings": {"install": round(stats["install_ms"], 1), "start": round(stats["start_ms"], 1),
                              "terrain": round(stats["terrain_ms"], 1), "mesh": round(stats["mesh_ms"], 1),
@@ -1391,6 +1450,10 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
                  "biome": self.world.biome_at(math.floor(self.pos[0]), math.floor(self.pos[2])),
                  "mouse_captured": self.mouse_captured, "yaw": round(self.yaw, 3), "pitch": round(self.pitch, 3),
                  "max_frame_ms": round(self.max_dt * 1000.0, 2),
+                 "spikes": self.spikes,
+                 "render": cge.render_stats(),
+                 "frame_avg": {k: ([round(a / max(1, self.frame_count), 2) for a in val] if isinstance(val, list) else round(val / max(1, self.frame_count), 2)) for k, val in self.frame_sums.items()},
+                 "walkers_ms": [round(sorted(self.walker_ms)[len(self.walker_ms) // 2], 3) if self.walker_ms else 0.0, round(max(self.walker_ms), 3) if self.walker_ms else 0.0],
                  "sounds": cge.sound_count(), "music": self.music_on,
                  "time_of_day": round(self.clock, 5), "world_io": self.world_io, "moon_phase": round((self.moon_days / MOON_MONTH_DAYS) % 1.0, 4), "moon_share": round(moon_share((self.moon_days / MOON_MONTH_DAYS) % 1.0), 4), "sun": [round(v, 5) for v in self.sun],
                  "fog": [round(v, 3) for v in self.fog],
@@ -1400,7 +1463,9 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
                  "camera_up": [round(v, 6) for v in basis["up"]],
                  "target": None if self.target is None else list(self.target[0])}
         self.max_dt = 0.0
-        StateFile.write_json(path, state)
+        self.frame_sums = {}
+        self.frame_count = 0
+        StateFile.write_json_async(path, state)
 
 
 def create_instance():

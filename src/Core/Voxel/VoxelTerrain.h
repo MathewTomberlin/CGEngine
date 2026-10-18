@@ -44,16 +44,52 @@ namespace CGEngine {
 		// How much of the sea column (x, z) is, from 0 (land) to 1 (the deep sea floor). The sea's shore is the range in between.
 		float seaWeight(int x, int z) const;
 
-		// Fills blocks for chunk (cx, cz): size * size * height blocks, block (x, y, z) at (y * size + z) * size + x.
-		// Trees are drawn last, into air only; the trees rooted just outside the chunk reach in and are drawn here too.
+		// Fills blocks for section (cx, cy, cz): size cubed blocks, block (x, y, z) at (ly * size + lz) * size + lx, where ly is y minus the
+		// section's floor (cy * size). Each block is a function of its world position, so every section agrees on the blocks it shares.
+		void fillSection(int cx, int cy, int cz, int size, std::vector<uint8_t>& blocks, bool features = true) const;
+		// A column's top (its columnHeight) and its surface block: what a cell's terrain depends on besides its height.
+		struct Column {
+			int top = 0;
+			uint8_t surface = 1;
+		};
+		Column columnAt(int wx, int wz) const;
+		// Floating islands (roadmap 45.2): blobs of stone, dirt and grass in the air between IslandMin and IslandMax, above the ground.
+		// Whether an island is at (wx, wy, wz): a slow field picks the regions that have islands, and a 3D field shapes each one.
+		bool islandAt(int wx, int wy, int wz) const;
+		// How much of the sky is cloud at column (wx, wz) at time t (seconds), 0 to 1: a slow field that drifts across the world.
+		float cloudCover(int wx, int wz, double t) const;
+		// The terrain block of one cell, from its column, with no trees, rocks or edits: the same block fillSection gives it, at any depth.
+		uint8_t cellBlock(int wx, int wy, int wz, const Column& column) const;
+		// The heights floating islands can be at (blocks): above the highest ground (about 58) and inside the loaded band of a player
+		// near the ground.
+		static constexpr int IslandMin = 60;
+		static constexpr int IslandMax = 76;
+		// Fills blocks for column (cx, cz): size * size * height blocks, block (x, y, z) at (y * size + z) * size + x. It is the sections of
+		// the column, stacked (fillSection).
 		void fillChunk(int cx, int cz, int size, int height, std::vector<uint8_t>& blocks) const;
 
 	private:
-		void placeTrees(int cx, int cz, int size, int height, std::vector<uint8_t>& blocks) const;
-		// Boulders of stone on the ground: a hash of the column decides, by biome, so every chunk that sees one draws the same.
-		void placeRocks(int cx, int cz, int size, int height, std::vector<uint8_t>& blocks) const;
+		// Trees and boulders are drawn into air only, in the section's cells. A tree or boulder rooted outside the section reaches in and is
+		// drawn here too, as the same shape the section that holds its root draws.
+		void placeTrees(int cx, int cy, int cz, int size, std::vector<uint8_t>& blocks) const;
+		// Boulders of stone on the ground: a hash of the column decides, by biome, so every section that sees one draws the same.
+		void placeRocks(int cx, int cy, int cz, int size, std::vector<uint8_t>& blocks) const;
 		// Whether the block at world (x, y, z) is carved out as cave: a tunnel where two noise fields are both near their middle,
 		// or a room where a third is high.
 		bool isCave(int wx, int wy, int wz) const;
+		// Whether a cave (or lava in one) is beside the block at (wx, wy, wz) (the ores in the stone beside a cave).
+		bool besideCave(int wx, int wy, int wz) const;
+		// A column's height and biome, remembered per thread (the trees and rocks read the columns around a section, and each section of a column
+		// reads the same ones). Kept per settings, so a terrain with other settings is never given these.
+		struct ColumnMemo {
+			uint32_t seed;
+			int seaLevel;
+			int baseHeight;
+			int heightRange;
+			int snowLevel;
+			int top;
+			uint8_t biome;
+		};
+		ColumnMemo memoColumn(int wx, int wz) const;
 	};
 }
