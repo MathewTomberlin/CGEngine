@@ -18,6 +18,13 @@ import VoxelWalkers
 RESULT = "cg_control/voxel_console_check.json"
 
 
+
+def lava_tick(game):
+    """One lava interval for the creatures: the herd moves them and burns those in lava; the ones it kills leave hides, as in the game."""
+    game.walkers.update(VoxelWalkers.LAVA_INTERVAL)
+    for killed in game.walkers.killed:
+        game.creature_died(killed)
+
 def find_game():
     games = [o for o in gc.get_objects() if type(o).__name__ == "VoxelGame"]
     if not games:
@@ -160,14 +167,17 @@ def main():
         checks["a spawned creature can be made for the lava check"] = walker is not None
         if walker is not None:
             x, y, z = walker.state()[0]
-            lava_cells = [(math.floor(x), math.floor(y + 0.1), math.floor(z)), (math.floor(x), math.floor(y + 1.0), math.floor(z))]
+            # The lava is a 3 by 3 square round the creature, at its feet and its chest: the herd moves it while it burns (up to 0.7
+            # blocks in a lava interval), and it must stay in the lava.
+            lava_cells = [(math.floor(x) + dx, row, math.floor(z) + dz) for dx in (-1, 0, 1) for dz in (-1, 0, 1)
+                          for row in (math.floor(y + 0.1), math.floor(y + 1.0))]
             saved_cells = [game.world.get_block(*cell) for cell in lava_cells]
             for cell in lava_cells:
                 game.world.set_block(cell[0], cell[1], cell[2], VoxelGen.LAVA)
-            game.burn_creatures(VoxelGame.LAVA_INTERVAL)
-            game.burn_creatures(VoxelGame.LAVA_INTERVAL)
+            lava_tick(game)
+            lava_tick(game)
             checks["a creature in lava loses a health each interval"] = walker.health == VoxelWalkers.HEALTH - 2 and not walker.removed
-            game.burn_creatures(VoxelGame.LAVA_INTERVAL)
+            lava_tick(game)
             checks["a creature in lava dies at its last health and leaves a hide"] = (
                 walker.removed and len(game.drops.live) == drops_before + 1)
             for cell, block in zip(lava_cells, saved_cells):
@@ -181,13 +191,12 @@ def main():
         console.run("spawn creature 1")
         turner = game.walkers.walkers[-1] if game.walkers.walkers else None
         if turner is not None:
-            turner.timer = 10.0
-            turner.heading = 0.0
+            turner.herd.set_heading(turner.name, 0.0, 10.0)
             x, y, z = turner.state()[0]
             ahead = (math.floor(x + VoxelWalkers.LOOK_AHEAD), math.floor(y + 0.1), math.floor(z))
             saved = game.world.get_block(*ahead)
             game.world.set_block(ahead[0], ahead[1], ahead[2], VoxelGen.LAVA)
-            turner.update(0.016, None)
+            game.walkers.update(0.016)
             game.world.set_block(ahead[0], ahead[1], ahead[2], saved)
             checks["a creature turns a quarter turn from lava ahead of it"] = abs(abs(turner.heading) - math.pi / 2) < 1e-9
             game.walkers.remove(turner)
@@ -200,7 +209,7 @@ def main():
         checks["a biter and a timid creature are made for the hunt check"] = biter is not None and prey is not None
         if biter is not None and prey is not None:
             bx, by, bz = biter.state()[0]
-            cge.set_voxel_position(prey.name, bx + 1.0, by, bz)
+            prey.herd.set_position(prey.name, bx + 1.0, by, bz)
             far = (bx + 500.0, bz)
             for _ in range(40):
                 game.walkers.update(0.1, far)
@@ -221,8 +230,8 @@ def main():
             if prey is not None and len(biters) == 2:
                 px, py, pz = prey.state()[0]
                 for biter in biters:
-                    cge.set_voxel_position(biter.name, px + 0.5, py, pz + 0.5)
-                prey.health = 1
+                    biter.herd.set_position(biter.name, px + 0.5, py, pz + 0.5)
+                prey.herd.hurt(prey.name, (px, pz), prey.health - 1, False)
                 game.walkers.update(0.1, (px + 500.0, pz))
                 queued = [w for w in game.walkers.killed if w is prey]
                 checks["two biters bite one prey in a frame: it is queued for removal once"] = len(queued) == 1

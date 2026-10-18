@@ -331,6 +331,10 @@ namespace CGEngine {
 		unsigned int lastFrameDrawCalls = 0;
 		unsigned int culledDrawsThisFrame = 0;
 		unsigned int lastFrameCulledDraws = 0;
+		// The frame's number (counted by clear), and the frame the light buffer was last worked out for: the lights do not change within a frame,
+		// so every draw of a frame uses the one set of light data.
+		unsigned long long frameIndex = 0;
+		unsigned long long lightFrame = ~0ull;
 		unsigned int skinnedDrawsThisFrame = 0;
 		unsigned int lastFrameSkinnedDraws = 0;
 		double lastFrameRenderMs = 0.0;
@@ -444,6 +448,8 @@ namespace CGEngine {
 		void setBoneUBOData(Animator* animator);
 		void setTransformUBOData(TransformUBO transformUBOData, glm::mat4 combinedTransform);
 		Animator* updateAnimator(Mesh* mesh);
+		/// The animator a mesh poses with (its instance's, or its model's), or nullptr.
+		Animator* findAnimator(Mesh* mesh);
 		/// Advance an animator by this frame's time, once per frame (updatedAnimators keeps it from advancing again for other meshes).
 		void advanceAnimator(Animator* animator);
 		Program* useRenderProgram(Material* renderMaterial);

@@ -541,12 +541,27 @@ namespace CGEngine {
 			return;
 		}
 
-		// Skinned meshes are never culled or instanced: their bind-pose bounds do not cover the animated pose.
 		const glm::mat4 bodyMatrix = getBodyGlobalTransform(mesh->getBodyId());
 		const bool instanced = meshData->bones.empty() && !mesh->getInstances().empty();
-		if (!meshData->bones.empty()) ++skinnedDrawsThisFrame;
+		if (!meshData->boundsValid) meshData->computeBounds();
+		// A skinned mesh (an animated creature) is culled on its bind-pose bounds widened by a margin, since the animated pose can reach past
+		// them. Viewmodels (the hands) are placed relative to the camera, so they are never culled here. A culled mesh still moves its
+		// animator's clip on, so it poses correctly when it comes back into view (the pose itself is worked out only when drawn).
+		const Body* owner = assets.get<Body>(mesh->getBodyId().value());
+		const bool viewmodel = owner && owner->viewmodel;
+		if (!meshData->bones.empty()) {
+			++skinnedDrawsThisFrame;
+			if (!viewmodel) {
+				const glm::vec3 extent = (meshData->boundsMax - meshData->boundsMin) * 0.5f;
+				const float margin = 0.5f * std::max(extent.x, std::max(extent.y, extent.z)) + 0.5f;
+				if (!isVisible(bodyMatrix, meshData->boundsMin - glm::vec3(margin), meshData->boundsMax + glm::vec3(margin))) {
+					advanceAnimator(findAnimator(mesh));
+					++culledDrawsThisFrame;
+					return;
+				}
+			}
+		}
 		if (meshData->bones.empty()) {
-			if (!meshData->boundsValid) meshData->computeBounds();
 			if (instanced) {
 				collectVisibleInstances(bodyMatrix, meshData, mesh->getInstances());
 				if (visibleInstances.empty()) {
@@ -574,7 +589,7 @@ namespace CGEngine {
 			}
 			Material* renderMaterial = assets.get<Material>(modelMaterials.at(0));
 
-			//Update each model's animator, if present, once per frame (instead of once per mesh per model per frame)
+			//Update each model's animator, if present, once per frame (instead of once per mesh per model per frame), and work out its pose
 			Animator* animator = updateAnimator(mesh);
 
 			//Get the renderMaterial's program and bind it
@@ -692,6 +707,7 @@ namespace CGEngine {
 			if (!attachment.bone.empty()) {
 				if (Animator* animator = target->findInstanceAnimator()) {
 					advanceAnimator(animator);
+					animator->buildPose();
 					animator->getNodeTransform(attachment.bone, bone);
 				}
 			}
@@ -712,26 +728,32 @@ namespace CGEngine {
 		return localTransform;
 	};
 
-	Animator* Renderer::updateAnimator(Mesh* mesh) {
-		//Update each animator once per frame (instead of once per mesh), and return it for every mesh that uses it: each mesh
-		//needs the bone matrices, not only the first one drawn.
+	Animator* Renderer::findAnimator(Mesh* mesh) {
 		optional<id_t> meshModelId = mesh->getModelId();
 		if (!meshModelId.has_value()) return nullptr;
 		Model* meshModel = assets.get<Model>(meshModelId.value());
 		if (!meshModel) return nullptr;
 		// A model instance has its own animator (on its root body); a model made in code uses the model's.
-		Animator* animator = nullptr;
 		if (optional<id_t> bodyId = mesh->getBodyId()) {
-			if (Body* body = assets.get<Body>(bodyId.value())) animator = body->findInstanceAnimator();
+			if (Body* body = assets.get<Body>(bodyId.value())) {
+				if (Animator* instance = body->findInstanceAnimator()) return instance;
+			}
 		}
-		if (!animator) animator = meshModel->getAnimator();
+		return meshModel->getAnimator();
+	}
+
+	Animator* Renderer::updateAnimator(Mesh* mesh) {
+		//Update each animator once per frame (instead of once per mesh), and return it for every mesh that uses it: each mesh
+		//needs the bone matrices, not only the first one drawn.
+		Animator* animator = findAnimator(mesh);
 		advanceAnimator(animator);
+		if (animator) animator->buildPose();
 		return animator;
 	}
 
 	void Renderer::advanceAnimator(Animator* animator) {
 		if (animator && updatedAnimators.insert(animator).second) {
-			animator->updateAnimation(time.getDeltaSec());
+			animator->advanceTime(time.getDeltaSec());
 		}
 	}
 
@@ -857,6 +879,8 @@ namespace CGEngine {
 	void Renderer::setLightUBOData(LightUBO lightUBOData) {
 		static LightUBO previousLightUBOData;
 		bool lightChanged = false;
+		if (lightFrame == frameIndex) return;   // this frame's light data is already in the buffer
+		lightFrame = frameIndex;
 
 		vector<Light*> lights = assets.getAllResources<Light>();
 		if (lights.size() > LightUBO::MAX_LIGHTS) {
@@ -1092,6 +1116,7 @@ namespace CGEngine {
 		drawCallsThisFrame = 0;
 		lastFrameCulledDraws = culledDrawsThisFrame;
 		culledDrawsThisFrame = 0;
+		++frameIndex;
 		lastFrameSkinnedDraws = skinnedDrawsThisFrame;
 		skinnedDrawsThisFrame = 0;
 		lastFrameCulledInstances = culledInstancesThisFrame;

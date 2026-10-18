@@ -14,6 +14,10 @@ namespace CGEngine {
 		/// </summary>
 		/// <param name="dt">Delta time this frame</param>
 		void updateAnimation(float dt);
+		/// Moves the clip's time on by dt (cheap). The pose is stale until buildPose.
+		void advanceTime(float dt);
+		/// Works out the bone transforms at the current time, if the time has moved since they were last worked out.
+		void buildPose();
 		void playAnimation(const string& animationName);
 		void calculateBoneTransform(const NodeData* node, glm::mat4 parentTransform);
 		const vector<glm::mat4>& getBoneMatrices() const { return pose; }
@@ -39,6 +43,7 @@ namespace CGEngine {
 		float speed = 1.0f;
 		bool looping = true;
 		bool paused = false;
+		bool posed = false;   // the pose is worked out for the current time (see buildPose)
 		/// <summary>
 		/// The matrix transformation passed to the shader for each bone in a pose
 		/// </summary>

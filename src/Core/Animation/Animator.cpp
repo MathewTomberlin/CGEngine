@@ -24,14 +24,19 @@ namespace CGEngine {
 			log(this, LogError, "No animation assigned to animator");
 			return;
 		}
+		advanceTime(dt);
+		buildPose();
+	}
 
+	void Animator::advanceTime(float dt) {
+		if (!currentAnimation) return;
 		float ticksPerSecond = currentAnimation->getTicksPerSecond();
 		if (ticksPerSecond <= 0) {
 			ticksPerSecond = 24.0f;
 		}
-		buildRestPose();
 		if (!paused) {
 			currentTime += dt * speed * ticksPerSecond;
+			posed = false;
 		}
 
 		//Wrap time for looping, or hold the last pose
@@ -42,9 +47,15 @@ namespace CGEngine {
 			} else {
 				currentTime = duration;
 			}
+			posed = false;
 		}
+	}
 
+	void Animator::buildPose() {
+		if (!currentAnimation || posed) return;
+		buildRestPose();
 		calculateBoneTransform(&currentAnimation->getRoot(), glm::mat4(1.0f));
+		posed = true;
 	}
 
 	void Animator::buildRestPose() {
@@ -87,6 +98,7 @@ namespace CGEngine {
 		if (animationId.has_value()) {
 			currentAnimation = assets.get<Animation>(animationId.value());
 			currentTime = 0.0f;
+			posed = false;
 		}
 		else {
 			log(this, LogError, "Animation '{}' not found in AssetManager", animationName);
