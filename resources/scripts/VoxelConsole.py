@@ -284,9 +284,7 @@ def cmd_spawn(console, args):
         console.spawned += 1
         angle = console.rng.uniform(0.0, 2.0 * math.pi)
         spot = (x + 4.0 * math.cos(angle), y + 2.0, z + 4.0 * math.sin(angle))
-        colour = VoxelWalkers.BITER_COLOUR if biter else console.rng.choice(VoxelWalkers.PALETTE)
-        walker = VoxelWalkers.Walker(game.world, "creature_cmd_%d" % console.spawned, spot, colour, console.rng, biter=biter)
-        game.walkers.walkers.append(walker)
+        game.walkers.add_walker("creature_cmd_%d" % console.spawned, spot, biter=biter)
     return ["Spawned %d %s" % (count, "biter" if biter else "creature") + ("s" if count != 1 else "")]
 
 

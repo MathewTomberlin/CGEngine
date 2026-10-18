@@ -496,7 +496,7 @@ def check_light(world, checks, chunks, results):
 
 def check_walkers(world, checks, results):
     """Creatures stand on the ground, walk about, and never end up inside a block. The engine moves them through
-    cge.step_voxel_walker here, since this check runs inside a frame and no frames pass while it works."""
+    the herd (its update moves the creatures), since this check runs inside a frame and no frames pass while it works."""
     import VoxelWalkers
     herd = VoxelWalkers.Walkers(world, (0.0, 0.0), 4, 5, prefix="check_creature")
     walkers = herd.walkers
@@ -504,9 +504,7 @@ def check_walkers(world, checks, results):
     spawns = [list(w.state()[0]) for w in walkers]
     dt = 1.0 / 60.0
     for _ in range(240):   # 4 seconds at 60 frames a second
-        herd.update(dt)
-        for w in walkers:
-            cge.step_voxel_walker(w.name, dt)
+        herd.update(dt)   # the herd moves every creature (its physics too)
 
     import VoxelPhysics as physics
     stands = True
@@ -530,8 +528,7 @@ def check_walkers(world, checks, results):
     checks["walkers never end up inside a block"] = not inside
     checks["walkers wander"] = moved > 0.5
     for w in walkers:
-        cge.remove_voxel_walker(w.name)
-        cge.remove_mesh_body(w.name)
+        cge.remove_body(w.name)
 
 
 BULGE = 0.1   # the terrain's skin sits this far out from each face (VoxelTerrainShift: 1 - 2 * (VoxelSkinIso + shift))

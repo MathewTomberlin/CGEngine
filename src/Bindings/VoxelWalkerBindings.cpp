@@ -5,6 +5,8 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <SFML/System/Vector3.hpp>
+#include <optional>
+#include "../Core/Voxel/VoxelHerd.h"
 #include "../Core/Voxel/VoxelWalker.h"
 #include "../Core/Voxel/VoxelWorld.h"
 #include "../Core/Body/Body.h"
@@ -50,6 +52,71 @@ namespace {
 		if (found == walkers.end()) return;
 		if (Body* body = bodyNamed(name)) body->removeScript(onUpdateEvent, found->second.scriptId, true);
 		walkers.erase(found);
+	}
+
+	// The herd's numbers and a kind's numbers, from the dicts the game sends (resources/scripts/VoxelWalkers.py).
+	double number(const py::dict& d, const char* key) {
+		return d[py::str(key)].cast<double>();
+	}
+
+	double numberOr(const py::dict& d, const char* key, double fallback) {
+		return d.contains(py::str(key)) && !d[py::str(key)].is_none() ? d[py::str(key)].cast<double>() : fallback;
+	}
+
+	HerdRules rulesFrom(const py::dict& d) {
+		HerdRules r;
+		r.respawnDepth = number(d, "respawn_depth");
+		r.bumpRange = number(d, "bump_range");
+		r.lookAhead = number(d, "look_ahead");
+		r.knockSeconds = number(d, "knock_seconds");
+		r.knockPace = number(d, "knock_pace");
+		r.flashSeconds = number(d, "flash_seconds");
+		r.hurtSeconds = number(d, "hurt_seconds");
+		r.dieSeconds = number(d, "die_seconds");
+		r.shieldCos = number(d, "shield_cos");
+		r.flankSeconds = number(d, "flank_seconds");
+		r.flankTurn = number(d, "flank_turn");
+		r.attackSeconds = number(d, "attack_seconds");
+		r.biteWindup = number(d, "bite_windup");
+		r.routeSeconds = number(d, "route_seconds");
+		r.routeSearchesPerFrame = static_cast<int>(number(d, "route_searches_per_frame"));
+		r.routeReach = number(d, "route_reach");
+		r.contact = number(d, "contact");
+		r.contactSlack = number(d, "contact_slack");
+		r.jumpSpeed = number(d, "jump_speed");
+		r.playerHeight = number(d, "player_height");
+		r.halfWidth = number(d, "half_width");
+		r.creatureHeight = number(d, "creature_height");
+		r.lavaInterval = number(d, "lava_interval");
+		r.chaseRange = number(d, "chase_range");
+		r.nightChaseShare = number(d, "night_chase_share");
+		r.lava = d[py::str("lava")].cast<std::vector<int>>();
+		r.liquids = d[py::str("liquids")].cast<std::vector<int>>();
+		return r;
+	}
+
+	HerdKind kindFrom(const py::dict& d) {
+		HerdKind k;
+		k.bites = d[py::str("bites")].cast<bool>();
+		k.health = number(d, "health");
+		k.pace = number(d, "pace");
+		k.chasePace = numberOr(d, "chase_pace", k.chasePace);
+		k.fleePace = numberOr(d, "flee_pace", k.fleePace);
+		k.fleeRange = numberOr(d, "flee_range", 0.0);
+		k.biteRange = numberOr(d, "bite_range", k.biteRange);
+		k.biteDamage = numberOr(d, "bite_damage", k.biteDamage);
+		k.biteInterval = numberOr(d, "bite_interval", k.biteInterval);
+		k.preyRange = numberOr(d, "prey_range", 0.0);
+		k.sight = numberOr(d, "sight", -1.0);
+		k.fightBackSeconds = numberOr(d, "fight_back_seconds", -1.0);
+		k.material = d[py::str("material")].cast<std::string>();
+		k.flashMaterial = d[py::str("flash_material")].cast<std::string>();
+		// The clips by role: a role the dict does not name has no clip.
+		const char* roles[] = { "walk", "bound", "attack", "hurt", "die" };
+		for (size_t i = 0; i < 5; ++i) {
+			if (d.contains(py::str(roles[i]))) k.clips[i] = d[py::str(roles[i])].cast<std::string>();
+		}
+		return k;
 	}
 }
 
@@ -113,4 +180,49 @@ void bindVoxelWalkers(py::module_& m) {
 		walker.step(dt);
 		placeBody(bodyNamed(name), walker.state);
 	}, py::arg("name"), py::arg("dt"), "Move the walker by dt seconds now, as its update does. For tests that run without frames.");
+
+	// The creature herd (src/Core/Voxel/VoxelHerd.h): every creature's decisions and moves run in C++ each frame.
+	py::class_<VoxelHerd>(m, "VoxelHerd")
+		.def(py::init([](const VoxelWorld& world, py::dict rules, uint32_t seed) {
+			return std::make_unique<VoxelHerd>(world, rulesFrom(rules), seed);
+		}), py::arg("world"), py::arg("rules"), py::arg("seed"),
+			"A herd on this world, with the game's rules (a dict of numbers and the lava and liquid blocks). The world must outlive the herd.")
+		.def("add", [](VoxelHerd& herd, const std::string& name, std::array<double, 3> spawn, py::dict kind) {
+			herd.add(name, spawn, kindFrom(kind));
+		}, py::arg("name"), py::arg("spawn"), py::arg("kind"), "Add a creature on a mesh body of that name, its feet at spawn.")
+		.def("update", [](VoxelHerd& herd, double dt, std::optional<std::array<double, 2>> player, std::optional<double> playerFeet,
+				double night, std::optional<std::array<double, 2>> shield) {
+			VoxelHerd::Result result = herd.update(dt, player ? &*player : nullptr, playerFeet ? &*playerFeet : nullptr, night,
+				shield ? &*shield : nullptr);
+			return py::dict("bites"_a = result.bites, "blocks"_a = result.blocks, "killed"_a = result.killed);
+		}, py::arg("dt"), py::arg("player") = py::none(), py::arg("player_feet") = py::none(), py::arg("night") = 0.0,
+			py::arg("shield") = py::none(),
+			"Move every creature for dt seconds. Returns bites (the health the player loses), blocks (shield blocks) and killed (names of "
+			"the creatures that died this frame, by a bite or by lava).")
+		.def("hurt", [](VoxelHerd& herd, const std::string& name, std::array<double, 2> from, double damage, bool provoked) {
+			return herd.hurt(name, from, damage, provoked);
+		}, py::arg("name"), py::arg("from_xz"), py::arg("damage") = 1.0, py::arg("provoked") = true,
+			"A hit from (x, z): True when it kills the creature (the caller then calls die).")
+		.def("die", &VoxelHerd::die, py::arg("name"), "The creature dies: it stops, plays its die clip, then its body goes.")
+		.def("alive", &VoxelHerd::alive, py::arg("name"), "Whether the creature exists and is not dying.")
+		.def("health", &VoxelHerd::health, py::arg("name"), "The creature's health.")
+		.def("state", [](const VoxelHerd& herd, const std::string& name) {
+			const VoxelBodyState s = herd.state(name);
+			return py::make_tuple(py::make_tuple(s.pos[0], s.pos[1], s.pos[2]), py::make_tuple(s.vel[0], s.vel[1], s.vel[2]), s.onGround);
+		}, py::arg("name"), "The creature's feet, velocity and ground contact: (pos, vel, on_ground).")
+		.def("count", &VoxelHerd::count, "The creatures in the herd, dying ones included.")
+		.def("heading", &VoxelHerd::heading, py::arg("name"), "The way the creature is heading, in radians (for the checks).")
+		.def("set_heading", &VoxelHerd::setHeading, py::arg("name"), py::arg("heading"), py::arg("timer"),
+			"Turn the creature to a heading, and set its wander timer (for the checks).")
+		.def("set_position", [](VoxelHerd& herd, const std::string& name, double x, double y, double z) { herd.setPosition(name, x, y, z); }, py::arg("name"), py::arg("x"), py::arg("y"), py::arg("z"),
+			"Put the creature's feet at (x, y, z) and stop it (for the checks and the console).")
+		.def("take_events", [](VoxelHerd& herd) {
+			py::list out;
+			for (const HerdEvent& e : herd.takeEvents()) {
+				const char* kind = e.kind == HerdEvent::Kind::Clip ? "clip" : e.kind == HerdEvent::Kind::Material ? "material" : "remove";
+				out.append(py::make_tuple(kind, e.name, e.value, e.looping));
+			}
+			return out;
+		}, "What the game must do to bodies since the last call: (kind, name, value, looping), kind being clip (play value, looping), "
+			"material (draw value) or remove (take the body out).");
 }

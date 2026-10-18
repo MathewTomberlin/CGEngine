@@ -48,7 +48,6 @@ LAVA_FOG = (1.00, 0.45, 0.12)   # the view inside lava: orange and short
 LAVA_FOG_START = 1.0
 LAVA_FOG_END = 9.0
 LAVA_SOUND_SECONDS = 0.9    # seconds between the hisses while the player stands in lava (the lava sound)
-LAVA_INTERVAL = 0.5          # seconds between a creature's losses of health in lava
 REPEAT_DELAY = 0.35         # seconds a held mouse button waits before it repeats its break or place
 REPEAT_RATE = 0.25          # seconds between the repeats while it is held
 BREAK_REPEAT_RATE = 1.0     # seconds between the breaks (attacks and block breaks) while the break button is held: half as fast as before
@@ -408,30 +407,10 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
         if bites > 0.0:
             cge.play_sound("bite", 0.8)
         self.hurt_player(bites)
-        for walker in self.walkers.killed:
-            if not walker.removed:          # a creature is removed once, however many biters bit it in the same frame
-                self.creature_died(walker)  # killed by a biter: the same hide as a hit leaves
+        for walker in self.walkers.killed:   # killed by a biter or by lava (the herd): the same hide as a hit leaves
+            self.creature_died(walker)
         self.walkers.killed = []
-        self.burn_creatures(dt)
         self.closest_creature = self.nearest_creature()
-
-    def burn_creatures(self, dt):
-        """A creature in lava loses one health every LAVA_INTERVAL seconds, as a hit would; one that dies leaves a hide."""
-        for walker in list(self.walkers.walkers):
-            if walker.removed:
-                continue
-            x, y, z = walker.state()[0]
-            x, z = math.floor(x), math.floor(z)
-            in_lava = (self.world.get_block(x, math.floor(y + 0.1), z) in VoxelGen.LAVA_BLOCKS
-                       or self.world.get_block(x, math.floor(y + 1.0), z) in VoxelGen.LAVA_BLOCKS)
-            if not in_lava:
-                walker.lava_timer = 0.0
-                continue
-            walker.lava_timer += dt
-            while walker.lava_timer >= LAVA_INTERVAL and not walker.removed:
-                walker.lava_timer -= LAVA_INTERVAL
-                if walker.hurt((x, z)):
-                    self.creature_died(walker)
 
     def wear_weapon(self):
         """A strike on a creature uses one of the weapon's uses (an item that does not wear is left as it is). It breaks when they

@@ -783,6 +783,13 @@ above it. The sky is drawn wherever the world has no block.
   twice a run) are in the render pass: the first GL state call after a heavy frame waits for the GPU. Timing each body in the render
   loop pins the stall on whichever body draws first (blanking that body's text does not move it), so the GPU is behind at that point.
   Next step: GPU timing (a profiler capture) to find the heavy frame. Font glyphs for the HUD are now made at setup (`warm_font`).
+  Creature scale (toward thousands): the herd is in C++ (src/Core/Voxel/VoxelHerd.h). One call a frame moves every creature: its decisions
+  (wander, flee, chase, bite, route, lava, death timers), its physics (VoxelWorld::stepBody) and its mesh (position and yaw); the game
+  applies the events it reports (clips, flash materials, bodies taken out). Skinned meshes are culled on their bounds with a margin, the
+  pose is built only for creatures drawn, and light data is built once a frame. Measured at 66 creatures with no player: the herd update
+  is 4.9 ms, and almost all of it is stepBody (about 70 microseconds a creature); the mesh placement and the events are negligible. So the
+  next step is the physics: a cheaper skin test for a walker (cache the skin under its box, or step only creatures near the player and
+  let far ones fall in bulk), then instanced skinned draws (one draw per model, bone palettes in a buffer) for the render (about 7 ms at 70).
   Known and still open: the visibility walk (about 4 ms), installs (3 to 4 ms),
   the GPU copy of each new region body (about 2 ms), the shadow pass (about 1.2 ms of CPU a frame), the water's double draw, and a
   creature spawn wave (about 70 ms in its first frame).

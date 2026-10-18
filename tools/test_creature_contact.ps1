@@ -78,8 +78,7 @@ for y in range(60, 3, -1):
     if game.world.is_solid(x, y, z):
         top = y
         break
-biter = VoxelWalkers.Walker(game.world, "contact_biter", (x + 0.5, top + 1.0, z + 0.5), (0.4, 0.1, 0.1), random.Random(5), biter=True)
-game.walkers.walkers.append(biter)
+biter = game.walkers.add_walker("contact_biter", (x + 0.5, top + 1.0, z + 0.5), biter=True)
 '@
 
     # Watch the nearest creature for six seconds, while the player stands still.

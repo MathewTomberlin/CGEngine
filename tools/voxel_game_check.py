@@ -397,8 +397,7 @@ def main():
         if game.walkers is None:
             raise RuntimeError("the creatures are not made yet")
         spawn = (game.spawn_pos[0] + 3.0, 40.0, game.spawn_pos[2] + 3.0)
-        test_walker = VoxelWalkers.Walker(world, "test_creature", spawn, (0.5, 0.5, 0.5), random.Random(1))
-        game.walkers.walkers.append(test_walker)
+        test_walker = game.walkers.add_walker("test_creature", spawn, kind=VoxelWalkers.TIMID)
         hides0 = inv.count(VoxelGen.HIDE)
         drops0 = len(game.drops.live)
         game.walker_target = (1.0, test_walker)
@@ -412,7 +411,7 @@ def main():
             test_walker not in game.walkers.walkers and test_walker.removed and cge.find_body("test_creature") is not None)
         game.walkers.update(VoxelWalkers.DIE_SECONDS, None)     # the die clip has played
         checks["the body goes when the die clip has played"] = (
-            cge.find_body("test_creature") is None and test_walker not in game.walkers.corpses)
+            cge.find_body("test_creature") is None)
         checks["a dead creature leaves a hide on the ground, not in the inventory"] = (
             inv.count(VoxelGen.HIDE) == hides0 and len(game.drops.live) == drops0 + 1 and game.drops.live[-1].item == VoxelGen.HIDE)
         # Walking up to the hide takes it into the inventory, and standing away from it does not.
@@ -439,39 +438,47 @@ def main():
         checks["a hide cannot be placed"] = game.notice == "A hide cannot be placed" and inv.count(VoxelGen.HIDE) == before_hide
         inv.slots[0] = None
 
+        # The herd of these checks: one creature at a time, moved by the herd (C++) as the game moves its own.
+        herd = cge.VoxelHerd(world, VoxelWalkers.herd_rules(), 2)
+        def tick(dt, xz=None, feet=None, shield=None):
+            return herd.update(dt, xz, feet, 0.0, shield)["bites"]
+        def events():
+            return herd.take_events()
         # A biter bites when it is close, after its lunge (BITE_WINDUP: the damage lands at the clip's strike), and then waits for
         # its next bite.
-        biter = VoxelWalkers.Walker(world, "test_biter", spawn, (0.4, 0.1, 0.1), random.Random(2), biter=True)
+        biter = VoxelWalkers.Walker(herd, "test_biter", spawn, VoxelWalkers.BITER)
         player_xz = (biter.state()[0][0], biter.state()[0][2])
-        lunge = biter.update(0.0, player_xz)
-        strike = biter.update(VoxelWalkers.BITE_WINDUP, player_xz)
-        second_bite = biter.update(0.0, player_xz)
+        lunge = tick(0.0, player_xz)
+        strike = tick(VoxelWalkers.BITE_WINDUP, player_xz)
+        second_bite = tick(0.0, player_xz)
         checks["a biter lunges, then bites at the strike, not again at once"] = (lunge == 0.0 and strike == VoxelWalkers.BITE_DAMAGE
                                                                                 and second_bite == 0.0)
         # A lunge that the player leaves before the strike does no damage.
-        dodge = VoxelWalkers.Walker(world, "test_biter_dodge", spawn, (0.4, 0.1, 0.1), random.Random(2), biter=True)
+        dodge = VoxelWalkers.Walker(herd, "test_biter_dodge", spawn, VoxelWalkers.BITER)
         dodge_xz = (dodge.state()[0][0], dodge.state()[0][2])
-        dodge.update(0.0, dodge_xz)
+        tick(0.0, dodge_xz)
         far_xz = (dodge_xz[0] + 3.0, dodge_xz[1])    # out of bite reach (1.3 blocks), still in chase range (7)
-        checks["a lunge the player dodges does no damage"] = dodge.update(VoxelWalkers.BITE_WINDUP, far_xz) == 0.0
-        dodge.remove()
+        checks["a lunge the player dodges does no damage"] = tick(VoxelWalkers.BITE_WINDUP, far_xz) == 0.0
+        dodge.die()
         # A hit flashes the creature red (its material is swapped for FLASH_MATERIAL), and the flash ends after FLASH_SECONDS.
-        flashed = VoxelWalkers.Walker(world, "test_flash", spawn, (0.4, 0.1, 0.1), random.Random(2))
-        flashed.hurt((flashed.state()[0][0] - 1.0, flashed.state()[0][2]))
-        checks["a hit starts the red flash"] = flashed.flash_timer == VoxelWalkers.FLASH_SECONDS
-        flashed.update(VoxelWalkers.FLASH_SECONDS)
-        checks["the flash ends after its time"] = flashed.flash_timer == 0.0
-        flashed.remove()
+        flashed = VoxelWalkers.Walker(herd, "test_flash", spawn, VoxelWalkers.TIMID)
+        events()
+        flashed.herd.hurt(flashed.name, (flashed.state()[0][0] - 1.0, flashed.state()[0][2]), 1, True)   # the herd's hit: its events are read below
+        checks["a hit starts the red flash"] = any(e[0] == "material" and e[1] == "test_flash" and e[2] == VoxelWalkers.TIMID["flash_material"] for e in events())
+        tick(VoxelWalkers.FLASH_SECONDS)
+        checks["the flash ends after its time"] = any(e[0] == "material" and e[1] == "test_flash" and e[2] == VoxelWalkers.TIMID["material"] for e in events())
+        flashed.die()
+        events()
         # A biter below a player high in the air does not bite it; once the player is level with it, it does (after the lunge).
-        high = VoxelWalkers.Walker(world, "test_biter_high", spawn, (0.4, 0.1, 0.1), random.Random(2), biter=True)
+        high = VoxelWalkers.Walker(herd, "test_biter_high", spawn, VoxelWalkers.BITER)
         high_xz = (high.state()[0][0], high.state()[0][2])
         high_feet = high.state()[0][1]
-        high_bite = high.update(0.0, high_xz, None, high_feet + 10.0)
-        level_bite = high.update(0.0, high_xz, None, high_feet)
-        level_bite += high.update(VoxelWalkers.BITE_WINDUP, high_xz, None, high_feet)
+        high_bite = tick(0.0, high_xz, high_feet + 10.0)
+        level_bite = tick(0.0, high_xz, high_feet)
+        level_bite += tick(VoxelWalkers.BITE_WINDUP, high_xz, high_feet)
         checks["a biter below a player high in the air does not bite it"] = high_bite == 0.0 and level_bite == VoxelWalkers.BITE_DAMAGE
-        high.remove()
-        biter.remove()
+        high.die()
+        biter.die()
 
         # The player's health: bites and falls lower it, it heals once it has not been hurt for a while, and a death puts it
         # back at the spawn with the inventory kept.
