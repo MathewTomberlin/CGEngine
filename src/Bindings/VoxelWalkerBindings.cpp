@@ -9,6 +9,7 @@
 #include "../Core/Voxel/VoxelWorld.h"
 #include "../Core/Body/Body.h"
 #include "../Core/Mesh/Mesh.h"
+#include "../Core/Mesh/RuntimeMesh.h"
 #include "../Core/Scripts/Script.h"
 #include "../Core/Engine/Engine.h"
 #include "../Core/Engine/EngineSystem.h"
@@ -26,10 +27,7 @@ namespace {
 	std::map<std::string, WalkerEntry> walkers;
 
 	Body* bodyNamed(const std::string& name) {
-		for (Body* body : assets.getAllResources<Body>()) {
-			if (body->getName() == name) return body;
-		}
-		return nullptr;
+		return findBodyByName(name);
 	}
 
 	VoxelWalker& walkerNamed(const std::string& name) {

@@ -28,6 +28,8 @@ class HudMixin:
     def setup_hud(self):
         """Two labels: the top left holds what the crosshair is on and the controls; the hotbar sits along the bottom."""
         cge.load_font(HUD_FONT, "hud")
+        # The sizes the labels use, with and without the outline: the glyphs are made now, not in a fight (see warm_font).
+        cge.warm_font("hud", [11, 14, 16, 22], [0.0, HUD_OUTLINE])
         # Each label is one text draw, which costs the renderer a state switch, so there are only two.
         cge.create_text_body("hud_target", "", "hud", cge.Vector2f(14, 10), 16, outline_thickness=HUD_OUTLINE)
         cge.create_text_body("hud_help", HELP_TEXT, "hud", cge.Vector2f(14, 34), 14, cge.Color(200, 200, 200),

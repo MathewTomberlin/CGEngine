@@ -2,6 +2,7 @@
 #include "../Engine/Engine.h"
 #include "../Body/Body.h"
 #include "Mesh.h"
+#include <unordered_map>
 
 namespace CGEngine {
 	namespace {
@@ -23,9 +24,20 @@ namespace CGEngine {
 	}
 
 	Body* findBodyByName(const std::string& name) {
-		for (Body* body : assets.getAllResources<Body>()) {
-			if (body->getName() == name) return body;
+		// The creatures' scripts ask for their bodies by name every frame, and a scan of every body each time is what that cost. The id
+		// of the body found is kept; it is used only while the body is still there under that name (an id can be reused by another body).
+		static std::unordered_map<std::string, id_t> idByName;
+		auto cached = idByName.find(name);
+		if (cached != idByName.end()) {
+			Body* body = assets.get<Body>(cached->second);
+			if (body && body->getName() == name) return body;
 		}
+		for (Body* body : assets.getAllResources<Body>()) {
+			if (body->getName() != name) continue;
+			if (auto id = body->getId()) idByName[name] = id.value();
+			return body;
+		}
+		idByName.erase(name);
 		return nullptr;
 	}
 
@@ -42,7 +54,8 @@ namespace CGEngine {
 		auto meshData = assets.create<MeshData>(runtimeMeshName(name), std::move(vertices), std::move(indices));
 		if (!meshData.has_value()) return nullptr;
 		meshData.value().second->runtimeMesh = true;
-		return attachMesh(name, meshData.value().second, materials, position);
+		Body* made = attachMesh(name, meshData.value().second, materials, position);
+		return made;
 	}
 
 	namespace {

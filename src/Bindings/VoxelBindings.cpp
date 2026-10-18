@@ -95,19 +95,42 @@ void bindVoxel(py::module_& m) {
         .def("is_loaded", &VoxelWorld::isLoaded, py::arg("cx"), py::arg("cz"),
              "True once the chunk's blocks are in the world (update() installs them).")
         .def("unload_chunk", &VoxelWorld::unloadChunk, py::arg("cx"), py::arg("cz"), "Remove a chunk and its body.")
-        .def("update", &VoxelWorld::update, py::arg("budget_ms") = 2.0, py::arg("focus_x") = 0, py::arg("focus_z") = 0,
+        .def("find_route", [](const VoxelWorld& world, std::array<int, 3> start, std::array<int, 3> goal, std::vector<int> liquids) -> py::object {
+            std::vector<std::array<int, 3>> route;
+            if (!world.findRoute(start, goal, liquids, route)) return py::none();
+            py::list out;
+            for (const auto& cell : route) out.append(py::make_tuple(cell[0], cell[1], cell[2]));
+            return out;
+        }, py::arg("start"), py::arg("goal"), py::arg("liquids"),
+           "The route a creature walks from start to a cell within one block of goal (VoxelPaths.find_path in C++): a list of (x, y, z) cells "
+           "after start with the goal last, [] when start is already there, None when no route is found.")
+        .def("update_clouds", &VoxelWorld::updateClouds, py::arg("time_seconds"), py::arg("focus_x"), py::arg("focus_z"),
+             "The cloud sheet over the blocks around (focus_x, focus_z), drifting with time_seconds. Rebuilt about twice a second.")
+        .def("set_band", &VoxelWorld::setBand, py::arg("sections"),
+             "How many sections the loaded band reaches above and below the focus (the vertical view distance; the game uses a quarter of its view).")
+        .def("update", &VoxelWorld::update, py::arg("budget_ms") = 2.0, py::arg("focus_x") = 0, py::arg("focus_z") = 0, py::arg("focus_y") = 0,
              "Call once a frame. Installs generated chunks, uploads finished meshes within budget_ms (at least one), and starts "
              "meshing the dirty chunks nearest (focus_x, focus_z), a chunk coordinate. Returns the meshes uploaded.")
         .def("stats", [](const VoxelWorld& world) {
             const VoxelWorld::Timings timings = world.timings();
-            return py::dict("chunks"_a = world.chunkCount(), "loaded"_a = world.loadedCount(), "pending"_a = world.pendingCount(),
+            const VoxelWorld::Counts counts = world.counts();
+            return py::dict("chunks"_a = world.chunkCount(), "loaded"_a = counts.loaded, "pending"_a = counts.pending,
                 "install_ms"_a = timings.install, "start_ms"_a = timings.start, "terrain_ms"_a = timings.terrain, "mesh_ms"_a = timings.mesh,
                 "light_ms"_a = timings.light, "skin_ms"_a = timings.skin, "surface_ms"_a = timings.surface, "builds"_a = timings.builds,
-                "dirty"_a = world.dirtyCount(), "meshing"_a = world.meshingCount(), "quads"_a = world.quadCount(),
-                "upload_ms"_a = world.lastUploadMs(), "uploads"_a = world.uploadCount(), "edits"_a = world.editCount());
+                "dirty"_a = counts.dirty, "meshing"_a = world.meshingCount(), "quads"_a = counts.quads,
+                "upload_ms"_a = world.lastUploadMs(), "uploads"_a = world.uploadCount(), "edits"_a = world.editCount(),
+                "phases"_a = py::list(py::cast(std::vector<double>(world.lastPhases.begin(), world.lastPhases.end()))));
         }, "Counts of chunks by state, quads in the meshes, edited blocks, and how long the last update's uploads took.")
-        .def("ready_within", &VoxelWorld::readyWithin, py::arg("cx"), py::arg("cz"), py::arg("radius"),
-             "How many chunks in the square of this radius around (cx, cz) are meshed and uploaded, not waiting for terrain or a mesh.")
+        .def("phases", [](const VoxelWorld& world) {
+            return py::list(py::cast(std::vector<double>(world.lastPhases.begin(), world.lastPhases.end())));
+        }, "The time of each phase of the last update, in ms (see stats).")
+        .def("bench_terrain", [](const VoxelWorld& world, int side, int band_low, int band_high) {
+            auto [ms, checksum] = world.benchTerrain(side, band_low, band_high);
+            return py::make_tuple(ms, checksum);
+        }, py::arg("side"), py::arg("band_low"), py::arg("band_high"),
+           "Generates the terrain of side x side columns for the sections from band_low to band_high. Returns (ms, checksum of the blocks).")
+        .def("ready_counts", &VoxelWorld::readyCounts, py::arg("cx"), py::arg("cz"), py::arg("radii"),
+             "How many chunks in each square (a list of radii, in chunks) around (cx, cz) are meshed and uploaded, not waiting for terrain or a mesh. One list, in the order of radii.")
         .def("set_smoothing", &VoxelWorld::setSmoothing, py::arg("resolution"),
              "The surface style: 0 for cubes, or the number of samples per block for a smooth skin (1 for the block scale, 2 for half blocks). Loaded chunks are re-meshed.")
         .def("smoothing", &VoxelWorld::smoothing, "The surface style set by set_smoothing: 0 for cubes, else the samples per block.")
@@ -115,6 +138,7 @@ void bindVoxel(py::module_& m) {
                 const std::string& shape, const std::string& group, const std::optional<std::string>& material, int mesh,
                 int join_above, const std::optional<std::vector<int>>& join_below, bool transparent, int hits, bool flows, const std::optional<std::vector<int>>& tiles, int splat) {
             if (shape != "smooth" && shape != "cube") throw py::value_error("shape must be \"smooth\" or \"cube\"");
+            if (group != "terrain" && group != "own") throw py::value_error("group must be \"terrain\" or \"own\"");
             if (group != "terrain" && group != "own") throw py::value_error("group must be \"terrain\" or \"own\"");
             if (shape == "cube" && group == "terrain") throw py::value_error("a cube block is drawn in its own mesh: group must be \"own\"");
             if (mesh < 0 || mesh > 255) throw py::value_error("mesh must be a block id, 0 to 255");
@@ -169,7 +193,9 @@ void bindVoxel(py::module_& m) {
         .def("skin_at", &VoxelWorld::skinAt, py::arg("x"), py::arg("y"), py::arg("z"),
              "The collision skin of the block at these coordinates: 0 for air and liquids, 1 for the terrain, 256 + id for a smooth "
              "block drawn in its own mesh, 512 + id for a cube. Solid blocks are the non-zero ones; VoxelPhysics uses it as its solid().")
-        .def("chunk_group_quads", &VoxelWorld::chunkGroupQuads, py::arg("cx"), py::arg("cz"),
+        .def("chunk_group_quads", py::overload_cast<int, int, int, int>(&VoxelWorld::chunkGroupQuads, py::const_), py::arg("cx"), py::arg("cz"), py::arg("y_from"), py::arg("y_to"),
+             "The quads of each group in the sections of a column whose blocks lie in [y_from, y_to).")
+        .def("chunk_group_quads", py::overload_cast<int, int>(&VoxelWorld::chunkGroupQuads, py::const_), py::arg("cx"), py::arg("cz"),
              "The quads of each mesh a loaded chunk has, as a dict: 0 for the terrain, else the block id with its own mesh. Missing "
              "groups have none.")
         .def("is_solid", &VoxelWorld::isSolid, py::arg("x"), py::arg("y"), py::arg("z"),
@@ -214,15 +240,15 @@ void bindVoxel(py::module_& m) {
              "Far skins: the chunks more than far_chunks from the focus are meshed with every stride-th block sampled (a stride of 2 is a quarter of the quads). 0 turns them off.")
         .def("set_detail", &VoxelWorld::setDetail, py::arg("near_chunks"), py::arg("near_samples") = 2,
              "Finer smooth skin near the camera: the chunks within near_chunks of the focus use near_samples per block. 0 turns it off.")
-        .def("ground_mesh", [](const VoxelWorld& world, int cx, int cz, int group, int stride) {
+        .def("ground_mesh", [](const VoxelWorld& world, int cx, int cz, int group, int stride, int cy) {
             py::list out;
-            for (const VoxelVertex& v : world.probeGroundMesh(cx, cz, static_cast<uint8_t>(group), stride)) {
+            for (const VoxelVertex& v : world.probeGroundMesh(cx, cy, cz, static_cast<uint8_t>(group), stride)) {
                 out.append(py::make_tuple(v.position.x, v.position.y, v.position.z, v.colour.r, v.colour.g, v.colour.b, v.colour.a,
                     v.splat[0], v.splat[1], v.splat[2], v.splat[3]));
             }
             return out;
-        }, py::arg("cx"), py::arg("cz"), py::arg("group") = 0, py::arg("stride") = 1,
-           "The smooth mesh of a chunk's group as it is built now (0 is the ground; a liquid's group is its source block): per vertex (x, y, z, r, g, b, a, the four splat words).")
+        }, py::arg("cx"), py::arg("cz"), py::arg("group") = 0, py::arg("stride") = 1, py::arg("cy") = 0,
+           "The smooth mesh of a section's group (section cy of the column) as it is built now (0 is the ground; a liquid's group is its source block): per vertex (x, y, z, r, g, b, a, the four splat words).")
         .def("chunk_quads", &VoxelWorld::chunkQuads, py::arg("cx"), py::arg("cz"),
              "The quads in a loaded chunk's mesh (0 if it is not loaded or has none).")
         .def("set_move_seconds", &VoxelWorld::setMoveSeconds, py::arg("seconds"),

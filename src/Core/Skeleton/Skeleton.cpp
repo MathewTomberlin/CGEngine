@@ -26,6 +26,11 @@ namespace CGEngine {
 		return boneData.find(boneName) != boneData.end();
 	}
 
+	const BoneData* Skeleton::findBoneData(const string& boneName) const {
+		auto it = boneData.find(boneName);
+		return it != boneData.end() ? &it->second : nullptr;
+	}
+
 	optional<BoneData> Skeleton::getBoneData(const string& boneName) const {
 		auto it = boneData.find(boneName);
 		if (it != boneData.end()) {

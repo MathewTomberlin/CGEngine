@@ -95,7 +95,7 @@ namespace CGEngine {
 
 	//Recursively calculate the bone transformations for the current animation
 	void Animator::calculateBoneTransform(const NodeData* node, glm::mat4 parentTransform) {
-		string nodeName = node->name;
+		const string& nodeName = node->name;
 		glm::mat4 nodeTransform = node->transformation;
 		
 		//Iterate through Animation.bones and find the bone with the same name as the Animation NodeData
@@ -109,11 +109,10 @@ namespace CGEngine {
 		nodeTransforms[nodeName] = globalTransform;
 
 		//Skin relative to the rest pose: pose = animated global * inverse(rest global)
-		if (skeleton && skeleton->hasBone(nodeName)) {
-			optional<BoneData> boneData = skeleton->getBoneData(nodeName);
-			if (boneData.has_value()) {
+		if (skeleton) {
+			if (const BoneData* boneData = skeleton->findBoneData(nodeName)) {
 				auto rest = inverseRest.find(nodeName);
-				pose[boneData.value().id] = globalTransform * (rest != inverseRest.end() ? rest->second : boneData.value().offset);
+				pose[boneData->id] = globalTransform * (rest != inverseRest.end() ? rest->second : boneData->offset);
 			}
 		}
 
@@ -122,11 +121,7 @@ namespace CGEngine {
 		}
 	}
 
-	vector<glm::mat4> Animator::getBoneMatrices() {
-		return pose;
-	}
-
-	bool Animator::getNodeTransform(const string& nodeName, glm::mat4& out) const {
+		bool Animator::getNodeTransform(const string& nodeName, glm::mat4& out) const {
 		auto found = nodeTransforms.find(nodeName);
 		if (found == nodeTransforms.end()) return false;
 		out = found->second;

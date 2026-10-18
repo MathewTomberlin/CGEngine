@@ -36,6 +36,8 @@ FLANK_TURN = math.radians(60.0)    # while it circles, a biter heads this far of
 ATTACK_SECONDS = 0.8               # how long a bite's clip plays before the creature goes back to walking or running
 BITE_WINDUP = 0.3                  # seconds from the start of a bite's clip to its strike: the damage lands then, if the player is still in reach
 ROUTE_SECONDS = 1.0                # a biter works out a route round a wall at most this often
+ROUTE_SEARCHES_PER_FRAME = 2       # route searches that may start in one frame, across all the creatures
+_searches_left = [ROUTE_SEARCHES_PER_FRAME]   # searches left this frame (reset by the herd's update)
 ROUTE_REACH = 0.45                 # blocks: a route cell is reached when the creature is this close to its centre
 CHUNK = VoxelGen.CHUNK
 # The numbers of the two kinds the game starts with, for the checks and the console (the kinds themselves are in the data file).
@@ -75,7 +77,7 @@ class Walker:
         self.body_gone = False      # the body has been taken out of the world (remove)
         self.removed = False        # taken out of the world (it is dead): its walker and mesh are gone
         self.route = []             # the cells a biter walks round a wall to reach the player (VoxelPaths), next first
-        self.route_timer = 0.0      # seconds until a biter may work out a route again
+        self.route_timer = random.uniform(0.0, ROUTE_SECONDS)   # seconds until a biter may work out a route again (staggered)
         # The creature is a model body: a horse that the clips animate and the walker moves.
         cge.load_scene_json(json.dumps({"version": 1, "bodies": [{"name": name, "model": self.kind["model"], "position": list(spawn), "material": self.kind["material"],
                                                                   "rotation": [0, 0, 0]}]}))
@@ -224,14 +226,16 @@ class Walker:
         Returns True when a route is there to walk. With no route found, the creature keeps to its own choices."""
         if self.route_timer > 0.0:
             return bool(self.route)
+        if _searches_left[0] <= 0:
+            return bool(self.route)   # the frame's searches are used up: this creature tries again next frame
+        _searches_left[0] -= 1
         self.route_timer = ROUTE_SECONDS
         here = (math.floor(pos[0]), math.floor(pos[1] + 0.1), math.floor(pos[2]))
         feet = here[1] if player_feet is None else math.floor(player_feet + 0.1)
         px, pz = math.floor(player[0]), math.floor(player[1])
 
-        def beside_player(x, y, z):
-            return abs(x - px) <= 1 and abs(z - pz) <= 1 and abs(y - feet) <= 1
-        self.route = VoxelPaths.find_path(self.world.get_block, here, beside_player) or []
+        # The search runs in C++ (VoxelWorld.find_route): the same route as VoxelPaths.find_path, which it replaces here.
+        self.route = self.world.find_route(list(here), [px, feet, pz], VoxelGen.LIQUIDS) or []
         return bool(self.route)
 
     def follow_route(self, pos):
@@ -391,6 +395,7 @@ class Walkers:
         """player is the (x, z) of the player, which the creatures run from or chase. A creature that is about to bump another
         turns away from it, so the herd does not stack up in one place. Returns the health the biters took from the player.
         A biter with no player near hunts the nearest timid creature and bites it; a creature a bite kills is in self.killed."""
+        _searches_left[0] = ROUTE_SEARCHES_PER_FRAME   # the frame's route searches, shared by the herd
         for corpse in list(self.corpses):
             corpse.die_timer -= dt
             if corpse.die_timer <= 0.0:

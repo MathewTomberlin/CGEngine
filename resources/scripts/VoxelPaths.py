@@ -33,6 +33,18 @@ def find_path(block_at, start, is_goal):
     after start, the goal last. [] when start is already a goal, None when no route is found within RADIUS and MAX_CELLS."""
     if is_goal(*start):
         return []
+    # Each cell is read by several of its neighbours, so a search reads each block once: the world's lookup is the cost of a search.
+    seen = {}
+    read = block_at
+
+    def block(x, y, z):
+        key = (x, y, z)
+        found = seen.get(key)
+        if found is None:
+            found = read(x, y, z)
+            seen[key] = found
+        return found
+    block_at = block
     sx, sy, sz = start
     came = {start: None}
     queue = deque([start])

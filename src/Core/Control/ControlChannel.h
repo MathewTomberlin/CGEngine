@@ -17,6 +17,8 @@ namespace CGEngine {
         static void initialize();
         /// Call once per frame, after rendering.
         static void poll();
+        /// How long the last poll took, in ms (a command that runs a script is run by the poll).
+        static double lastPollMs();
         /// Frames rendered since startup, as counted by poll().
         static unsigned long long frameCount();
     };

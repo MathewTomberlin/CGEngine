@@ -16,7 +16,7 @@ namespace CGEngine {
 		void updateAnimation(float dt);
 		void playAnimation(const string& animationName);
 		void calculateBoneTransform(const NodeData* node, glm::mat4 parentTransform);
-		vector<glm::mat4> getBoneMatrices();
+		const vector<glm::mat4>& getBoneMatrices() const { return pose; }
 		/// The model-space transform of a node of the clip at the current time, with the bone's inverse bind pose not applied: where the
 		/// bone is, for an object that follows it. False if the clip has no node of that name.
 		bool getNodeTransform(const string& nodeName, glm::mat4& out) const;

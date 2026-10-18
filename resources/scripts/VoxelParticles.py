@@ -15,7 +15,7 @@ MAX_BURSTS = 8              # live bursts at once; the oldest is removed to make
 
 
 class Burst:
-    def __init__(self, name, centre, colour, count, size, life, rng):
+    def __init__(self, name, centre, colour, count, size, life, rng, reuse=False):
         self.name = name
         self.colour = colour
         self.size = size
@@ -28,7 +28,11 @@ class Burst:
             up = rng.uniform(0.5, 1.5)
             velocity = [math.cos(angle) * speed, up * speed * 0.6, math.sin(angle) * speed]
             self.parts.append([list(centre), velocity])
-        cge.create_mesh_body(name, *self.arrays(1.0), materials=["voxel"], position=cge.Vector3f(0.0, 0.0, 0.0))
+        # A burst takes over a body that a finished burst left behind (see Bursts), which costs far less than making one.
+        if reuse:
+            cge.update_mesh_body(name, *self.arrays(1.0))
+        else:
+            cge.create_mesh_body(name, *self.arrays(1.0), materials=["voxel"], position=cge.Vector3f(0.0, 0.0, 0.0))
 
     def boxes(self, scale):
         half = self.size * scale / 2.0
@@ -52,7 +56,8 @@ class Burst:
         return True
 
     def remove(self):
-        cge.remove_mesh_body(self.name)
+        # Hidden, not removed: the body stays for the next burst (Bursts keeps a few).
+        cge.update_mesh_body(self.name, *boxes_arrays([((0.0, 0.0, 0.0), (0.0, 0.0, 0.0), (0.0, 0.0, 0.0))]))
 
 
 class Bursts:
@@ -62,12 +67,27 @@ class Bursts:
         self.rng = rng
         self.live = []
         self.made = 0
+        self.spare = []             # the bodies of finished bursts, hidden, for the next burst to take over
+        self.started = 0            # bursts started, reused bodies or not (counts the hits and the breaks)
 
     def add(self, centre, colour, count, size, life):
         if len(self.live) >= MAX_BURSTS:
-            self.live.pop(0).remove()
-        self.made += 1
-        self.live.append(Burst("burst_%d" % self.made, centre, colour, count, size, life, self.rng))
+            self.retire(self.live.pop(0))
+        self.started += 1
+        if self.spare:
+            name, reuse = self.spare.pop(), True
+        else:
+            self.made += 1
+            name, reuse = "burst_%d" % self.made, False
+        self.live.append(Burst(name, centre, colour, count, size, life, self.rng, reuse=reuse))
+
+    def retire(self, burst):
+        """A finished burst is hidden, and its body kept for the next burst, up to MAX_BURSTS of them; the rest are removed."""
+        burst.remove()
+        if len(self.spare) < MAX_BURSTS:
+            self.spare.append(burst.name)
+        else:
+            cge.remove_mesh_body(burst.name)
 
     def update(self, dt):
         """Step every burst by dt (a paused game passes 0, so nothing moves and nothing is rebuilt)."""
@@ -78,5 +98,5 @@ class Bursts:
             if burst.update(dt):
                 still.append(burst)
             else:
-                burst.remove()
+                self.retire(burst)
         self.live = still

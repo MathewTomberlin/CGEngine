@@ -68,7 +68,8 @@ function Sample-Frames($label, $seconds) {
     $b = Read-State
     $elapsed = ((Get-Date) - $t0).TotalSeconds
     $fps = ($b.frames - $a.frames) / $elapsed
-    Write-Host ("{0,-10} {1,6:N0} fps   worst frame {2,6:N1} ms" -f $label, $fps, $worst)
+    $walkers = if ($b.walkers_ms) { "   creatures median {0:N2} ms, max {1:N2} ms" -f $b.walkers_ms[0], $b.walkers_ms[1] } else { "" }
+    Write-Host ("{0,-10} {1,6:N0} fps   worst frame {2,6:N1} ms{3}" -f $label, $fps, $worst, $walkers)
 }
 
 Remove-Item -Recurse -Force $control -ErrorAction SilentlyContinue
@@ -78,7 +79,7 @@ $app = Start-Unattended (Join-Path $exeDir "main.exe") $exeDir
 Remove-Item Env:CGENGINE_SCENE; Remove-Item Env:VOXEL_SEED
 try {
     while (-not (Test-Path $stateFile)) { Start-Sleep -Milliseconds 200 }
-    do { Start-Sleep -Milliseconds 250; $s = Read-State } while (-not $s -or $s.pending -ne 0 -or $s.meshing -ne 0 -or $s.loaded -lt $s.chunks -or -not $s.on_ground)
+    do { Start-Sleep -Milliseconds 250; $s = Read-State } while (-not $s -or $s.pending -ne 0 -or $s.meshing -ne 0 -or $s.dirty -ne 0 -or $s.loaded -lt $s.chunks -or -not $s.on_ground)
     Write-Host ("loaded {0} chunks ({1} quads) in {2:N1} s from the start" -f $s.loaded, $s.quads, ((Get-Date) - $launched).TotalSeconds)
     $memory = Get-Process -Id $app.Id
     Write-Host ("memory after the load: {0:N0} MB working set, {1:N0} MB private" -f ($memory.WorkingSet64 / 1MB), ($memory.PrivateMemorySize64 / 1MB))

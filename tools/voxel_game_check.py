@@ -332,13 +332,13 @@ def main():
         checks["the reach ends after its length"] = game.reach_time is None
         inv.slots[0] = [VoxelGen.PICKAXE, 1, VoxelGen.TOOLS[VoxelGen.PICKAXE]["durability"]]
         game.update_hands(0.016)
-        made_before = game.bursts.made
+        made_before = game.bursts.started
         game.hands_hit("block", [0.5, 0.5, 0.5])
-        checks["a pickaxe's hit on a block throws sparks"] = game.bursts.made > made_before
-        made_before = game.bursts.made
+        checks["a pickaxe's hit on a block throws sparks"] = game.bursts.started > made_before
+        made_before = game.bursts.started
         inv.slots[0] = [VoxelGen.TORCH, 1]
         game.hands_hit("block", [0.5, 0.5, 0.5])
-        checks["a torch in hand throws no hit effect"] = game.bursts.made == made_before
+        checks["a torch in hand throws no hit effect"] = game.bursts.started == made_before
         inv.slots[0] = None
         game.update_hands(0.016)
 

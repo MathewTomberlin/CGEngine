@@ -24,6 +24,7 @@
 #include "../Core/Mesh/Model.h"
 #include "../Core/Material/Material.h"
 #include "../Core/Mesh/RuntimeMesh.h"
+#include "../Core/Control/ControlChannel.h"
 #include "../Core/Animation/Animator.h"
 #include <algorithm>
 #include "../Core/Scene/SceneLoader.h"
@@ -85,10 +86,7 @@ namespace {
     }
 
     Body* findBody(const std::string& name) {
-        for (Body* body : assets.getAllResources<Body>()) {
-            if (body->getName() == name) return body;
-        }
-        return nullptr;
+        return findBodyByName(name);
     }
 
     // Copies a one-dimensional buffer (array.array, numpy, bytes) into a vector. The element size must match T.
@@ -423,6 +421,28 @@ void bindGame(py::module_& m) {
         }
         return text;
     }, "The characters typed since the last call, in order (ASCII only). Use key_down for Backspace and Enter.");
+
+    // Rasterises the printable glyphs of a loaded font at these sizes and outlines now, so no label pays for it when it first shows a
+    // letter (a glyph is made on first use, and that draw took tens of milliseconds in a fight).
+    m.def("warm_font", [](const std::string& fontName, const std::vector<unsigned int>& sizes, const std::vector<float>& outlines) {
+        optional<id_t> id = assets.getId<FontResource>(fontName);
+        FontResource* resource = id.has_value() ? assets.get<FontResource>(id.value()) : nullptr;
+        if (!resource || !resource->getFont()) throw std::runtime_error("no font named '" + fontName + "' (load_font it first)");
+        for (unsigned int size : sizes) {
+            for (float outline : outlines) {
+                for (char32_t code = 32; code < 127; ++code) {
+                    resource->getFont()->getGlyph(code, size, false, outline);
+                }
+            }
+        }
+    }, py::arg("font"), py::arg("sizes"), py::arg("outlines"),
+        "Rasterises the printable ASCII glyphs of a loaded font at these sizes and outline thicknesses, so the first label that shows them is not slow.");
+
+    m.def("render_stats", []() {
+        if (!renderer) return py::dict();
+        return py::dict("skinned_draws"_a = renderer->getLastFrameSkinnedDraws(), "culled_draws"_a = renderer->getLastFrameCulledDraws(),
+            "render_ms"_a = renderer->getLastFrameRenderMs(), "poll_ms"_a = ControlChannel::lastPollMs());
+    }, "The last frame's render: the skinned (animated) draws, the draws culled, and the time of the render in ms.");
 
     m.def("play_sound", [](const std::string& name, float volume, float pitch) {
         return audioPlayer().playEffect(name, volume, pitch);

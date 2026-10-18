@@ -126,7 +126,7 @@ namespace CGEngine {
 		MeshData(string meshName = "", vector<VertexData> vertices = {}, vector<unsigned int> indices = {}, map<string, BoneData> bones = {}) : meshName(meshName), vertices(vertices), indices(indices), vao(0U), vbo(0U), ebo(0U), bones(bones) {};
 		MeshData(vector<VertexData> vertices, vector<unsigned int> indices = {}, map<string, BoneData> bones = {}, string meshName = "") : meshName(meshName), vertices(vertices), indices(indices), vao(0U), vbo(0U), ebo(0U), bones(bones) {};
 		// A compact voxel mesh. The asset manager checks a resource when it is created, so its vertices are given here.
-		MeshData(vector<VoxelVertex> voxels, vector<unsigned int> indices) : voxelVertices(voxels), compact(true), indices(indices), vao(0U), vbo(0U), ebo(0U) {};
+		MeshData(vector<VoxelVertex> voxels, vector<unsigned int> indices) : voxelVertices(std::move(voxels)), compact(true), indices(std::move(indices)), vao(0U), vbo(0U), ebo(0U) {};
 		bool isValid() const {
 			return vertexCount() > 0 && indexCount() > 0;
 		}
@@ -276,6 +276,9 @@ namespace CGEngine {
 		unsigned int getLastFrameDrawCalls() const { return lastFrameDrawCalls; }
 		/// Meshes skipped in the last rendered frame because their bounds were outside the camera's view.
 		unsigned int getLastFrameCulledDraws() const { return lastFrameCulledDraws; }
+		// What the last frame's render cost: its skinned (animated) draws, and the time from the start of the render to its end, in ms.
+		unsigned int getLastFrameSkinnedDraws() const { return lastFrameSkinnedDraws; }
+		double getLastFrameRenderMs() const { return lastFrameRenderMs; }
 		/// Instances skipped in the last rendered frame because they were outside the view.
 		unsigned int getLastFrameCulledInstances() const { return lastFrameCulledInstances; }
 		void saveScreenshot(const std::string& path);
@@ -328,6 +331,9 @@ namespace CGEngine {
 		unsigned int lastFrameDrawCalls = 0;
 		unsigned int culledDrawsThisFrame = 0;
 		unsigned int lastFrameCulledDraws = 0;
+		unsigned int skinnedDrawsThisFrame = 0;
+		unsigned int lastFrameSkinnedDraws = 0;
+		double lastFrameRenderMs = 0.0;
 		unsigned int culledInstancesThisFrame = 0;
 		unsigned int lastFrameCulledInstances = 0;
 		// Instances of the mesh being drawn that are inside the view (filled by collectVisibleInstances).
@@ -391,6 +397,9 @@ namespace CGEngine {
 		/// </summary>
 		bool zSortingEnabled = true;
 		set<Animator*> updatedAnimators;
+		// The animator whose bones are in the bone buffer this frame, and the buffer's contents (reused for each mesh, so not zeroed for each).
+		Animator* boneUploadedFor = nullptr;
+		BoneUBO boneScratch;
 		GLenum initGlew();
 		Program* program;
 		int boundTextures = 0;
@@ -431,7 +440,8 @@ namespace CGEngine {
 		void bindTextureAndSetUniform(Texture* texture, const string& paramName, Program* program, int materialIndex, int& boundTextures);
 		void setMaterialUBOData(MaterialUBO materialUBOData, vector<id_t> modelMaterials, Program* program);
 		void setLightUBOData(LightUBO lightUBOData);
-		void setBoneUBOData(BoneUBO boneUBOData, Animator* animator);
+		// Sends an animator's bones to the bone buffer, once per frame: its meshes share the pose (see boneUploadedFor).
+		void setBoneUBOData(Animator* animator);
 		void setTransformUBOData(TransformUBO transformUBOData, glm::mat4 combinedTransform);
 		Animator* updateAnimator(Mesh* mesh);
 		/// Advance an animator by this frame's time, once per frame (updatedAnimators keeps it from advancing again for other meshes).
