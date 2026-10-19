@@ -498,7 +498,10 @@ def check_walkers(world, checks, results):
     """Creatures stand on the ground, walk about, and never end up inside a block. The engine moves them through
     the herd (its update moves the creatures), since this check runs inside a frame and no frames pass while it works."""
     import VoxelWalkers
-    herd = VoxelWalkers.Walkers(world, (0.0, 0.0), 4, 5, prefix="check_creature")
+    herd = VoxelWalkers.Walkers(world, 5, prefix="check_creature")
+    for i in range(4):
+        spot = herd.herd.find_spawn((0.0, 0.0), 30.0, None, 400, 2.0, 12.0)   # near the origin, out of no view
+        herd.add_walker("check_creature_%d" % i, spot)
     walkers = herd.walkers
     checks["walkers spawn on the ground"] = len(walkers) == 4 and all(w.state()[2] is False or w.state()[0][1] >= 1.0 for w in walkers)
     spawns = [list(w.state()[0]) for w in walkers]

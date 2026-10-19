@@ -391,7 +391,7 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
         if self.walkers is None:
             if not self.world.is_loaded(0, 0):
                 return
-            self.walkers = VoxelWalkers.Walkers(self.world, (8.5, 8.5), WALKERS, self.seed)
+            self.walkers = VoxelWalkers.Walkers(self.world, self.seed)
         # The shield faces the way the player looks, flat on the ground (the same forward as the walk, see update_player).
         shield = None
         if self.shield_up():
@@ -411,6 +411,16 @@ class VoxelGame(PyScript, HudMixin, InventoryMixin, HandsMixin, NetMixin, Settin
             self.creature_died(walker)
         self.walkers.killed = []
         self.closest_creature = self.nearest_creature()
+        self.manage_creatures(dt)
+
+    def manage_creatures(self, dt):
+        """Keep the creatures near the player at WALKERS: spawn out of view when short, take out the far ones nothing holds
+        (VoxelWalkers.Walkers.manage). The creature under the crosshair is kept, and none goes while an arrow flies."""
+        look = self.look_direction()
+        horizontal = math.hypot(look[0], look[2])
+        look_xz = (look[0] / horizontal, look[2] / horizontal) if horizontal > 1e-6 else None
+        keep = [self.walker_target[1].name] if self.walker_target is not None else []
+        self.walkers.manage(dt, (self.pos[0], self.pos[2]), self.pos[1], look_xz, keep, bool(self.arrows), WALKERS)
 
     def wear_weapon(self):
         """A strike on a creature uses one of the weapon's uses (an item that does not wear is left as it is). It breaks when they

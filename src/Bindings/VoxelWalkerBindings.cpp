@@ -90,6 +90,15 @@ namespace {
 		r.lavaInterval = number(d, "lava_interval");
 		r.chaseRange = number(d, "chase_range");
 		r.nightChaseShare = number(d, "night_chase_share");
+		r.spawnMin = numberOr(d, "spawn_min", r.spawnMin);
+		r.spawnMax = numberOr(d, "spawn_max", r.spawnMax);
+		r.despawnRange = numberOr(d, "despawn_range", r.despawnRange);
+		r.interactRange = numberOr(d, "interact_range", r.interactRange);
+		r.spacing = numberOr(d, "spacing", r.spacing);
+		r.lookCos = numberOr(d, "look_cos", r.lookCos);
+		r.chunk = static_cast<int>(numberOr(d, "chunk", r.chunk));
+		r.seaLevel = static_cast<int>(numberOr(d, "sea_level", r.seaLevel));
+		r.worldHeight = static_cast<int>(numberOr(d, "world_height", r.worldHeight));
 		r.lava = d[py::str("lava")].cast<std::vector<int>>();
 		r.liquids = d[py::str("liquids")].cast<std::vector<int>>();
 		return r;
@@ -111,10 +120,13 @@ namespace {
 		k.fightBackSeconds = numberOr(d, "fight_back_seconds", -1.0);
 		k.material = d[py::str("material")].cast<std::string>();
 		k.flashMaterial = d[py::str("flash_material")].cast<std::string>();
-		// The clips by role: a role the dict does not name has no clip.
-		const char* roles[] = { "walk", "bound", "attack", "hurt", "die" };
-		for (size_t i = 0; i < 5; ++i) {
-			if (d.contains(py::str(roles[i]))) k.clips[i] = d[py::str(roles[i])].cast<std::string>();
+		// The clips by role (herd_kind in VoxelWalkers.py puts them in a "clips" dict): a role the dict does not name has no clip.
+		if (d.contains(py::str("clips")) && !d[py::str("clips")].is_none()) {
+			py::dict clips = d[py::str("clips")].cast<py::dict>();
+			const char* roles[] = { "walk", "bound", "attack", "hurt", "die" };
+			for (size_t i = 0; i < 5; ++i) {
+				if (clips.contains(py::str(roles[i]))) k.clips[i] = clips[py::str(roles[i])].cast<std::string>();
+			}
 		}
 		return k;
 	}
@@ -211,6 +223,22 @@ void bindVoxelWalkers(py::module_& m) {
 			return py::make_tuple(py::make_tuple(s.pos[0], s.pos[1], s.pos[2]), py::make_tuple(s.vel[0], s.vel[1], s.vel[2]), s.onGround);
 		}, py::arg("name"), "The creature's feet, velocity and ground contact: (pos, vel, on_ground).")
 		.def("count", &VoxelHerd::count, "The creatures in the herd, dying ones included.")
+		.def("live_count", &VoxelHerd::liveCount, "The creatures that are alive.")
+		.def("find_spawn", [](VoxelHerd& herd, std::array<double, 2> player, double feet, std::optional<std::array<double, 2>> look,
+				int attempts, double minDistance, double maxDistance) -> py::object {
+			auto spot = herd.findSpawn(player, feet, look ? &*look : nullptr, attempts, minDistance, maxDistance);
+			if (!spot) return py::none();
+			return py::make_tuple((*spot)[0], (*spot)[1], (*spot)[2]);
+		}, py::arg("player"), py::arg("feet"), py::arg("look") = py::none(), py::arg("attempts") = 16,
+			py::arg("min_distance") = 16.0, py::arg("max_distance") = 32.0,
+			"A spawn spot (x, y, z) for a creature, or None: out of view when look (the player's horizontal look) is given, on loaded ground above "
+			"the water, and not close to a creature.")
+		.def("despawn", [](VoxelHerd& herd, std::array<double, 2> player, double feet, std::vector<std::string> keep, bool arrowsFlying,
+				int target) {
+			return herd.despawn(player, feet, keep, arrowsFlying, target);
+		}, py::arg("player"), py::arg("feet"), py::arg("keep"), py::arg("arrows_flying"), py::arg("target"),
+			"Take out the creatures nothing holds that are beyond the despawn range (and the farthest one while over target). Returns their "
+			"names; their bodies go with the Remove events. Nothing goes while an arrow flies.")
 		.def("heading", &VoxelHerd::heading, py::arg("name"), "The way the creature is heading, in radians (for the checks).")
 		.def("set_heading", &VoxelHerd::setHeading, py::arg("name"), py::arg("heading"), py::arg("timer"),
 			"Turn the creature to a heading, and set its wander timer (for the checks).")

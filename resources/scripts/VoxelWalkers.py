@@ -49,6 +49,14 @@ BITE_DAMAGE = BITER["bite_damage"]
 BITER_COLOUR = BITER["colours"][0]
 FLASH_COLOUR = (1.0, 0.35, 0.25)
 ROLES = ("walk", "bound", "attack", "hurt", "die")
+SPAWN_MIN = 16.0                  # blocks from the player: the nearest a creature appears (out of its sight, see manage)
+SPAWN_MAX = 32.0                  # the farthest a creature appears
+DESPAWN_RANGE = 40.0              # beyond this, a creature nothing holds is taken out
+INTERACT_RANGE = 4.0              # within this (and level with the player) a creature is one the player is dealing with: it is not taken out
+SPAWN_SPACING = 2.0               # a spawn spot is this far from every creature
+SPAWN_LOOK_COS = 0.5              # a spawn spot is never within 60 degrees of the way the player looks
+SPAWN_SECONDS = 0.1               # seconds between spawns while the herd is under its target
+SPAWN_ATTEMPTS = 48               # spots tried for one spawn
 
 
 def herd_rules():
@@ -60,7 +68,10 @@ def herd_rules():
             "route_reach": ROUTE_REACH, "contact": physics.CONTACT, "contact_slack": physics.CONTACT_SLACK,
             "jump_speed": physics.JUMP_SPEED, "player_height": physics.PLAYER_HEIGHT, "half_width": HALF_WIDTH,
             "creature_height": HEIGHT, "lava_interval": LAVA_INTERVAL, "chase_range": VoxelNight.CHASE_RANGE,
-            "night_chase_share": VoxelNight.NIGHT_CHASE_SHARE, "lava": sorted(VoxelGen.LAVA_BLOCKS), "liquids": sorted(VoxelGen.LIQUIDS)}
+            "night_chase_share": VoxelNight.NIGHT_CHASE_SHARE, "lava": sorted(VoxelGen.LAVA_BLOCKS), "liquids": sorted(VoxelGen.LIQUIDS),
+            "spawn_min": SPAWN_MIN, "spawn_max": SPAWN_MAX, "despawn_range": DESPAWN_RANGE, "interact_range": INTERACT_RANGE,
+            "spacing": SPAWN_SPACING, "look_cos": SPAWN_LOOK_COS, "chunk": VoxelGen.CHUNK, "sea_level": VoxelGen.SEA_LEVEL,
+            "world_height": VoxelGen.HEIGHT}
 
 
 def herd_kind(kind):
@@ -73,6 +84,8 @@ def herd_kind(kind):
 def apply_events(herd):
     """Do what the herd reports the engine must do: play clips, draw materials, take bodies out (see VoxelHerd.take_events)."""
     for kind, name, value, looping in herd.take_events():
+        if kind != "remove" and cge.find_body(name) is None:
+            continue   # the body is gone already (taken out in the same frame): nothing to play or draw
         if kind == "clip":
             cge.play_clip(name, value, looping, 1.0)
         elif kind == "material":
@@ -129,20 +142,19 @@ class Walker:
 
 
 class Walkers:
-    """A herd of creatures spread over the loaded terrain near centre, each standing on the ground where it is put."""
+    """The creatures near the player: a herd (C++) that the game keeps at its target. Each frame manage takes out the creatures that
+    have gone far and that nothing holds, and spawns one when the herd is short, out of the player's view."""
 
-    def __init__(self, world, centre, count, seed, prefix="creature"):
+    def __init__(self, world, seed, prefix="creature"):
         self.world = world          # the herd reads the terrain from it, so it must outlive the herd
         self.herd = cge.VoxelHerd(world, herd_rules(), seed & 0xFFFFFFFF)
         self.walkers = []
         self.killed = []            # creatures that died in the last update (by a bite or by lava): the game takes them out and leaves hides
         self.blocks = 0             # shield blocks in the last update
-        rng = random.Random(seed)
-        for i in range(count):
-            spot = self.find_ground(world, centre, rng)
-            if spot is None:
-                continue
-            self.add_walker("%s_%d" % (prefix, i), spot, kind=VoxelCreatures.choose(rng))
+        self.rng = random.Random(seed)
+        self.prefix = prefix
+        self.next_id = 0
+        self.spawn_timer = 0.0
 
     def add_walker(self, name, spot, kind=None, biter=False):
         """A creature of a kind (or a biter or a timid one) on a body called name, standing at spot. Returns it."""
@@ -152,22 +164,24 @@ class Walkers:
         apply_events(self.herd)
         return walker
 
-    @staticmethod
-    def find_ground(world, centre, rng, tries=40):
-        """A point near centre standing on the top solid block of its column, on loaded terrain above the water."""
-        for _ in range(tries):
-            x = math.floor(centre[0] + rng.uniform(-12.0, 12.0))
-            z = math.floor(centre[1] + rng.uniform(-12.0, 12.0))
-            if not world.is_loaded(math.floor(x / CHUNK), math.floor(z / CHUNK)):
-                continue
-            for y in range(VoxelGen.HEIGHT - 2, 0, -1):
-                if world.is_solid(x, y, z):
-                    # The creature's box must have room above the ground: no leaves or walls within a block of it.
-                    clear = all(not world.is_solid(x + dx, y + 1 + k, z + dz) for dx in (-1, 0, 1) for dz in (-1, 0, 1) for k in (0, 1))
-                    if clear and y + 1 > VoxelGen.SEA_LEVEL:
-                        return (x + 0.5, float(y + 1), z + 0.5)
-                    break
-        return None
+    def manage(self, dt, player, feet, look=None, keep=(), arrows_flying=False, target=0):
+        """Keep the creatures near the player. Those beyond DESPAWN_RANGE go, and so does the farthest free one while the herd is over
+        target; nothing the player is dealing with goes (keep names the creature under the crosshair; see VoxelHerd.holdsPlayer), and none
+        goes while an arrow flies. While the herd is under target, a creature spawns every SPAWN_SECONDS at a spot out of the player's view
+        (look: the player's horizontal look, or None). Returns the names taken out."""
+        gone = self.herd.despawn(player, feet, list(keep), arrows_flying, target)
+        if gone:
+            names = set(gone)
+            self.walkers = [walker for walker in self.walkers if walker.name not in names]
+        apply_events(self.herd)
+        self.spawn_timer -= dt
+        if self.spawn_timer <= 0.0 and self.herd.live_count() < target:
+            self.spawn_timer = SPAWN_SECONDS
+            spot = self.herd.find_spawn(player, feet, look, SPAWN_ATTEMPTS, SPAWN_MIN, SPAWN_MAX)
+            if spot is not None:
+                self.next_id += 1
+                self.add_walker("%s_%d" % (self.prefix, self.next_id), spot, kind=VoxelCreatures.choose(self.rng))
+        return gone
 
     def update(self, dt, player=None, player_feet=None, night=0.0, shield=None):
         """player is the (x, z) of the player, which the creatures run from or chase; player_feet its height. Moves the whole herd (in

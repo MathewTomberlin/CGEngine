@@ -128,7 +128,7 @@ def hotbar_key(slot):
 HEAL_AFTER = 4.0                 # seconds a damaged block is left alone before it starts to heal
 HEAL_STEP = 1.0                  # seconds per damage stage it heals once it does
 HELD_TORCH_BRIGHTNESS = 2.5     # the light of the torch the player carries (L lights and puts it out)
-WALKERS = int(os.environ.get("VOXEL_WALKERS", "12"))   # creatures that wander the terrain near the spawn
+WALKERS = int(os.environ.get("VOXEL_WALKERS", "12"))   # creatures that wander the terrain near the player (the population's target)
 FAR_RADIUS = int(os.environ.get("VOXEL_FAR_RADIUS", "12"))   # chunks more than this from the player get far skins (stride 2); 0 is off (roadmap 15.8, 22.3)
 FAR_STRIDE = 2             # the far skins sample every second block: a quarter of the quads
 SHADOWS = os.environ.get("VOXEL_SHADOWS", "1") != "0"   # the sun casts shadows (the map covers SHADOW_RADIUS around the camera)
