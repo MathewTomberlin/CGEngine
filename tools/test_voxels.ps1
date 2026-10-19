@@ -118,6 +118,16 @@ try {
     $consoleResult.check.PSObject.Properties | ForEach-Object { Check ("console: " + $_.Name) ([bool]$_.Value) }
     $consoleResult.errors | ForEach-Object { Check ("console check error: " + $_) $false }
 
+    # The creature population (spawn spots, spawning, despawning and what the player is dealing with), run inside the game by
+    # tools/voxel_population_check.py.
+    $populationCheck = (Resolve-Path "tools/voxel_population_check.py").Path -replace '\\', '/'
+    Send-Command "00d_population_check" ('{"command":"run_script","params":{"path":"' + $populationCheck + '"}}')
+    $ranPopulation = Wait-Result "00d_population_check" 120
+    Check "the population check script runs" ($ranPopulation -and $ranPopulation.ok)
+    $populationResult = Get-Content (Join-Path $control "voxel_population_check.json") -Raw | ConvertFrom-Json
+    $populationResult.check.PSObject.Properties | ForEach-Object { Check ("population: " + $_.Name) ([bool]$_.Value) }
+    $populationResult.errors | ForEach-Object { Check ("population check error: " + $_) $false }
+
     # Walk forward for 240 frames (4 seconds), then turn right for 120 frames (2 seconds): 90 degrees a second is 180
     # degrees of turn. The frames are counted by the Enter key, which the game asks for once a frame, before the walk.
     # Mouse input is scripted to nothing so that the real mouse cannot turn the view during the test.

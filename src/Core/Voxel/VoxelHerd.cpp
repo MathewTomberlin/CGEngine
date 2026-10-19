@@ -2,6 +2,7 @@
 #include "VoxelWorld.h"
 #include <algorithm>
 #include <cmath>
+#include <functional>
 #include <SFML/System/Vector3.hpp>
 #include "../Body/Body.h"
 #include "../Mesh/Mesh.h"
@@ -509,5 +510,124 @@ namespace CGEngine {
 			if (!creatures[i].removed) burn(creatures[i], dt, result);
 		}
 		return result;
+	}
+
+	int VoxelHerd::liveCount() const {
+		int live = 0;
+		for (const Creature& c : creatures) {
+			if (!c.removed) ++live;
+		}
+		return live;
+	}
+
+	std::optional<std::array<double, 3>> VoxelHerd::findSpawn(const std::array<double, 2>& player, double feet,
+		const std::array<double, 2>* look, int attempts, double minDistance, double maxDistance) {
+		for (int attempt = 0; attempt < attempts; ++attempt) {
+			const double angle = uniform(0.0, 2.0 * PI);
+			const double distance = uniform(minDistance, maxDistance);
+			const double x = player[0] + std::cos(angle) * distance;
+			const double z = player[1] + std::sin(angle) * distance;
+			if (look) {
+				// Out of view: a spot the player is looking toward is not picked, so creatures do not pop in front of it.
+				const double dx = x - player[0];
+				const double dz = z - player[1];
+				const double d = std::hypot(dx, dz);
+				if (d > 0.0 && (dx * (*look)[0] + dz * (*look)[1]) / d > rules.lookCos) continue;
+			}
+			const int bx = static_cast<int>(std::floor(x));
+			const int bz = static_cast<int>(std::floor(z));
+			const int cx = static_cast<int>(std::floor(static_cast<double>(bx) / rules.chunk));
+			const int cz = static_cast<int>(std::floor(static_cast<double>(bz) / rules.chunk));
+			if (!world->isLoaded(cx, cz)) continue;
+			// The ground is the top solid block at or below the feet (a little above them), above the water.
+			const int top = std::min(rules.worldHeight - 2, static_cast<int>(std::floor(feet + 16.0)));
+			int ground = -1;
+			for (int y = top; y > rules.seaLevel; --y) {
+				if (world->isSolid(bx, y, bz)) {
+					ground = y;
+					break;
+				}
+			}
+			if (ground < 0 || ground + 1 <= rules.seaLevel) continue;
+			// The creature's box needs room above the ground: no leaves or walls within a block of it.
+			bool clear = true;
+			for (int dx = -1; dx <= 1 && clear; ++dx) {
+				for (int dz = -1; dz <= 1 && clear; ++dz) {
+					for (int k = 0; k <= 1 && clear; ++k) {
+						if (world->isSolid(bx + dx, ground + 1 + k, bz + dz)) clear = false;
+					}
+				}
+			}
+			if (!clear) continue;
+			const double spotX = bx + 0.5;
+			const double spotZ = bz + 0.5;
+			const double spotY = ground + 1.0;
+			bool crowded = false;
+			for (const Creature& c : creatures) {
+				if (c.removed) continue;
+				if (std::hypot(c.state.pos[0] - spotX, c.state.pos[2] - spotZ) < rules.spacing) {
+					crowded = true;
+					break;
+				}
+			}
+			if (crowded) continue;
+			return std::array<double, 3>{ spotX, spotY, spotZ };
+		}
+		return std::nullopt;
+	}
+
+	bool VoxelHerd::holdsPlayer(const Creature& c, const std::array<double, 2>& player, double feet, const std::vector<std::string>& keep) const {
+		for (const std::string& name : keep) {
+			if (name == c.name) return true;
+		}
+		// A creature in a fight, a flinch, a lunge, a knock or a shield's turn is still dealing with the player.
+		if (c.hurtTimer > 0.0 || c.fightTimer > 0.0 || c.flashTimer > 0.0 || c.windup > 0.0 || c.flankTimer > 0.0 || c.knockTimer > 0.0
+			|| c.attackTimer > 0.0) return true;
+		const auto& pos = c.state.pos;
+		const double distance = std::hypot(pos[0] - player[0], pos[2] - player[1]);
+		const bool level = pos[1] < feet + rules.playerHeight && feet < pos[1] + rules.creatureHeight;
+		if (level && distance < rules.interactRange) return true;
+		// A biter that could chase the player (at its longest, at night) is not taken out.
+		return c.kind.bites && distance < chaseDistance(c, 1.0);
+	}
+
+	std::vector<std::string> VoxelHerd::despawn(const std::array<double, 2>& player, double feet, const std::vector<std::string>& keep,
+		bool arrowsFlying, int target) {
+		std::vector<std::string> gone;
+		// While an arrow flies, it may still reach a creature the player shot at: none is taken out.
+		if (arrowsFlying) return gone;
+		std::vector<size_t> marked;
+		auto isMarked = [&marked](size_t i) { return std::find(marked.begin(), marked.end(), i) != marked.end(); };
+		int live = 0;
+		for (size_t i = 0; i < creatures.size(); ++i) {
+			const Creature& c = creatures[i];
+			if (c.removed) continue;
+			++live;
+			if (holdsPlayer(c, player, feet, keep)) continue;
+			if (std::hypot(c.state.pos[0] - player[0], c.state.pos[2] - player[1]) > rules.despawnRange) marked.push_back(i);
+		}
+		// Over the target, the farthest free creature beyond the spawn ring goes as well (one a call).
+		if (live - static_cast<int>(marked.size()) > target) {
+			double farthest = rules.spawnMin;
+			size_t pick = creatures.size();
+			for (size_t i = 0; i < creatures.size(); ++i) {
+				const Creature& c = creatures[i];
+				if (c.removed || isMarked(i) || holdsPlayer(c, player, feet, keep)) continue;
+				const double distance = std::hypot(c.state.pos[0] - player[0], c.state.pos[2] - player[1]);
+				if (distance > farthest) {
+					farthest = distance;
+					pick = i;
+				}
+			}
+			if (pick < creatures.size()) marked.push_back(pick);
+		}
+		// Taken out by name, last first, so the indices still stand as they are removed.
+		std::sort(marked.begin(), marked.end(), std::greater<size_t>());
+		for (size_t i : marked) {
+			gone.push_back(creatures[i].name);
+			events.push_back(HerdEvent{ HerdEvent::Kind::Remove, creatures[i].name, "", false });
+			erase(i);
+		}
+		return gone;
 	}
 }

@@ -29,9 +29,10 @@ struct Material {
     float normalStrength;
     int useNormalTexture;
     float metallic;
+    int useRoughnessTexture;
 };
 layout(std140, binding = 3) uniform MaterialBlock {
-    Material materials[8];
+    Material materials[1];
 };
 struct Light {
     vec4 position;

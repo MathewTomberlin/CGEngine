@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <optional>
 #include <cstdint>
 #include <random>
 #include <string>
@@ -38,6 +39,16 @@ namespace CGEngine {
 		double lavaInterval = 0.5;
 		double chaseRange = 7.0;          // VoxelNight.CHASE_RANGE
 		double nightChaseShare = 0.8;     // VoxelNight.NIGHT_CHASE_SHARE
+		// The population: where creatures appear and where they are taken out (see findSpawn and despawn).
+		double spawnMin = 16.0;           // blocks from the player: the nearest a creature appears
+		double spawnMax = 32.0;           // the farthest
+		double despawnRange = 40.0;       // beyond this, a creature nothing holds is taken out
+		double interactRange = 4.0;       // within this (and level with the player) a creature is one the player is dealing with
+		double spacing = 2.0;             // a spawn spot is this far from every creature
+		double lookCos = 0.5;             // a spawn spot is never within this cosine of the way the player looks (out of view)
+		int chunk = 16;                   // blocks along x and z in a chunk
+		int seaLevel = 14;
+		int worldHeight = 64;
 		std::vector<int> lava;            // VoxelGen.LAVA_BLOCKS
 		std::vector<int> liquids;         // VoxelGen.LIQUIDS
 	};
@@ -106,6 +117,18 @@ namespace CGEngine {
 		// The feet, velocity and ground contact of the creature (VoxelWalker's state).
 		VoxelBodyState state(const std::string& name) const;
 		int count() const { return static_cast<int>(creatures.size()); }
+		// The creatures that are alive (not dying).
+		int liveCount() const;
+		// A spawn spot for a creature: a point between minDistance and maxDistance from the player (x, z), standing on the ground at feet
+		// level, out of view (look: the player's horizontal look, or null for any direction), over loaded terrain, not in water, with room
+		// above, and not close to a creature. None when none of the attempts finds one.
+		std::optional<std::array<double, 3>> findSpawn(const std::array<double, 2>& player, double feet, const std::array<double, 2>* look,
+			int attempts, double minDistance, double maxDistance);
+		// Takes out creatures that nothing holds: the ones beyond despawnRange, and, while the herd is over target, the farthest one beyond
+		// spawnMin. Nothing goes while an arrow is flying (keep: names the player is dealing with, which are never taken). Returns the names
+		// taken out; their bodies are removed by the game (Remove events).
+		std::vector<std::string> despawn(const std::array<double, 2>& player, double feet, const std::vector<std::string>& keep,
+			bool arrowsFlying, int target);
 		// For the checks and the console: the creature's heading, a way to turn it and set its wander timer, and to place its feet.
 		double heading(const std::string& name) const;
 		void setHeading(const std::string& name, double heading, double timer);
@@ -185,6 +208,8 @@ namespace CGEngine {
 		void bite(Creature& c);
 		void burn(Creature& c, double dt, Result& result);
 		void kill(Creature& c, Result& result);
+		// Whether the player is dealing with the creature, so it is not taken out (see despawn).
+		bool holdsPlayer(const Creature& c, const std::array<double, 2>& player, double feet, const std::vector<std::string>& keep) const;
 		bool isLava(int block) const;
 	};
 }

@@ -79,6 +79,8 @@ namespace CGEngine {
 		string normalTexturePath = "";
 		Vector2f normalTextureUVScale = { 1,1 };
 		float normalStrength = 1.0f;
+		// A roughness map (its red channel takes the smoothness down where it is rough): its texture, on the surface's UVs.
+		string roughnessTexturePath = "";
 		// How metallic the surface is, 0 (a dielectric, its highlight is the specular colour) to 1 (a metal, its highlight takes its colour).
 		float metallic = 0.0f;
 	};

@@ -29,6 +29,7 @@ struct Material {
     float normalStrength;
     int useNormalTexture;
     float metallic;
+    int useRoughnessTexture;
 };
 layout(std140, binding = 2) uniform TransformBlock {
     mat4 camera;
@@ -42,7 +43,7 @@ layout(std140, binding = 1) uniform BoneBlock {
 	int padding3;
 };
 layout(std140, binding = 3) uniform MaterialBlock {
-    Material materials[8];
+    Material materials[1];
 };
 
 struct Light {
@@ -73,8 +74,9 @@ struct MaterialTextures {
     sampler2D specularTexture;
     sampler2D opacityTexture;
     sampler2D normalTexture;
+    sampler2D roughnessTexture;
 };
-uniform MaterialTextures materialTextures[8];
+uniform MaterialTextures materialTextures[1];
 
 in vec2 uv;
 in vec3 normal;
@@ -255,8 +257,13 @@ vec3 applyLight(Light light, vec3 surfColor, vec3 surfNormal, vec3 surfPos, vec3
     float specularity = 0.0;
     //A metal's highlight takes the surface's colour (metallic 1); a dielectric's stays the material's own (metallic 0).
     vec3 specularColor = mix(materials[mtl].specularColor.rgb, surfColor.rgb, materials[mtl].metallic);
-    float specularPower = max(1.0,materials[mtl].smoothnessFactor);
-    float specularOpacity = clamp(materials[mtl].smoothnessFactor,0.0,1.0);
+    //A roughness map takes the smoothness down where the surface is rough (its red channel, on the surface's UVs).
+    float smoothness = materials[mtl].smoothnessFactor;
+    if(materials[mtl].useRoughnessTexture != 0){
+        smoothness *= 1.0 - texture(materialTextures[mtl].roughnessTexture, uv).r;
+    }
+    float specularPower = max(1.0,smoothness);
+    float specularOpacity = clamp(smoothness,0.0,1.0);
     vec3 specularMap = vec3(1,1,1);
     if(materials[mtl].useSpecularTexture != 0){
         vec2 specularUV = (uv * materials[mtl].specularTextureUVScale);
