@@ -214,6 +214,7 @@ namespace CGEngine {
                     SurfaceParameters surface(SurfaceDomain(texture, Vector2f(uvScale, uvScale), tint),
                         SurfaceDomain(32.0f, Color(specularByte, specularByte, specularByte)), SurfaceDomain(opacity));
                     surface.normalTexturePath = m.value("normalTexture", std::string());
+                    surface.roughnessTexturePath = m.value("roughnessTexture", std::string());
                     surface.normalTextureUVScale = Vector2f(uvScale, uvScale);
                     surface.normalStrength = normalStrength;
                     // Metallic (roadmap 35.2): 0 for a dielectric, 1 for a metal whose highlight takes the surface's colour.

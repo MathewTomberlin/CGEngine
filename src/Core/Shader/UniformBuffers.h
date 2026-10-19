@@ -1,6 +1,6 @@
 namespace CGEngine {
 	struct MaterialUBO {
-		static const int MAX_MATERIALS = 8;		//Max number of materials
+		static const int MAX_MATERIALS = 1;		//Max number of materials per draw. A GPU guarantees 16 texture units (OpenGL 3.3): the voxel tiles and the shadow map take 2, so a material has up to 14 texture samplers (MaterialTextures in StdFragShader.frag)
 		struct Material {
 			glm::vec4 diffuseColor;					//16
 			glm::vec4 specularColor;				//32
@@ -27,7 +27,8 @@ namespace CGEngine {
 			float normalStrength;					//156
 			int useNormalTexture;					//160
 			float metallic;							//164: 0 for a dielectric (white highlights), 1 for a metal (the highlight takes the surface's colour)
-			float padding[3];						//176: the std140 array stride
+			int useRoughnessTexture;				//168: the roughness map (red channel) takes the smoothness down where it is rough
+			float padding[2];						//176: the std140 array stride
 		} materials[MAX_MATERIALS];
 	};
 

@@ -38,6 +38,7 @@ Failures are reported with a message; a bad scene never silently produces a part
 | `tint`           | [r, g, b] | no     | `[1, 1, 1]` | Multiplies the texture's colour, each 0 to 1. White is no tint. |
 | `repeat`         | bool    | no       | `false` | The texture repeats past its edges, instead of stretching its edge pixels. Applies to the texture file, so every material that uses it repeats too. |
 | `normalTexture`  | string  | no       |         | A tangent-space normal map, a file in `resources/`. Its UVs use `uvScale`. Lit surfaces only. Blue points out of the surface, as in Blender's and most engines' normal maps. |
+| `roughnessTexture` | string  | no       |         | A roughness map, a file in `resources/`: its red channel takes the surface's smoothness down where it is rough. Its UVs are the surface's own. Lit surfaces only. |
 | `normalStrength` | number  | no       | `1`     | How far the normal map tilts the surface: 1 as made, 0 for the flat surface (the same as no map). Not negative. |
 | `metallic`       | number  | no       | `0`     | 0 for a dielectric (its highlight is the material's specular colour, white by default), 1 for a metal (the highlight takes the surface's colour). 0 to 1. |
 

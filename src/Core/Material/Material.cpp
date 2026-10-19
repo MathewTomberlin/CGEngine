@@ -206,13 +206,22 @@ namespace CGEngine {
 		setParameter("normalTextureUVScale", params.normalTextureUVScale, ParamType::V2);
 		setParameter("normalStrength", params.normalStrength, ParamType::Float);
 		setParameter("useNormalTexture", false, ParamType::Bool);
-		if (params.normalTexturePath.empty()) return;
-		auto normalAsset = assets.load<TextureResource>(params.normalTexturePath);
-		if (!normalAsset.has_value()) return;
-		TextureResource* normalTexture = assets.get<TextureResource>(normalAsset.value().first);
-		if (normalTexture) {
-			setParameter("normalTexture", normalTexture->getTexture(), ParamType::Texture2D);
-			setParameter("useNormalTexture", true, ParamType::Bool);
+		setParameter("useRoughnessTexture", false, ParamType::Bool);
+		if (!params.normalTexturePath.empty()) {
+			auto normalAsset = assets.load<TextureResource>(params.normalTexturePath);
+			TextureResource* normalTexture = normalAsset.has_value() ? assets.get<TextureResource>(normalAsset.value().first) : nullptr;
+			if (normalTexture) {
+				setParameter("normalTexture", normalTexture->getTexture(), ParamType::Texture2D);
+				setParameter("useNormalTexture", true, ParamType::Bool);
+			}
+		}
+		if (!params.roughnessTexturePath.empty()) {
+			auto roughnessAsset = assets.load<TextureResource>(params.roughnessTexturePath);
+			TextureResource* roughnessTexture = roughnessAsset.has_value() ? assets.get<TextureResource>(roughnessAsset.value().first) : nullptr;
+			if (roughnessTexture) {
+				setParameter("roughnessTexture", roughnessTexture->getTexture(), ParamType::Texture2D);
+				setParameter("useRoughnessTexture", true, ParamType::Bool);
+			}
 		}
 	}
 
